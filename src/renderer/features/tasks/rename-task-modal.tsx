@@ -1,5 +1,12 @@
 import { observer } from 'mobx-react-lite';
 import { useCallback, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import {
+  deriveTaskSlug,
+  liveTransformTaskDisplayName,
+  MAX_TASK_NAME_LENGTH,
+  normalizeTaskDisplayName,
+} from '@shared/task-name';
 import { getTaskManagerStore } from '@renderer/features/tasks/stores/task-selectors';
 import { type BaseModalProps } from '@renderer/lib/modal/modal-provider';
 import { Button } from '@renderer/lib/ui/button';
@@ -12,11 +19,6 @@ import {
 } from '@renderer/lib/ui/dialog';
 import { Field, FieldGroup, FieldLabel } from '@renderer/lib/ui/field';
 import { Input } from '@renderer/lib/ui/input';
-import {
-  liveTransformTaskName,
-  MAX_TASK_NAME_LENGTH,
-  normalizeTaskName,
-} from '@renderer/utils/taskNames';
 
 type RenameTaskModalArgs = {
   projectId: string;
@@ -33,6 +35,7 @@ export const RenameTaskModal = observer(function RenameTaskModal({
   onSuccess,
   onClose,
 }: Props) {
+  const { t } = useTranslation();
   const [name, setName] = useState(currentName);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,20 +47,24 @@ export const RenameTaskModal = observer(function RenameTaskModal({
       .map((t) => t.data.name)
   );
 
-  const normalizedName = normalizeTaskName(name);
+  const normalizedName = normalizeTaskDisplayName(name);
+  const derivedSlug = deriveTaskSlug(normalizedName);
   const isDuplicate = siblingNames.has(normalizedName);
   const isUnchanged = normalizedName === currentName;
   const isEmpty = normalizedName.length === 0;
-  const isValid = !isEmpty && !isDuplicate && !isUnchanged;
+  const slugWouldBeEmpty = !isEmpty && derivedSlug.length === 0;
+  const isValid = !isEmpty && !isDuplicate && !isUnchanged && !slugWouldBeEmpty;
 
   const validationMessage = isDuplicate
-    ? 'A task with this name already exists in this project.'
+    ? t('tasks.rename.duplicate')
     : isEmpty
-      ? 'Task name cannot be empty.'
-      : undefined;
+      ? t('tasks.rename.empty')
+      : slugWouldBeEmpty
+        ? t('tasks.rename.invalidSlug')
+        : undefined;
 
   const handleNameChange = useCallback((value: string) => {
-    setName(liveTransformTaskName(value));
+    setName(liveTransformTaskDisplayName(value));
     setError(null);
   }, []);
 
@@ -71,25 +78,31 @@ export const RenameTaskModal = observer(function RenameTaskModal({
       await task.rename(normalizedName);
       onSuccess();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to rename task');
+      setError(e instanceof Error ? e.message : t('tasks.rename.renameFailed'));
       setIsSubmitting(false);
     }
-  }, [isValid, taskManager, taskId, normalizedName, onSuccess]);
+  }, [isValid, taskManager, taskId, normalizedName, onSuccess, t]);
 
   return (
     <>
       <DialogHeader showCloseButton={false}>
-        <DialogTitle>Rename task</DialogTitle>
+        <DialogTitle>{t('tasks.rename.title')}</DialogTitle>
       </DialogHeader>
       <DialogContentArea className="pt-0">
         <FieldGroup>
           <Field>
-            <FieldLabel>Task name</FieldLabel>
+            <FieldLabel>{t('tasks.rename.label')}</FieldLabel>
             <Input
               value={name}
               onChange={(e) => handleNameChange(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') void handleSubmit();
+                // Skip while IME composition is active (e.g. Chinese pinyin
+                // candidate selection) — the first Enter confirms the candidate,
+                // not the form. `isComposing` covers all IMEs; keyCode 229 is
+                // the legacy Safari/Webkit fallback.
+                if (e.key === 'Enter' && !e.nativeEvent.isComposing && e.keyCode !== 229) {
+                  void handleSubmit();
+                }
               }}
               maxLength={MAX_TASK_NAME_LENGTH}
               autoFocus
@@ -97,16 +110,24 @@ export const RenameTaskModal = observer(function RenameTaskModal({
             {validationMessage && !isUnchanged && (
               <p className="text-xs text-destructive mt-1">{validationMessage}</p>
             )}
+            {!validationMessage &&
+              !isUnchanged &&
+              derivedSlug &&
+              derivedSlug !== normalizedName && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {t('tasks.rename.branchPreview', { slug: derivedSlug })}
+                </p>
+              )}
             {error && <p className="text-xs text-destructive mt-1">{error}</p>}
           </Field>
         </FieldGroup>
       </DialogContentArea>
       <DialogFooter>
         <Button variant="outline" onClick={onClose}>
-          Cancel
+          {t('common.cancel')}
         </Button>
         <ConfirmButton onClick={() => void handleSubmit()} disabled={!isValid || isSubmitting}>
-          {isSubmitting ? 'Renaming...' : 'Rename'}
+          {isSubmitting ? t('tasks.rename.renaming') : t('tasks.rename.submit')}
         </ConfirmButton>
       </DialogFooter>
     </>

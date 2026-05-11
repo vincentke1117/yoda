@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { resolveAgentAutoApprove } from '@shared/agent-auto-approve-defaults';
 import { err, ok, type Result } from '@shared/result';
+import { deriveTaskSlug } from '@shared/task-name';
 import type {
   CreateTaskError,
   CreateTaskParams,
@@ -64,7 +65,7 @@ export async function createTask(
 
   switch (strategy.kind) {
     case 'new-branch': {
-      const rawBranch = strategy.taskBranch;
+      const rawBranch = deriveTaskSlug(strategy.taskBranch) || strategy.taskBranch;
       taskBranch = resolveTaskBranchName({
         rawBranch,
         branchPrefix,
@@ -136,7 +137,7 @@ export async function createTask(
 
       if (strategy.taskBranch) {
         // Create a new task branch on top of the just-fetched local head branch.
-        const rawBranch = strategy.taskBranch;
+        const rawBranch = deriveTaskSlug(strategy.taskBranch) || strategy.taskBranch;
         taskBranch = resolveTaskBranchName({
           rawBranch,
           branchPrefix,

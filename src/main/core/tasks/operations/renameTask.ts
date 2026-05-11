@@ -1,4 +1,5 @@
 import { and, eq, sql } from 'drizzle-orm';
+import { deriveTaskSlug, normalizeTaskDisplayName } from '@shared/task-name';
 import { projectManager } from '@main/core/projects/project-manager';
 import { taskEvents } from '@main/core/tasks/task-events';
 import { mapTaskRowToTask } from '@main/core/tasks/utils/utils';
@@ -17,6 +18,9 @@ export async function renameTask(
   const project = projectManager.getProject(projectId);
   if (!project) throw new Error(`Project not found: ${projectId}`);
 
+  const displayName = normalizeTaskDisplayName(newName);
+  if (!displayName) throw new Error('Task name cannot be empty');
+
   const oldBranch = row.taskBranch;
   const sourceBranch = row.sourceBranch ?? undefined;
   let newBranch: string | null = null;
@@ -30,11 +34,16 @@ export async function renameTask(
         .limit(2);
 
       if (siblings.length === 1) {
-        const suffix = Math.random().toString(36).slice(2, 7);
-        const branchPrefix = (await appSettingsService.get('project')).branchPrefix ?? '';
-        newBranch = branchPrefix ? `${branchPrefix}/${newName}-${suffix}` : `${newName}-${suffix}`;
+        const branchSlug = deriveTaskSlug(displayName);
+        if (branchSlug) {
+          const suffix = Math.random().toString(36).slice(2, 7);
+          const branchPrefix = (await appSettingsService.get('project')).branchPrefix ?? '';
+          newBranch = branchPrefix
+            ? `${branchPrefix}/${branchSlug}-${suffix}`
+            : `${branchSlug}-${suffix}`;
 
-        await project.repository.renameBranch(oldBranch, newBranch);
+          await project.repository.renameBranch(oldBranch, newBranch);
+        }
       }
     }
   }
@@ -42,7 +51,7 @@ export async function renameTask(
   const [updatedRow] = await db
     .update(tasks)
     .set({
-      name: newName,
+      name: displayName,
       taskBranch: newBranch ?? row.taskBranch,
       updatedAt: sql`CURRENT_TIMESTAMP`,
     })

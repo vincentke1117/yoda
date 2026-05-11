@@ -7,7 +7,7 @@ interface TaskNameFieldProps {
 }
 
 export function TaskNameField({ state }: TaskNameFieldProps) {
-  const { taskName, handleTaskNameChange, showSlugHint } = state;
+  const { taskName, handleTaskNameChange, branchSlugPreview } = state;
 
   return (
     <Field>
@@ -17,9 +17,9 @@ export function TaskNameField({ state }: TaskNameFieldProps) {
         value={taskName}
         onChange={(e) => handleTaskNameChange(e.target.value)}
       />
-      {showSlugHint && (
+      {branchSlugPreview && (
         <p className="text-xs text-muted-foreground mt-1">
-          Task names only allow lowercase letters, numbers, and hyphens.
+          Branch: <code className="font-mono">{branchSlugPreview}</code>
         </p>
       )}
     </Field>

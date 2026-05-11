@@ -1,10 +1,10 @@
 import { useCallback, useState } from 'react';
-import { liveTransformTaskName } from '@renderer/utils/taskNames';
+import { deriveTaskSlug, liveTransformTaskDisplayName } from '@shared/task-name';
 
 export type TaskNameState = {
   taskName: string;
   handleTaskNameChange: (value: string) => void;
-  showSlugHint: boolean;
+  branchSlugPreview: string | null;
   isPending: boolean;
 };
 
@@ -15,7 +15,6 @@ export function useTaskName(opts?: {
 }): TaskNameState {
   const { generatedName, isPending = false, resetKey } = opts ?? {};
   const [taskName, setTaskName] = useState(generatedName ?? '');
-  const [showSlugHint, setShowSlugHint] = useState(false);
   const [prevGeneratedName, setPrevGeneratedName] = useState(generatedName);
   const [prevResetKey, setPrevResetKey] = useState(resetKey);
 
@@ -23,21 +22,19 @@ export function useTaskName(opts?: {
     setPrevResetKey(resetKey);
     setPrevGeneratedName(generatedName);
     setTaskName(generatedName ?? '');
-    setShowSlugHint(false);
   } else if (generatedName !== prevGeneratedName) {
     setPrevGeneratedName(generatedName);
     if (generatedName !== undefined) {
       setTaskName(generatedName);
-      setShowSlugHint(false);
     }
   }
 
   const handleTaskNameChange = useCallback((value: string) => {
-    const transformed = liveTransformTaskName(value);
-    setTaskName(transformed);
-    const hasDroppedChars = /[^a-z0-9\s-]/i.test(value);
-    setShowSlugHint(hasDroppedChars);
+    setTaskName(liveTransformTaskDisplayName(value));
   }, []);
 
-  return { taskName, handleTaskNameChange, showSlugHint, isPending };
+  const slug = deriveTaskSlug(taskName);
+  const branchSlugPreview = slug && slug !== taskName.trim() ? slug : null;
+
+  return { taskName, handleTaskNameChange, branchSlugPreview, isPending };
 }

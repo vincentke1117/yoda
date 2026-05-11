@@ -1,5 +1,5 @@
+import { deriveTaskSlug } from '@shared/task-name';
 import type { Issue } from '@shared/tasks';
-import { normalizeTaskName } from '@renderer/utils/taskNames';
 
 export function getIssueTaskName(issue: Issue | null | undefined): string | null {
   if (issue?.provider !== 'linear') {
@@ -11,6 +11,6 @@ export function getIssueTaskName(issue: Issue | null | undefined): string | null
     return null;
   }
 
-  const normalized = normalizeTaskName(branchName.replace(/\//g, '-'));
+  const normalized = deriveTaskSlug(branchName.replace(/\//g, '-'));
   return normalized || null;
 }
