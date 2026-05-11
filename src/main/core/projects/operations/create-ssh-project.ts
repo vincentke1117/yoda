@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import type { ProjectPathStatus, SshProject } from '@shared/projects';
 import { GitHubAuthExecutionContext } from '@main/core/execution-context/github-auth-execution-context';
 import { SshExecutionContext } from '@main/core/execution-context/ssh-execution-context';
@@ -38,18 +38,41 @@ export async function createSshProject(params: CreateSshProjectParams): Promise<
   const gitInfo = await ensureGitRepository(git, params.initGitRepository);
   const baseRef = await resolveProjectBaseRef(git, gitInfo.baseRef);
 
-  const [row] = await db
-    .insert(projects)
-    .values({
-      id: params.id ?? randomUUID(),
-      name: params.name,
-      path: gitInfo.rootPath,
-      workspaceProvider: 'ssh',
-      sshConnectionId: params.connectionId,
-      baseRef,
-      updatedAt: sql`CURRENT_TIMESTAMP`,
-    })
-    .returning();
+  const [existing] = await db
+    .select()
+    .from(projects)
+    .where(eq(projects.path, gitInfo.rootPath))
+    .limit(1);
+
+  if (existing && existing.sshConnectionId !== params.connectionId) {
+    throw new Error(
+      `A project at ${gitInfo.rootPath} already exists on a different SSH connection.`
+    );
+  }
+
+  const [row] = existing
+    ? await db
+        .update(projects)
+        .set({
+          name: params.name,
+          baseRef,
+          archivedAt: null,
+          updatedAt: sql`CURRENT_TIMESTAMP`,
+        })
+        .where(eq(projects.id, existing.id))
+        .returning()
+    : await db
+        .insert(projects)
+        .values({
+          id: params.id ?? randomUUID(),
+          name: params.name,
+          path: gitInfo.rootPath,
+          workspaceProvider: 'ssh',
+          sshConnectionId: params.connectionId,
+          baseRef,
+          updatedAt: sql`CURRENT_TIMESTAMP`,
+        })
+        .returning();
 
   const project = {
     type: 'ssh' as const,

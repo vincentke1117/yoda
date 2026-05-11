@@ -91,6 +91,7 @@ export class ProjectManagerStore {
     id?: string
   ): Promise<string | undefined> {
     const projectId = id ?? crypto.randomUUID();
+    let resolvedId = projectId;
     const isSsh = projectType.type === 'ssh';
     const inspection = await rpc.projects.inspectProjectPath(
       isSsh
@@ -128,7 +129,7 @@ export class ProjectManagerStore {
                 name: data.name,
                 initGitRepository: data.initGitRepository,
               });
-          this._setAndOpenProject(projectId, project);
+          resolvedId = this._setAndOpenProject(projectId, project);
           captureTelemetry('project_added', {
             type: projectTelemetryType,
             strategy: projectTelemetryStrategy,
@@ -177,7 +178,7 @@ export class ProjectManagerStore {
                 path: clonePath,
                 name: data.name,
               });
-          this._setAndOpenProject(projectId, project);
+          resolvedId = this._setAndOpenProject(projectId, project);
           captureTelemetry('project_added', {
             type: projectTelemetryType,
             strategy: projectTelemetryStrategy,
@@ -239,7 +240,7 @@ export class ProjectManagerStore {
                 path: clonePath,
                 name: data.name,
               });
-          this._setAndOpenProject(projectId, project);
+          resolvedId = this._setAndOpenProject(projectId, project);
           captureTelemetry('project_added', {
             type: projectTelemetryType,
             strategy: projectTelemetryStrategy,
@@ -258,7 +259,7 @@ export class ProjectManagerStore {
       }
     }
 
-    return projectId;
+    return resolvedId;
   }
 
   mountProject(projectId: string): Promise<void> {
@@ -373,6 +374,13 @@ export class ProjectManagerStore {
     }
   }
 
+  async unarchiveProject(projectId: string): Promise<void> {
+    const project = await rpc.projects.unarchiveProject(projectId);
+    if (project) {
+      this._setAndOpenProject(projectId, project);
+    }
+  }
+
   async updateProjectConnection(projectId: string, newConnectionId: string): Promise<void> {
     await rpc.projects.updateProjectConnection(projectId, newConnectionId);
 
@@ -410,16 +418,25 @@ export class ProjectManagerStore {
     });
   }
 
-  private _setAndOpenProject(id: string, project: LocalProject | SshProject): void {
+  private _setAndOpenProject(id: string, project: LocalProject | SshProject): string {
+    const realId = project.id;
     runInAction(() => {
-      const current = this.projects.get(id);
+      // Main may have upserted an existing row (e.g. same path, archived): the
+      // returned project.id then differs from the requested id. Drop the
+      // placeholder under the requested id and operate on the real one.
+      if (id !== realId) {
+        this.projects.delete(id);
+      }
+      const current = this.projects.get(realId);
       if (current) {
         current.transitionToUnmounted(project, 'opening');
       } else {
-        this.projects.set(id, createUnmountedProject(project, 'opening'));
+        this.projects.set(realId, createUnmountedProject(project, 'opening'));
       }
+      appState.sidebar.prependProjectOrder(realId);
     });
-    void this.mountProject(id);
+    void this.mountProject(realId);
+    return realId;
   }
 
   private _updatePhase(id: string, phase: UnregisteredProjectPhase): void {

@@ -15,10 +15,12 @@ import type {
  *   ~/.claude/projects/<encoded-cwd>/<sessionId>.jsonl
  * where <encoded-cwd> replaces both '/' and '.' with '-'.
  *
- * After the first user turn, Claude appends a line like
- *   {"type":"summary","summary":"<auto-title>","leafUuid":"..."}
- * each time it auto-titles the conversation. We tail the file and surface the
- * latest summary as the session title.
+ * Claude appends sentinel rows whenever the session title changes:
+ *   {"type":"ai-title","aiTitle":"...","sessionId":"..."}
+ *   {"type":"custom-title","customTitle":"...","sessionId":"..."}
+ * `customTitle` wins over `aiTitle` when both exist (matches Claude Code's
+ * own readLiteMetadata precedence). The `summary` row is /compact output
+ * and is intentionally ignored — it is not the auto-title.
  */
 export class ClaudeSessionTitleSource implements SessionTitleSource {
   readonly providerId = 'claude' as const;
@@ -47,6 +49,7 @@ class ClaudeTranscriptTailer implements SessionTitleWatcher {
   private offset = 0;
   private buffer = '';
   private lastTitle: string | undefined;
+  private lastTitleSource: 'custom' | 'ai' | undefined;
   private stopped = false;
   private reading = false;
   private pendingRead = false;
@@ -157,30 +160,44 @@ class ClaudeTranscriptTailer implements SessionTitleWatcher {
 
   private tryEmitTitle(line: string): void {
     if (this.stopped) return;
-    if (!line.includes('"type":"summary"')) return;
-    let parsed: unknown;
+    const parsed = parseTitleRow(line);
+    if (!parsed) return;
+    // Custom title beats AI title; once we've locked onto a custom title,
+    // ignore later ai-title rows for the same session.
+    if (parsed.source === 'ai' && this.lastTitleSource === 'custom') return;
+    if (parsed.title === this.lastTitle && parsed.source === this.lastTitleSource) return;
+    this.lastTitle = parsed.title;
+    this.lastTitleSource = parsed.source;
     try {
-      parsed = JSON.parse(line);
-    } catch {
-      return;
-    }
-    if (!isSummaryRecord(parsed)) return;
-    const title = parsed.summary.trim();
-    if (!title || title === this.lastTitle) return;
-    this.lastTitle = title;
-    try {
-      this.onTitle(title);
+      this.onTitle(parsed.title);
     } catch (err) {
       log.warn('ClaudeSessionTitleSource: listener threw', { error: String(err) });
     }
   }
 }
 
-function isSummaryRecord(value: unknown): value is { type: 'summary'; summary: string } {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    (value as { type?: unknown }).type === 'summary' &&
-    typeof (value as { summary?: unknown }).summary === 'string'
-  );
+type ParsedTitle = { title: string; source: 'custom' | 'ai' };
+
+function parseTitleRow(line: string): ParsedTitle | undefined {
+  // Cheap pre-filter — most lines are user/assistant/tool_use rows.
+  const isCustom = line.includes('"type":"custom-title"');
+  const isAi = !isCustom && line.includes('"type":"ai-title"');
+  if (!isCustom && !isAi) return undefined;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(line);
+  } catch {
+    return undefined;
+  }
+  if (typeof parsed !== 'object' || parsed === null) return undefined;
+  const rec = parsed as Record<string, unknown>;
+  if (isCustom && rec.type === 'custom-title' && typeof rec.customTitle === 'string') {
+    const title = rec.customTitle.trim();
+    if (title) return { title, source: 'custom' };
+  }
+  if (isAi && rec.type === 'ai-title' && typeof rec.aiTitle === 'string') {
+    const title = rec.aiTitle.trim();
+    if (title) return { title, source: 'ai' };
+  }
+  return undefined;
 }

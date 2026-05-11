@@ -50,7 +50,6 @@ export const SidebarProjectItem = observer(function SidebarProjectItem({
   const { currentView } = useWorkspaceSlots();
   const { params: projectParams } = useParams('project');
   const { params: taskParams } = useParams('task');
-  const showCreateTaskModal = useShowModal('taskModal');
   const showChangeConnectionModal = useShowModal('changeProjectConnectionModal');
   const showManageRunScripts = useShowModal('manageRunScriptsModal');
   const [isMenuOpen, setMenuOpen] = useState(false);
@@ -218,7 +217,7 @@ export const SidebarProjectItem = observer(function SidebarProjectItem({
             onPointerEnter={() => prefetchRepository()}
             onClick={(e) => {
               e.stopPropagation();
-              showCreateTaskModal({ projectId });
+              navigate('home', { projectId });
             }}
             disabled={project.state === 'unregistered'}
           >

@@ -3,7 +3,6 @@ import {
   InitialConversationField,
   type InitialConversationState,
 } from './initial-conversation-section';
-import { TaskNameField } from './task-name-field';
 import { type FromBranchModeState } from './use-from-branch-mode';
 
 interface FromBranchContentProps {
@@ -25,7 +24,6 @@ export function FromBranchContent({
 }: FromBranchContentProps) {
   return (
     <div className="flex flex-col gap-4">
-      <TaskNameField state={state} />
       <InitialConversationField state={initialConversation} connectionId={connectionId} />
       <BranchPickerField
         state={state}

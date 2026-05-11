@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import type { LocalProject, ProjectPathStatus } from '@shared/projects';
 import { GitHubAuthExecutionContext } from '@main/core/execution-context/github-auth-execution-context';
 import { LocalExecutionContext } from '@main/core/execution-context/local-execution-context';
@@ -33,17 +33,34 @@ export async function createLocalProject(params: CreateLocalProjectParams): Prom
   const gitInfo = await ensureGitRepository(git, params.initGitRepository);
   const baseRef = await resolveProjectBaseRef(git, gitInfo.baseRef);
 
-  const [row] = await db
-    .insert(projects)
-    .values({
-      id: params.id ?? randomUUID(),
-      name: params.name,
-      path: gitInfo.rootPath,
-      workspaceProvider: 'local',
-      baseRef,
-      updatedAt: sql`CURRENT_TIMESTAMP`,
-    })
-    .returning();
+  const [existing] = await db
+    .select()
+    .from(projects)
+    .where(eq(projects.path, gitInfo.rootPath))
+    .limit(1);
+
+  const [row] = existing
+    ? await db
+        .update(projects)
+        .set({
+          name: params.name,
+          baseRef,
+          archivedAt: null,
+          updatedAt: sql`CURRENT_TIMESTAMP`,
+        })
+        .where(eq(projects.id, existing.id))
+        .returning()
+    : await db
+        .insert(projects)
+        .values({
+          id: params.id ?? randomUUID(),
+          name: params.name,
+          path: gitInfo.rootPath,
+          workspaceProvider: 'local',
+          baseRef,
+          updatedAt: sql`CURRENT_TIMESTAMP`,
+        })
+        .returning();
 
   const project = {
     type: 'local' as const,

@@ -1,6 +1,6 @@
 import { ArrowUp, FolderOpen, GitBranch, Mic, Monitor, Plus, Server } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import yodaLogoWhite from '@/assets/images/yoda/yoda_logo_white.svg';
 import yodaLogo from '@/assets/images/yoda/yoda_logo.svg';
@@ -17,7 +17,7 @@ import { AgentSelector } from '@renderer/lib/components/agent-selector/agent-sel
 import { Titlebar } from '@renderer/lib/components/titlebar/Titlebar';
 import { useTheme } from '@renderer/lib/hooks/useTheme';
 import { rpc } from '@renderer/lib/ipc';
-import { useNavigate } from '@renderer/lib/layout/navigation-provider';
+import { useNavigate, useParams } from '@renderer/lib/layout/navigation-provider';
 import { useShowModal } from '@renderer/lib/modal/modal-provider';
 import { appState } from '@renderer/lib/stores/app-state';
 import { ComboboxTrigger, ComboboxValue } from '@renderer/lib/ui/combobox';
@@ -26,6 +26,15 @@ import { cn } from '@renderer/utils/utils';
 
 export function HomeTitlebar() {
   return <Titlebar />;
+}
+
+interface HomeViewWrapperProps {
+  children: ReactNode;
+  projectId?: string;
+}
+
+export function HomeViewWrapper({ children }: HomeViewWrapperProps) {
+  return <>{children}</>;
 }
 
 export const HomeMainPanel = observer(function HomeMainPanel() {
@@ -45,6 +54,9 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
     [projectManager.projects.size]
   );
 
+  const { params: homeParams, setParams: setHomeParams } = useParams('home');
+  const homeProjectId = homeParams.projectId;
+
   const navProjectId = (() => {
     const nav = appState.navigation;
     if (nav.currentViewId === 'task') {
@@ -58,11 +70,18 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
 
   const [selectedProjectId, setSelectedProjectId] = useState<string | undefined>(
     () =>
+      homeProjectId ??
       navProjectId ??
       Array.from(projectManager.projects.values())
         .reverse()
         .find((p) => p.state === 'mounted')?.data?.id
   );
+
+  useEffect(() => {
+    if (!homeProjectId) return;
+    setSelectedProjectId(homeProjectId);
+    setHomeParams({ projectId: undefined });
+  }, [homeProjectId, setHomeParams]);
 
   const projectStore = selectedProjectId
     ? projectManager.projects.get(selectedProjectId)
@@ -134,6 +153,8 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
     type RecentEntry = {
       id: string;
       projectId: string;
+      projectName: string;
+      projectType: 'local' | 'ssh';
       name: string;
       createdAt: string;
     };
@@ -143,6 +164,8 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
         entries.push({
           id: t.data.id,
           projectId: p.data.id,
+          projectName: p.data.name,
+          projectType: p.data.type,
           name: t.data.name,
           createdAt: t.data.createdAt,
         });
@@ -185,9 +208,9 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
                   if (canSubmit) void handleSubmit();
                 }
               }}
-              className="min-h-28 resize-none border-0 bg-transparent px-5 pb-2 pt-4 text-base placeholder:text-foreground-muted focus-visible:ring-0"
+              className="min-h-28 resize-none border-0 bg-transparent px-5 py-4 text-base placeholder:text-foreground-muted focus-visible:ring-0"
             />
-            <div className="flex items-center justify-between gap-2 px-2.5 pb-2.5 pt-1">
+            <div className="flex items-center justify-between gap-2 px-2.5 py-2">
               <div className="flex items-center gap-1">
                 <button
                   type="button"
@@ -255,17 +278,24 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
 
         {recentTasks.length > 0 && (
           <div className="mt-10 flex flex-col">
-            {recentTasks.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => navigate('task', { projectId: t.projectId, taskId: t.id })}
-                className="flex items-center gap-3 border-b border-border/60 py-3 text-left text-sm text-foreground-muted transition-colors hover:text-foreground"
-              >
-                <GitBranch className="size-4 shrink-0 text-foreground-passive" />
-                <span className="truncate">{t.name}</span>
-              </button>
-            ))}
+            {recentTasks.map((t) => {
+              const ProjectIcon = t.projectType === 'ssh' ? Server : Monitor;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => navigate('task', { projectId: t.projectId, taskId: t.id })}
+                  className="flex items-center gap-3 border-b border-border/60 py-3 text-left text-sm text-foreground-muted transition-colors hover:text-foreground"
+                >
+                  <GitBranch className="size-4 shrink-0 text-foreground-passive" />
+                  <span className="truncate">{t.name}</span>
+                  <span className="ml-auto flex shrink-0 items-center gap-1.5 text-xs text-foreground-passive">
+                    <ProjectIcon className="size-3.5" />
+                    <span className="max-w-[12rem] truncate">{t.projectName}</span>
+                  </span>
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
@@ -288,6 +318,7 @@ function Chip({ icon: Icon, children }: ChipProps) {
 }
 
 export const homeView = {
+  WrapView: HomeViewWrapper,
   TitlebarSlot: HomeTitlebar,
   MainPanel: HomeMainPanel,
 };

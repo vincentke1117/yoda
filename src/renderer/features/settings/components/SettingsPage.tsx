@@ -5,6 +5,7 @@ import { rpc } from '@renderer/lib/ipc';
 import { Separator } from '@renderer/lib/ui/separator';
 import { cn } from '@renderer/utils/utils';
 import { AccountTab } from './AccountTab';
+import ArchivedProjectsCard from './ArchivedProjectsCard';
 import { CliAgentsList } from './CliAgentsList';
 import DefaultAgentSettingsCard from './DefaultAgentSettingsCard';
 import HiddenToolsSettingsCard from './HiddenToolsSettingsCard';
@@ -127,6 +128,10 @@ export function SettingsPage({
       description: t('settings.repositoryTab.description'),
       sections: [
         { title: t('settings.repositoryTab.branchPrefix'), component: <RepositorySettingsCard /> },
+        {
+          title: t('settings.archivedProjects.title'),
+          component: <ArchivedProjectsCard />,
+        },
       ],
     },
     interface: {

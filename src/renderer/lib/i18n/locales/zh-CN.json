@@ -166,6 +166,13 @@
       "autoUpdateGitignore": "自动更新 .gitignore",
       "autoUpdateGitignoreAria": "启用 CLI hook 配置的 .gitignore 更新"
     },
+    "archivedProjects": {
+      "title": "已归档的项目",
+      "loading": "加载中…",
+      "empty": "没有已归档的项目。",
+      "unarchive": "取消归档",
+      "unarchiveFailed": "取消归档失败"
+    },
     "interfaceTab": {
       "description": "自定义应用的外观与行为。",
       "keyboardShortcuts": "键盘快捷键",

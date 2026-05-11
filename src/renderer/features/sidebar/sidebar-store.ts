@@ -197,6 +197,11 @@ export class SidebarStore implements Snapshottable<SidebarSnapshot> {
     this.projectOrder = ids;
   }
 
+  prependProjectOrder(id: string): void {
+    const filtered = this.projectOrder.filter((existing) => existing !== id);
+    this.projectOrder = [id, ...filtered];
+  }
+
   mergeTaskOrder(projectId: string, tasks: TaskStore[]): TaskStore[] {
     const stored = this.taskOrderByProject[projectId] ?? [];
     const byId = new Map(tasks.map((t) => [t.data.id, t] as const));

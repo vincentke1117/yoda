@@ -99,7 +99,13 @@ export const CreateTaskModal = observer(function CreateTaskModal({
     ? (getRepositoryStore(selectedProjectId)?.repositoryUrl ?? undefined)
     : undefined;
 
-  const fromBranch = useFromBranchMode(selectedProjectId, defaultBranch, isUnborn, currentBranch);
+  const fromBranch = useFromBranchMode(
+    selectedProjectId,
+    defaultBranch,
+    isUnborn,
+    currentBranch,
+    initialConversation.prompt
+  );
   const fromIssue = useFromIssueMode(selectedProjectId, defaultBranch, isUnborn, currentBranch);
   const fromPR = useFromPullRequestMode(selectedProjectId, defaultBranch, isUnborn, initialPR);
   const fromPrUnavailable = selectedStrategy === 'from-pull-request' && !repositoryUrl;

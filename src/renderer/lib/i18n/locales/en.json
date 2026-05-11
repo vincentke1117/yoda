@@ -166,6 +166,13 @@
       "autoUpdateGitignore": "Auto-update .gitignore",
       "autoUpdateGitignoreAria": "Enable .gitignore updates for CLI hook configs"
     },
+    "archivedProjects": {
+      "title": "Archived projects",
+      "loading": "Loading…",
+      "empty": "No archived projects.",
+      "unarchive": "Unarchive",
+      "unarchiveFailed": "Failed to unarchive project"
+    },
     "interfaceTab": {
       "description": "Customize the appearance and behavior of the app.",
       "keyboardShortcuts": "Keyboard shortcuts",

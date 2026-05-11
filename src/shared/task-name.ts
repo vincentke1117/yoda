@@ -41,6 +41,20 @@ export const deriveTaskSlug = (input: string): string => {
 export const liveTransformTaskDisplayName = (input: string): string =>
   input.slice(0, MAX_TASK_NAME_LENGTH);
 
+/**
+ * Extract a display-name candidate from the first user prompt.
+ * Uses the first non-empty line, collapses inner whitespace, and caps length.
+ * Returns an empty string if the prompt has no usable content.
+ */
+export const taskNameFromPrompt = (prompt: string): string => {
+  const firstLine = prompt
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .find((l) => l.length > 0);
+  if (!firstLine) return '';
+  return normalizeTaskDisplayName(firstLine.replace(/\s+/g, ' '));
+};
+
 export const ensureUniqueTaskSlug = (
   baseName: string,
   existingNames: Iterable<string>,
