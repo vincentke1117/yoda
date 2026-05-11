@@ -6,6 +6,23 @@ This project resets to **0.1.0** with the rebrand from `emdash` to `yoda`. Older
 release history (`v0.4.x`, `v1.1.x`) belongs to the upstream `emdash` codebase
 and is preserved in git tags only.
 
+## 0.1.1 — 2026-05-11
+
+### Fixed
+
+- Make Apple/Azure code signing and R2 upload conditional in
+  `release-prod.yml` so the workflow can produce unsigned artifacts when
+  optional secrets are absent. Adds GitHub Release upload as a fallback
+  artifact destination.
+- Switch macOS signing secrets to the `APPLE_CERTIFICATE` /
+  `APPLE_CERTIFICATE_PASSWORD` / `APPLE_PASSWORD` naming used elsewhere
+  in the lovstudio org.
+- `notarize-mac.ts` now accepts either an App Store Connect API key
+  (`APPLE_API_KEY*`) or an Apple ID + app-specific password
+  (`APPLE_ID` + `APPLE_PASSWORD` + `APPLE_TEAM_ID`).
+- `electron-builder.config.ts` reads `YODA_DISABLE_WIN_SIGNING` and
+  `YODA_DISABLE_MAC_SIGNING` to opt out of code signing per-build.
+
 ## 0.1.0 — 2026-05-11
 
 First release under the `yoda` name. This version represents a full rebrand and

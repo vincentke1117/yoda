@@ -28,17 +28,28 @@ const apiKeyPath = process.env.APPLE_API_KEY ?? process.env.APPLE_API_KEY_CONTEN
 const apiKeyId = process.env.APPLE_API_KEY_ID;
 const apiIssuer = process.env.APPLE_API_ISSUER;
 
-if (!apiKeyPath || !apiKeyId || !apiIssuer) {
-  warn('Apple API key not configured; skipping notarization.');
+const appleId = process.env.APPLE_ID;
+const applePassword = process.env.APPLE_PASSWORD ?? process.env.APPLE_APP_SPECIFIC_PASSWORD;
+const appleTeamId = process.env.APPLE_TEAM_ID;
+
+const hasApiKeyAuth = Boolean(apiKeyPath && apiKeyId && apiIssuer);
+const hasAppleIdAuth = Boolean(appleId && applePassword && appleTeamId);
+
+if (!hasApiKeyAuth && !hasAppleIdAuth) {
+  warn('No Apple notarization credentials configured; skipping notarization.');
   process.exit(0);
 }
 
-let keyFile = apiKeyPath;
-if (apiKeyPath.includes('BEGIN PRIVATE KEY') || apiKeyPath.length > 500) {
+let keyFile = apiKeyPath ?? '';
+if (hasApiKeyAuth && apiKeyPath && (apiKeyPath.includes('BEGIN PRIVATE KEY') || apiKeyPath.length > 500)) {
   const { writeFileSync } = await import('node:fs');
   keyFile = join(tmpdir(), `apple_api_key_${Date.now()}.p8`);
   writeFileSync(keyFile, apiKeyPath);
 }
+
+const notarizeAuth = hasApiKeyAuth
+  ? `--key "${keyFile}" --key-id "${apiKeyId}" --issuer "${apiIssuer}"`
+  : `--apple-id "${appleId}" --password "${applePassword}" --team-id "${appleTeamId}"`;
 
 const dmgs = readdirSync(RELEASE_DIR)
   .filter((f) => f.endsWith('.dmg'))
@@ -51,10 +62,7 @@ if (dmgs.length === 0) {
 
 for (const dmg of dmgs) {
   step(`Notarizing ${dmg}`);
-  exec(
-    `xcrun notarytool submit "${dmg}" --key "${keyFile}" --key-id "${apiKeyId}" --issuer "${apiIssuer}" --wait`,
-    { echo: true }
-  );
+  exec(`xcrun notarytool submit "${dmg}" ${notarizeAuth} --wait`, { echo: true });
 
   info('Stapling DMG');
   exec(`xcrun stapler staple -v "${dmg}"`, { echo: true });

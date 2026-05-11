@@ -7,6 +7,23 @@ import {
   UPDATE_CHANNEL,
 } from './src/shared/app-identity';
 
+const winSigning =
+  process.env.YODA_DISABLE_WIN_SIGNING === '1'
+    ? {}
+    : {
+        azureSignOptions: {
+          publisherName: 'LovStudio',
+          endpoint: 'https://eus.codesigning.azure.net/',
+          certificateProfileName: 'yoda-public',
+          codeSigningAccountName: 'yoda',
+        },
+      };
+
+const macSigning =
+  process.env.YODA_DISABLE_MAC_SIGNING === '1'
+    ? { identity: null as unknown as string }
+    : {};
+
 const config: Configuration = {
   appId: APP_ID,
   productName: PRODUCT_NAME,
@@ -38,6 +55,7 @@ const config: Configuration = {
     ],
     icon: 'src/assets/images/yoda/yoda-beta.icns',
     notarize: false,
+    ...macSigning,
   },
   dmg: {
     icon: 'src/assets/images/yoda/yoda-beta.icns',
@@ -56,12 +74,7 @@ const config: Configuration = {
       { target: 'nsis', arch: ['x64'] },
       { target: 'msi', arch: ['x64'] },
     ],
-    azureSignOptions: {
-      publisherName: 'LovStudio',
-      endpoint: 'https://eus.codesigning.azure.net/',
-      certificateProfileName: 'yoda-public',
-      codeSigningAccountName: 'yoda',
-    },
+    ...winSigning,
   },
   msi: {
     oneClick: false,
