@@ -41,6 +41,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@renderer/lib/ui/toolti
 import { cn } from '@renderer/utils/utils';
 import { DevServerPills } from './components/dev-server-pills';
 import { IssueSelector, ProviderLogo } from './components/issue-selector/issue-selector';
+import { TaskGitDiffStats } from './components/task-git-diff-stats';
 import { type SidebarTab } from './types';
 import { useGitActions } from './use-git-actions';
 
@@ -265,6 +266,7 @@ const ActiveTaskTitlebar = observer(function ActiveTaskTitlebar({
               />
             </PopoverContent>
           </Popover>
+          <TaskGitDiffStats task={taskStore} />
           {taskPayload.linkedIssue ? <LinkedIssueBadge issue={taskPayload.linkedIssue} /> : null}
           <button
             className={cn(

@@ -9,7 +9,6 @@ import {
   TaskActionsMenu,
   TaskContextMenu,
 } from '@renderer/features/tasks/components/task-context-menu';
-import { TaskGitDiffStats } from '@renderer/features/tasks/components/task-git-diff-stats';
 import { type TaskStore } from '@renderer/features/tasks/stores/task';
 import {
   asProvisioned,
@@ -161,7 +160,6 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
           >
             {taskName}
           </span>
-          <TaskGitDiffStats task={task} className="h-full shrink-0 flex items-center pl-1 pr-1" />
           <RenderPrBadge task={task} />
         </div>
         <div
