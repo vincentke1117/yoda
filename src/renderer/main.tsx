@@ -1,6 +1,7 @@
 import ReactDOM from 'react-dom/client';
 import { App } from './App';
 import { ErrorBoundary } from './lib/components/error-boundary';
+import './lib/i18n';
 import './index.css';
 import 'devicon/devicon.min.css';
 import type { NavigationSnapshot, SidebarSnapshot } from '@shared/view-state';
