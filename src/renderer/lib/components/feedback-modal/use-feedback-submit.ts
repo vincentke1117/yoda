@@ -1,69 +1,21 @@
 import { useCallback, useState } from 'react';
 import { useToast } from '@renderer/lib/hooks/use-toast';
+import { rpc } from '@renderer/lib/ipc';
 import { log } from '@renderer/utils/logger';
 
-const DISCORD_WEBHOOK_URL =
-  'https://discord.com/api/webhooks/1473390363388416230/eRIo1UhylapH94KpqUUp5PDzkLhjBvcnjjyE_JezfHiAyfN3QEbRyEIJaSl8QQUz7Mak';
-
-interface GithubUser {
-  login?: string;
-  name?: string;
-  html_url?: string;
-  email?: string;
-}
+export type FeedbackCategory = 'bug' | 'idea' | 'contact';
 
 interface FeedbackSubmitOptions {
-  githubUser?: GithubUser | null;
-  appVersion?: string | null;
   onSuccess: () => void;
 }
 
-interface BuildFeedbackContentOptions {
-  feedback: string;
-  contactEmail: string;
-  githubUser?: GithubUser | null;
-  appVersion?: string | null;
+async function fileToUint8Array(file: File): Promise<Uint8Array> {
+  return new Uint8Array(await file.arrayBuffer());
 }
 
-export function buildFeedbackContent({
-  feedback,
-  contactEmail,
-  githubUser,
-  appVersion,
-}: BuildFeedbackContentOptions): string {
-  const trimmedFeedback = feedback.trim();
-  const trimmedContact = contactEmail.trim();
-  const metadataLines: string[] = [];
-
-  if (trimmedContact) {
-    metadataLines.push(`Contact: ${trimmedContact}`);
-  }
-
-  const githubLogin = githubUser?.login?.trim();
-  const githubName = githubUser?.name?.trim();
-  if (githubLogin || githubName) {
-    const parts: string[] = [];
-    if (githubName && githubLogin) {
-      parts.push(`${githubName} (@${githubLogin})`);
-    } else if (githubName) {
-      parts.push(githubName);
-    } else if (githubLogin) {
-      parts.push(`@${githubLogin}`);
-    }
-    metadataLines.push(`GitHub: ${parts.join(' ')}`);
-  }
-
-  const trimmedAppVersion = appVersion?.trim();
-  if (trimmedAppVersion) {
-    metadataLines.push(`Yoda Version: ${trimmedAppVersion}`);
-  }
-
-  return [trimmedFeedback, metadataLines.join('\n')].filter(Boolean).join('\n\n');
-}
-
-export function useFeedbackSubmit({ githubUser, appVersion, onSuccess }: FeedbackSubmitOptions) {
+export function useFeedbackSubmit({ onSuccess }: FeedbackSubmitOptions) {
   const [feedbackDetails, setFeedbackDetails] = useState('');
-  const [contactEmail, setContactEmail] = useState('');
+  const [category, setCategory] = useState<FeedbackCategory>('idea');
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const { toast } = useToast();
@@ -74,7 +26,7 @@ export function useFeedbackSubmit({ githubUser, appVersion, onSuccess }: Feedbac
 
   const reset = useCallback(() => {
     setFeedbackDetails('');
-    setContactEmail('');
+    setCategory('idea');
     setSubmitting(false);
     setErrorMessage(null);
   }, []);
@@ -82,7 +34,7 @@ export function useFeedbackSubmit({ githubUser, appVersion, onSuccess }: Feedbac
   const handleSubmit = useCallback(
     async (attachments: File[]) => {
       const trimmedFeedback = feedbackDetails.trim();
-      if (!trimmedFeedback) {
+      if (trimmedFeedback.length < 4) {
         setErrorMessage('Please enter some feedback before sending.');
         return;
       }
@@ -90,39 +42,31 @@ export function useFeedbackSubmit({ githubUser, appVersion, onSuccess }: Feedbac
       setSubmitting(true);
       setErrorMessage(null);
 
-      const content = buildFeedbackContent({
-        feedback: trimmedFeedback,
-        contactEmail,
-        githubUser,
-        appVersion,
-      });
-
       try {
-        let response: Response;
-        if (attachments.length > 0) {
-          const formData = new FormData();
-          formData.append('content', content);
-          attachments.forEach((file, index) => {
-            formData.append(`file${index}`, file);
-          });
-          response = await fetch(DISCORD_WEBHOOK_URL, { method: 'POST', body: formData });
-        } else {
-          response = await fetch(DISCORD_WEBHOOK_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content }),
-          });
-        }
+        const attachmentPayload = await Promise.all(
+          attachments.map(async (file) => ({
+            filename: file.name,
+            contentType: file.type || 'application/octet-stream',
+            data: await fileToUint8Array(file),
+          }))
+        );
 
-        if (!response.ok) {
-          throw new Error(`Discord webhook returned ${response.status}`);
+        const result = await rpc.feedback.submit({
+          message: trimmedFeedback,
+          category,
+          attachments: attachmentPayload,
+        });
+
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to send feedback');
         }
 
         onSuccess();
         toast({ title: 'Feedback sent', description: 'Thanks for your feedback!' });
       } catch (error) {
         log.error('Failed to submit feedback:', error);
-        setErrorMessage('Unable to send feedback. Please try again.');
+        const message = error instanceof Error ? error.message : 'Unable to send feedback.';
+        setErrorMessage(message);
         toast({
           title: 'Failed to send feedback',
           description: 'Please try again.',
@@ -132,19 +76,19 @@ export function useFeedbackSubmit({ githubUser, appVersion, onSuccess }: Feedbac
         setSubmitting(false);
       }
     },
-    [appVersion, contactEmail, feedbackDetails, githubUser, onSuccess, toast]
+    [category, feedbackDetails, onSuccess, toast]
   );
 
   return {
     feedbackDetails,
     setFeedbackDetails,
-    contactEmail,
-    setContactEmail,
+    category,
+    setCategory,
     submitting,
     errorMessage,
     clearError,
     reset,
     handleSubmit,
-    canSubmit: feedbackDetails.trim().length > 0 && !submitting,
+    canSubmit: feedbackDetails.trim().length >= 4 && !submitting,
   };
 }

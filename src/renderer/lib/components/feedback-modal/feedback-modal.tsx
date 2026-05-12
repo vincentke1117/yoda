@@ -1,9 +1,8 @@
-import { ImageIcon, Paperclip, XIcon } from 'lucide-react';
+import { ImageIcon, LogIn, Paperclip, XIcon } from 'lucide-react';
 import React, { useCallback } from 'react';
 import { useAttachments } from '@renderer/lib/hooks/use-attachments';
+import { useAccountSession, useAccountSignIn } from '@renderer/lib/hooks/useAccount';
 import { type BaseModalProps } from '@renderer/lib/modal/modal-provider';
-import { useGithubContext } from '@renderer/lib/providers/github-context-provider';
-import { appState } from '@renderer/lib/stores/app-state';
 import { Button } from '@renderer/lib/ui/button';
 import { ConfirmButton } from '@renderer/lib/ui/confirm-button';
 import {
@@ -13,11 +12,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@renderer/lib/ui/dialog';
-import { Input } from '@renderer/lib/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@renderer/lib/ui/select';
 import { Spinner } from '@renderer/lib/ui/spinner';
 import { Textarea } from '@renderer/lib/ui/textarea';
 import { cn } from '@renderer/utils/utils';
-import { useFeedbackSubmit } from './use-feedback-submit';
+import { useFeedbackSubmit, type FeedbackCategory } from './use-feedback-submit';
 
 type FeedbackModalArgs = {
   blurb?: string;
@@ -52,9 +57,42 @@ function AttachmentThumbnail({
   );
 }
 
+function SignInGate({ blurb }: { blurb?: string }) {
+  const signIn = useAccountSignIn();
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <DialogHeader>
+        <div className="flex flex-col gap-0.5">
+          <DialogTitle>Feedback</DialogTitle>
+          {blurb ? <DialogDescription className="text-xs">{blurb}</DialogDescription> : null}
+        </div>
+      </DialogHeader>
+      <DialogContentArea>
+        <div className="flex flex-col items-center justify-center gap-3 py-6 text-center">
+          <LogIn className="size-8 text-muted-foreground" aria-hidden="true" />
+          <div className="space-y-1">
+            <p className="text-sm font-medium">Sign in to send feedback</p>
+            <p className="text-xs text-muted-foreground">
+              We use your Lovstudio account email so we can reply to you.
+            </p>
+          </div>
+          <Button
+            type="button"
+            onClick={() => signIn.mutate(undefined)}
+            disabled={signIn.isPending}
+            className="gap-2"
+          >
+            {signIn.isPending ? <Spinner size="sm" /> : <LogIn className="size-4" />}
+            <span>{signIn.isPending ? 'Signing in…' : 'Sign in'}</span>
+          </Button>
+        </div>
+      </DialogContentArea>
+    </div>
+  );
+}
+
 export function FeedbackModal({ onSuccess, blurb }: Props) {
-  const { user: githubUser } = useGithubContext();
-  const appVersion = appState.update.currentVersion;
+  const { data: session, isLoading: sessionLoading } = useAccountSession();
   const {
     attachments,
     isDraggingOver,
@@ -73,16 +111,14 @@ export function FeedbackModal({ onSuccess, blurb }: Props) {
   const {
     feedbackDetails,
     setFeedbackDetails,
-    contactEmail,
-    setContactEmail,
+    category,
+    setCategory,
     submitting,
     errorMessage,
     clearError,
     handleSubmit,
     canSubmit,
   } = useFeedbackSubmit({
-    githubUser,
-    appVersion,
     onSuccess: () => {
       resetAttachments();
       onSuccess();
@@ -96,6 +132,18 @@ export function FeedbackModal({ onSuccess, blurb }: Props) {
     },
     [handleSubmit, attachments]
   );
+
+  if (sessionLoading) {
+    return (
+      <div className="flex min-h-0 flex-1 items-center justify-center py-8">
+        <Spinner size="sm" />
+      </div>
+    );
+  }
+
+  if (!session?.isSignedIn) {
+    return <SignInGate blurb={blurb} />;
+  }
 
   return (
     <div
@@ -116,11 +164,39 @@ export function FeedbackModal({ onSuccess, blurb }: Props) {
       <DialogHeader>
         <div className="flex flex-col gap-0.5">
           <DialogTitle>Feedback</DialogTitle>
-          {blurb ? <DialogDescription className="text-xs">{blurb}</DialogDescription> : null}
+          {blurb ? (
+            <DialogDescription className="text-xs">{blurb}</DialogDescription>
+          ) : (
+            <DialogDescription className="text-xs">
+              Sending as {session.user?.email}
+            </DialogDescription>
+          )}
         </div>
       </DialogHeader>
       <DialogContentArea>
         <form id="feedback-form" className="space-y-4 pt-0.5" onSubmit={handleFormSubmit}>
+          <div className="space-y-1.5">
+            <label
+              htmlFor="feedback-category"
+              className="text-xs font-medium text-muted-foreground"
+            >
+              Category
+            </label>
+            <Select
+              value={category}
+              onValueChange={(value) => setCategory(value as FeedbackCategory)}
+            >
+              <SelectTrigger id="feedback-category" className="w-40">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="idea">Idea</SelectItem>
+                <SelectItem value="bug">Bug</SelectItem>
+                <SelectItem value="contact">Contact</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           <div className="space-y-1.5">
             <label htmlFor="feedback-details" className="sr-only">
               Feedback details
@@ -137,22 +213,6 @@ export function FeedbackModal({ onSuccess, blurb }: Props) {
                 if (errorMessage) clearError();
               }}
               onPaste={handlePaste}
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label htmlFor="feedback-contact" className="sr-only">
-              Contact email
-            </label>
-            <Input
-              id="feedback-contact"
-              type="text"
-              placeholder="productive@example.com (optional)"
-              value={contactEmail}
-              onChange={(event) => {
-                setContactEmail(event.target.value);
-                if (errorMessage) clearError();
-              }}
             />
           </div>
 
