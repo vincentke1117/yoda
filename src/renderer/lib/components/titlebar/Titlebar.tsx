@@ -23,17 +23,19 @@ export function Titlebar({ leftSlot, rightSlot }: { leftSlot?: ReactNode; rightS
             {!isLeftOpen && (
               <>
                 <Tooltip>
-                  <TooltipTrigger>
-                    <Toggle
-                      pressed={isLeftOpen}
-                      variant="outline"
-                      size="sm"
-                      className="ml-2 size-7 border-none"
-                      onPressedChange={() => setCollapsed('left', isLeftOpen)}
-                    >
-                      <PanelLeft className="h-4 w-4" />
-                    </Toggle>
-                  </TooltipTrigger>
+                  <TooltipTrigger
+                    render={
+                      <Toggle
+                        pressed={isLeftOpen}
+                        variant="outline"
+                        size="sm"
+                        className="ml-2 size-7 border-none"
+                        onPressedChange={() => setCollapsed('left', isLeftOpen)}
+                      >
+                        <PanelLeft className="h-4 w-4" />
+                      </Toggle>
+                    }
+                  />
                   <TooltipContent>
                     Toggle left sidebar
                     <ShortcutHint settingsKey="toggleLeftSidebar" />

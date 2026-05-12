@@ -41,18 +41,21 @@ export function ShareableSettingTitle({ children, leafLabel, overrideSources, on
               </TooltipContent>
             </Tooltip>
             <Tooltip>
-              <TooltipTrigger className="inline-flex h-4.5 items-center">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  className="size-4.5 rounded-full p-0 text-muted-foreground hover:text-foreground"
-                  aria-label={`Use team settings for ${leafLabel}`}
-                  onClick={onRestore}
-                >
-                  <RotateCcw className="size-3" aria-hidden="true" />
-                </Button>
-              </TooltipTrigger>
+              <TooltipTrigger
+                className="inline-flex h-4.5 items-center"
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    className="size-4.5 rounded-full p-0 text-muted-foreground hover:text-foreground"
+                    aria-label={`Use team settings for ${leafLabel}`}
+                    onClick={onRestore}
+                  >
+                    <RotateCcw className="size-3" aria-hidden="true" />
+                  </Button>
+                }
+              />
               <TooltipContent side="top" align="end">
                 Use team settings
               </TooltipContent>

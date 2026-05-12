@@ -178,22 +178,24 @@ const IntegrationRow: React.FC<IntegrationRowProps> = ({
         {showInstallCopy ? (
           <TooltipProvider>
             <Tooltip>
-              <TooltipTrigger>
-                <button
-                  type="button"
-                  onClick={() => {
-                    void handleCopyInstall();
-                  }}
-                  className={ICON_BUTTON}
-                  aria-label={
-                    copied
-                      ? t('settings.integrationsTab.commandCopied')
-                      : t('settings.integrationsTab.copyInstallFor', { name })
-                  }
-                >
-                  <CopyIcon className="h-4 w-4" aria-hidden="true" />
-                </button>
-              </TooltipTrigger>
+              <TooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void handleCopyInstall();
+                    }}
+                    className={ICON_BUTTON}
+                    aria-label={
+                      copied
+                        ? t('settings.integrationsTab.commandCopied')
+                        : t('settings.integrationsTab.copyInstallFor', { name })
+                    }
+                  >
+                    <CopyIcon className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                }
+              />
               <TooltipContent side="top">
                 <div className="max-w-[240px] space-y-1">
                   <div className="text-xs font-medium text-foreground">

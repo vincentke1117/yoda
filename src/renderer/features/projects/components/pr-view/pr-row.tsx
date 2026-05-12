@@ -32,16 +32,18 @@ export const PrRow = memo(function PrRow({
             </span>
             <PrNumberBadge number={getPrNumber(pr) ?? 0} />
             <Tooltip>
-              <TooltipTrigger>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  className="opacity-0 group-hover:opacity-100 transition-opacity"
-                  onClick={() => rpc.app.openExternal(pr.url)}
-                >
-                  <ExternalLink className="size-3.5" />
-                </Button>
-              </TooltipTrigger>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    className="opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={() => rpc.app.openExternal(pr.url)}
+                  >
+                    <ExternalLink className="size-3.5" />
+                  </Button>
+                }
+              />
               <TooltipContent>Open PR on github</TooltipContent>
             </Tooltip>
           </div>

@@ -142,17 +142,19 @@ export function BranchSelector({
           rightAddon={
             onRefresh && (
               <Tooltip>
-                <TooltipTrigger>
-                  <InputGroupButton
-                    size="icon-xs"
-                    className="text-foreground-muted hover:text-foreground"
-                    onClick={onRefresh}
-                    disabled={isRefreshing}
-                    aria-label="Refresh branches"
-                  >
-                    <RefreshCw className={cn('size-3', isRefreshing && 'animate-spin')} />
-                  </InputGroupButton>
-                </TooltipTrigger>
+                <TooltipTrigger
+                  render={
+                    <InputGroupButton
+                      size="icon-xs"
+                      className="text-foreground-muted hover:text-foreground"
+                      onClick={onRefresh}
+                      disabled={isRefreshing}
+                      aria-label="Refresh branches"
+                    >
+                      <RefreshCw className={cn('size-3', isRefreshing && 'animate-spin')} />
+                    </InputGroupButton>
+                  }
+                />
                 <TooltipContent>Refresh branches</TooltipContent>
               </Tooltip>
             )

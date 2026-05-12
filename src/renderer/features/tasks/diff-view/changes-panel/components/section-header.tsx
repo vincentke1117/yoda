@@ -122,11 +122,18 @@ export function PullRequestSectionHeader({
             </TooltipContent>
           </Tooltip>
           <Tooltip>
-            <TooltipTrigger>
-              <Button variant="outline" size="icon-xs" onClick={onRefresh} disabled={isRefreshing}>
-                <RefreshCw className={cn('size-3', isRefreshing && 'animate-spin')} />
-              </Button>
-            </TooltipTrigger>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="outline"
+                  size="icon-xs"
+                  onClick={onRefresh}
+                  disabled={isRefreshing}
+                >
+                  <RefreshCw className={cn('size-3', isRefreshing && 'animate-spin')} />
+                </Button>
+              }
+            />
             <TooltipContent>Refresh pull requests</TooltipContent>
           </Tooltip>
         </div>

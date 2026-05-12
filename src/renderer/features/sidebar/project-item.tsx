@@ -10,7 +10,6 @@ import {
 import { observer } from 'mobx-react-lite';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import useDoubleClick from 'use-double-click';
 import { ensureUniqueTaskSlug } from '@shared/task-name';
 import {
   isUnregisteredProject,
@@ -61,18 +60,28 @@ export const SidebarProjectItem = observer(function SidebarProjectItem({
   const showManageRunScripts = useShowModal('manageRunScriptsModal');
   const showRenameProject = useShowModal('renameProjectModal');
   const [isMenuOpen, setMenuOpen] = useState(false);
-  const rowRef = useRef<HTMLDivElement>(null);
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const canRename = getProjectStore(projectId)?.state !== 'unregistered';
-  useDoubleClick({
-    ref: rowRef,
-    latency: 220,
-    onSingleClick: () => navigate('project', { projectId }),
-    onDoubleClick: () => {
+  useEffect(
+    () => () => {
+      if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
+    },
+    []
+  );
+  const handleRowClick = useCallback(() => {
+    if (clickTimerRef.current) {
+      clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
       if (canRename) showRenameProject({ projectId });
       else navigate('project', { projectId });
-    },
-  });
+      return;
+    }
+    clickTimerRef.current = setTimeout(() => {
+      clickTimerRef.current = null;
+      navigate('project', { projectId });
+    }, 220);
+  }, [canRename, navigate, projectId, showRenameProject]);
 
   const project = getProjectStore(projectId);
 
@@ -169,11 +178,13 @@ export const SidebarProjectItem = observer(function SidebarProjectItem({
     const labelKey = UNREGISTERED_PHASE_KEY[project.phase] ?? 'sidebar.phase.loading';
     return (
       <Tooltip>
-        <TooltipTrigger>
-          <SidebarItemMiniButton type="button" disabled aria-label={t('sidebar.loading')}>
-            <Loader2 className="h-4 w-4 animate-spin text-foreground/60" />
-          </SidebarItemMiniButton>
-        </TooltipTrigger>
+        <TooltipTrigger
+          render={
+            <SidebarItemMiniButton type="button" disabled aria-label={t('sidebar.loading')}>
+              <Loader2 className="h-4 w-4 animate-spin text-foreground/60" />
+            </SidebarItemMiniButton>
+          }
+        />
         <TooltipContent>{t(labelKey)}</TooltipContent>
       </Tooltip>
     );
@@ -211,11 +222,11 @@ export const SidebarProjectItem = observer(function SidebarProjectItem({
   return (
     <ProjectContextMenu {...menuActions}>
       <SidebarMenuRow
-        ref={rowRef}
         className={cn('group/row h-8 justify-between flex px-1')}
         data-active={isProjectActive || undefined}
         isActive={isProjectActive}
         onMouseDown={(e) => e.preventDefault()}
+        onClick={handleRowClick}
       >
         <div className="flex items-center gap-1 flex-1 min-w-0">
           {project.state === 'unregistered' ? (

@@ -32,18 +32,20 @@ export function ProjectSettingsFooter({
     <div className="flex justify-between gap-2 pt-5 pb-10 px-10">
       <TooltipProvider delay={150}>
         <Tooltip>
-          <TooltipTrigger>
-            <Button
-              type="button"
-              variant="outline"
-              className="shrink-0 gap-1.5"
-              disabled={shareDisabled}
-              hidden={!canShareConfig}
-              onClick={onShare}
-            >
-              Share with team
-            </Button>
-          </TooltipTrigger>
+          <TooltipTrigger
+            render={
+              <Button
+                type="button"
+                variant="outline"
+                className="shrink-0 gap-1.5"
+                disabled={shareDisabled}
+                hidden={!canShareConfig}
+                onClick={onShare}
+              >
+                Share with team
+              </Button>
+            }
+          />
           <TooltipContent side="bottom" align="end">
             Writes selected settings to .yoda.json. Commit that file to share these defaults with
             your team.

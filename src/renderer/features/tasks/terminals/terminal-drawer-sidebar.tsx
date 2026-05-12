@@ -51,14 +51,16 @@ export const TerminalDrawerSidebar = observer(function TerminalDrawerSidebar({
         label="Terminals"
         action={
           <Tooltip>
-            <TooltipTrigger>
-              <button
-                className="flex items-center justify-center size-5 rounded hover:bg-background-2 text-foreground-muted hover:text-foreground"
-                onClick={onAddTerminal}
-              >
-                <Plus className="size-3" />
-              </button>
-            </TooltipTrigger>
+            <TooltipTrigger
+              render={
+                <button
+                  className="flex items-center justify-center size-5 rounded hover:bg-background-2 text-foreground-muted hover:text-foreground"
+                  onClick={onAddTerminal}
+                >
+                  <Plus className="size-3" />
+                </button>
+              }
+            />
             <TooltipContent>New terminal</TooltipContent>
           </Tooltip>
         }
@@ -73,17 +75,19 @@ export const TerminalDrawerSidebar = observer(function TerminalDrawerSidebar({
             onRename={(name) => onRenameTerminal(terminal.data.id, name)}
             action={
               <Tooltip>
-                <TooltipTrigger>
-                  <button
-                    className="ml-1 shrink-0 flex items-center justify-center size-5 rounded opacity-0 group-hover:opacity-100 hover:bg-background text-foreground-muted hover:text-foreground"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onRemoveTerminal(terminal.data.id);
-                    }}
-                  >
-                    <X className="size-3" />
-                  </button>
-                </TooltipTrigger>
+                <TooltipTrigger
+                  render={
+                    <button
+                      className="ml-1 shrink-0 flex items-center justify-center size-5 rounded opacity-0 group-hover:opacity-100 hover:bg-background text-foreground-muted hover:text-foreground"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRemoveTerminal(terminal.data.id);
+                      }}
+                    >
+                      <X className="size-3" />
+                    </button>
+                  }
+                />
                 <TooltipContent>Close terminal</TooltipContent>
               </Tooltip>
             }
@@ -95,14 +99,16 @@ export const TerminalDrawerSidebar = observer(function TerminalDrawerSidebar({
           label="Scripts"
           action={
             <Tooltip>
-              <TooltipTrigger>
-                <button
-                  onClick={() => navigate('project', { projectId })}
-                  className="flex items-center justify-center size-5 rounded hover:bg-background-2 text-foreground-muted hover:text-foreground"
-                >
-                  <Settings className="size-3" />
-                </button>
-              </TooltipTrigger>
+              <TooltipTrigger
+                render={
+                  <button
+                    onClick={() => navigate('project', { projectId })}
+                    className="flex items-center justify-center size-5 rounded hover:bg-background-2 text-foreground-muted hover:text-foreground"
+                  >
+                    <Settings className="size-3" />
+                  </button>
+                }
+              />
               <TooltipContent>Configure in project settings</TooltipContent>
             </Tooltip>
           }
@@ -119,25 +125,27 @@ export const TerminalDrawerSidebar = observer(function TerminalDrawerSidebar({
                 action={
                   isActive ? (
                     <Tooltip>
-                      <TooltipTrigger>
-                        <button
-                          className="ml-1 shrink-0 flex items-center justify-center size-5 rounded hover:bg-background text-foreground-muted hover:text-foreground"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (script.isRunning) {
-                              onStopScript();
-                            } else {
-                              onRunScript();
-                            }
-                          }}
-                        >
-                          {script.isRunning ? (
-                            <Pause className="size-3" />
-                          ) : (
-                            <Play className="size-3" />
-                          )}
-                        </button>
-                      </TooltipTrigger>
+                      <TooltipTrigger
+                        render={
+                          <button
+                            className="ml-1 shrink-0 flex items-center justify-center size-5 rounded hover:bg-background text-foreground-muted hover:text-foreground"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (script.isRunning) {
+                                onStopScript();
+                              } else {
+                                onRunScript();
+                              }
+                            }}
+                          >
+                            {script.isRunning ? (
+                              <Pause className="size-3" />
+                            ) : (
+                              <Play className="size-3" />
+                            )}
+                          </button>
+                        }
+                      />
                       <TooltipContent>{script.isRunning ? 'Stop' : 'Run'}</TooltipContent>
                     </Tooltip>
                   ) : null

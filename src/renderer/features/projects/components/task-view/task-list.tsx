@@ -134,6 +134,7 @@ export const TaskList = observer(function TaskList() {
   const showCreateTaskModal = useShowModal('taskModal');
 
   const taskView = store?.view.taskView ?? null;
+  const showCommandPalette = useShowModal('commandPaletteModal');
 
   const allTasks = taskManager
     ? Array.from(taskManager.tasks.values()).filter(
@@ -203,24 +204,35 @@ export const TaskList = observer(function TaskList() {
           </ToggleGroup>
           <div className="flex items-center gap-2">
             <SearchInput
-              placeholder="Search tasks…"
+              placeholder="Search tasks… (↵ for full search)"
               value={taskView.searchQuery}
               onChange={(e) => taskView.setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  showCommandPalette({
+                    projectId,
+                    initialQuery: taskView.searchQuery,
+                  });
+                }
+              }}
               className="flex-1"
             />
             {taskView.tab === 'archived' && (
               <Tooltip>
-                <TooltipTrigger>
-                  <Toggle
-                    variant="outline"
-                    size="sm"
-                    pressed={taskView.archivedOnlyWithNote}
-                    onPressedChange={(pressed) => taskView.setArchivedOnlyWithNote(pressed)}
-                    aria-label="Only show tasks with a note"
-                  >
-                    <FileText className="size-3.5" />
-                  </Toggle>
-                </TooltipTrigger>
+                <TooltipTrigger
+                  render={
+                    <Toggle
+                      variant="outline"
+                      size="sm"
+                      pressed={taskView.archivedOnlyWithNote}
+                      onPressedChange={(pressed) => taskView.setArchivedOnlyWithNote(pressed)}
+                      aria-label="Only show tasks with a note"
+                    >
+                      <FileText className="size-3.5" />
+                    </Toggle>
+                  }
+                />
                 <TooltipContent>Only with notes</TooltipContent>
               </Tooltip>
             )}

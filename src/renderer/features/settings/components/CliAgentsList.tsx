@@ -107,16 +107,18 @@ const renderAgentRow = (agent: CliAgentStatus, actions: AgentRowActions) => {
         isDetected ? (
           <TooltipProvider delay={150}>
             <Tooltip>
-              <TooltipTrigger>
-                <button
-                  type="button"
-                  onClick={() => actions.onSettingsClick(agent.id)}
-                  className={ICON_BUTTON}
-                  aria-label={t('settings.agentsTab.executionSettingsAria', { name: agent.name })}
-                >
-                  <Settings2 className="h-4 w-4" aria-hidden="true" />
-                </button>
-              </TooltipTrigger>
+              <TooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    onClick={() => actions.onSettingsClick(agent.id)}
+                    className={ICON_BUTTON}
+                    aria-label={t('settings.agentsTab.executionSettingsAria', { name: agent.name })}
+                  >
+                    <Settings2 className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                }
+              />
               <TooltipContent side="top" className="text-xs">
                 {t('settings.agentsTab.executionSettings')}
               </TooltipContent>

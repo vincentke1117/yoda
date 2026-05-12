@@ -69,29 +69,33 @@ export const GitStatusSection = observer(function GitStatusSection() {
             {hasUpstream ? (
               <>
                 <Tooltip>
-                  <TooltipTrigger>
-                    <Button
-                      variant="outline"
-                      size="icon-xs"
-                      disabled={isFetching}
-                      onClick={() => fetch()}
-                    >
-                      <RefreshCcw className="size-3" />
-                    </Button>
-                  </TooltipTrigger>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        variant="outline"
+                        size="icon-xs"
+                        disabled={isFetching}
+                        onClick={() => fetch()}
+                      >
+                        <RefreshCcw className="size-3" />
+                      </Button>
+                    }
+                  />
                   <TooltipContent>{isFetching ? 'Fetching...' : 'Fetch changes'}</TooltipContent>
                 </Tooltip>
                 <Tooltip>
-                  <TooltipTrigger>
-                    <Button
-                      variant="outline"
-                      size="icon-xs"
-                      disabled={isPulling || behindCount === 0}
-                      onClick={() => pull()}
-                    >
-                      <ArrowDown className="size-3" />
-                    </Button>
-                  </TooltipTrigger>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        variant="outline"
+                        size="icon-xs"
+                        disabled={isPulling || behindCount === 0}
+                        onClick={() => pull()}
+                      >
+                        <ArrowDown className="size-3" />
+                      </Button>
+                    }
+                  />
                   <TooltipContent>
                     {isPulling
                       ? 'Pulling...'
@@ -101,16 +105,18 @@ export const GitStatusSection = observer(function GitStatusSection() {
                   </TooltipContent>
                 </Tooltip>
                 <Tooltip>
-                  <TooltipTrigger>
-                    <Button
-                      variant="outline"
-                      size="icon-xs"
-                      disabled={isPushing || aheadCount === 0}
-                      onClick={() => push()}
-                    >
-                      <ArrowUp className="size-3" />
-                    </Button>
-                  </TooltipTrigger>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        variant="outline"
+                        size="icon-xs"
+                        disabled={isPushing || aheadCount === 0}
+                        onClick={() => push()}
+                      >
+                        <ArrowUp className="size-3" />
+                      </Button>
+                    }
+                  />
                   <TooltipContent>
                     {isPushing
                       ? 'Pushing...'
@@ -122,21 +128,23 @@ export const GitStatusSection = observer(function GitStatusSection() {
               </>
             ) : (
               <Tooltip>
-                <TooltipTrigger>
-                  <Button
-                    variant="outline"
-                    size="xs"
-                    disabled={isPublishing || !branchName}
-                    onClick={handlePublishClick}
-                  >
-                    <ArrowUp className="size-3" />
-                    {isPublishing
-                      ? 'Publishing...'
-                      : shouldOfferAddRemote
-                        ? 'Add Remote'
-                        : 'Publish'}
-                  </Button>
-                </TooltipTrigger>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      variant="outline"
+                      size="xs"
+                      disabled={isPublishing || !branchName}
+                      onClick={handlePublishClick}
+                    >
+                      <ArrowUp className="size-3" />
+                      {isPublishing
+                        ? 'Publishing...'
+                        : shouldOfferAddRemote
+                          ? 'Add Remote'
+                          : 'Publish'}
+                    </Button>
+                  }
+                />
                 <TooltipContent>
                   {getPublishTooltipText({ isPublishing, branchName, shouldOfferAddRemote })}
                 </TooltipContent>

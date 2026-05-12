@@ -28,17 +28,19 @@ export const DevServerPills = observer(function DevServerPills({
     <>
       {urls.map((url) => (
         <Tooltip key={url}>
-          <TooltipTrigger>
-            <button
-              type="button"
-              onClick={() => rpc.app.openExternal(url)}
-              className="flex h-7 rounded-md items-center gap-1.5 border border-green-300 bg-green-50 px-2 py-1 text-xs text-foreground-muted transition-colors hover:border-green-400 hover:text-foreground"
-            >
-              <Globe className="size-3 shrink-0 text-green-700" />
-              <span className="text-green-700">{formatUrl(url)}</span>
-              <ExternalLink className="size-3 shrink-0 text-green-700" />
-            </button>
-          </TooltipTrigger>
+          <TooltipTrigger
+            render={
+              <button
+                type="button"
+                onClick={() => rpc.app.openExternal(url)}
+                className="flex h-7 rounded-md items-center gap-1.5 border border-green-300 bg-green-50 px-2 py-1 text-xs text-foreground-muted transition-colors hover:border-green-400 hover:text-foreground"
+              >
+                <Globe className="size-3 shrink-0 text-green-700" />
+                <span className="text-green-700">{formatUrl(url)}</span>
+                <ExternalLink className="size-3 shrink-0 text-green-700" />
+              </button>
+            }
+          />
           <TooltipContent side="bottom" className="text-xs">
             Dev server running at {url}
           </TooltipContent>
