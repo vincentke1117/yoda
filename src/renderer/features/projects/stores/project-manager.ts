@@ -381,6 +381,24 @@ export class ProjectManagerStore {
     }
   }
 
+  async updateProjectAlias(projectId: string, alias: string | null): Promise<void> {
+    const store = this.projects.get(projectId);
+    const previousAlias = store?.alias ?? null;
+    const next = alias?.trim() ?? null;
+    const normalized = next && next.length > 0 ? next : null;
+    runInAction(() => {
+      store?.setAlias(normalized);
+    });
+    try {
+      await rpc.projects.updateProjectAlias(projectId, normalized);
+    } catch (err) {
+      runInAction(() => {
+        store?.setAlias(previousAlias);
+      });
+      throw err;
+    }
+  }
+
   async updateProjectConnection(projectId: string, newConnectionId: string): Promise<void> {
     await rpc.projects.updateProjectConnection(projectId, newConnectionId);
 

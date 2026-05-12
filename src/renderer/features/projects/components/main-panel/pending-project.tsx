@@ -37,7 +37,7 @@ export const PendingProjectStatus = observer(function PendingProjectStatus({
   return (
     <div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-6 p-8">
       <div className="flex w-full max-w-sm min-w-0 flex-col gap-3">
-        <h2 className="mb-2 text-base">{project.name}</h2>
+        <h2 className="mb-2 text-base">{project.displayName}</h2>
 
         {stages.map((stage, i) => {
           const isDone = !isError && i < currentStageIndex;

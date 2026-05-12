@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArchiveRestore, FolderClosed, FolderInput } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { LocalProject, SshProject } from '@shared/projects';
+import { projectDisplayName, type LocalProject, type SshProject } from '@shared/projects';
 import { getProjectManagerStore } from '@renderer/features/projects/stores/project-selectors';
 import { useToast } from '@renderer/lib/hooks/use-toast';
 import { rpc } from '@renderer/lib/ipc';
@@ -75,7 +75,7 @@ function ArchivedProjectRow({
     <div className="flex items-center gap-3 rounded-md px-2 py-2">
       <Icon className="h-4 w-4 shrink-0 text-foreground-muted" />
       <div className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-sm text-foreground">{project.name}</span>
+        <span className="truncate text-sm text-foreground">{projectDisplayName(project)}</span>
         <span className="truncate text-xs text-foreground-muted">{project.path}</span>
       </div>
       <Button variant="outline" size="sm" onClick={onUnarchive} disabled={busy}>

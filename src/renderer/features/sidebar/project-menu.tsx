@@ -1,4 +1,4 @@
-import { Archive, CableIcon, RotateCcw, Settings2 } from 'lucide-react';
+import { Archive, CableIcon, PencilLine, RotateCcw, Settings2 } from 'lucide-react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -22,6 +22,7 @@ interface ProjectMenuActions {
   onReconnect?: () => void;
   onChangeSshConnection?: () => void;
   onConfigureScripts?: () => void;
+  onRename?: () => void;
   onArchive: () => void;
 }
 
@@ -40,6 +41,15 @@ function useMenuItems(actions: ProjectMenuActions): MenuItemDescriptor[] {
   const items: MenuItemDescriptor[] = [];
 
   // group 1 — configuration
+  if (actions.onRename) {
+    items.push({
+      key: 'rename',
+      group: 1,
+      icon: PencilLine,
+      label: t('sidebar.renameProject.menuLabel'),
+      onSelect: actions.onRename,
+    });
+  }
   if (actions.onConfigureScripts) {
     items.push({
       key: 'configure-scripts',

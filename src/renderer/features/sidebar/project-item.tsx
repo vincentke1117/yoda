@@ -8,8 +8,9 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import useDoubleClick from 'use-double-click';
 import { ensureUniqueTaskSlug } from '@shared/task-name';
 import {
   isUnregisteredProject,
@@ -58,7 +59,20 @@ export const SidebarProjectItem = observer(function SidebarProjectItem({
   const { params: taskParams } = useParams('task');
   const showChangeConnectionModal = useShowModal('changeProjectConnectionModal');
   const showManageRunScripts = useShowModal('manageRunScriptsModal');
+  const showRenameProject = useShowModal('renameProjectModal');
   const [isMenuOpen, setMenuOpen] = useState(false);
+  const rowRef = useRef<HTMLDivElement>(null);
+
+  const canRename = getProjectStore(projectId)?.state !== 'unregistered';
+  useDoubleClick({
+    ref: rowRef,
+    latency: 220,
+    onSingleClick: () => navigate('project', { projectId }),
+    onDoubleClick: () => {
+      if (canRename) showRenameProject({ projectId });
+      else navigate('project', { projectId });
+    },
+  });
 
   const project = getProjectStore(projectId);
 
@@ -189,18 +203,19 @@ export const SidebarProjectItem = observer(function SidebarProjectItem({
     onConfigureScripts:
       project.state === 'unregistered'
         ? undefined
-        : () => showManageRunScripts({ projectId, projectName: project.name ?? projectId }),
+        : () => showManageRunScripts({ projectId, projectName: project.displayName }),
+    onRename: project.state === 'unregistered' ? undefined : () => showRenameProject({ projectId }),
     onArchive: handleArchive,
   };
 
   return (
     <ProjectContextMenu {...menuActions}>
       <SidebarMenuRow
+        ref={rowRef}
         className={cn('group/row h-8 justify-between flex px-1')}
         data-active={isProjectActive || undefined}
         isActive={isProjectActive}
         onMouseDown={(e) => e.preventDefault()}
-        onClick={() => navigate('project', { projectId })}
       >
         <div className="flex items-center gap-1 flex-1 min-w-0">
           {project.state === 'unregistered' ? (
@@ -232,12 +247,12 @@ export const SidebarProjectItem = observer(function SidebarProjectItem({
           >
             {isSshProject ? (
               <span className="min-w-0 flex items-center gap-2">
-                <span className="truncate">{project.name}</span>
+                <span className="truncate">{project.displayName}</span>
                 <ConnectionStatusDot state={sshConnectionState} />
               </span>
             ) : (
               <span className="min-w-0 flex items-center gap-1.5">
-                <span className="truncate">{project.name}</span>
+                <span className="truncate">{project.displayName}</span>
                 {projectViewKind(project) === 'path_not_found' && (
                   <Tooltip>
                     <TooltipTrigger>

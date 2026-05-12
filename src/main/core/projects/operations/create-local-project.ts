@@ -66,6 +66,7 @@ export async function createLocalProject(params: CreateLocalProjectParams): Prom
     type: 'local' as const,
     id: row.id,
     name: row.name,
+    alias: row.alias,
     path: row.path,
     baseRef: row.baseRef ?? baseRef,
     createdAt: row.createdAt,

@@ -67,6 +67,17 @@
     "reconnect": "Reconnect",
     "changeSshConnection": "Change SSH connection",
     "archiveProject": "Archive project",
+    "renameProject": {
+      "menuLabel": "Rename project…",
+      "title": "Rename project",
+      "label": "Alias",
+      "hint": "Leave empty to use the default name ({{name}}).",
+      "tooLong": "Alias must be {{max}} characters or fewer.",
+      "matchesName": "Alias is the same as the default name; leave empty instead.",
+      "submit": "Save",
+      "saving": "Saving…",
+      "failed": "Failed to rename project"
+    },
     "archiveTask": "Archive task",
     "archiveTaskWithNote": "Archive task with note…",
     "phase": {

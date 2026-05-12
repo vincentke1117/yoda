@@ -78,6 +78,7 @@ export async function createSshProject(params: CreateSshProjectParams): Promise<
     type: 'ssh' as const,
     id: row.id,
     name: row.name,
+    alias: row.alias,
     path: row.path,
     connectionId: params.connectionId,
     baseRef: row.baseRef ?? baseRef,

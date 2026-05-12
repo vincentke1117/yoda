@@ -1,5 +1,5 @@
 import { makeAutoObservable, observable } from 'mobx';
-import type { LocalProject, SshProject } from '@shared/projects';
+import { projectDisplayName, type LocalProject, type SshProject } from '@shared/projects';
 import type { ProjectViewSnapshot } from '@shared/view-state';
 import { TaskManagerStore } from '@renderer/features/tasks/stores/task-manager';
 import { snapshotRegistry } from '@renderer/lib/stores/snapshot-registry';
@@ -75,6 +75,7 @@ export class ProjectStore {
   state: 'unregistered' | 'unmounted' | 'mounted';
   id: string;
   name: string | null;
+  alias: string | null = null;
   data: LocalProject | SshProject | null;
   phase: UnregisteredProjectPhase | UnmountedProjectPhase | null;
   error: string | undefined = undefined;
@@ -93,10 +94,21 @@ export class ProjectStore {
     this.state = state;
     this.id = id;
     this.name = name;
+    this.alias = data?.alias ?? null;
     this.data = data;
     this.phase = phase;
     this.mode = mode;
     makeAutoObservable(this, { mountedProject: observable.ref });
+  }
+
+  get displayName(): string {
+    if (this.name === null) return this.id;
+    return projectDisplayName({ name: this.name, alias: this.alias });
+  }
+
+  setAlias(alias: string | null): void {
+    this.alias = alias;
+    if (this.data) this.data = { ...this.data, alias } as LocalProject | SshProject;
   }
 
   transitionToMounted(data: LocalProject | SshProject, savedSnapshot?: ProjectViewSnapshot): void {
@@ -104,6 +116,7 @@ export class ProjectStore {
     this.data = data;
     this.id = data.id;
     this.name = data.name;
+    this.alias = data.alias;
     this.state = 'mounted';
     this.phase = null;
     this.error = undefined;
@@ -119,6 +132,7 @@ export class ProjectStore {
     this.data = data;
     this.id = data.id;
     this.name = data.name;
+    this.alias = data.alias;
     this.state = 'unmounted';
     this.phase = phase;
     this.error = undefined;
@@ -136,6 +150,7 @@ export class ProjectStore {
     this.data = null;
     this.id = id;
     this.name = name;
+    this.alias = null;
     this.state = 'unregistered';
     this.phase = phase;
     this.mode = mode;

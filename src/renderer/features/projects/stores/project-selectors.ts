@@ -58,9 +58,10 @@ export function mountedProjectData(
   return store?.mountedProject?.data ?? null;
 }
 
-/** Returns the display name from any project store variant. */
+/** Returns the display name from any project store variant — alias overrides name. */
 export function projectDisplayName(store: ProjectStore | undefined): string | undefined {
-  return store?.name ?? undefined;
+  if (!store || store.name === null) return undefined;
+  return store.displayName;
 }
 
 export function unmountedMountErrorMessage(store: ProjectStore | undefined): string {

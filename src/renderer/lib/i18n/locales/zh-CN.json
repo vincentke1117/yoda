@@ -66,6 +66,17 @@
     "reconnect": "重新连接",
     "changeSshConnection": "更换 SSH 连接",
     "archiveProject": "归档项目",
+    "renameProject": {
+      "menuLabel": "重命名项目…",
+      "title": "重命名项目",
+      "label": "别名",
+      "hint": "留空则使用默认名称（{{name}}）。",
+      "tooLong": "别名长度不能超过 {{max}} 个字符。",
+      "matchesName": "别名与默认名称相同，留空即可。",
+      "submit": "保存",
+      "saving": "保存中…",
+      "failed": "重命名项目失败"
+    },
     "archiveTask": "归档任务",
     "archiveTaskWithNote": "归档任务（附备注）…",
     "phase": {

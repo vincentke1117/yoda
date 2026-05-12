@@ -2,6 +2,7 @@ import { FolderPlus } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import React, { useState } from 'react';
 import { basenameFromAnyPath } from '@shared/path-name';
+import { projectDisplayName } from '@shared/projects';
 import {
   asMounted,
   getProjectManagerStore,
@@ -45,7 +46,7 @@ export const ProjectSelector = observer(function ProjectSelector({
   const options: ProjectOption[] = Array.from(getProjectManagerStore().projects.entries()).flatMap(
     ([id, store]) => {
       const mounted = asMounted(store);
-      return mounted ? [{ value: id, label: mounted.data.name }] : [];
+      return mounted ? [{ value: id, label: projectDisplayName(mounted.data) }] : [];
     }
   );
 

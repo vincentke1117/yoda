@@ -16,6 +16,7 @@ import { useTranslation } from 'react-i18next';
 import yodaLogoWhite from '@/assets/images/yoda/yoda_logo_white.svg';
 import yodaLogo from '@/assets/images/yoda/yoda_logo.svg';
 import { type AgentProviderId } from '@shared/agent-provider-registry';
+import { projectDisplayName } from '@shared/projects';
 import { ensureUniqueTaskSlug } from '@shared/task-name';
 import {
   asMounted,
@@ -251,7 +252,7 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
         entries.push({
           id: t.data.id,
           projectId: p.data.id,
-          projectName: p.data.name,
+          projectName: projectDisplayName(p.data),
           projectType: p.data.type,
           name: t.data.name,
           createdAt: t.data.createdAt,

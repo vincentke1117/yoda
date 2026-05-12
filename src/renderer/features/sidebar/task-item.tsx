@@ -106,7 +106,8 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
     workspace?.connectionState != null ? () => workspace.reconnect() : undefined;
 
   const project = getProjectStore(projectId);
-  const projectName = project?.state === 'unregistered' ? projectId : (project?.name ?? projectId);
+  const projectName =
+    project?.state === 'unregistered' ? projectId : (project?.displayName ?? projectId);
 
   const handleConfigureScripts = () => showManageRunScripts({ projectId, projectName });
 

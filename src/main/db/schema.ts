@@ -39,6 +39,7 @@ export const projects = sqliteTable(
   {
     id: text('id').primaryKey(),
     name: text('name').notNull(),
+    alias: text('alias'),
     path: text('path').notNull(),
     workspaceProvider: text('workspace_provider').notNull().default('local'), // 'local' | 'ssh'
     baseRef: text('base_ref'),

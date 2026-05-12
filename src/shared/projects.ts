@@ -7,6 +7,7 @@ export type LocalProject = {
   type: 'local';
   id: string;
   name: string;
+  alias: string | null;
   path: string;
   baseRef: string;
   createdAt: string;
@@ -17,6 +18,7 @@ export type SshProject = {
   type: 'ssh';
   id: string;
   name: string;
+  alias: string | null;
   path: string;
   baseRef: string;
   connectionId: string;
@@ -25,6 +27,13 @@ export type SshProject = {
 };
 
 export type Project = LocalProject | SshProject;
+
+export function projectDisplayName(p: Pick<LocalProject, 'name' | 'alias'>): string {
+  const alias = p.alias?.trim();
+  return alias && alias.length > 0 ? alias : p.name;
+}
+
+export const MAX_PROJECT_ALIAS_LENGTH = 80;
 
 export type CreateLocalProjectParams = {
   type: 'local';

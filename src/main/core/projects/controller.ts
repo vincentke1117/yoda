@@ -5,6 +5,7 @@ import { deleteProject } from './operations/deleteProject';
 import { getArchivedProjects, getProjects } from './operations/getProjects';
 import { openProject } from './operations/openProject';
 import { unarchiveProject } from './operations/unarchiveProject';
+import { updateProjectAlias } from './operations/updateProjectAlias';
 import { updateProjectConnection } from './operations/updateProjectConnection';
 import {
   getProjectSettingsPage,
@@ -24,5 +25,6 @@ export const projectController = createRPCController({
   updateProjectSettings,
   shareProjectSettingsToConfig,
   updateProjectConnection,
+  updateProjectAlias,
   openProject,
 });
