@@ -44,6 +44,7 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
   const { navigate } = useNavigate();
   const showRename = useShowModal('renameTaskModal');
   const showArchiveWithNote = useShowModal('archiveTaskWithNoteModal');
+  const showEditPreArchive = useShowModal('editPreArchiveCommandModal');
   const showConfirm = useShowModal('confirmActionModal');
   const showManageRunScripts = useShowModal('manageRunScriptsModal');
 
@@ -159,6 +160,7 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
     onRename: handleRename,
     onArchive: handleArchive,
     onArchiveWithNote: handleArchiveWithNote,
+    onConfigurePreArchive: () => showEditPreArchive({}),
     onReconnect: handleReconnect,
     onDelete: handleDelete,
     onRunScript: handleRunScript,
@@ -172,19 +174,16 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
       <SidebarMenuRow
         className={cn(
           'group/row flex items-center justify-between px-1 h-8 gap-1',
-          rowVariant === 'pinned' ? 'pl-2' : 'pl-8',
-          isArchiving && 'opacity-50 pointer-events-none'
+          rowVariant === 'pinned' ? 'pl-2' : 'pl-8'
         )}
         isActive={isActive}
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => {
-          if (isArchiving) return;
           handleProvision();
           navigate('task', { projectId, taskId });
         }}
         onDoubleClick={(e) => {
           e.stopPropagation();
-          if (isArchiving) return;
           handleRename();
         }}
       >
@@ -192,7 +191,7 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
           <span
             className={cn(
               'min-w-0 truncate text-left transition-colors',
-              isBootstrapping && 'text-foreground/40'
+              (isBootstrapping || isArchiving) && 'text-foreground/40'
             )}
           >
             {taskName}
@@ -205,22 +204,20 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
             isMenuOpen || isArchiving ? 'flex' : 'hidden group-hover/row:flex'
           )}
         >
-          {!isArchiving && (
-            <TaskActionsMenu
-              {...menuActions}
-              open={isMenuOpen}
-              onOpenChange={setMenuOpen}
-              trigger={
-                <SidebarItemMiniButton
-                  type="button"
-                  aria-label={t('sidebar.runScripts.menuLabel')}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <MoreHorizontal className="h-4 w-4" />
-                </SidebarItemMiniButton>
-              }
-            />
-          )}
+          <TaskActionsMenu
+            {...menuActions}
+            open={isMenuOpen}
+            onOpenChange={setMenuOpen}
+            trigger={
+              <SidebarItemMiniButton
+                type="button"
+                aria-label={t('sidebar.runScripts.menuLabel')}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </SidebarItemMiniButton>
+            }
+          />
           <SidebarItemMiniButton
             type="button"
             aria-label={t('sidebar.archiveTask')}

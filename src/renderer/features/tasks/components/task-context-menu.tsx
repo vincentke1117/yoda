@@ -11,6 +11,7 @@ import {
   PlayCircle,
   RotateCcw,
   Settings2,
+  Terminal,
   Trash2,
 } from 'lucide-react';
 import React from 'react';
@@ -45,6 +46,7 @@ interface TaskMenuActions {
   onRename: () => void;
   onArchive: () => void;
   onArchiveWithNote?: () => void;
+  onConfigurePreArchive?: () => void;
   onRestore?: () => void;
   onReconnect?: () => void;
   onDelete: () => void;
@@ -166,6 +168,15 @@ function useMenuItems(actions: TaskMenuActions): MenuItemDescriptor[] {
         onSelect: actions.onArchiveWithNote,
       });
     }
+    if (actions.onConfigurePreArchive) {
+      items.push({
+        key: 'configure-pre-archive',
+        group: 3,
+        icon: Terminal,
+        label: t('sidebar.configurePreArchive'),
+        onSelect: actions.onConfigurePreArchive,
+      });
+    }
   }
   if (actions.isArchived && actions.onRestore) {
     items.push({
@@ -226,7 +237,7 @@ export function TaskContextMenu({ children, ...actions }: TaskContextMenuProps) 
   return (
     <ContextMenu>
       <ContextMenuTrigger>{children}</ContextMenuTrigger>
-      <ContextMenuContent>
+      <ContextMenuContent className="w-max overflow-x-visible">
         {items.map((item, index) => {
           const prev = items[index - 1];
           const showSeparator = prev && prev.group !== item.group;
@@ -241,6 +252,7 @@ export function TaskContextMenu({ children, ...actions }: TaskContextMenuProps) 
                   e.stopPropagation();
                   item.onSelect();
                 }}
+                className="whitespace-nowrap"
               >
                 <Icon className="size-4" />
                 {item.label}
@@ -271,7 +283,7 @@ export function TaskActionsMenu({
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange}>
       <DropdownMenuTrigger render={trigger} />
-      <DropdownMenuContent align={align} className="min-w-44">
+      <DropdownMenuContent align={align} className="w-max min-w-44 overflow-x-visible">
         {items.map((item, index) => {
           const prev = items[index - 1];
           const showSeparator = prev && prev.group !== item.group;
@@ -286,6 +298,7 @@ export function TaskActionsMenu({
                   e.stopPropagation();
                   item.onSelect();
                 }}
+                className="whitespace-nowrap"
               >
                 <Icon className="size-4" />
                 {item.label}

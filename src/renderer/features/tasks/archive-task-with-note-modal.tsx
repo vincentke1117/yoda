@@ -1,6 +1,8 @@
 import { observer } from 'mobx-react-lite';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useAppSettingsKey } from '@renderer/features/settings/use-app-settings-key';
+import { runPreArchiveCommand } from '@renderer/features/tasks/run-pre-archive-command';
 import { getTaskManagerStore } from '@renderer/features/tasks/stores/task-selectors';
 import { type BaseModalProps } from '@renderer/lib/modal/modal-provider';
 import { Button } from '@renderer/lib/ui/button';
@@ -37,19 +39,22 @@ export const ArchiveTaskWithNoteModal = observer(function ArchiveTaskWithNoteMod
   const [error, setError] = useState<string | null>(null);
 
   const taskManager = getTaskManagerStore(projectId);
+  const { value: homeDraft } = useAppSettingsKey('homeDraft');
+  const preArchiveCommand = homeDraft?.preArchiveCommand ?? '';
 
   const handleSubmit = useCallback(async () => {
     if (!taskManager) return;
     setIsSubmitting(true);
     setError(null);
     try {
+      await runPreArchiveCommand(projectId, taskId, preArchiveCommand);
       await taskManager.archiveTask(taskId, note);
       onSuccess();
     } catch (e) {
       setError(e instanceof Error ? e.message : t('sidebar.archiveTask'));
       setIsSubmitting(false);
     }
-  }, [taskManager, taskId, note, onSuccess, t]);
+  }, [taskManager, projectId, taskId, note, onSuccess, preArchiveCommand, t]);
 
   return (
     <>

@@ -68,6 +68,7 @@ export const keyboardSettingsSchema = z
       sidebarChanges: z.string().nullable().optional(),
       sidebarConversations: z.string().nullable().optional(),
       sidebarFiles: z.string().nullable().optional(),
+      sidebarTask: z.string().nullable().optional(),
       tabNext: z.string().nullable().optional(),
       tabPrev: z.string().nullable().optional(),
       tabClose: z.string().nullable().optional(),
@@ -134,6 +135,11 @@ export const homeDraftSchema = z.object({
   /** When true, the sidebar "+" button creates a task immediately using the
    *  last home-draft agent runtime config instead of opening the home view. */
   expressMode: z.boolean(),
+  /** When non-empty, archiving a task first sends this text to the task's
+   *  most-recently-used conversation and waits for the agent to finish
+   *  before performing the actual archive. Typical value: a slash command
+   *  like "/lovstudio-git-commit-with-context". */
+  preArchiveCommand: z.string(),
 });
 
 export const openInSettingsSchema = z.object({

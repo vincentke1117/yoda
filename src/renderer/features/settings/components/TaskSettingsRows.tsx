@@ -3,6 +3,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAppSettingsKey } from '@renderer/features/settings/use-app-settings-key';
 import { useTaskSettings } from '@renderer/features/tasks/hooks/useTaskSettings';
+import { Input } from '@renderer/lib/ui/input';
 import { Switch } from '@renderer/lib/ui/switch';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@renderer/lib/ui/tooltip';
 import { ResetToDefaultButton } from './ResetToDefaultButton';
@@ -12,15 +13,17 @@ function InfoTooltip({ label, content }: { label: string; content: React.ReactNo
   return (
     <TooltipProvider delay={150}>
       <Tooltip>
-        <TooltipTrigger>
-          <button
-            type="button"
-            className="inline-flex h-4 w-4 items-center justify-center text-muted-foreground hover:text-foreground"
-            aria-label={label}
-          >
-            <Info className="h-3.5 w-3.5" />
-          </button>
-        </TooltipTrigger>
+        <TooltipTrigger
+          render={
+            <button
+              type="button"
+              className="inline-flex h-4 w-4 items-center justify-center text-muted-foreground hover:text-foreground"
+              aria-label={label}
+            >
+              <Info className="h-3.5 w-3.5" />
+            </button>
+          }
+        />
         <TooltipContent side="top" className="max-w-xs text-xs">
           {content}
         </TooltipContent>
@@ -84,6 +87,54 @@ export const AutoTrustWorktreesRow: React.FC = () => {
             checked={taskSettings.autoTrustWorktrees}
             disabled={taskSettings.loading || taskSettings.saving}
             onCheckedChange={taskSettings.updateAutoTrustWorktrees}
+          />
+        </>
+      }
+    />
+  );
+};
+
+export const PreArchiveCommandRow: React.FC = () => {
+  const { t } = useTranslation();
+  const {
+    value: homeDraft,
+    update,
+    isLoading: loading,
+    isSaving: saving,
+    isFieldOverridden,
+    resetField,
+  } = useAppSettingsKey('homeDraft');
+
+  const command = homeDraft?.preArchiveCommand ?? '';
+
+  return (
+    <SettingRow
+      title={t('settings.tasks.preArchiveCommand')}
+      description={t('settings.tasks.preArchiveCommandDescription')}
+      control={
+        <>
+          <ResetToDefaultButton
+            visible={isFieldOverridden('preArchiveCommand')}
+            defaultLabel="empty"
+            onReset={() => resetField('preArchiveCommand')}
+            disabled={loading || saving}
+          />
+          <Input
+            key={command}
+            type="text"
+            defaultValue={command}
+            disabled={loading || saving}
+            placeholder={t('settings.tasks.preArchiveCommandPlaceholder')}
+            onBlur={(e) => {
+              const next = e.target.value;
+              if (next !== command) update({ preArchiveCommand: next });
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.currentTarget.blur();
+              }
+            }}
+            className="w-72"
           />
         </>
       }

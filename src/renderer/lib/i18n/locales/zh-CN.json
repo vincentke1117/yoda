@@ -79,6 +79,7 @@
     },
     "archiveTask": "归档任务",
     "archiveTaskWithNote": "归档任务（附备注）…",
+    "configurePreArchive": "配置归档前命令…",
     "phase": {
       "creatingRepo": "创建仓库中…",
       "cloning": "克隆中…",
@@ -260,7 +261,10 @@
       "autoTrustWorktreesInfo": "仅对 Claude Code 生效。会在启动前向 ~/.claude.json 写入信任记录。",
       "autoTrustWorktreesInfoLabel": "关于自动信任 worktree 的更多信息",
       "enableTmux": "启用 tmux",
-      "enableTmuxDescription": "默认在 tmux session 中运行代理与终端。"
+      "enableTmuxDescription": "默认在 tmux session 中运行代理与终端。",
+      "preArchiveCommand": "归档前自动命令",
+      "preArchiveCommandDescription": "设置后，归档任务前会先把这段文本发送到该任务最近一次使用的会话，并等 agent 完成再执行归档。留空则直接归档。",
+      "preArchiveCommandPlaceholder": "例如 /lovstudio-git-commit-with-context"
     },
     "terminal": {
       "font": "终端字体",
@@ -437,6 +441,12 @@
       "placeholder": "为何归档此任务？",
       "archiving": "归档中…",
       "submit": "归档"
+    },
+    "editPreArchiveCommand": {
+      "title": "归档前命令",
+      "label": "命令",
+      "hint": "归档前发送到该任务最近一次使用的会话。留空则直接归档。",
+      "submit": "保存"
     },
     "addRemote": {
       "title": "添加远端",

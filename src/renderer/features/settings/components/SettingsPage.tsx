@@ -15,7 +15,12 @@ import LanguageCard from './LanguageCard';
 import NotificationSettingsCard from './NotificationSettingsCard';
 import RepositorySettingsCard from './RepositorySettingsCard';
 import { ReviewPromptResetButton, ReviewPromptSettingsCard } from './ReviewPromptSettingsCard';
-import { AutoGenerateTaskNamesRow, AutoTrustWorktreesRow, EnableTmuxRow } from './TaskSettingsRows';
+import {
+  AutoGenerateTaskNamesRow,
+  AutoTrustWorktreesRow,
+  EnableTmuxRow,
+  PreArchiveCommandRow,
+} from './TaskSettingsRows';
 import TelemetryCard from './TelemetryCard';
 import TerminalSettingsCard from './TerminalSettingsCard';
 import ThemeCard from './ThemeCard';
@@ -84,6 +89,9 @@ export function SettingsPage({
         },
         {
           component: <EnableTmuxRow />,
+        },
+        {
+          component: <PreArchiveCommandRow />,
         },
         {
           component: <NotificationSettingsCard />,

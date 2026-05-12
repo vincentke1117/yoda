@@ -59,6 +59,7 @@ export const SETTINGS_DEFAULTS = {
     strategyKind: 'new-branch' as const,
     providerOverride: null,
     expressMode: false,
+    preArchiveCommand: '',
   },
 } satisfies SettingsDefaultsMap;
 

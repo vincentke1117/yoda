@@ -80,6 +80,7 @@
     },
     "archiveTask": "Archive task",
     "archiveTaskWithNote": "Archive task with note…",
+    "configurePreArchive": "Configure pre-archive command…",
     "phase": {
       "creatingRepo": "Creating repository…",
       "cloning": "Cloning…",
@@ -261,7 +262,10 @@
       "autoTrustWorktreesInfo": "Only applies to Claude Code. Writes trust entries to ~/.claude.json before launching.",
       "autoTrustWorktreesInfoLabel": "More info about auto-trust worktrees",
       "enableTmux": "Enable tmux",
-      "enableTmuxDescription": "Run agent sessions and terminals in tmux sessions by default."
+      "enableTmuxDescription": "Run agent sessions and terminals in tmux sessions by default.",
+      "preArchiveCommand": "Pre-archive command",
+      "preArchiveCommandDescription": "When set, archiving a task first sends this text to the task's last-used conversation and waits for the agent to finish. Leave empty to archive immediately.",
+      "preArchiveCommandPlaceholder": "e.g. /lovstudio-git-commit-with-context"
     },
     "terminal": {
       "font": "Terminal font",
@@ -438,6 +442,12 @@
       "placeholder": "Why are you archiving this task?",
       "archiving": "Archiving…",
       "submit": "Archive"
+    },
+    "editPreArchiveCommand": {
+      "title": "Pre-archive command",
+      "label": "Command",
+      "hint": "Sent to the task's last-used conversation before archiving. Leave empty to archive immediately.",
+      "submit": "Save"
     },
     "addRemote": {
       "title": "Add Remote",

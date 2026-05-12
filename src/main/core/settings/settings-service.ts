@@ -12,6 +12,20 @@ export { AppSettingsKeys } from '@shared/app-settings';
 
 export class SettingsStore implements IInitializable {
   private cache: Partial<AppSettings> = {};
+  /** Serializes write operations per key so concurrent partial updates
+   *  (e.g. Settings UI and home-view debounced writes) do not race on the
+   *  read-merge-write cycle and clobber each other's fields. */
+  private writeQueues: Partial<Record<AppSettingsKey, Promise<unknown>>> = {};
+
+  private async runSerialized<K extends AppSettingsKey, T>(
+    key: K,
+    task: () => Promise<T>
+  ): Promise<T> {
+    const prev = this.writeQueues[key] ?? Promise.resolve();
+    const next = prev.then(task, task);
+    this.writeQueues[key] = next.catch(() => undefined);
+    return next;
+  }
 
   private async readRaw(key: AppSettingsKey): Promise<unknown> {
     const [row] = await db.select().from(appSettings).where(eq(appSettings.key, key)).execute();
@@ -89,60 +103,66 @@ export class SettingsStore implements IInitializable {
     key: K,
     value: AppSettings[K] | Partial<AppSettings[K]>
   ): Promise<void> {
-    const defaults = getDefaultForKey(key);
+    return this.runSerialized(key, async () => {
+      const defaults = getDefaultForKey(key);
 
-    // For object settings, accept partial updates and merge with the
-    // currently stored value. This keeps the renderer simple (it sends only
-    // the changed fields) and avoids the race where the renderer's cache is
-    // not yet populated and would otherwise send an incomplete object that
-    // fails strict schema validation.
-    let toValidate: unknown = value;
-    if (isPlainObject(value) && isPlainObject(defaults)) {
-      const current = await this.get(key);
-      toValidate = isPlainObject(current)
-        ? mergeDeep(current as Record<string, unknown>, value as Record<string, unknown>)
-        : value;
-    }
+      // For object settings, accept partial updates and merge with the
+      // currently stored value. This keeps the renderer simple (it sends only
+      // the changed fields) and avoids the race where the renderer's cache is
+      // not yet populated and would otherwise send an incomplete object that
+      // fails strict schema validation.
+      let toValidate: unknown = value;
+      if (isPlainObject(value) && isPlainObject(defaults)) {
+        const current = await this.get(key);
+        toValidate = isPlainObject(current)
+          ? mergeDeep(current as Record<string, unknown>, value as Record<string, unknown>)
+          : value;
+      }
 
-    const validated = APP_SETTINGS_SCHEMA_MAP[key].parse(toValidate) as AppSettings[K];
+      const validated = APP_SETTINGS_SCHEMA_MAP[key].parse(toValidate) as AppSettings[K];
 
-    if (isPlainObject(validated) && isPlainObject(defaults)) {
-      const delta = computeDelta(
-        validated as Record<string, unknown>,
-        defaults as Record<string, unknown>
-      );
+      if (isPlainObject(validated) && isPlainObject(defaults)) {
+        const delta = computeDelta(
+          validated as Record<string, unknown>,
+          defaults as Record<string, unknown>
+        );
+        if (Object.keys(delta).length === 0) {
+          await this.deleteRow(key);
+        } else {
+          await this.storeRaw(key, delta);
+        }
+      } else if (isDeepEqual(validated, defaults)) {
+        await this.deleteRow(key);
+      } else {
+        await this.storeRaw(key, validated);
+      }
+
+      delete this.cache[key];
+    });
+  }
+
+  async reset<K extends AppSettingsKey>(key: K): Promise<void> {
+    return this.runSerialized(key, async () => {
+      await this.deleteRow(key);
+      delete this.cache[key];
+    });
+  }
+
+  async resetField<K extends AppSettingsKey>(key: K, field: keyof AppSettings[K]): Promise<void> {
+    return this.runSerialized(key, async () => {
+      const raw = await this.readRaw(key);
+      if (!isPlainObject(raw)) return;
+
+      const delta = { ...raw };
+      delete delta[field as string];
+
       if (Object.keys(delta).length === 0) {
         await this.deleteRow(key);
       } else {
         await this.storeRaw(key, delta);
       }
-    } else if (isDeepEqual(validated, defaults)) {
-      await this.deleteRow(key);
-    } else {
-      await this.storeRaw(key, validated);
-    }
-
-    delete this.cache[key];
-  }
-
-  async reset<K extends AppSettingsKey>(key: K): Promise<void> {
-    await this.deleteRow(key);
-    delete this.cache[key];
-  }
-
-  async resetField<K extends AppSettingsKey>(key: K, field: keyof AppSettings[K]): Promise<void> {
-    const raw = await this.readRaw(key);
-    if (!isPlainObject(raw)) return;
-
-    const delta = { ...raw };
-    delete delta[field as string];
-
-    if (Object.keys(delta).length === 0) {
-      await this.deleteRow(key);
-    } else {
-      await this.storeRaw(key, delta);
-    }
-    delete this.cache[key];
+      delete this.cache[key];
+    });
   }
 
   async getAll(): Promise<AppSettings> {

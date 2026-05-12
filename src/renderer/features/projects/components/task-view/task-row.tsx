@@ -37,6 +37,7 @@ export const TaskRow = observer(function TaskRow({
   const { navigate } = useNavigate();
   const showRename = useShowModal('renameTaskModal');
   const showArchiveWithNote = useShowModal('archiveTaskWithNoteModal');
+  const showEditPreArchive = useShowModal('editPreArchiveCommandModal');
   const showConfirm = useShowModal('confirmActionModal');
   const taskManager = getTaskManagerStore(task.data.projectId);
   const { value: homeDraft } = useAppSettingsKey('homeDraft');
@@ -98,20 +99,17 @@ export const TaskRow = observer(function TaskRow({
       onRename={handleRename}
       onArchive={handleArchive}
       onArchiveWithNote={handleArchiveWithNote}
+      onConfigurePreArchive={() => showEditPreArchive({})}
       onRestore={handleRestore}
       onDelete={handleDelete}
     >
       <button
         onClick={() => {
-          if (isArchived || isArchiving) return;
+          if (isArchived) return;
           handleProvision();
           navigate('task', { projectId: task.data.projectId, taskId: task.data.id });
         }}
-        disabled={isArchiving}
-        className={cn(
-          'group flex items-center gap-2 rounded-lg p-3  hover:bg-background-1 transition-colors w-full',
-          isArchiving && 'opacity-50 pointer-events-none'
-        )}
+        className="group flex items-center gap-2 rounded-lg p-3  hover:bg-background-1 transition-colors w-full"
       >
         <div
           onClick={(e) => e.stopPropagation()}
