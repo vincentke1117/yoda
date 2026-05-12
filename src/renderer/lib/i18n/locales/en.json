@@ -39,6 +39,7 @@
   "sidebar": {
     "newSession": "New session",
     "searchSession": "Search session",
+    "agents": "Agents",
     "skills": "Skills",
     "automation": "Automation",
     "settings": "Settings",
@@ -519,5 +520,63 @@
     "recommended": "Recommended",
     "noMatches": "No skills match your search.",
     "noSkills": "No skills available."
+  },
+  "agents": {
+    "title": "Agents",
+    "subtitle": "Configure MaaS, memory, hooks and skills for each CLI agent",
+    "detected": "Detected",
+    "notDetected": "Not detected",
+    "notFound": "Agent not found",
+    "docs": "Docs",
+    "openInFinder": "Open",
+    "unset": "unset",
+    "tabs": {
+      "maas": "MaaS",
+      "memory": "Memory",
+      "hooks": "Hooks",
+      "skills": "Skills",
+      "settings": "Settings"
+    },
+    "maas": {
+      "title": "Model-as-a-Service",
+      "description": "Model routing and credentials are managed by the agent itself. Centralized control coming soon.",
+      "placeholder": "Model selection / API keys / provider routing for {{name}} — placeholder.",
+      "cliFlags": "CLI flags",
+      "cliFlagsDescription": "Flags Yoda uses to launch this agent",
+      "cli": "CLI command",
+      "autoApprove": "Auto-approve flag",
+      "initialPrompt": "Initial prompt flag",
+      "resume": "Resume flag",
+      "sessionId": "Session ID flag",
+      "newConversation": "New-conversation flag",
+      "planActivate": "Plan-mode command",
+      "autoStart": "Autostart command",
+      "defaultArgs": "Default args"
+    },
+    "memory": {
+      "title": "Memory / context file",
+      "description": "Global memory file used by {{name}} (e.g. CLAUDE.md / AGENTS.md / GEMINI.md).",
+      "unsupported": "{{name}} does not expose a memory file location."
+    },
+    "hooks": {
+      "title": "Hooks",
+      "description": "Session-lifecycle hook configuration for {{name}}.",
+      "unsupported": "{{name}} does not currently support hooks.",
+      "noPath": "No hook configuration path is known."
+    },
+    "skills": {
+      "title": "Skills",
+      "description": "Directory {{name}} reads skills from. Manage centrally in the Skills view.",
+      "manage": "Manage skills",
+      "noPath": "No skills directory configured for {{name}}."
+    },
+    "settings": {
+      "execTitle": "Execution parameters",
+      "execDescription": "Override the launch command, CLI, and extra args for {{name}}.",
+      "editExec": "Edit execution",
+      "configTitle": "Config files",
+      "configDescription": "Open the agent's local config directory or file in Finder.",
+      "noConfig": "No default config path for {{name}}."
+    }
   }
 }

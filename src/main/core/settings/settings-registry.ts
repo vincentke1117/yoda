@@ -60,6 +60,7 @@ export const SETTINGS_DEFAULTS = {
     providerOverride: null,
     expressMode: false,
     preArchiveCommand: '',
+    defaultQuickActions: [{ id: 'release', label: 'Release', command: '/release-via-cicd' }],
   },
 } satisfies SettingsDefaultsMap;
 

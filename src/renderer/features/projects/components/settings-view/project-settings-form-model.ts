@@ -19,6 +19,8 @@ export type FormState = {
   remote: string;
   provisionCommand: string;
   terminateCommand: string;
+  /** Carried through opaque — managed by the dedicated quick-actions modal. */
+  quickActions?: ProjectSettings['quickActions'];
 };
 
 export type FormUpdate = <K extends keyof FormState>(key: K, value: FormState[K]) => void;
@@ -60,6 +62,7 @@ export function settingsToForm(
     remote: s.remote ?? '',
     provisionCommand: s.workspaceProvider?.provisionCommand ?? '',
     terminateCommand: s.workspaceProvider?.terminateCommand ?? '',
+    quickActions: s.quickActions,
   };
 }
 
@@ -99,6 +102,7 @@ export function formToSettings(f: FormState): ProjectSettings {
             terminateCommand,
           }
         : undefined,
+    quickActions: f.quickActions,
   };
 }
 

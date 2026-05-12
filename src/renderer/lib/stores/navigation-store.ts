@@ -18,6 +18,7 @@ export const viewEvents: Record<
   | 'settings_viewed'
   | 'skills_viewed'
   | 'mcp_viewed'
+  | 'agents_viewed'
 > = {
   home: 'home_viewed',
   project: 'project_viewed',
@@ -25,6 +26,7 @@ export const viewEvents: Record<
   settings: 'settings_viewed',
   skills: 'skills_viewed',
   mcp: 'mcp_viewed',
+  agents: 'agents_viewed',
 };
 
 export class NavigationStore implements Snapshottable<NavigationSnapshot> {

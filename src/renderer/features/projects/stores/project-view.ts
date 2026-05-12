@@ -2,10 +2,10 @@ import { makeAutoObservable } from 'mobx';
 import type { ProjectViewSnapshot } from '@shared/view-state';
 import type { Snapshottable } from '@renderer/lib/stores/snapshottable';
 
-export type ProjectView = 'tasks' | 'pull-request' | 'settings';
+export type ProjectView = 'overview' | 'tasks' | 'pull-request' | 'settings';
 
 export class ProjectViewStore implements Snapshottable<ProjectViewSnapshot> {
-  activeView: ProjectView = 'tasks';
+  activeView: ProjectView = 'overview';
   taskView: TaskViewStore = new TaskViewStore();
 
   constructor() {
@@ -25,7 +25,9 @@ export class ProjectViewStore implements Snapshottable<ProjectViewSnapshot> {
   }
 
   restoreSnapshot(snapshot: Partial<ProjectViewSnapshot>): void {
-    if (snapshot.activeView) this.activeView = snapshot.activeView as ProjectView;
+    // Intentionally ignore snapshot.activeView — always land on Overview on
+    // session start. Users navigate to other tabs via clicks; that state is
+    // intra-session only.
     if (snapshot.taskViewTab) this.taskView.setTab(snapshot.taskViewTab);
     if (typeof snapshot.taskViewArchivedOnlyWithNote === 'boolean') {
       this.taskView.setArchivedOnlyWithNote(snapshot.taskViewArchivedOnlyWithNote);

@@ -306,6 +306,7 @@ export class TaskStore {
     if (this.state === 'unregistered') return;
     const task = registeredTaskData(this);
     if (!task) return;
+    if (task.needsReview === needsReview) return;
     const previous = task.needsReview;
     runInAction(() => {
       task.needsReview = needsReview;

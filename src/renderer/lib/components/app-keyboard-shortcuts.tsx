@@ -6,32 +6,26 @@ import {
 } from '@renderer/lib/hooks/useKeyboardShortcuts';
 import { useTheme } from '@renderer/lib/hooks/useTheme';
 import { useWorkspaceLayoutContext } from '@renderer/lib/layout/layout-provider';
-import {
-  useNavigate,
-  useParams,
-  useWorkspaceSlots,
-} from '@renderer/lib/layout/navigation-provider';
+import { useParams, useWorkspaceSlots } from '@renderer/lib/layout/navigation-provider';
 import { useShowModal } from '@renderer/lib/modal/modal-provider';
 
 /**
  * Mounts global keyboard shortcut handlers for the entire application.
  * Renders nothing — exists only to register useHotkey() calls that are always active.
  * Must be mounted inside all relevant providers (ModalProvider, WorkspaceLayoutContext, etc.).
+ *
+ * Shortcuts already exposed through `commandRegistry` (settings, newProject, newTask,
+ * navigateBack, navigateForward) are bound by `CommandShortcutBinder` — do not
+ * duplicate them here, or `@tanstack/react-hotkeys` warns about double registration.
  */
 export function AppKeyboardShortcuts() {
   const { value: keyboard } = useAppSettingsKey('keyboard');
-  const showNewProject = useShowModal('addProjectModal');
-  const showCreateTask = useShowModal('taskModal');
   const showCommandPalette = useShowModal('commandPaletteModal');
   const { toggleLeft } = useWorkspaceLayoutContext();
   const { toggleTheme } = useTheme();
-  const { navigate } = useNavigate();
   const commandPaletteHotkey = getEffectiveHotkey('commandPalette', keyboard);
-  const settingsHotkey = getEffectiveHotkey('settings', keyboard);
   const toggleLeftSidebarHotkey = getEffectiveHotkey('toggleLeftSidebar', keyboard);
   const toggleThemeHotkey = getEffectiveHotkey('toggleTheme', keyboard);
-  const newProjectHotkey = getEffectiveHotkey('newProject', keyboard);
-  const newTaskHotkey = getEffectiveHotkey('newTask', keyboard);
 
   // Resolve current project context from whichever view is active
   const { currentView } = useWorkspaceSlots();
@@ -51,14 +45,6 @@ export function AppKeyboardShortcuts() {
     { enabled: commandPaletteHotkey !== null }
   );
 
-  useHotkey(
-    getHotkeyRegistration('settings', keyboard),
-    () => {
-      if (currentView !== 'settings') navigate('settings');
-    },
-    { enabled: settingsHotkey !== null }
-  );
-
   useHotkey(getHotkeyRegistration('toggleLeftSidebar', keyboard), () => toggleLeft(), {
     enabled: toggleLeftSidebarHotkey !== null,
   });
@@ -66,20 +52,6 @@ export function AppKeyboardShortcuts() {
   useHotkey(getHotkeyRegistration('toggleTheme', keyboard), () => toggleTheme(), {
     enabled: toggleThemeHotkey !== null,
   });
-
-  useHotkey(
-    getHotkeyRegistration('newProject', keyboard),
-    () => showNewProject({ strategy: 'local', mode: 'pick' }),
-    { enabled: newProjectHotkey !== null }
-  );
-
-  useHotkey(
-    getHotkeyRegistration('newTask', keyboard),
-    () => {
-      if (currentProjectId) showCreateTask({ projectId: currentProjectId });
-    },
-    { enabled: !!currentProjectId && newTaskHotkey !== null }
-  );
 
   return null;
 }

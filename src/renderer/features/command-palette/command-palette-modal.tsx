@@ -1,22 +1,27 @@
 import { useQuery } from '@tanstack/react-query';
 import { Command } from 'cmdk';
-import { FolderOpen, GitBranch, MessageSquare, Zap } from 'lucide-react';
+import { FolderOpen, GitBranch, Loader2, MessageSquare, MessagesSquare, Zap } from 'lucide-react';
 import { useObserver } from 'mobx-react-lite';
 import React, { useDeferredValue, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { SearchItem } from '@shared/search';
-import { getTaskView } from '@renderer/features/tasks/stores/task-selectors';
+import { asMounted, getProjectStore } from '@renderer/features/projects/stores/project-selectors';
+import { getTaskStore, getTaskView } from '@renderer/features/tasks/stores/task-selectors';
 import { commandRegistry } from '@renderer/lib/commands/registry';
 import { APP_SHORTCUTS } from '@renderer/lib/hooks/useKeyboardShortcuts';
 import { rpc } from '@renderer/lib/ipc';
 import { useNavigate } from '@renderer/lib/layout/navigation-provider';
 import { type BaseModalProps } from '@renderer/lib/modal/modal-provider';
 import { cn } from '@renderer/utils/utils';
+import { LovcodeInstallBanner } from './lovcode-install-banner';
+import { parseQuery, toggleInSessionsQualifier } from './qualifiers';
 import { applyContextAffinity, rrf } from './rrf';
+import { useLovcodeSearch } from './use-lovcode-search';
 
 interface CommandPaletteProps {
   projectId?: string;
   taskId?: string;
+  initialQuery?: string;
 }
 
 interface PaletteAction {
@@ -80,18 +85,34 @@ function PaletteItem({
 export function CommandPaletteModal({
   projectId,
   taskId,
+  initialQuery,
   onClose,
 }: CommandPaletteProps & BaseModalProps) {
   const { t } = useTranslation();
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialQuery ?? '');
   const deferred = useDeferredValue(query);
   const { navigate } = useNavigate();
 
+  const parsed = parseQuery(deferred);
+  const inSessionsScope = parsed.inSessions;
+  const searchText = parsed.text;
+
+  const mounted = projectId ? asMounted(getProjectStore(projectId)) : undefined;
+  const projectPath = mounted?.data.type === 'local' ? mounted.data.path : null;
+
+  const { data: lovcodeResult, isFetching: lovcodeFetching } = useLovcodeSearch(
+    projectId,
+    projectPath,
+    searchText,
+    inSessionsScope
+  );
+
   const { data: dbResults = [] } = useQuery({
-    queryKey: ['cmdk-search', deferred, projectId, taskId],
-    queryFn: () => rpc.search.commandPalette({ query: deferred, context: { projectId, taskId } }),
+    queryKey: ['cmdk-search', searchText, projectId, taskId],
+    queryFn: () => rpc.search.commandPalette({ query: searchText, context: { projectId, taskId } }),
     staleTime: 0,
     placeholderData: (prev) => prev,
+    enabled: !inSessionsScope || searchText.length === 0,
   });
 
   const actions = useObserver((): PaletteAction[] =>
@@ -121,6 +142,32 @@ export function CommandPaletteModal({
   const projectResults = merged.filter((r): r is SearchItem => r.kind === 'project');
   const conversationResults = merged.filter((r): r is SearchItem => r.kind === 'conversation');
 
+  const lovcodeTaskItems: SearchItem[] =
+    inSessionsScope && projectId && lovcodeResult?.status === 'ok'
+      ? lovcodeResult.taskIds.flatMap((tid) => {
+          const task = getTaskStore(projectId, tid)?.data;
+          if (!task) return [];
+          return [
+            {
+              kind: 'task' as const,
+              id: tid,
+              projectId,
+              taskId: null,
+              title: task.name,
+              subtitle: '',
+              score: 0,
+            },
+          ];
+        })
+      : [];
+  const lovcodeNotInstalled =
+    inSessionsScope && searchText.length > 0 && lovcodeResult?.status === 'not-installed';
+  const lovcodeUnavailable = inSessionsScope && searchText.length > 0 && !projectPath;
+
+  const handleToggleSessionsScope = () => {
+    setQuery((prev) => toggleInSessionsQualifier(prev, !inSessionsScope));
+  };
+
   const handleNavigateToTask = (item: SearchItem) => {
     if (!item.projectId) return;
     onClose();
@@ -146,6 +193,8 @@ export function CommandPaletteModal({
     if (item.kind === 'conversation') return handleNavigateToConversation(item as SearchItem);
   };
 
+  const sessionsChipDisabled = !projectId || !projectPath;
+
   return (
     <Command className="flex flex-col overflow-hidden" shouldFilter={false} loop>
       <div className="border-b border-foreground/10 px-1">
@@ -157,8 +206,66 @@ export function CommandPaletteModal({
           autoFocus
         />
       </div>
+      <div className="flex items-center gap-1.5 border-b border-foreground/10 px-3 py-1.5">
+        <button
+          type="button"
+          onClick={handleToggleSessionsScope}
+          disabled={sessionsChipDisabled}
+          className={cn(
+            'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors',
+            inSessionsScope
+              ? 'border-foreground/30 bg-background-2 text-foreground'
+              : 'border-foreground/10 text-foreground/60 hover:text-foreground',
+            sessionsChipDisabled && 'opacity-40 cursor-not-allowed hover:text-foreground/60'
+          )}
+          title={
+            sessionsChipDisabled
+              ? 'Open a local project to search session transcripts'
+              : 'Toggle in:sessions — search prompts inside Claude transcripts (lovcode)'
+          }
+        >
+          {inSessionsScope && lovcodeFetching ? (
+            <Loader2 className="size-3 animate-spin" />
+          ) : (
+            <MessagesSquare className="size-3" />
+          )}
+          In sessions
+        </button>
+      </div>
       <Command.List className="h-96 overflow-y-auto p-1">
-        {query ? (
+        {inSessionsScope ? (
+          searchText.length === 0 ? (
+            <div className="py-8 text-center text-xs text-foreground/40">
+              Type to search prompts inside Claude transcripts.
+            </div>
+          ) : lovcodeUnavailable ? (
+            <div className="py-8 text-center text-xs text-foreground/40">
+              Open a local project to search session transcripts.
+            </div>
+          ) : lovcodeNotInstalled ? (
+            <LovcodeInstallBanner />
+          ) : (
+            <>
+              <Command.Empty className="py-8 text-center text-sm text-foreground/40">
+                {lovcodeFetching
+                  ? 'Searching transcripts…'
+                  : t('commandPalette.noResultsFor', { query: searchText })}
+              </Command.Empty>
+              {lovcodeTaskItems.length > 0 && (
+                <Command.Group heading="Tasks (sessions)" className={GROUP_CLASS}>
+                  {lovcodeTaskItems.map((item) => (
+                    <PaletteItem
+                      key={`session-task:${item.id}`}
+                      value={`session-task:${item.id}`}
+                      item={item}
+                      onSelect={() => handleNavigateToTask(item)}
+                    />
+                  ))}
+                </Command.Group>
+              )}
+            </>
+          )
+        ) : query ? (
           <>
             <Command.Empty className="py-8 text-center text-sm text-foreground/40">
               {t('commandPalette.noResultsFor', { query })}

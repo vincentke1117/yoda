@@ -3,6 +3,7 @@ import { IntegrationSetupModal } from '@renderer/features/integrations/integrati
 import { McpModal } from '@renderer/features/mcp/components/McpModal';
 import { AddProjectModal } from '@renderer/features/projects/components/add-project-modal/add-project-modal';
 import { ManageRunScriptsModal } from '@renderer/features/projects/components/manage-run-scripts-modal';
+import { ManageQuickActionsModal } from '@renderer/features/projects/components/overview-view/manage-quick-actions-modal';
 import { RenameProjectModal } from '@renderer/features/projects/components/rename-project-modal';
 import { ShareProjectConfigModal } from '@renderer/features/projects/components/settings-view/share-project-config-modal';
 import { CreateSkillModal } from '@renderer/features/skills/components/CreateSkillModal';
@@ -59,6 +60,7 @@ export const modalRegistry = {
   editPreArchiveCommandModal: createModal(EditPreArchiveCommandModal, { size: 'xs' }),
   shareProjectConfigModal: createModal(ShareProjectConfigModal, { size: 'md' }),
   manageRunScriptsModal: createModal(ManageRunScriptsModal, { size: 'md' }),
+  manageQuickActionsModal: createModal(ManageQuickActionsModal, { size: 'md' }),
   integrationSetupModal: createModal(IntegrationSetupModal, { size: 'md' }),
   addRemoteModal: createModal(AddRemoteModal),
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

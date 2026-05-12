@@ -3,6 +3,7 @@ import { observer } from 'mobx-react-lite';
 import { useEffect, useMemo, useRef } from 'react';
 import { asMounted, getProjectStore } from '@renderer/features/projects/stores/project-selectors';
 import { useIsActiveTask } from '@renderer/features/tasks/hooks/use-is-active-task';
+import { getTaskStore } from '@renderer/features/tasks/stores/task-selectors';
 import { useProvisionedTask, useTaskViewContext } from '@renderer/features/tasks/task-view-context';
 import { useShowModal } from '@renderer/lib/modal/modal-provider';
 import { PaneSizingProvider } from '@renderer/lib/pty/pane-sizing-context';
@@ -91,13 +92,15 @@ export const ConversationsPanel = observer(function ConversationsPanel() {
     }
   }, [sessionStatus]);
 
-  const onEnterPress =
-    shouldSetWorkingOnEnter && activeConversation
-      ? () => {
+  const onEnterPress = activeConversation
+    ? () => {
+        if (shouldSetWorkingOnEnter) {
           activeConversation.setWorking();
           void conversations.touchConversation(activeConversation.data.id);
         }
-      : undefined;
+        void getTaskStore(projectId, taskId)?.setNeedsReview(false);
+      }
+    : undefined;
 
   const onInterruptPress = activeConversation ? () => activeConversation.clearWorking() : undefined;
 

@@ -39,6 +39,7 @@
   "sidebar": {
     "newSession": "新建会话",
     "searchSession": "搜索会话",
+    "agents": "Agents",
     "skills": "Skills",
     "automation": "自动化",
     "settings": "设置",
@@ -518,5 +519,63 @@
     "recommended": "推荐",
     "noMatches": "没有匹配的 skill。",
     "noSkills": "暂无可用 skill。"
+  },
+  "agents": {
+    "title": "Agents 管理",
+    "subtitle": "为每个 CLI 代理配置 MaaS、记忆、Hooks 与 Skills",
+    "detected": "已检测",
+    "notDetected": "未检测",
+    "notFound": "未找到该代理",
+    "docs": "文档",
+    "openInFinder": "打开",
+    "unset": "未设置",
+    "tabs": {
+      "maas": "MaaS",
+      "memory": "记忆",
+      "hooks": "Hooks",
+      "skills": "Skills",
+      "settings": "设置"
+    },
+    "maas": {
+      "title": "Model-as-a-Service",
+      "description": "模型路由与凭证由代理自身管理。后续将在此集中维护。",
+      "placeholder": "{{name}} 的模型选择、API Key、Provider 路由配置占位。",
+      "cliFlags": "CLI 调用参数",
+      "cliFlagsDescription": "Yoda 启动该代理时使用的命令行参数",
+      "cli": "CLI 命令",
+      "autoApprove": "自动确认 Flag",
+      "initialPrompt": "初始 Prompt Flag",
+      "resume": "继续会话 Flag",
+      "sessionId": "Session ID Flag",
+      "newConversation": "新会话 Flag",
+      "planActivate": "Plan 模式命令",
+      "autoStart": "自启动命令",
+      "defaultArgs": "默认参数"
+    },
+    "memory": {
+      "title": "记忆 / 上下文文件",
+      "description": "{{name}} 的全局记忆文件(如 CLAUDE.md / AGENTS.md / GEMINI.md)。",
+      "unsupported": "{{name}} 暂未公开记忆文件位置。"
+    },
+    "hooks": {
+      "title": "Hooks",
+      "description": "{{name}} 的会话生命周期 Hook 配置。",
+      "unsupported": "{{name}} 当前不支持 Hooks。",
+      "noPath": "未找到 Hooks 配置文件路径。"
+    },
+    "skills": {
+      "title": "Skills",
+      "description": "{{name}} 读取 skill 的目录。统一管理请前往 Skills 视图。",
+      "manage": "管理 Skills",
+      "noPath": "{{name}} 暂未配置 skills 目录。"
+    },
+    "settings": {
+      "execTitle": "执行参数",
+      "execDescription": "覆盖 {{name}} 的启动命令、CLI、附加参数等。",
+      "editExec": "编辑执行参数",
+      "configTitle": "配置文件",
+      "configDescription": "在 Finder 中打开代理的本地配置目录或文件。",
+      "noConfig": "暂未为 {{name}} 配置默认路径。"
+    }
   }
 }

@@ -55,6 +55,7 @@ export const CreateConversationModal = observer(function CreateConversationModal
       title,
       initialSize: getConversationsPaneSize(),
     });
+    void getTaskStore(projectId, taskId)?.setNeedsReview(false);
     onSuccess({ conversationId: id });
   }, [
     conversationMgr,

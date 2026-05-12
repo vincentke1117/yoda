@@ -1,3 +1,4 @@
+import { homedir } from 'node:os';
 import { createRPCController } from '@shared/ipc/rpc';
 import type { OpenInAppId } from '@shared/openInApps';
 import { telemetryService } from '@main/lib/telemetry';
@@ -45,4 +46,5 @@ export const appController = createRPCController({
   getAppVersion: () => appService.getCachedAppVersion(),
   getElectronVersion: () => process.versions.electron,
   getPlatform: () => process.platform,
+  getHomeDir: () => homedir(),
 });

@@ -32,7 +32,7 @@ export function AgentStatusIndicator({
       case 'awaiting-input':
         return (
           <span
-            className={cn('rounded-full bg-blue-200 border size-2 border-blue-500', className)}
+            className={cn('rounded-full bg-primary border size-2 border-primary', className)}
             aria-label="Agent is awaiting input"
             title="Agent is awaiting input"
           />

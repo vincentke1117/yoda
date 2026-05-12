@@ -24,16 +24,18 @@ export const NavButtons = observer(function NavButtons() {
   return (
     <div className="[-webkit-app-region:no-drag] flex items-center gap-0.5">
       <Tooltip>
-        <TooltipTrigger>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="size-7 p-0"
-            disabled={!canGoBack}
-            onClick={() => appState.history.back(applyHistoryEntry)}
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
+        <TooltipTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="sm"
+              className="size-7 p-0"
+              disabled={!canGoBack}
+              onClick={() => appState.history.back(applyHistoryEntry)}
+            />
+          }
+        >
+          <ArrowLeft className="h-4 w-4" />
         </TooltipTrigger>
         <TooltipContent>
           Go Back
@@ -41,16 +43,18 @@ export const NavButtons = observer(function NavButtons() {
         </TooltipContent>
       </Tooltip>
       <Tooltip>
-        <TooltipTrigger>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="size-7 p-0"
-            disabled={!canGoForward}
-            onClick={() => appState.history.forward(applyHistoryEntry)}
-          >
-            <ArrowRight className="h-4 w-4" />
-          </Button>
+        <TooltipTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="sm"
+              className="size-7 p-0"
+              disabled={!canGoForward}
+              onClick={() => appState.history.forward(applyHistoryEntry)}
+            />
+          }
+        >
+          <ArrowRight className="h-4 w-4" />
         </TooltipTrigger>
         <TooltipContent>
           Go Forward

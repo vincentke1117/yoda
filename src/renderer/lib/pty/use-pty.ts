@@ -552,6 +552,23 @@ export function usePty(
       });
       resizeObserver.observe(container);
       cleanups.push(() => resizeObserver.disconnect());
+
+      // ── HMR: re-fit after every Vite update ────────────────────────────────
+      // Hot-reload can subtly change xterm cell metrics (font CSS reinjection,
+      // padding tweaks) without changing the container's pixel size, so the
+      // ResizeObserver never fires and the PTY keeps its stale cols/rows while
+      // xterm's canvas re-renders with new cell widths — producing the visual
+      // line-wrap glitch that the user has to fix by dragging a divider.
+      // Clearing the dedup ref guarantees the broadcast goes through even when
+      // measured dims round to the same integer cols/rows as before.
+      if (import.meta.hot) {
+        const onHmrUpdate = () => {
+          lastSentResizeRef.current = null;
+          measureAndResizeRef.current();
+        };
+        import.meta.hot.on('vite:afterUpdate', onHmrUpdate);
+        cleanups.push(() => import.meta.hot?.off('vite:afterUpdate', onHmrUpdate));
+      }
     }
 
     // ── Cleanup ───────────────────────────────────────────────────────────────

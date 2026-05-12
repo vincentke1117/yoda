@@ -1,6 +1,7 @@
 import z from 'zod';
 import { AGENT_PROVIDER_IDS, AGENT_PROVIDERS } from '@shared/agent-provider-registry';
 import { openInAppIdSchema } from '@shared/openInApps';
+import { quickActionSchema } from '@shared/project-settings';
 import { DEFAULT_AGENT_ID, DEFAULT_REVIEW_PROMPT } from './settings-registry';
 
 export const projectSettingsSchema = z.object({
@@ -140,6 +141,9 @@ export const homeDraftSchema = z.object({
    *  before performing the actual archive. Typical value: a slash command
    *  like "/lovstudio-git-commit-with-context". */
   preArchiveCommand: z.string(),
+  /** Global default quick-action commands shown on each project's overview.
+   *  Projects can override via ShareableProjectSettings.quickActions. */
+  defaultQuickActions: z.array(quickActionSchema),
 });
 
 export const openInSettingsSchema = z.object({

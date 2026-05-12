@@ -75,3 +75,7 @@ src/main/appConfig.json
 
 # Local logo design drafts (not packaged with releases)
 /assets/logo-drafts/
+
+# Local content artifacts (dev blog drafts, generated covers)
+/.output/
+/cover-image/

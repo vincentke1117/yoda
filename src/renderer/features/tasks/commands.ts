@@ -65,6 +65,17 @@ export function createTaskCommandProvider(projectId: string, taskId: string): Co
 
         // ── View sidebar panels ────────────────────────────────────────────
         {
+          id: 'task.sidebarTask',
+          label: 'View Task',
+          description: 'Open the Task panel in the right sidebar',
+          shortcutKey: 'sidebarTask',
+          group: 'View',
+          execute() {
+            taskView?.setSidebarTab('task');
+            taskView?.setSidebarCollapsed(false);
+          },
+        },
+        {
           id: 'task.sidebarChanges',
           label: 'View Changes',
           description: 'Open the Changes panel in the right sidebar',

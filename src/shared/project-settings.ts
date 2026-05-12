@@ -28,10 +28,19 @@ export const shareableProjectScriptsSettingsSchema = z.object({
   teardown: z.string().optional(),
 });
 
+export const quickActionSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  command: z.string(),
+});
+
+export type QuickAction = z.infer<typeof quickActionSchema>;
+
 export const shareableProjectSettingsSchema = z.object({
   preservePatterns: preservePatternsSchema.optional(),
   shellSetup: z.string().optional(),
   scripts: shareableProjectScriptsSettingsSchema.optional(),
+  quickActions: z.array(quickActionSchema).optional(),
 });
 
 export const shareableProjectSettingsWithDefaultsSchema = shareableProjectSettingsSchema.extend({
@@ -92,7 +101,8 @@ export type ShareableProjectSettingsWriteField =
   | 'shellSetup'
   | 'scripts.setup'
   | 'scripts.run'
-  | 'scripts.teardown';
+  | 'scripts.teardown'
+  | 'quickActions';
 
 export const SHAREABLE_PROJECT_SETTINGS_WRITE_FIELDS = [
   'preservePatterns',
@@ -100,6 +110,7 @@ export const SHAREABLE_PROJECT_SETTINGS_WRITE_FIELDS = [
   'scripts.setup',
   'scripts.run',
   'scripts.teardown',
+  'quickActions',
 ] as const satisfies ShareableProjectSettingsWriteField[];
 
 export type WriteProjectConfigRequest = {
@@ -125,5 +136,6 @@ export function emptyProjectSettingsOverrideState(): ProjectSettingsOverrideStat
     'scripts.setup': [],
     'scripts.run': [],
     'scripts.teardown': [],
+    quickActions: [],
   };
 }

@@ -110,6 +110,12 @@ export const APP_SHORTCUTS = defineShortcuts({
     description: 'Open the right sidebar to the Files panel',
     category: 'Task View',
   },
+  sidebarTask: {
+    defaultHotkey: 'Mod+Shift+4',
+    label: 'View Task',
+    description: 'Open the right sidebar to the Task panel',
+    category: 'Task View',
+  },
   tabNext: {
     defaultHotkey: 'Mod+Alt+ArrowRight',
     label: 'Next Tab',

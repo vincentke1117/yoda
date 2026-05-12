@@ -1,6 +1,7 @@
 import {
   SHAREABLE_PROJECT_SETTINGS_WRITE_FIELDS,
   type ProjectSettings,
+  type QuickAction,
   type ShareableProjectSettings,
   type ShareableProjectSettingsWriteField,
 } from './project-settings';
@@ -92,6 +93,20 @@ export const SHAREABLE_FIELD_ACCESSORS = {
     },
     displayValue: (settings) => displayText(settings.scripts?.teardown),
   },
+  quickActions: {
+    path: ['quickActions'],
+    get: (settings) => settings.quickActions,
+    set: (settings, value) => {
+      settings.quickActions = value as QuickAction[] | undefined;
+    },
+    clear: (settings) => {
+      delete settings.quickActions;
+    },
+    displayValue: (settings) => {
+      const value = settings.quickActions?.filter((a) => a.label.trim() && a.command.trim());
+      return value?.length ? value.map((a) => `${a.label}: ${a.command}`).join('\n') : null;
+    },
+  },
 } satisfies Record<ShareableProjectSettingsWriteField, ShareableFieldAccessor>;
 
 export function clearShareableProjectSettingsFields<T extends ProjectSettings>(
@@ -102,6 +117,7 @@ export function clearShareableProjectSettingsFields<T extends ProjectSettings>(
     ...settings,
     preservePatterns: settings.preservePatterns ? [...settings.preservePatterns] : undefined,
     scripts: settings.scripts ? { ...settings.scripts } : undefined,
+    quickActions: settings.quickActions ? [...settings.quickActions] : undefined,
   };
 
   for (const field of fields) {

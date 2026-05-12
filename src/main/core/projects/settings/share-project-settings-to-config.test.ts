@@ -562,6 +562,7 @@ describe('shareProjectSettingsToConfig', () => {
           value: 'docker compose down',
         },
       ],
+      quickActions: [],
     });
   });
 });

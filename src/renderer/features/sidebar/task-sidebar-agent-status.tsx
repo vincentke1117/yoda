@@ -56,7 +56,7 @@ export const TaskSidebarAgentStatus = observer(function TaskSidebarAgentStatus({
           <span className="size-6 flex justify-center items-center">
             <span
               aria-label="Needs review"
-              className="size-1.5 rounded-full bg-amber-400 dark:bg-amber-300"
+              className="size-1.5 rounded-full bg-foreground-passive/60"
             />
           </span>
         </TooltipTrigger>

@@ -1,4 +1,5 @@
 import {
+  Bot,
   FolderInput,
   MessageSquareShare,
   Puzzle,
@@ -120,6 +121,15 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
         </SidebarContent>
         <div className="flex flex-col border-t border-border">
           <SidebarMenu className="px-2 pt-2">
+            <SidebarMenuButton
+              isActive={isCurrentView(currentView, 'agents')}
+              onClick={() => navigate('agents')}
+              aria-label={t('sidebar.agents')}
+              className="w-full justify-start"
+            >
+              <Bot className="h-5 w-5 sm:h-4 sm:w-4" />
+              {t('sidebar.agents')}
+            </SidebarMenuButton>
             <SidebarMenuButton
               isActive={isCurrentView(currentView, 'skills')}
               onClick={() => navigate('skills')}

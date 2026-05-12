@@ -6,6 +6,59 @@ This project resets to **0.1.0** with the rebrand from `emdash` to `yoda`. Older
 release history (`v0.4.x`, `v1.1.x`) belongs to the upstream `emdash` codebase
 and is preserved in git tags only.
 
+## 0.3.0 — 2026-05-12
+
+### Added
+
+- **Lovcode integration**: new `lovcode` main-process controller and
+  service (`checkAvailability`, `search`). Command palette gains a
+  Lovcode-backed search source, an install banner when Lovcode isn't
+  detected, and shared types in `src/shared/lovcode.ts`.
+- **Agents view**: dedicated renderer feature under
+  `src/renderer/features/agents/` with its own view registry entry and
+  `agents_viewed` telemetry event.
+- **Command palette qualifiers**: structured query qualifiers
+  (`qualifiers.ts`) and a Lovcode search hook
+  (`use-lovcode-search.ts`).
+- **Custom command on archive**: tasks can run a project-defined command
+  before archiving (`src/renderer/features/projects/run-project-command.ts`).
+- **Mark task for review**: new task state plus surfacing in the sidebar
+  and task titlebar.
+- **Project aliases**: projects can carry a custom alias used in UI and
+  search.
+- **Claude session metadata**: new
+  `src/main/core/conversations/getClaudeSessionMetadata.ts` helper for
+  resolving Claude session identity.
+- **Project overview view**: new `overview-view/` panel for projects.
+- **Task panel**: extracted `task-panel.tsx` to host the task surface.
+
+### Changed
+
+- Command palette modal refactored to support multiple search sources
+  (Lovcode, qualifiers, built-ins) with shared scoring/filtering.
+- Conversations controller and panel updated to consume Claude session
+  metadata and surface it in the create-conversation modal.
+- Settings schema and project-settings shared types extended for
+  archive-command and alias fields. Settings registry wired accordingly.
+- Sidebar and task titlebar reflect the new mark-for-review and
+  alias-aware project naming. Agent status indicator polished.
+- i18n: large new key set in `en.json` and `zh-CN.json` for Lovcode,
+  agents, qualifiers, archive note, and review states.
+- Telemetry `FocusView` adds `'agents'`.
+- Navigation store and keyboard shortcuts wired for the new agents view.
+
+### Fixed
+
+- PTY: pure CJK / non-ASCII messages now correctly trigger the sidebar
+  "working" state.
+- Tasks: in-flight lock added when archiving so a task cannot be
+  double-archived.
+- Tooltip: nested-`button` hydration warning from `TooltipTrigger` fixed.
+
+### CI
+
+- Dropped the `nix-build` workflow.
+
 ## 0.2.0 — 2026-05-12
 
 ### Added
