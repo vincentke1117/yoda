@@ -4,8 +4,27 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+patchDevElectronBundleName();
+
 if (process.env.CI || process.env.YODA_SKIP_ELECTRON_REBUILD === '1') {
   process.exit(0);
+}
+
+function patchDevElectronBundleName() {
+  if (process.platform !== 'darwin') return;
+  const plist = path.resolve(
+    __dirname,
+    '..',
+    'node_modules',
+    'electron',
+    'dist',
+    'Electron.app',
+    'Contents',
+    'Info.plist'
+  );
+  for (const key of ['CFBundleName', 'CFBundleDisplayName']) {
+    spawnSync('/usr/libexec/PlistBuddy', ['-c', `Set :${key} Yoda`, plist], { stdio: 'ignore' });
+  }
 }
 
 function getElectronRebuildBin() {

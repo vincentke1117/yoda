@@ -322,7 +322,7 @@ export const AGENT_PROVIDERS: AgentProviderDefinition[] = [
     name: 'Kimi',
     description:
       'Kimi CLI by Moonshot AI, with shell execution, Zsh integration, ACP, and MCP support.',
-    docUrl: 'https://www.kimi.com/code/docs/en/kimi-cli/guides/getting-started.html',
+    docUrl: 'https://moonshotai.github.io/kimi-cli/en/guides/getting-started.html',
     installCommand: 'uv tool install kimi-cli',
     commands: ['kimi'],
     versionArgs: ['--version'],

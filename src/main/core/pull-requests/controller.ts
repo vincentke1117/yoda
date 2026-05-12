@@ -1,7 +1,10 @@
 import { RequestError } from '@octokit/request-error';
+import { eq } from 'drizzle-orm';
 import { createRPCController } from '@shared/ipc/rpc';
 import type { ListPrOptions, PullRequestError, PullRequestFile } from '@shared/pull-requests';
 import { err, ok } from '@shared/result';
+import { db } from '@main/db/client';
+import { tasks } from '@main/db/schema';
 import { log } from '@main/lib/logger';
 import { telemetryService } from '@main/lib/telemetry';
 import { prQueryService } from './pr-query-service';
@@ -43,9 +46,6 @@ export const pullRequestController = createRPCController({
         return ok({ prs: [], taskBranch: null });
       }
 
-      const { tasks } = await import('@main/db/schema');
-      const { eq } = await import('drizzle-orm');
-      const { db } = await import('@main/db/client');
       const [taskRow] = await db
         .select({ taskBranch: tasks.taskBranch })
         .from(tasks)

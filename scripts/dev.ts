@@ -14,13 +14,44 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
 const electronVite = path.join(repoRoot, 'node_modules', '.bin', 'electron-vite');
 
+const verbose = process.env.YODA_DEV_VERBOSE === '1';
+
+// Lines we drop unless YODA_DEV_VERBOSE=1. These come from Electron / macOS
+// and are not actionable in app code.
+const NOISE_PATTERNS: RegExp[] = [
+  /\(node:\d+\) \[DEP0180\] DeprecationWarning: fs\.Stats constructor is deprecated/,
+  /^\(Use `[^`]*--trace-deprecation/,
+  /error messaging the mach port for IMKCFRunLoopWakeUpReliable/,
+  /TISFileInterrogator updateSystemInputSources/,
+  /^Keyboard Layouts: (duplicate|keyboard layout identifier)/,
+];
+
+function makeNoiseFilter(out: NodeJS.WritableStream) {
+  let buf = '';
+  return (chunk: Buffer | string) => {
+    buf += typeof chunk === 'string' ? chunk : chunk.toString('utf8');
+    const lines = buf.split('\n');
+    buf = lines.pop() ?? '';
+    for (const line of lines) {
+      if (verbose || !NOISE_PATTERNS.some((re) => re.test(line))) {
+        out.write(line + '\n');
+      }
+    }
+  };
+}
+
 const args = process.argv.slice(2);
 const child = spawn(electronVite, ['dev', ...args], {
   cwd: repoRoot,
-  stdio: 'inherit',
+  stdio: verbose ? 'inherit' : ['inherit', 'inherit', 'pipe'],
   detached: true, // own process group so we can signal the whole tree
   env: process.env,
 });
+
+if (!verbose && child.stderr) {
+  const writeStderr = makeNoiseFilter(process.stderr);
+  child.stderr.on('data', writeStderr);
+}
 
 const GRACE_MS = 5000;
 let shuttingDown = false;

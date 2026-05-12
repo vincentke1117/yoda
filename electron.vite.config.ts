@@ -16,6 +16,23 @@ export default defineConfig({
         '@root': resolve('.'),
       },
     },
+    build: {
+      emptyOutDir: true,
+      rollupOptions: {
+        // legacy-port intentionally lazy-loads db/client + db/kv + settings-service
+        // to avoid opening the main sqlite handle before the migration gate runs.
+        // The matching dynamic-import warnings are not actionable.
+        onwarn(warning, defaultHandler) {
+          if (
+            warning.code === 'DYNAMIC_IMPORT_WILL_NOT_MOVE_MODULE' ||
+            /dynamic import will not move module into another chunk/.test(warning.message ?? '')
+          ) {
+            return;
+          }
+          defaultHandler(warning);
+        },
+      },
+    },
   },
   preload: {
     root: 'src/preload',
@@ -24,6 +41,9 @@ export default defineConfig({
         '@shared': resolve('src/shared'),
         '@root': resolve('.'),
       },
+    },
+    build: {
+      emptyOutDir: true,
     },
   },
   renderer: {

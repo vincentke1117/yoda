@@ -1,10 +1,10 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { parseGitHubRepository } from '@shared/github-repository';
 import { gitWatcherRegistry } from '@main/core/git/git-watcher-registry';
 import { projectManager } from '@main/core/projects/project-manager';
 import { taskManager } from '@main/core/tasks/task-manager';
 import { db } from '@main/db/client';
-import { projectRemotes } from '@main/db/schema';
+import { projectRemotes, pullRequests } from '@main/db/schema';
 import type { IDisposable, IInitializable } from '@main/lib/lifecycle';
 import { log } from '@main/lib/logger';
 import { prSyncEngine } from './pr-sync-engine';
@@ -172,16 +172,11 @@ export class PrSyncScheduler implements IInitializable, IDisposable {
     repositoryUrl: string,
     taskBranch: string
   ): Promise<number | null> {
-    const { pullRequests } = await import('@main/db/schema');
-    const { and, eq: deq } = await import('drizzle-orm');
     const rows = await db
       .select({ identifier: pullRequests.identifier })
       .from(pullRequests)
       .where(
-        and(
-          deq(pullRequests.repositoryUrl, repositoryUrl),
-          deq(pullRequests.headRefName, taskBranch)
-        )
+        and(eq(pullRequests.repositoryUrl, repositoryUrl), eq(pullRequests.headRefName, taskBranch))
       )
       .limit(1);
 

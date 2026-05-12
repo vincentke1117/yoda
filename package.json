@@ -7,7 +7,7 @@
   "main": "./out/main/index.js",
   "packageManager": "pnpm@10.28.2",
   "scripts": {
-    "d": "pnpm install && pnpm run dev",
+    "d": "pnpm install --prefer-frozen-lockfile --reporter=append-only --silent && pnpm run dev",
     "dev": "node --experimental-strip-types scripts/dev.ts",
     "dev:debug": "VITE_LOG_LEVEL=debug node --experimental-strip-types scripts/dev.ts",
     "dev:main": "node --experimental-strip-types scripts/dev.ts --watch main",
