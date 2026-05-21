@@ -36,10 +36,12 @@ function createAppDb(): {
     CREATE TABLE projects (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
+      alias TEXT,
       path TEXT NOT NULL UNIQUE,
       workspace_provider TEXT NOT NULL DEFAULT 'local',
       base_ref TEXT,
       ssh_connection_id TEXT,
+      archived_at TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
@@ -53,11 +55,14 @@ function createAppDb(): {
       task_branch TEXT,
       linked_issue TEXT,
       archived_at TEXT,
+      archive_note TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       last_interacted_at TEXT,
       status_changed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       is_pinned INTEGER NOT NULL DEFAULT 0,
+      needs_review INTEGER NOT NULL DEFAULT 0,
+      is_user_named INTEGER NOT NULL DEFAULT 0,
       workspace_provider TEXT,
       workspace_id TEXT,
       workspace_provider_data TEXT

@@ -116,7 +116,8 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
     [homeProjectId, navProjectId, projectManager.projects.size]
   );
 
-  const selectedProjectId = draft?.selectedProjectId ?? fallbackProjectId;
+  const selectedProjectId =
+    draft === undefined ? fallbackProjectId : (draft.selectedProjectId ?? undefined);
   const setSelectedProjectId = useCallback(
     (next: string | undefined) => {
       updateDraft({ selectedProjectId: next ?? null });
@@ -360,23 +361,27 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
               </ComboboxTrigger>
             }
           />
-          <Chip icon={projectData?.type === 'ssh' ? Server : Monitor}>
-            {projectData?.type === 'ssh' ? t('home.remoteMode') : t('home.localMode')}
-          </Chip>
-          <StrategyChip
-            strategyKind={effectiveStrategyKind}
-            disabled={isUnborn || !mounted}
-            onChange={setStrategyKind}
-            ariaLabel={t('home.strategyAria')}
-            labels={{
-              chipNewBranch: t('home.strategyChipNewBranch', { branch: branchLabel }),
-              chipNoWorktree: t('home.strategyChipNoWorktree', { branch: branchLabel }),
-              newBranchTitle: t('home.strategyNewBranchTitle', { branch: branchLabel }),
-              newBranchDesc: t('home.strategyNewBranchDesc', { branch: branchLabel }),
-              noWorktreeTitle: t('home.strategyNoWorktreeTitle', { branch: branchLabel }),
-              noWorktreeDesc: t('home.strategyNoWorktreeDesc'),
-            }}
-          />
+          {projectData && (
+            <Chip icon={projectData.type === 'ssh' ? Server : Monitor}>
+              {projectData.type === 'ssh' ? t('home.remoteMode') : t('home.localMode')}
+            </Chip>
+          )}
+          {mounted && (
+            <StrategyChip
+              strategyKind={effectiveStrategyKind}
+              disabled={isUnborn}
+              onChange={setStrategyKind}
+              ariaLabel={t('home.strategyAria')}
+              labels={{
+                chipNewBranch: t('home.strategyChipNewBranch', { branch: branchLabel }),
+                chipNoWorktree: t('home.strategyChipNoWorktree', { branch: branchLabel }),
+                newBranchTitle: t('home.strategyNewBranchTitle', { branch: branchLabel }),
+                newBranchDesc: t('home.strategyNewBranchDesc', { branch: branchLabel }),
+                noWorktreeTitle: t('home.strategyNoWorktreeTitle', { branch: branchLabel }),
+                noWorktreeDesc: t('home.strategyNoWorktreeDesc'),
+              }}
+            />
+          )}
           {!mounted && (
             <span className="text-xs text-foreground-muted">{t('home.needProjectHint')}</span>
           )}

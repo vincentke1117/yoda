@@ -12,6 +12,10 @@ const mocks = vi.hoisted(() => ({
   initRepositoryMock: vi.fn(),
   openProjectMock: vi.fn(),
   getProjectMock: vi.fn(),
+  selectMock: vi.fn(),
+  fromMock: vi.fn(),
+  whereMock: vi.fn(),
+  limitMock: vi.fn(),
   insertMock: vi.fn(),
   valuesMock: vi.fn(),
   returningMock: vi.fn(),
@@ -53,6 +57,7 @@ vi.mock('@main/core/projects/project-manager', () => ({
 
 vi.mock('@main/db/client', () => ({
   db: {
+    select: mocks.selectMock,
     insert: mocks.insertMock,
   },
 }));
@@ -67,6 +72,10 @@ beforeEach(() => {
   mocks.getBranchesMock.mockResolvedValue([]);
   mocks.getDefaultBranchMock.mockResolvedValue('main');
   mocks.initRepositoryMock.mockResolvedValue(undefined);
+  mocks.selectMock.mockReturnValue({ from: mocks.fromMock });
+  mocks.fromMock.mockReturnValue({ where: mocks.whereMock });
+  mocks.whereMock.mockReturnValue({ limit: mocks.limitMock });
+  mocks.limitMock.mockResolvedValue([]);
   mocks.sshConnectMock.mockResolvedValue({ id: 'ssh-proxy' });
   mocks.sshStatMock.mockResolvedValue({ path: '', type: 'dir' });
 });

@@ -24,15 +24,30 @@ import {
 import { log } from '@renderer/utils/logger';
 
 interface ProjectOption {
+  kind: 'project';
   value: string;
   label: string;
 }
 
+interface EmptyProjectOption {
+  kind: 'empty';
+  value: '__empty_project__';
+  label: string;
+}
+
+type ProjectSelectorOption = ProjectOption | EmptyProjectOption;
+
 interface ProjectSelectorProps {
   value: string | undefined;
-  onChange: (projectId: string) => void;
+  onChange: (projectId: string | undefined) => void;
   trigger?: React.ReactNode;
 }
+
+const EMPTY_PROJECT_OPTION: EmptyProjectOption = {
+  kind: 'empty',
+  value: '__empty_project__',
+  label: 'No project',
+};
 
 export const ProjectSelector = observer(function ProjectSelector({
   value,
@@ -46,14 +61,24 @@ export const ProjectSelector = observer(function ProjectSelector({
   const options: ProjectOption[] = Array.from(getProjectManagerStore().projects.entries()).flatMap(
     ([id, store]) => {
       const mounted = asMounted(store);
-      return mounted ? [{ value: id, label: projectDisplayName(mounted.data) }] : [];
+      return mounted
+        ? [{ kind: 'project', value: id, label: projectDisplayName(mounted.data) }]
+        : [];
     }
   );
+  const optionGroups: Array<{ value: string; items: ProjectSelectorOption[] }> = [
+    { value: 'empty', items: [EMPTY_PROJECT_OPTION] },
+    { value: 'options', items: options },
+  ];
 
   const selectedOption = options.find((o) => o.value === value) ?? null;
 
-  function handleValueChange(item: ProjectOption | null) {
-    if (!item) return;
+  function handleValueChange(item: ProjectSelectorOption | null) {
+    if (!item || item.kind === 'empty') {
+      onChange(undefined);
+      setOpen(false);
+      return;
+    }
     onChange(item.value);
     setOpen(false);
   }
@@ -118,13 +143,15 @@ export const ProjectSelector = observer(function ProjectSelector({
 
   return (
     <Combobox
-      items={[{ value: 'options', items: options }]}
+      items={optionGroups}
       value={selectedOption}
       onValueChange={handleValueChange}
       open={open}
       onOpenChange={setOpen}
-      isItemEqualToValue={(a: ProjectOption, b: ProjectOption) => a.value === b.value}
-      filter={(item: ProjectOption, query) =>
+      isItemEqualToValue={(a: ProjectSelectorOption, b: ProjectSelectorOption) =>
+        a.kind === b.kind && a.value === b.value
+      }
+      filter={(item: ProjectSelectorOption, query) =>
         item.label.toLowerCase().includes(query.toLowerCase())
       }
       autoHighlight
@@ -135,12 +162,12 @@ export const ProjectSelector = observer(function ProjectSelector({
         </ComboboxTrigger>
       )}
       <ComboboxContent className="w-auto min-w-(--anchor-width)">
-        <ComboboxInput showTrigger={false} placeholder="Search projects..." />
+        <ComboboxInput showTrigger={false} showClear={!!value} placeholder="Search projects..." />
         <ComboboxList className="pb-0">
-          {(group: { value: string; items: ProjectOption[] }) => (
+          {(group: { value: string; items: ProjectSelectorOption[] }) => (
             <ComboboxGroup key={group.value} items={group.items} className="py-1">
               <ComboboxCollection>
-                {(item: ProjectOption) => (
+                {(item: ProjectSelectorOption) => (
                   <ComboboxItem key={item.value} value={item}>
                     {item.label}
                   </ComboboxItem>

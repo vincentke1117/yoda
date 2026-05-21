@@ -23,15 +23,15 @@
 
 <br>
 
-  <a href="https://lovstudio.ai/yoda/download">
-    <img src="https://lovstudio.ai/yoda/media/readme/downloadforwindows.png" alt="Download for Windows" height="40">
-  </a>
-  <a href="https://lovstudio.ai/yoda/download">
-    <img src="https://lovstudio.ai/yoda/media/readme/downloadformacos.png" alt="Download for macOS" height="40">
-  </a>
-  <a href="https://lovstudio.ai/yoda/download">
-    <img src="https://lovstudio.ai/yoda/media/readme/downloadforlinux.png" alt="Download for Linux" height="40">
-  </a>
+  <strong>
+    <a href="https://github.com/lovstudio/yoda/releases/latest/download/yoda-arm64.dmg">macOS Apple Silicon</a>
+    ·
+    <a href="https://github.com/lovstudio/yoda/releases/latest/download/yoda-x64.dmg">macOS Intel</a>
+    ·
+    <a href="https://github.com/lovstudio/yoda/releases/latest/download/yoda-x64.msi">Windows</a>
+    ·
+    <a href="https://github.com/lovstudio/yoda/releases/latest/download/yoda-x86_64.AppImage">Linux AppImage</a>
+  </strong>
 
 <br><br>
 
@@ -47,12 +47,12 @@ Modern coding agents are powerful — but managing more than one at a time devol
 
 Every task spawns an isolated **git worktree** (locally or over SSH), every agent stays sandboxed, every diff is reviewable side‑by‑side, and every merge is deliberate. Dispatch work, review, intervene, and merge with the calm precision of a master orchestrator — instead of the chaos of switching tabs.
 
-Yoda is **provider‑agnostic**: Claude Code, Codex, OpenCode, Gemini, Amp, Cursor, Copilot, and 20+ more CLIs all run under the same orchestration model. It also pipes Linear / GitHub / Jira tickets straight into a session and surfaces CI/CD checks from the sidebar — so the loop from ticket → agent → review → ship lives in one window.
+Yoda is **provider‑agnostic**: Claude Code, Codex, OpenCode, Gemini, Amp, Cursor, Copilot, and the rest of your coding-agent CLIs all run under the same orchestration model. It also pipes Linear / GitHub / Jira tickets straight into a session and surfaces CI/CD checks from the sidebar — so the loop from ticket → agent → review → ship lives in one window.
 
 ## Highlights
 
 - **Parallel worktrees** — Each task runs in its own `git worktree`, isolated from your working tree. Multiple agents work simultaneously without stomping on each other.
-- **Provider‑agnostic** — 24+ coding agent CLIs supported (Claude Code, Codex, OpenCode, Gemini, Amp, Cursor, Copilot, Cline, Goose, Kimi, Qwen, …). Switch providers per task, not per project.
+- **Provider‑agnostic** — Bring your coding-agent CLIs with you (Claude Code, Codex, OpenCode, Gemini, Amp, Cursor, Copilot, Cline, Goose, Kimi, Qwen, …). Switch providers per task, not per project.
 - **Remote dev over SSH** — Add a remote machine, mount projects on it, and run agents there with the same workflow. Credentials live in your OS keychain.
 - **Ticket → session** — Pull Linear / Jira / GitHub Issues / GitLab / Forgejo / Plain tickets straight into a new agent session as the prompt.
 - **CI/CD aware** — Watch GitHub Actions / build status next to the diff. Re‑dispatch the agent without leaving the task.
@@ -63,30 +63,27 @@ Yoda is **provider‑agnostic**: Claude Code, Codex, OpenCode, Gemini, Amp, Curs
 
 ## Installation
 
-### macOS
-- Homebrew: `brew install --cask yoda`
-- Apple Silicon: https://releases.lovstudio.ai/yoda/yoda-arm64.dmg
-- Intel x64: https://releases.lovstudio.ai/yoda/yoda-x64.dmg
+Installers are published on GitHub Releases for macOS, Windows, and Linux.
 
-### Windows
-- Installer (x64): https://releases.lovstudio.ai/yoda/yoda-x64.msi
-- Portable (x64): https://releases.lovstudio.ai/yoda/yoda-x64.exe
+| Platform | Download |
+| --- | --- |
+| macOS | [Apple Silicon DMG](https://github.com/lovstudio/yoda/releases/latest/download/yoda-arm64.dmg) · [Intel DMG](https://github.com/lovstudio/yoda/releases/latest/download/yoda-x64.dmg) · [Apple Silicon ZIP](https://github.com/lovstudio/yoda/releases/latest/download/yoda-arm64.zip) · [Intel ZIP](https://github.com/lovstudio/yoda/releases/latest/download/yoda-x64.zip) |
+| Windows | [MSI installer](https://github.com/lovstudio/yoda/releases/latest/download/yoda-x64.msi) · [EXE installer](https://github.com/lovstudio/yoda/releases/latest/download/yoda-x64.exe) |
+| Linux | [AppImage](https://github.com/lovstudio/yoda/releases/latest/download/yoda-x86_64.AppImage) · [Debian package](https://github.com/lovstudio/yoda/releases/latest/download/yoda-amd64.deb) · [RPM package](https://github.com/lovstudio/yoda/releases/latest/download/yoda-x86_64.rpm) |
 
-### Linux
-- AppImage (x64): https://releases.lovstudio.ai/yoda/yoda-x86_64.AppImage
-- Debian package (x64): https://releases.lovstudio.ai/yoda/yoda-amd64.deb
+> Homebrew note: `brew install --cask yoda` currently resolves to an unrelated, disabled Homebrew cask. Use the GitHub Releases downloads above until an official LovStudio Yoda cask exists.
 
-**[All releases (macOS · Windows · Linux)](https://github.com/lovstudio/yoda/releases/latest)** · [Changelog](./CHANGELOG.md)
+**[All releases](https://github.com/lovstudio/yoda/releases/latest)** · [Changelog](./CHANGELOG.md)
 
 ## Remote Development over SSH
 
 Connect to remote machines via SSH/SFTP to work with remote codebases without leaving Yoda. Use SSH agent or key authentication; credentials are stored in your OS keychain. Run any supported coding agent on remote projects with the same parallel worktree workflow as local development.
 
-See [Remote Projects](https://lovstudio.ai/yoda/docs/remote-projects) and [Bring Your Own Infrastructure](https://lovstudio.ai/yoda/docs/bring-your-own-infrastructure) for setup details.
+See the [remote development notes](./agents/workflows/remote-development.md) for the current implementation model.
 
 ## Providers
 
-### Coding agents (24+)
+### Coding agents
 
 Yoda is provider‑agnostic and built to add new CLIs quickly. If yours is missing, [open an issue](https://github.com/lovstudio/yoda/issues) or send a PR.
 
@@ -157,7 +154,7 @@ Small, focused PRs over big bangs. See the [Contributing Guide](CONTRIBUTING.md)
 > - In the app: **Settings → General → Privacy & Telemetry** (toggle off)
 > - Or via env var before launch: `TELEMETRY_ENABLED=false`
 >
-> Full details: see [Telemetry](https://lovstudio.ai/yoda/docs/telemetry).
+> The tracked event allowlist lives in [`src/shared/telemetry.ts`](./src/shared/telemetry.ts).
 </details>
 
 <details>
@@ -219,7 +216,7 @@ Small, focused PRs over big bangs. See the [Contributing Guide](CONTRIBUTING.md)
 > - Git installed on the remote server
 > - For agent auth: SSH agent running with your key loaded (`ssh-add -l`)
 >
-> See [Remote Projects](https://lovstudio.ai/yoda/docs/remote-projects) and [Bring Your Own Infrastructure](https://lovstudio.ai/yoda/docs/bring-your-own-infrastructure) for details.
+> See the [remote development notes](./agents/workflows/remote-development.md) for implementation details.
 </details>
 
 ## Star History

@@ -6,6 +6,20 @@ This project resets to **0.1.0** with the rebrand from `emdash` to `yoda`. Older
 release history (`v0.4.x`, `v1.1.x`) belongs to the upstream `emdash` codebase
 and is preserved in git tags only.
 
+## 0.3.1 — 2026-05-21
+
+### Fixed
+
+- Suppress Octokit request logging so GitHub API failures cannot write noisy
+  stderr output through the default logger.
+- Allow task creation to continue when no project is selected, including an
+  explicit no-project option in the selector.
+- Publish GitHub Release notes from `CHANGELOG.md`.
+
+### Changed
+
+- Refresh public download links and agentic CLI reference docs.
+
 ## 0.3.0 — 2026-05-12
 
 ### Added

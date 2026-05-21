@@ -1,5 +1,4 @@
 import { createOAuthDeviceAuth } from '@octokit/auth-oauth-device';
-import { Octokit } from '@octokit/rest';
 import {
   githubAuthCancelledChannel,
   githubAuthDeviceCodeChannel,
@@ -15,6 +14,7 @@ import { KV } from '@main/db/kv';
 import { events } from '@main/lib/events';
 import { log } from '@main/lib/logger';
 import { extractGhCliToken } from './gh-cli-token';
+import { createGitHubOctokit } from './octokit-client';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -208,7 +208,7 @@ export class GitHubConnectionServiceImpl implements GitHubConnectionService {
 
   async getUserInfo(token: string): Promise<GitHubUser | null> {
     try {
-      const octokit = new Octokit({ auth: token });
+      const octokit = createGitHubOctokit(token);
       const { data } = await octokit.rest.users.getAuthenticated();
       return {
         id: data.id,

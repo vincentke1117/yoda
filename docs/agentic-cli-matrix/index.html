@@ -1,0 +1,2717 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Agentic CLI 横向功能对比</title>
+    <script type="module" src="./main.js"></script>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #10100e;
+        --panel: #181713;
+        --panel-2: #202019;
+        --ink: #f0eadc;
+        --muted: #a8a08f;
+        --line: #353226;
+        --line-strong: #5b563f;
+        --good: #6ee7b7;
+        --partial: #f2c97d;
+        --via: #93c5fd;
+        --none: #6e6a5d;
+        --risk: #fca5a5;
+        --accent: #d6ff79;
+        --cyan: #79e8ff;
+        --rose: #ff9aae;
+        --shadow: 0 20px 70px rgba(0, 0, 0, 0.38);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at 16% 6%, rgba(214, 255, 121, 0.1), transparent 28rem),
+          linear-gradient(135deg, rgba(121, 232, 255, 0.06), transparent 28rem), var(--bg);
+        color: var(--ink);
+        font-family:
+          'IBM Plex Sans', 'PingFang SC', 'Microsoft YaHei', ui-sans-serif, system-ui, sans-serif;
+        letter-spacing: 0;
+      }
+
+      a {
+        color: inherit;
+      }
+
+      .shell {
+        min-height: 100vh;
+      }
+
+      .hero {
+        border-bottom: 1px solid var(--line);
+        background:
+          linear-gradient(90deg, rgba(16, 16, 14, 0.96), rgba(16, 16, 14, 0.7)),
+          repeating-linear-gradient(
+            90deg,
+            rgba(255, 255, 255, 0.03) 0,
+            rgba(255, 255, 255, 0.03) 1px,
+            transparent 1px,
+            transparent 54px
+          );
+      }
+
+      .hero-inner {
+        max-width: 1480px;
+        margin: 0 auto;
+        padding: 34px 24px 26px;
+      }
+
+      .title-row {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 18px;
+        align-items: start;
+      }
+
+      h1 {
+        max-width: none;
+        margin: 0;
+        font-family: 'IBM Plex Mono', 'SFMono-Regular', ui-monospace, monospace;
+        font-size: 68px;
+        line-height: 0.92;
+        letter-spacing: 0;
+        white-space: nowrap;
+      }
+
+      .subtitle {
+        max-width: 980px;
+        margin: 18px 0 0;
+        color: var(--muted);
+        font-size: 15px;
+        line-height: 1.7;
+      }
+
+      .stamp {
+        display: grid;
+        gap: 7px;
+        min-width: 220px;
+        border: 1px solid var(--line-strong);
+        background: rgba(32, 32, 25, 0.78);
+        padding: 14px;
+        box-shadow: var(--shadow);
+      }
+
+      .stamp strong {
+        color: var(--accent);
+        font-family: 'IBM Plex Mono', ui-monospace, monospace;
+        font-size: 13px;
+        letter-spacing: 0;
+      }
+
+      .stamp span {
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      .logo-strip {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        overflow: hidden;
+        padding-top: 26px;
+      }
+
+      .logo-chip {
+        display: grid;
+        place-items: center;
+        width: 46px;
+        height: 46px;
+        flex: 0 0 auto;
+        border: 1px solid var(--line);
+        background: rgba(240, 234, 220, 0.04);
+      }
+
+      .logo-chip img {
+        width: 27px;
+        height: 27px;
+        object-fit: contain;
+      }
+
+      .logo-fallback {
+        color: var(--accent);
+        font-family: 'IBM Plex Mono', ui-monospace, monospace;
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .workspace {
+        max-width: 1480px;
+        margin: 0 auto;
+        padding: 22px 24px 42px;
+      }
+
+      .controls {
+        display: grid;
+        grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
+        gap: 18px;
+        align-items: start;
+      }
+
+      .control-panel,
+      .source-panel,
+      .drawer {
+        border: 1px solid var(--line);
+        background: rgba(24, 23, 19, 0.92);
+        box-shadow: var(--shadow);
+      }
+
+      .control-panel {
+        position: sticky;
+        top: 14px;
+        padding: 16px;
+      }
+
+      .panel-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        margin-bottom: 12px;
+      }
+
+      .panel-title h2 {
+        margin: 0;
+        font-size: 13px;
+        text-transform: uppercase;
+        color: var(--accent);
+        letter-spacing: 0.06em;
+      }
+
+      .small-action {
+        border: 1px solid var(--line);
+        background: rgba(240, 234, 220, 0.04);
+        color: var(--ink);
+        cursor: pointer;
+        font: inherit;
+        font-size: 12px;
+        padding: 6px 9px;
+      }
+
+      .small-action:hover {
+        border-color: var(--accent);
+      }
+
+      .search {
+        width: 100%;
+        border: 1px solid var(--line);
+        background: #0d0d0b;
+        color: var(--ink);
+        font: inherit;
+        font-size: 14px;
+        padding: 11px 12px;
+        outline: none;
+      }
+
+      .search:focus {
+        border-color: var(--accent);
+      }
+
+      .group-label {
+        display: block;
+        margin: 16px 0 9px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .checks {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 8px;
+      }
+
+      .check {
+        display: grid;
+        grid-template-columns: 18px minmax(0, 1fr);
+        gap: 8px;
+        align-items: center;
+        min-height: 34px;
+        border: 1px solid var(--line);
+        background: rgba(240, 234, 220, 0.03);
+        padding: 7px 8px;
+        cursor: pointer;
+      }
+
+      .check input {
+        width: 15px;
+        height: 15px;
+        accent-color: var(--accent);
+      }
+
+      .check span {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 12px;
+      }
+
+      .category-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .category-row label {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border: 1px solid var(--line);
+        padding: 7px 9px;
+        color: var(--muted);
+        cursor: pointer;
+        font-size: 12px;
+      }
+
+      .category-row input {
+        accent-color: var(--accent);
+      }
+
+      .segmented {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        border: 1px solid var(--line);
+        background: #0d0d0b;
+      }
+
+      .segmented button {
+        min-width: 0;
+        border: 0;
+        border-right: 1px solid var(--line);
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+        font: inherit;
+        font-size: 12px;
+        padding: 8px 6px;
+      }
+
+      .segmented button:last-child {
+        border-right: 0;
+      }
+
+      .segmented button.active {
+        background: rgba(214, 255, 121, 0.13);
+        color: var(--accent);
+      }
+
+      .matrix-zone {
+        min-width: 0;
+      }
+
+      .score-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 12px;
+      }
+
+      .score {
+        min-height: 82px;
+        border: 1px solid var(--line);
+        background: rgba(240, 234, 220, 0.04);
+        padding: 12px;
+      }
+
+      .score b {
+        display: block;
+        color: var(--ink);
+        font-size: 22px;
+        line-height: 1;
+      }
+
+      .score span {
+        display: block;
+        margin-top: 8px;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.35;
+      }
+
+      .insight-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 10px;
+        margin-bottom: 12px;
+      }
+
+      .agent-score-card {
+        border: 1px solid var(--line);
+        background: rgba(240, 234, 220, 0.04);
+        padding: 11px;
+      }
+
+      .agent-score-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        font-size: 12px;
+      }
+
+      .agent-score-head strong {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .agent-score-head b {
+        color: var(--accent);
+        font-family: 'IBM Plex Mono', ui-monospace, monospace;
+        font-size: 15px;
+      }
+
+      .score-bar {
+        height: 7px;
+        margin: 10px 0 7px;
+        border: 1px solid var(--line);
+        background: #0d0d0b;
+      }
+
+      .score-fill {
+        height: 100%;
+        background: linear-gradient(90deg, var(--accent), var(--cyan));
+      }
+
+      .agent-score-meta {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+
+      .legend span,
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border: 1px solid var(--line);
+        padding: 5px 8px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+      }
+
+      .dot.full {
+        background: var(--good);
+      }
+
+      .dot.partial {
+        background: var(--partial);
+      }
+
+      .dot.via {
+        background: var(--via);
+      }
+
+      .dot.none {
+        background: var(--none);
+      }
+
+      .table-wrap {
+        overflow: auto;
+        max-height: 72vh;
+        border: 1px solid var(--line);
+        background: rgba(16, 16, 14, 0.9);
+      }
+
+      table {
+        width: max-content;
+        min-width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        font-size: 13px;
+      }
+
+      th,
+      td {
+        border-right: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+        vertical-align: top;
+      }
+
+      th {
+        position: sticky;
+        top: 0;
+        z-index: 4;
+        min-width: 148px;
+        background: #1d1c17;
+        color: var(--ink);
+        padding: 10px;
+        text-align: left;
+      }
+
+      th.feature-head {
+        left: 0;
+        z-index: 5;
+        width: 248px;
+        min-width: 248px;
+      }
+
+      td.feature-cell {
+        position: sticky;
+        left: 0;
+        z-index: 3;
+        width: 248px;
+        min-width: 248px;
+        background: #171611;
+        padding: 12px;
+      }
+
+      .feature-title {
+        display: block;
+        color: var(--ink);
+        font-weight: 700;
+        line-height: 1.35;
+      }
+
+      .feature-meta {
+        display: block;
+        margin-top: 5px;
+        color: var(--muted);
+        font-size: 11px;
+        line-height: 1.45;
+      }
+
+      .feature-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+        margin-top: 9px;
+      }
+
+      .feature-tags span,
+      .criterion-pill {
+        border: 1px solid var(--line);
+        color: var(--muted);
+        padding: 2px 5px;
+        font-size: 10px;
+        line-height: 1.25;
+      }
+
+      .feature-kicker {
+        display: block;
+        margin-bottom: 4px;
+        color: var(--accent);
+        font-family: 'IBM Plex Mono', ui-monospace, monospace;
+        font-size: 10px;
+        text-transform: uppercase;
+      }
+
+      .agent-head {
+        display: grid;
+        gap: 7px;
+      }
+
+      .agent-name {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+      }
+
+      .agent-name img {
+        width: 20px;
+        height: 20px;
+        object-fit: contain;
+      }
+
+      .agent-name strong {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .agent-origin {
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .cell-btn {
+        display: grid;
+        width: 100%;
+        min-height: 82px;
+        border: 0;
+        background: transparent;
+        color: var(--ink);
+        cursor: pointer;
+        font: inherit;
+        padding: 10px;
+        text-align: left;
+      }
+
+      .cell-btn:hover {
+        background: rgba(214, 255, 121, 0.07);
+      }
+
+      .cell-btn.full {
+        background: linear-gradient(180deg, rgba(110, 231, 183, 0.16), transparent 75%);
+        box-shadow: inset 3px 0 0 var(--good);
+      }
+
+      .cell-btn.partial {
+        background: linear-gradient(180deg, rgba(242, 201, 125, 0.15), transparent 75%);
+        box-shadow: inset 3px 0 0 var(--partial);
+      }
+
+      .cell-btn.via {
+        background: linear-gradient(180deg, rgba(147, 197, 253, 0.14), transparent 75%);
+        box-shadow: inset 3px 0 0 var(--via);
+      }
+
+      .cell-btn.none,
+      .cell-btn.unknown {
+        background: rgba(240, 234, 220, 0.015);
+        box-shadow: inset 3px 0 0 var(--none);
+      }
+
+      .status {
+        display: inline-flex;
+        align-items: center;
+        width: fit-content;
+        gap: 6px;
+        margin-bottom: 7px;
+        border: 1px solid var(--line);
+        padding: 3px 6px;
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .status.full {
+        color: var(--good);
+      }
+
+      .status.partial {
+        color: var(--partial);
+      }
+
+      .status.via {
+        color: var(--via);
+      }
+
+      .status.none,
+      .status.unknown {
+        color: var(--muted);
+      }
+
+      .cell-note {
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.45;
+      }
+
+      .cell-compact-line {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 7px;
+      }
+
+      .cell-score {
+        color: var(--ink);
+        font-family: 'IBM Plex Mono', ui-monospace, monospace;
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .coverage {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 4px;
+        margin: 3px 0 8px;
+      }
+
+      .coverage i {
+        height: 6px;
+        border: 1px solid var(--line);
+        background: rgba(240, 234, 220, 0.04);
+      }
+
+      .coverage i.on.full {
+        background: var(--good);
+      }
+
+      .coverage i.on.partial {
+        background: var(--partial);
+      }
+
+      .coverage i.on.via {
+        background: var(--via);
+      }
+
+      .cell-summary {
+        color: var(--muted);
+        font-size: 11px;
+        line-height: 1.4;
+      }
+
+      .cell-refs {
+        display: flex;
+        gap: 5px;
+        margin-top: 9px;
+        flex-wrap: wrap;
+      }
+
+      .ref-pill {
+        border: 1px solid var(--line);
+        color: var(--accent);
+        padding: 2px 5px;
+        font-size: 10px;
+      }
+
+      .drawer {
+        position: fixed;
+        right: 18px;
+        bottom: 18px;
+        z-index: 20;
+        display: none;
+        width: min(520px, calc(100vw - 36px));
+        max-height: min(72vh, 690px);
+        overflow: auto;
+      }
+
+      .drawer.open {
+        display: block;
+      }
+
+      .drawer-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        border-bottom: 1px solid var(--line);
+        padding: 14px 16px;
+      }
+
+      .drawer-head h3 {
+        margin: 0;
+        font-size: 15px;
+      }
+
+      .drawer-body {
+        padding: 16px;
+      }
+
+      .drawer-body p {
+        margin: 0 0 12px;
+        color: var(--muted);
+        line-height: 1.6;
+      }
+
+      .drawer-criteria {
+        display: grid;
+        gap: 6px;
+        margin: 0 0 14px;
+      }
+
+      .drawer-criteria span {
+        border: 1px solid var(--line);
+        color: var(--muted);
+        padding: 7px 8px;
+        font-size: 12px;
+        line-height: 1.4;
+      }
+
+      .source-list {
+        display: grid;
+        gap: 9px;
+      }
+
+      .source-link {
+        display: block;
+        border: 1px solid var(--line);
+        padding: 10px;
+        color: var(--ink);
+        text-decoration: none;
+      }
+
+      .source-link:hover {
+        border-color: var(--accent);
+      }
+
+      .source-link small {
+        display: block;
+        margin-top: 5px;
+        color: var(--muted);
+        overflow-wrap: anywhere;
+      }
+
+      .source-panel {
+        margin-top: 18px;
+        padding: 16px;
+      }
+
+      .source-columns {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .source-columns a {
+        min-width: 0;
+        border: 1px solid var(--line);
+        padding: 9px;
+        color: var(--muted);
+        text-decoration: none;
+        font-size: 12px;
+        line-height: 1.4;
+        overflow-wrap: anywhere;
+      }
+
+      .source-columns a:hover {
+        border-color: var(--accent);
+        color: var(--ink);
+      }
+
+      .notes {
+        margin-top: 18px;
+        border: 1px solid var(--line);
+        background: rgba(24, 23, 19, 0.8);
+        padding: 16px;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.7;
+      }
+
+      @media (max-width: 960px) {
+        .title-row,
+        .controls,
+        .score-grid,
+        .source-columns {
+          grid-template-columns: 1fr;
+        }
+
+        .control-panel {
+          position: static;
+        }
+
+        .checks {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 1120px) {
+        h1 {
+          font-size: 54px;
+        }
+      }
+
+      @media (max-width: 720px) {
+        h1 {
+          font-size: 34px;
+        }
+      }
+
+      @media (max-width: 430px) {
+        h1 {
+          font-size: 23px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <header class="hero">
+        <div class="hero-inner">
+          <div class="title-row">
+            <div>
+              <h1>Agentic CLI 横向功能对比</h1>
+              <p class="subtitle">
+                面向工程团队选型：以官方文档为主，按 system prompt / memory / hooks / MCP / skills /
+                API base / protocol 等能力拆成可筛选矩阵。每个格子都可打开证据和延伸阅读链接。
+              </p>
+            </div>
+            <aside class="stamp">
+              <strong>Verified: 2026-05-13</strong>
+              <span
+                >范围：CLI 或 terminal-first agent；IDE-only 产品仅在其 CLI 文档可核验时纳入。</span
+              >
+            </aside>
+          </div>
+          <div class="logo-strip" id="logoStrip" aria-label="agent logos"></div>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <section class="controls">
+          <aside class="control-panel">
+            <div class="panel-title">
+              <h2>筛选</h2>
+              <button class="small-action" id="coreOnly" type="button">核心组合</button>
+            </div>
+            <input
+              class="search"
+              id="searchBox"
+              type="search"
+              placeholder="搜索功能、CLI、引用备注"
+            />
+            <span class="group-label">CLI 勾选</span>
+            <div class="checks" id="agentChecks"></div>
+            <span class="group-label">功能类别</span>
+            <div class="category-row" id="categoryChecks"></div>
+            <span class="group-label">阅读模式</span>
+            <div class="segmented" id="viewModeControls"></div>
+          </aside>
+
+          <section class="matrix-zone">
+            <div class="score-grid" id="scoreGrid"></div>
+            <div class="insight-grid" id="insightGrid"></div>
+            <div class="legend">
+              <span><i class="dot full"></i>原生支持</span>
+              <span><i class="dot partial"></i>部分支持 / 配置型</span>
+              <span><i class="dot via"></i>通过扩展、插件或外部服务</span>
+              <span><i class="dot none"></i>官方资料未确认</span>
+            </div>
+            <div class="table-wrap">
+              <table id="matrixTable" aria-label="Agentic CLI feature matrix"></table>
+            </div>
+          </section>
+        </section>
+
+        <section class="source-panel">
+          <div class="panel-title">
+            <h2>参考资料索引</h2>
+            <button class="small-action" id="sourceToggle" type="button">全部展开</button>
+          </div>
+          <div class="source-columns" id="sourceColumns"></div>
+        </section>
+
+        <section class="notes">
+          方法说明：只把官方文档、官方仓库或产品手册作为强证据。若文档只说明“规则/配置/扩展”而未明确称为
+          hooks、skills 或 memory，矩阵中标为“部分支持”。国产 CLI 目前以 Qwen Code、Kimi CLI
+          为可核验代表；Trae、Comate、CodeBuddy 等更偏 IDE/平台形态，未发现稳定、公开、可独立核验的
+          agentic CLI 文档时未放入主矩阵。
+        </section>
+      </main>
+    </div>
+
+    <aside class="drawer" id="drawer" aria-live="polite">
+      <div class="drawer-head">
+        <h3 id="drawerTitle"></h3>
+        <button class="small-action" id="drawerClose" type="button">关闭</button>
+      </div>
+      <div class="drawer-body">
+        <p id="drawerNote"></p>
+        <div class="drawer-criteria" id="drawerCriteria"></div>
+        <div class="source-list" id="drawerSources"></div>
+      </div>
+    </aside>
+
+    <script>
+      const SOURCES = {
+        mcpSpec: {
+          title: 'Model Context Protocol 官方说明',
+          url: 'https://modelcontextprotocol.io/docs/getting-started/intro',
+        },
+        acpSpec: {
+          title: 'Agent Client Protocol specification',
+          url: 'https://github.com/zed-industries/agent-client-protocol',
+        },
+        claudeExtend: {
+          title: 'Claude Code: Extend Claude Code',
+          url: 'https://code.claude.com/docs/en/features-overview',
+        },
+        claudeConfig: {
+          title: 'Claude Code: settings and configuration',
+          url: 'https://code.claude.com/docs/en/configuration',
+        },
+        claudeHooks: {
+          title: 'Claude Code: hooks reference',
+          url: 'https://code.claude.com/docs/en/hooks',
+        },
+        claudeMcp: {
+          title: 'Claude Code: connect tools via MCP',
+          url: 'https://code.claude.com/docs/en/mcp',
+        },
+        claudeSkills: {
+          title: 'Claude Code: skills',
+          url: 'https://code.claude.com/docs/en/skills',
+        },
+        codexCli: {
+          title: 'OpenAI Codex: CLI overview',
+          url: 'https://developers.openai.com/codex/cli',
+        },
+        codexConfig: {
+          title: 'OpenAI Codex: configuration reference',
+          url: 'https://developers.openai.com/codex/config-reference',
+        },
+        codexAgents: {
+          title: 'OpenAI Codex: custom instructions with AGENTS.md',
+          url: 'https://developers.openai.com/codex/guides/agents-md',
+        },
+        codexMcp: {
+          title: 'OpenAI Codex: Model Context Protocol',
+          url: 'https://developers.openai.com/codex/mcp',
+        },
+        codexHooks: {
+          title: 'OpenAI Codex: hooks',
+          url: 'https://developers.openai.com/codex/hooks',
+        },
+        codexSkills: {
+          title: 'OpenAI Codex: skills',
+          url: 'https://developers.openai.com/codex/skills',
+        },
+        codexSubagents: {
+          title: 'OpenAI Codex: subagents',
+          url: 'https://developers.openai.com/codex/subagents',
+        },
+        geminiConfig: {
+          title: 'Gemini CLI: configuration',
+          url: 'https://google-gemini.github.io/gemini-cli/docs/get-started/configuration.html',
+        },
+        geminiMcp: {
+          title: 'Gemini CLI: MCP servers',
+          url: 'https://google-gemini.github.io/gemini-cli/docs/tools/mcp-server.html',
+        },
+        geminiExtensions: {
+          title: 'Gemini CLI: extensions',
+          url: 'https://google-gemini.github.io/gemini-cli/docs/extensions/',
+        },
+        geminiCommands: {
+          title: 'Gemini CLI: custom commands',
+          url: 'https://google-gemini.github.io/gemini-cli/docs/cli/custom-commands.html',
+        },
+        geminiMemory: {
+          title: 'Gemini CLI: GEMINI.md files',
+          url: 'https://google-gemini.github.io/gemini-cli/docs/cli/gemini-md.html',
+        },
+        geminiCliCommands: {
+          title: 'Gemini CLI: CLI commands',
+          url: 'https://google-gemini.github.io/gemini-cli/docs/cli/commands.html',
+        },
+        qwenSettings: {
+          title: 'Qwen Code: settings',
+          url: 'https://qwenlm.github.io/qwen-code-docs/en/users/configuration/settings/',
+        },
+        qwenMemory: {
+          title: 'Qwen Code: memory',
+          url: 'https://qwenlm.github.io/qwen-code-docs/en/users/features/memory/',
+        },
+        qwenHooks: {
+          title: 'Qwen Code: hooks',
+          url: 'https://qwenlm.github.io/qwen-code-docs/en/users/features/hooks/',
+        },
+        qwenSkills: {
+          title: 'Qwen Code: agent skills',
+          url: 'https://qwenlm.github.io/qwen-code-docs/en/users/features/skills/',
+        },
+        qwenMcp: {
+          title: 'Qwen Code: MCP',
+          url: 'https://qwenlm.github.io/qwen-code-docs/en/users/features/mcp/',
+        },
+        qwenProviders: {
+          title: 'Qwen Code: model providers',
+          url: 'https://qwenlm.github.io/qwen-code-docs/en/users/configuration/model-providers/',
+        },
+        qwenSubagents: {
+          title: 'Qwen Code: subagents',
+          url: 'https://qwenlm.github.io/qwen-code-docs/en/users/features/subagents/',
+        },
+        qwenHeadless: {
+          title: 'Qwen Code: headless mode',
+          url: 'https://qwenlm.github.io/qwen-code-docs/en/users/features/headless-mode/',
+        },
+        kimiCli: {
+          title: 'Kimi CLI guide',
+          url: 'https://www.kimi.com/code/docs/en/kimi-cli.html',
+        },
+        opencodeCli: {
+          title: 'OpenCode: CLI',
+          url: 'https://dev.opencode.ai/docs/cli/',
+        },
+        opencodeConfig: {
+          title: 'OpenCode: config',
+          url: 'https://opencode.ai/docs/config/',
+        },
+        opencodeMcp: {
+          title: 'OpenCode: MCP servers',
+          url: 'https://dev.opencode.ai/docs/mcp-servers/',
+        },
+        opencodeSkills: {
+          title: 'OpenCode: agent skills',
+          url: 'https://dev.opencode.ai/docs/skills/',
+        },
+        opencodePlugins: {
+          title: 'OpenCode: plugins',
+          url: 'https://dev.opencode.ai/docs/plugins/',
+        },
+        opencodeAcp: {
+          title: 'OpenCode: ACP support',
+          url: 'https://dev.opencode.ai/docs/acp/',
+        },
+        opencodeCommands: {
+          title: 'OpenCode: commands',
+          url: 'https://opencode.ai/docs/commands/',
+        },
+        opencodeProviders: {
+          title: 'OpenCode: providers',
+          url: 'https://opencode.ai/docs/providers/',
+        },
+        ampManual: {
+          title: "Amp Owner's Manual",
+          url: 'https://ampcode.com/manual',
+        },
+        cursorCli: {
+          title: 'Cursor: using Agent in CLI',
+          url: 'https://docs.cursor.com/en/cli/using',
+        },
+        gooseExtensions: {
+          title: 'Goose: using extensions',
+          url: 'https://block.github.io/goose/docs/getting-started/using-extensions',
+        },
+        gooseCli: {
+          title: 'Goose: CLI commands',
+          url: 'https://block.github.io/goose/docs/guides/goose-cli-commands',
+        },
+        aiderOptions: {
+          title: 'Aider: options reference',
+          url: 'https://aider.chat/docs/config/options.html',
+        },
+        aiderOpenAiCompat: {
+          title: 'Aider: OpenAI-compatible APIs',
+          url: 'https://aider.chat/docs/llms/openai-compat.html',
+        },
+        aiderConfig: {
+          title: 'Aider: YAML config file',
+          url: 'https://aider.chat/docs/config/aider_conf.html',
+        },
+        aiderRepoMap: {
+          title: 'Aider: repository map',
+          url: 'https://aider.chat/docs/repomap.html',
+        },
+        continueConfig: {
+          title: 'Continue: configuring models, rules, and tools',
+          url: 'https://docs.continue.dev/guides/configuring-models-rules-tools',
+        },
+        continueMcp: {
+          title: 'Continue: MCP deep dive',
+          url: 'https://docs.continue.dev/customize/deep-dives/mcp',
+        },
+        clineConfig: {
+          title: 'Cline CLI: configuration',
+          url: 'https://docs.cline.bot/getting-started/config',
+        },
+        clineWorkflows: {
+          title: 'Cline: workflows',
+          url: 'https://docs.cline.bot/customization/workflows',
+        },
+        kiloCli: {
+          title: 'Kilo CLI',
+          url: 'https://kilo.ai/docs/code-with-ai/platforms/cli',
+        },
+        kiloMcp: {
+          title: 'Kilo CLI: using MCP',
+          url: 'https://kilo.ai/docs/automate/mcp/using-in-cli',
+        },
+        kiloSkills: {
+          title: 'Kilo Code: skills',
+          url: 'https://kilo.ai/docs/customize/skills',
+        },
+        devinCommands: {
+          title: 'Devin for Terminal: commands and flags',
+          url: 'https://cli.devin.ai/docs/reference/commands',
+        },
+        kiroCli: {
+          title: 'Kiro CLI: get started',
+          url: 'https://kiro.dev/docs/cli/',
+        },
+        kiroHooks: {
+          title: 'Kiro CLI: hooks',
+          url: 'https://kiro.dev/docs/cli/hooks/',
+        },
+        kiroAcp: {
+          title: 'Kiro CLI: ACP',
+          url: 'https://kiro.dev/docs/cli/acp/',
+        },
+        junieUsage: {
+          title: 'Junie CLI: terminal usage',
+          url: 'https://junie.jetbrains.com/docs/junie-cli-usage.html',
+        },
+        junieParams: {
+          title: 'Junie CLI: parameters',
+          url: 'https://junie.jetbrains.com/docs/parameters.html',
+        },
+      };
+
+      const AGENTS = [
+        {
+          id: 'claude',
+          name: 'Claude Code',
+          origin: 'Anthropic / US',
+          logo: '../../src/assets/images/claude.png',
+          core: true,
+        },
+        {
+          id: 'codex',
+          name: 'Codex CLI',
+          origin: 'OpenAI / US',
+          logo: '../../src/assets/images/openai.svg',
+          core: true,
+        },
+        {
+          id: 'gemini',
+          name: 'Gemini CLI',
+          origin: 'Google / US',
+          logo: '../../src/assets/images/gemini.png',
+          core: true,
+        },
+        {
+          id: 'qwen',
+          name: 'Qwen Code',
+          origin: 'Alibaba / CN',
+          logo: '../../src/assets/images/qwen.png',
+          core: true,
+        },
+        {
+          id: 'kimi',
+          name: 'Kimi CLI',
+          origin: 'Moonshot / CN',
+          logo: '../../src/assets/images/kimi.png',
+          core: true,
+        },
+        {
+          id: 'opencode',
+          name: 'OpenCode',
+          origin: 'Anomaly / OSS',
+          logo: '../../src/assets/images/opencode.png',
+          core: true,
+        },
+        {
+          id: 'amp',
+          name: 'Amp',
+          origin: 'Sourcegraph / US',
+          logo: '../../src/assets/images/ampcode.png',
+          core: true,
+        },
+        {
+          id: 'cursor',
+          name: 'Cursor CLI',
+          origin: 'Anysphere / US',
+          logo: '../../src/assets/images/cursor.svg',
+          core: true,
+        },
+        {
+          id: 'goose',
+          name: 'Goose',
+          origin: 'Block / OSS',
+          logo: '../../src/assets/images/goose.png',
+          core: true,
+        },
+        { id: 'aider', name: 'Aider', origin: 'OSS', logo: '', core: true },
+        {
+          id: 'continue',
+          name: 'Continue CLI',
+          origin: 'Continue / OSS',
+          logo: '',
+          core: false,
+        },
+        {
+          id: 'cline',
+          name: 'Cline CLI',
+          origin: 'Cline / OSS',
+          logo: '../../src/assets/images/cline.png',
+          core: false,
+        },
+        {
+          id: 'kilo',
+          name: 'Kilo Code',
+          origin: 'Kilo / OSS',
+          logo: '../../src/assets/images/kilocode.png',
+          core: false,
+        },
+        {
+          id: 'devin',
+          name: 'Devin Terminal',
+          origin: 'Cognition / US',
+          logo: '../../src/assets/images/devin.png',
+          core: false,
+        },
+        {
+          id: 'kiro',
+          name: 'Kiro CLI',
+          origin: 'AWS / US',
+          logo: '../../src/assets/images/kiro.png',
+          core: false,
+        },
+        {
+          id: 'junie',
+          name: 'Junie CLI',
+          origin: 'JetBrains / EU',
+          logo: '../../src/assets/images/junie-color.png',
+          core: false,
+        },
+      ];
+
+      const CATEGORIES = [
+        { id: 'context', label: '上下文' },
+        { id: 'extension', label: '扩展' },
+        { id: 'control', label: '控制' },
+        { id: 'automation', label: '自动化' },
+        { id: 'interop', label: '协议' },
+        { id: 'workflow', label: '工程流' },
+      ];
+
+      const FEATURES = [
+        {
+          id: 'instructions',
+          category: 'context',
+          label: 'System prompt / 项目指令',
+          meta: '全局或仓库级指令文件、rules、steering 等。',
+          criteria: ['全局指令', '仓库级指令', '目录分层', '运行时追加或切换'],
+        },
+        {
+          id: 'memory',
+          category: 'context',
+          label: 'Memory / 长期记忆',
+          meta: '跨会话持久上下文、自动记忆、历史恢复。',
+          criteria: ['显式记忆文件', '自动记忆', '会话摘要', '跨会话检索'],
+        },
+        {
+          id: 'mcp',
+          category: 'extension',
+          label: 'MCP 工具接入',
+          meta: 'stdio、HTTP、SSE、OAuth、工具命名和权限。',
+          criteria: ['stdio transport', 'HTTP/SSE', 'OAuth', '工具过滤/命名'],
+        },
+        {
+          id: 'skills',
+          category: 'extension',
+          label: 'Skills / Recipes',
+          meta: '按需加载的能力包、工作流说明或可分发技能。',
+          criteria: ['本地技能目录', '项目级技能', '自动发现', '可分发包'],
+        },
+        {
+          id: 'hooks',
+          category: 'automation',
+          label: 'Hooks / 生命周期自动化',
+          meta: 'PreToolUse、PostToolUse、SessionStart 等事件。',
+          criteria: ['工具前置', '工具后置', '会话事件', '阻断/审批'],
+        },
+        {
+          id: 'commands',
+          category: 'workflow',
+          label: 'Slash / Custom commands',
+          meta: '可复用提示词、命令模板、交互式命令。',
+          criteria: ['内建 slash', '自定义命令', '参数模板', 'shell/文件注入'],
+        },
+        {
+          id: 'subagents',
+          category: 'workflow',
+          label: 'Subagents / 多代理',
+          meta: '隔离上下文、任务委派、agent teams。',
+          criteria: ['子代理定义', '上下文隔离', '任务委派', '并行/团队'],
+        },
+        {
+          id: 'providers',
+          category: 'control',
+          label: '模型提供商 / API Base',
+          meta: 'BYOK、多 provider、OpenAI-compatible baseURL。',
+          criteria: ['BYOK', '多 provider', 'baseURL', 'profile/model 切换'],
+        },
+        {
+          id: 'permissions',
+          category: 'control',
+          label: '权限、审批、沙箱',
+          meta: 'allow/deny/ask、危险模式、沙箱、命令白名单。',
+          criteria: ['工具 allow/deny', '审批模式', '沙箱', '危险绕过'],
+        },
+        {
+          id: 'headless',
+          category: 'automation',
+          label: 'Headless / CI',
+          meta: '非交互式运行、JSON 输出、脚本和 CI 模式。',
+          criteria: ['非交互 prompt', 'JSON/stream 输出', 'CI 环境', '脚本退出码'],
+        },
+        {
+          id: 'protocols',
+          category: 'interop',
+          label: '协议与服务端形态',
+          meta: 'ACP、SDK、app server、IDE/remote server。',
+          criteria: ['MCP client', 'ACP server', 'HTTP/app server', 'SDK/API'],
+        },
+        {
+          id: 'resume',
+          category: 'workflow',
+          label: '会话恢复 / 历史',
+          meta: 'resume、session id、transcript、导入导出。',
+          criteria: ['resume 命令', 'session id', '历史列表', '导入/导出'],
+        },
+        {
+          id: 'multimodal',
+          category: 'context',
+          label: '文件、图片、多模态上下文',
+          meta: '@file、附件、截图、图片输入。',
+          criteria: ['@file/目录', '附件', '截图/图片', '外部网页/URL'],
+        },
+        {
+          id: 'git',
+          category: 'workflow',
+          label: 'Git / PR / Review',
+          meta: '自动 commit、review、GitHub Action、PR 工作流。',
+          criteria: ['git status/diff', '自动 commit', '代码 review', 'PR/CI 集成'],
+        },
+        {
+          id: 'plugins',
+          category: 'extension',
+          label: '插件 / 扩展分发',
+          meta: '可安装扩展、marketplace、plugin package。',
+          criteria: ['插件 API', 'marketplace', '配置包', '安全/权限边界'],
+        },
+        {
+          id: 'ide',
+          category: 'interop',
+          label: 'IDE / LSP 上下文',
+          meta: 'VS Code、JetBrains、Zed、LSP、编辑器协议。',
+          criteria: ['VS Code', 'JetBrains', 'Zed/ACP', 'LSP/编辑器上下文'],
+        },
+      ];
+
+      const statusLabel = {
+        full: '原生',
+        partial: '部分',
+        via: '扩展',
+        none: '未确认',
+        unknown: '待核验',
+      };
+
+      const VIEW_MODES = [
+        { id: 'compact', label: '总览' },
+        { id: 'detail', label: '细项' },
+        { id: 'evidence', label: '证据' },
+      ];
+
+      const VIEW_MODE_IDS = new Set(VIEW_MODES.map((mode) => mode.id));
+
+      const statusWeight = {
+        full: 4,
+        partial: 2,
+        via: 2,
+        none: 0,
+        unknown: 0,
+      };
+
+      const S = (status, note, refs) => ({ status, note, refs });
+
+      const MATRIX = {
+        claude: {
+          instructions: S('full', 'CLAUDE.md、rules 和分层 .claude 目录是核心上下文层。', [
+            'claudeExtend',
+            'claudeConfig',
+          ]),
+          memory: S(
+            'full',
+            '官方把 CLAUDE.md 定义为每会话加载的持久上下文，并提供 memory 相关工作流。',
+            ['claudeExtend']
+          ),
+          mcp: S('full', 'MCP 是一等扩展层，工具名可被 hooks 匹配。', ['claudeMcp', 'mcpSpec']),
+          skills: S('full', 'Skills 可被 slash 调用或由模型自动加载，也可被插件分发。', [
+            'claudeSkills',
+            'claudeExtend',
+          ]),
+          hooks: S('full', 'Hooks 覆盖工具调用、权限、会话边界和配置变更等事件。', ['claudeHooks']),
+          commands: S('full', '自定义命令和 skills 都能形成可复用工作流。', [
+            'claudeExtend',
+            'claudeSkills',
+          ]),
+          subagents: S('full', 'Subagents 和 agent teams 支持隔离上下文与并行协作。', [
+            'claudeExtend',
+          ]),
+          providers: S(
+            'partial',
+            '配置面丰富，但不是以通用 OpenAI-compatible API base 为主要模型。',
+            ['claudeConfig']
+          ),
+          permissions: S('full', '权限模式、settings、hooks 共同实现审批和强约束。', [
+            'claudeConfig',
+            'claudeHooks',
+          ]),
+          headless: S('full', 'CLI 支持脚本化使用，配置和权限适合自动化场景。', ['claudeConfig']),
+          protocols: S('partial', '覆盖 MCP、IDE 集成和 SDK；ACP 不是主协议。', [
+            'claudeMcp',
+            'claudeExtend',
+          ]),
+          resume: S('full', '会话、上下文窗口和历史能力由 CLI 工作流支撑。', ['claudeExtend']),
+          multimodal: S('partial', '文件、目录和工具上下文完整；图片能力依具体入口而定。', [
+            'claudeExtend',
+          ]),
+          git: S('full', '内建工具链覆盖读写文件、执行命令、review 和 CI/CD 工作流。', [
+            'claudeExtend',
+          ]),
+          plugins: S('full', 'Plugins 可打包 skills、hooks、subagents 和 MCP servers。', [
+            'claudeExtend',
+          ]),
+          ide: S('full', '官方提供 VS Code、JetBrains、web、desktop 等入口。', ['claudeExtend']),
+        },
+        codex: {
+          instructions: S('full', 'AGENTS.md 是 Codex 的项目级自定义指令入口。', ['codexAgents']),
+          memory: S(
+            'partial',
+            'Codex 产品文档有 memories 概念；CLI 侧以 AGENTS.md、配置和会话上下文为主。',
+            ['codexCli', 'codexAgents']
+          ),
+          mcp: S('full', 'CLI 和 IDE 共享 MCP 配置，并支持命令行添加 MCP server。', [
+            'codexMcp',
+            'mcpSpec',
+          ]),
+          skills: S('full', 'Codex 有官方 skills 文档和插件化能力。', ['codexSkills']),
+          hooks: S('full', '官方配置目录包含 hooks，适合事件自动化和策略控制。', [
+            'codexHooks',
+            'codexConfig',
+          ]),
+          commands: S('full', 'CLI 提供 slash commands 和命令行选项。', ['codexCli']),
+          subagents: S('full', 'Codex 文档包含 subagents 和 multi-agent 入口。', [
+            'codexSubagents',
+          ]),
+          providers: S(
+            'full',
+            'config reference 覆盖 model provider、base URL、profiles 等配置。',
+            ['codexConfig']
+          ),
+          permissions: S('full', 'approval_policy、sandbox_mode 和 writable roots 是配置核心项。', [
+            'codexConfig',
+          ]),
+          headless: S('full', 'CLI 和 automation 文档覆盖非交互模式、SDK 和 app server。', [
+            'codexCli',
+          ]),
+          protocols: S('partial', 'MCP、SDK、app server 完整；ACP 不是主线。', [
+            'codexMcp',
+            'codexCli',
+          ]),
+          resume: S('full', 'CLI 支持会话和 resume 工作流。', ['codexCli']),
+          multimodal: S('full', 'OpenAI Help 明确 Codex CLI 支持文本、截图、图表等输入。', [
+            'codexCli',
+          ]),
+          git: S('full', 'Codex 有 GitHub Action、review 和仓库工作流入口。', ['codexCli']),
+          plugins: S('full', '官方配置导航包含 plugins、skills、subagents。', [
+            'codexCli',
+            'codexSkills',
+          ]),
+          ide: S('full', 'CLI、IDE Extension、App、Web 共享同一 Codex 产品体系。', ['codexCli']),
+        },
+        gemini: {
+          instructions: S('full', 'GEMINI.md 支持全局、项目、父目录和子目录层级上下文。', [
+            'geminiMemory',
+          ]),
+          memory: S('full', '/memory 管理层级记忆；/chat 可保存和恢复对话状态。', [
+            'geminiMemory',
+            'geminiCliCommands',
+          ]),
+          mcp: S('full', 'settings.json 的 mcpServers 支持 stdio、SSE、Streamable HTTP。', [
+            'geminiMcp',
+            'mcpSpec',
+          ]),
+          skills: S(
+            'partial',
+            '没有同名 skills 面；extensions 可打包 prompts、MCP servers 和 custom commands。',
+            ['geminiExtensions']
+          ),
+          hooks: S('none', '官方 Gemini CLI 文档未发现 Claude/Qwen 式生命周期 hooks。', [
+            'geminiConfig',
+          ]),
+          commands: S('full', 'TOML custom commands 支持参数和 shell 注入。', ['geminiCommands']),
+          subagents: S('none', '官方 CLI 文档未确认 subagent/worker 抽象。', ['geminiCliCommands']),
+          providers: S(
+            'partial',
+            '支持 Gemini API、Vertex AI、Code Assist 等认证路径；非通用 baseURL 优先。',
+            ['geminiConfig']
+          ),
+          permissions: S(
+            'partial',
+            'MCP trust、shell confirmation、checkpointing 和 sandbox 配置提供控制面。',
+            ['geminiMcp', 'geminiConfig']
+          ),
+          headless: S('full', 'CLI 命令和 flags 支持脚本化调用。', ['geminiCliCommands']),
+          protocols: S('partial', 'MCP 完整；未见 ACP/server API 主线。', ['geminiMcp']),
+          resume: S('full', '/chat save/resume/list 与 checkpoint restore 覆盖恢复。', [
+            'geminiCliCommands',
+          ]),
+          multimodal: S(
+            'partial',
+            '文件上下文和命令上下文明确；图片能力按 Gemini 模型与入口而定。',
+            ['geminiMemory']
+          ),
+          git: S('partial', '可通过 shell、custom commands、extensions 组合 Git 流程。', [
+            'geminiCommands',
+            'geminiExtensions',
+          ]),
+          plugins: S('full', 'Extensions 是官方可安装分发机制。', ['geminiExtensions']),
+          ide: S('partial', 'CLI 可与编辑器配置配合，但官方主线仍是终端。', ['geminiConfig']),
+        },
+        qwen: {
+          instructions: S('full', 'QWEN.md、AGENTS.md 兼容读取，并支持 @file 引用。', [
+            'qwenMemory',
+          ]),
+          memory: S('full', 'Auto-memory 默认开启，可保存偏好、反馈、项目上下文。', ['qwenMemory']),
+          mcp: S('full', 'MCP 支持 stdio、HTTP、SSE、OAuth、tool filtering。', [
+            'qwenMcp',
+            'mcpSpec',
+          ]),
+          skills: S('full', 'Agent Skills 支持个人、项目、扩展级发现和 SKILL.md。', ['qwenSkills']),
+          hooks: S(
+            'full',
+            'Hooks 覆盖 PreToolUse、PostToolUse、UserPromptSubmit、SessionStart 等。',
+            ['qwenHooks']
+          ),
+          commands: S('full', '官方功能目录包含 Commands，skills 也可通过 /skills 显式触发。', [
+            'qwenSkills',
+          ]),
+          subagents: S('full', '官方功能目录包含 SubAgents，并有 fork subagent 设计文档。', [
+            'qwenSubagents',
+          ]),
+          providers: S(
+            'full',
+            'modelProviders 支持 envKey、baseUrl、generationConfig 和 /model 切换。',
+            ['qwenProviders']
+          ),
+          permissions: S(
+            'full',
+            'Approval Mode、Sandboxing、Trusted Folders、hook security 构成控制面。',
+            ['qwenHooks', 'qwenSettings']
+          ),
+          headless: S('full', '官方功能目录包含 Headless Mode。', ['qwenHeadless']),
+          protocols: S('partial', 'MCP、channels、IDE 集成明确；ACP 未作为主协议出现。', [
+            'qwenMcp',
+          ]),
+          resume: S('full', '记忆、会话标题、session recap 等构成跨会话体验。', ['qwenMemory']),
+          multimodal: S('partial', '官方博客目录提到剪贴板图片和终端捕获，功能需按版本核验。', [
+            'qwenSettings',
+          ]),
+          git: S('full', '官方功能包含 Code Review、GitHub Actions、workflow commands。', [
+            'qwenMcp',
+          ]),
+          plugins: S('full', 'Extensions、plugins、skills 都在官方功能体系内。', [
+            'qwenSkills',
+            'qwenMcp',
+          ]),
+          ide: S('full', '官方列出 VS Code、Zed、JetBrains、LSP 支持。', ['qwenMcp']),
+        },
+        kimi: {
+          instructions: S(
+            'partial',
+            'Kimi CLI guide 主要说明安装、ACP 和 MCP；项目指令文件需要进一步核验。',
+            ['kimiCli']
+          ),
+          memory: S('unknown', '未在打开的官方 CLI guide 中确认自动记忆或专用 memory 文件。', [
+            'kimiCli',
+          ]),
+          mcp: S('full', 'kimi mcp 支持 HTTP、OAuth 和 stdio servers。', ['kimiCli', 'mcpSpec']),
+          skills: S('none', '官方 CLI guide 未确认 SKILL.md 类机制。', ['kimiCli']),
+          hooks: S('none', '官方 CLI guide 未确认生命周期 hooks。', ['kimiCli']),
+          commands: S('partial', 'CLI 有 slash/setup 类交互，但未确认可分发 custom command。', [
+            'kimiCli',
+          ]),
+          subagents: S('none', '官方 CLI guide 未确认 subagent 抽象。', ['kimiCli']),
+          providers: S('partial', '以 Kimi 认证和模型为主，未确认通用 API base 配置。', [
+            'kimiCli',
+          ]),
+          permissions: S('partial', 'MCP OAuth 和 setup 存在，但未见完整 allow/deny policy。', [
+            'kimiCli',
+          ]),
+          headless: S('partial', 'CLI 可直接运行；非交互 JSON/CI 能力未完整确认。', ['kimiCli']),
+          protocols: S('full', '支持 ACP，可作为 agent server 接入 Zed 或 JetBrains。', [
+            'kimiCli',
+            'acpSpec',
+          ]),
+          resume: S('partial', '线程能力存在于 CLI guide 语境中；详细恢复策略需查更多页。', [
+            'kimiCli',
+          ]),
+          multimodal: S('unknown', '官方 CLI guide 未明确图片输入。', ['kimiCli']),
+          git: S('partial', '可通过 MCP 和 shell 组合；未见原生 PR/review 文档。', ['kimiCli']),
+          plugins: S('none', '官方 CLI guide 未确认插件或 marketplace。', ['kimiCli']),
+          ide: S('full', 'ACP 文档给出 Zed 和 JetBrains 配置示例。', ['kimiCli']),
+        },
+        opencode: {
+          instructions: S('full', 'Rules、agents 和 config 都能提供系统提示与项目行为。', [
+            'opencodeConfig',
+            'opencodeCli',
+          ]),
+          memory: S('partial', 'Session、export/import、stats 完整；未强调自动长期记忆。', [
+            'opencodeCli',
+          ]),
+          mcp: S('full', '支持 local/remote MCP、OAuth、enabled 开关和管理命令。', [
+            'opencodeMcp',
+            'mcpSpec',
+          ]),
+          skills: S('full', 'Agent Skills 原生读取 .opencode、.claude、.agents 技能目录。', [
+            'opencodeSkills',
+          ]),
+          hooks: S('partial', '插件体系可拦截行为；用户级生命周期 hooks 需按插件 API 细查。', [
+            'opencodePlugins',
+          ]),
+          commands: S('full', '支持 CLI commands、custom commands、run、serve、web 等。', [
+            'opencodeCli',
+            'opencodeCommands',
+          ]),
+          subagents: S('full', 'agent create 支持 primary/subagent 模式和自定义 system prompt。', [
+            'opencodeCli',
+          ]),
+          providers: S(
+            'full',
+            'provider/model、models.dev、provider options 和 baseURL 类配置完整。',
+            ['opencodeProviders', 'opencodeConfig']
+          ),
+          permissions: S(
+            'full',
+            'Agent permissions、tool permissions、dangerously-skip-permissions 明确。',
+            ['opencodeCli', 'opencodeSkills']
+          ),
+          headless: S('full', 'run、serve、web、attach 和 JSON output 支持自动化。', [
+            'opencodeCli',
+          ]),
+          protocols: S('full', '支持 ACP server、HTTP server、MCP。', [
+            'opencodeAcp',
+            'opencodeCli',
+          ]),
+          resume: S('full', 'session list/delete、continue/session/fork、export/import 完整。', [
+            'opencodeCli',
+          ]),
+          multimodal: S('full', 'run 支持 --file 附加文件，TUI 支持项目上下文。', ['opencodeCli']),
+          git: S('full', 'github agent、pr checkout、GitLab/GitHub 文档入口明确。', [
+            'opencodeCli',
+          ]),
+          plugins: S('full', '官方 plugin command 和 plugins 文档。', [
+            'opencodePlugins',
+            'opencodeCli',
+          ]),
+          ide: S('full', '支持 IDE、ACP、web、server 多入口。', ['opencodeAcp', 'opencodeCli']),
+        },
+        amp: {
+          instructions: S('full', "AGENTS.md 是 Owner's Manual 中的使用章节。", ['ampManual']),
+          memory: S(
+            'partial',
+            '线程、handoff、referencing threads 完整；自动长期记忆未作为核心暴露。',
+            ['ampManual']
+          ),
+          mcp: S('full', '支持本地和远程 MCP，并建议通过 skills 延迟加载。', [
+            'ampManual',
+            'mcpSpec',
+          ]),
+          skills: S('full', 'Agent Skills 是工具与 subagent 体系的一部分。', ['ampManual']),
+          hooks: S(
+            'partial',
+            'manual 提到 policy/plugin hooks；是否等价生命周期 hooks 需看插件 API。',
+            ['ampManual']
+          ),
+          commands: S('full', 'CLI 有 shell mode、prompt writing、tools 命令和 streaming JSON。', [
+            'ampManual',
+          ]),
+          subagents: S('full', 'Tools & Subagents 是 manual 主章节。', ['ampManual']),
+          providers: S(
+            'partial',
+            '以 Amp 服务为主，未见通用 OpenAI-compatible baseURL 作为主配置。',
+            ['ampManual']
+          ),
+          permissions: S('full', 'permissions rules 支持 allow/ask/reject/delegate 和测试。', [
+            'ampManual',
+          ]),
+          headless: S('full', 'manual 覆盖 non-interactive environments 和 streaming JSON。', [
+            'ampManual',
+          ]),
+          protocols: S('partial', 'MCP 完整；ACP/server API 不是主线。', ['ampManual']),
+          resume: S('full', '线程查找、引用、归档和 handoff 是核心能力。', ['ampManual']),
+          multimodal: S('full', 'manual 覆盖 images 和 @file。', ['ampManual']),
+          git: S('full', 'manual 包含 code review 和工程工作流。', ['ampManual']),
+          plugins: S(
+            'partial',
+            '技能与 permission helper 可组合；插件分发面不如 Claude/OpenCode 明确。',
+            ['ampManual']
+          ),
+          ide: S('full', 'manual 覆盖 CLI-IDE integration。', ['ampManual']),
+        },
+        cursor: {
+          instructions: S('full', 'CLI 读取 .cursor/rules、AGENTS.md 和 CLAUDE.md。', [
+            'cursorCli',
+          ]),
+          memory: S('partial', 'resume/thread 历史明确；长期自动记忆未在 CLI 页确认。', [
+            'cursorCli',
+          ]),
+          mcp: S('full', 'CLI 自动检测并尊重 IDE 的 mcp.json 配置。', ['cursorCli', 'mcpSpec']),
+          skills: S('none', 'CLI 页未确认 SKILL.md 类机制。', ['cursorCli']),
+          hooks: S(
+            'unknown',
+            '搜索结果显示 Cursor docs 有 hooks 语境，但当前 CLI 页未明确完整 hook API。',
+            ['cursorCli']
+          ),
+          commands: S('partial', '支持 /compress、resume、非交互；custom command 分发未确认。', [
+            'cursorCli',
+          ]),
+          subagents: S('none', 'CLI 页未确认 subagent 抽象。', ['cursorCli']),
+          providers: S('partial', '以 Cursor 账户和 IDE 模型能力为主，未确认通用 API base。', [
+            'cursorCli',
+          ]),
+          permissions: S('partial', '命令执行默认需要批准；非交互模式有完整写权限。', [
+            'cursorCli',
+          ]),
+          headless: S('full', '-p/--print 和 --output-format 支持脚本化输出。', ['cursorCli']),
+          protocols: S('partial', 'MCP 明确；ACP/server API 未在 CLI 页确认。', ['cursorCli']),
+          resume: S('full', '--resume、cursor-agent resume、ls 支持线程恢复。', ['cursorCli']),
+          multimodal: S('partial', '@ 选择文件/目录明确；图片未在 CLI 页确认。', ['cursorCli']),
+          git: S('partial', 'review changes 是交互流程一部分；PR 自动化未在 CLI 页确认。', [
+            'cursorCli',
+          ]),
+          plugins: S('partial', '沿用 IDE MCP/rules；独立 CLI plugin 面未确认。', ['cursorCli']),
+          ide: S('full', 'CLI 与 Cursor IDE rules/MCP 共享配置。', ['cursorCli']),
+        },
+        goose: {
+          instructions: S('full', 'Top of Mind 扩展会在每轮注入持久 instructions。', [
+            'gooseExtensions',
+          ]),
+          memory: S('full', 'Chat Recall、Top of Mind 和 Todo 是内建扩展。', ['gooseExtensions']),
+          mcp: S('full', 'Goose extensions 基于 MCP，并可添加任意 MCP server。', [
+            'gooseExtensions',
+            'mcpSpec',
+          ]),
+          skills: S('via', 'Summon 内建扩展可加载 skills 和 recipes。', ['gooseExtensions']),
+          hooks: S('none', '官方 extensions/CLI 页未确认生命周期 hooks。', ['gooseExtensions']),
+          commands: S('partial', 'CLI 有丰富命令和交互 slash 命令；custom command 包装偏扩展化。', [
+            'gooseCli',
+            'gooseExtensions',
+          ]),
+          subagents: S('via', 'Summon 可委派任务给 subagents。', ['gooseExtensions']),
+          providers: S('full', 'Goose 是多 provider 本地 agent，配置命令覆盖模型和扩展。', [
+            'gooseCli',
+          ]),
+          permissions: S(
+            'partial',
+            'Developer extension 可执行命令和修改文件，需结合扩展权限谨慎配置。',
+            ['gooseExtensions']
+          ),
+          headless: S('full', 'CLI commands 覆盖 session、schedule、project、mcp 等自动化入口。', [
+            'gooseCli',
+          ]),
+          protocols: S('full', 'Goose CLI 可作为 ACP agent server over stdio。', [
+            'gooseCli',
+            'acpSpec',
+          ]),
+          resume: S('full', 'session 命令和 Chat Recall 支持跨会话检索。', [
+            'gooseCli',
+            'gooseExtensions',
+          ]),
+          multimodal: S(
+            'partial',
+            'Computer Controller、fetch、developer 等扩展可接入外部上下文。',
+            ['gooseExtensions']
+          ),
+          git: S('partial', 'Developer extension 可执行 Git 工作流；PR 自动化需扩展。', [
+            'gooseExtensions',
+          ]),
+          plugins: S('full', '内建和外部 extensions 是核心扩展机制。', ['gooseExtensions']),
+          ide: S('full', 'ACP 可接入 Zed 等兼容客户端。', ['gooseCli']),
+        },
+        aider: {
+          instructions: S(
+            'partial',
+            'YAML config、read files、repo map 可提供项目上下文，但非 AGENTS.md 主线。',
+            ['aiderConfig', 'aiderRepoMap']
+          ),
+          memory: S(
+            'partial',
+            'chat history、input history、restore-chat-history 和 repo map 提供会话连续性。',
+            ['aiderOptions', 'aiderRepoMap']
+          ),
+          mcp: S('none', '官方 options 和 LLM 文档未确认 MCP client。', ['aiderOptions']),
+          skills: S('none', '官方文档未确认 SKILL.md 类机制。', ['aiderOptions']),
+          hooks: S('partial', '自动 lint/test/commit 类似后处理，但不是通用生命周期 hook 系统。', [
+            'aiderOptions',
+          ]),
+          commands: S('full', 'Aider 有交互命令、message/message-file 等命令行模式。', [
+            'aiderOptions',
+          ]),
+          subagents: S('none', '官方文档未确认 subagent 抽象。', ['aiderOptions']),
+          providers: S(
+            'full',
+            '支持 OpenAI-compatible endpoint、OPENAI_API_BASE 和 provider keys。',
+            ['aiderOpenAiCompat', 'aiderOptions']
+          ),
+          permissions: S(
+            'partial',
+            'Git、lint、test 和 auto-commit 可控；没有完整工具 allow/deny 面。',
+            ['aiderOptions']
+          ),
+          headless: S('full', '--message、--message-file、--commit、--test 支持自动化。', [
+            'aiderOptions',
+          ]),
+          protocols: S('none', '未确认 ACP、MCP 或 server protocol。', ['aiderOptions']),
+          resume: S('full', 'chat history 文件和 restore-chat-history 明确。', ['aiderOptions']),
+          multimodal: S('partial', '可把文件加入上下文；图片能力依模型和配置，不是主文档重点。', [
+            'aiderOptions',
+          ]),
+          git: S(
+            'full',
+            'Git auto commit、commit prompt、dirty commits、pre-commit verify 都是核心选项。',
+            ['aiderOptions']
+          ),
+          plugins: S('none', '官方 docs 未确认插件/marketplace。', ['aiderOptions']),
+          ide: S('partial', '主线是 CLI；可与编辑器流程配合但非 IDE agent 协议。', [
+            'aiderOptions',
+          ]),
+        },
+        continue: {
+          instructions: S('full', 'Continue 配置模型、rules 和 tools，是上下文配置主面。', [
+            'continueConfig',
+          ]),
+          memory: S('partial', 'rules 和配置可持久；自动长期记忆不是 CLI 主文档重点。', [
+            'continueConfig',
+          ]),
+          mcp: S('full', '官方 deep dive 说明如何设置 MCP。', ['continueMcp', 'mcpSpec']),
+          skills: S('partial', 'Continue 更偏 blocks/rules/tools 组合，未采用 SKILL.md 规范。', [
+            'continueConfig',
+          ]),
+          hooks: S('none', '官方配置页未确认生命周期 hooks。', ['continueConfig']),
+          commands: S('partial', 'CLI 和 IDE 命令存在；自定义 slash command 分发需按配置核验。', [
+            'continueConfig',
+          ]),
+          subagents: S('none', '官方配置页未确认 subagent 抽象。', ['continueConfig']),
+          providers: S('full', '模型 provider、secrets 和 MCP server 配置是官方配置面。', [
+            'continueConfig',
+          ]),
+          permissions: S(
+            'partial',
+            '工具与 MCP 通过配置控制；沙箱/审批体系不如 Codex/Claude/Qwen 明确。',
+            ['continueConfig']
+          ),
+          headless: S('full', 'Continue CLI 可在终端运行 agent 工作流。', ['continueConfig']),
+          protocols: S('partial', 'MCP 完整；ACP/server API 未作为主线。', ['continueMcp']),
+          resume: S('partial', 'IDE/CLI 会话能力存在，细节需查 Continue CLI 页。', [
+            'continueConfig',
+          ]),
+          multimodal: S('partial', 'IDE/CLI 上下文与 tools 支持文件和外部工具。', [
+            'continueConfig',
+          ]),
+          git: S('partial', '可通过 rules/tools/MCP 组织 review；原生 PR agent 未确认。', [
+            'continueConfig',
+          ]),
+          plugins: S('partial', 'Community blocks 可复用配置，但不是传统 plugin API。', [
+            'continueConfig',
+          ]),
+          ide: S('full', 'Continue 是 IDE + CLI 组合形态。', ['continueConfig']),
+        },
+        cline: {
+          instructions: S('full', 'Global/project rules 直接在 ~/.cline 和 .cline 下发现。', [
+            'clineConfig',
+          ]),
+          memory: S('partial', 'Rules/workflows 可持久；自动记忆需另查。', ['clineConfig']),
+          mcp: S('full', 'CLI 支持 MCP servers，格式与 VS Code extension 一致。', [
+            'clineConfig',
+            'mcpSpec',
+          ]),
+          skills: S('full', 'Global rules、hooks、skills、agents、plugins 均在 Cline 配置层。', [
+            'clineConfig',
+          ]),
+          hooks: S('full', 'CLI 配置明确暴露 hooks 目录和 CLINE_HOOKS_DIR。', ['clineConfig']),
+          commands: S('full', 'cline config 和 workflows 支持可复用任务。', [
+            'clineConfig',
+            'clineWorkflows',
+          ]),
+          subagents: S('full', 'agents 是 Cline 配置层的一等对象。', ['clineConfig']),
+          providers: S(
+            'full',
+            'Global provider settings 与 BYOK 配置位于 ~/.cline/data/settings。',
+            ['clineConfig']
+          ),
+          permissions: S('full', 'CLINE_COMMAND_PERMISSIONS、sandbox env 和 MCP allow 设置明确。', [
+            'clineConfig',
+          ]),
+          headless: S('full', 'CLI 可通过 prompt 和 config 直接运行。', ['clineConfig']),
+          protocols: S('partial', 'MCP 完整；ACP 未在配置页确认。', ['clineConfig']),
+          resume: S('partial', 'CLI session backend 相关 env 存在，历史恢复细节需查更多页。', [
+            'clineConfig',
+          ]),
+          multimodal: S('partial', 'Cline 生态支持文件/工具上下文；CLI 配置页未详述图片。', [
+            'clineConfig',
+          ]),
+          git: S('partial', 'workflows 可组合 Git；原生 PR agent 未在配置页确认。', [
+            'clineWorkflows',
+          ]),
+          plugins: S('full', 'plugins 在 global/project 配置层明确出现。', ['clineConfig']),
+          ide: S('full', 'CLI 与 VS Code extension 共享 MCP/config 格式。', ['clineConfig']),
+        },
+        kilo: {
+          instructions: S(
+            'partial',
+            'CLI docs 指向配置和 marketplace；rules/AGENTS 需按 Kilo 具体页核验。',
+            ['kiloCli']
+          ),
+          memory: S('partial', '会话和 profile 能力存在；自动长期记忆未在 MCP 页确认。', [
+            'kiloCli',
+          ]),
+          mcp: S('full', 'Kilo CLI 支持 local/remote MCP 和权限规则。', ['kiloMcp', 'mcpSpec']),
+          skills: S('partial', 'Marketplace 包含 agent skills；技能触发/发现细节需看 skills 页。', [
+            'kiloMcp',
+            'kiloSkills',
+          ]),
+          hooks: S('unknown', '主 CLI/MCP 页未确认生命周期 hooks。', ['kiloCli']),
+          commands: S('full', 'CLI 文档列出 kilo mcp、models、help、/local-review 等命令。', [
+            'kiloCli',
+          ]),
+          subagents: S('partial', 'Kilo/Roo 系模式和 agents 存在，但当前证据页不够完整。', [
+            'kiloCli',
+          ]),
+          providers: S('full', 'CLI models/provider 命令和 env provider 配置明确。', ['kiloCli']),
+          permissions: S('full', 'MCP tools 使用 built-in tools 相同 allow/ask/deny 权限系统。', [
+            'kiloMcp',
+          ]),
+          headless: S('full', 'CLI 平台页和命令支持自动化运行。', ['kiloCli']),
+          protocols: S('partial', 'MCP 完整；ACP 未在证据页确认。', ['kiloMcp']),
+          resume: S('partial', '会话/profile 能力存在，恢复细节需另查。', ['kiloCli']),
+          multimodal: S('partial', 'Kilo 平台工具可附加上下文；图片未在证据页确认。', ['kiloCli']),
+          git: S('partial', '/local-review 明确；更完整 PR 自动化需查更多页。', ['kiloCli']),
+          plugins: S('partial', 'Marketplace 可分发 MCP configs 和 agent skills。', ['kiloMcp']),
+          ide: S('full', 'Kilo Code 本身跨 IDE/CLI；CLI 是平台入口之一。', ['kiloCli']),
+        },
+        devin: {
+          instructions: S('full', 'commands reference 明确包含 devin rules。', ['devinCommands']),
+          memory: S(
+            'partial',
+            'session resume 和 workspace 能力明确；自动 memory 未在命令页确认。',
+            ['devinCommands']
+          ),
+          mcp: S('full', 'devin mcp add/list/login 支持 stdio、HTTP、OAuth、scope。', [
+            'devinCommands',
+            'mcpSpec',
+          ]),
+          skills: S('full', 'commands reference 明确包含 devin skills。', ['devinCommands']),
+          hooks: S('none', '命令页未确认生命周期 hooks。', ['devinCommands']),
+          commands: S('full', 'subcommands 和 slash commands 都在官方命令参考。', [
+            'devinCommands',
+          ]),
+          subagents: S(
+            'partial',
+            'Devin 云端 agent 形态强；Terminal 命令页未列本地 subagent API。',
+            ['devinCommands']
+          ),
+          providers: S('partial', '--model 可选，但 BYOK/baseURL 细节不在命令页。', [
+            'devinCommands',
+          ]),
+          permissions: S('full', '--permission-mode 支持 normal、dangerous、bypass。', [
+            'devinCommands',
+          ]),
+          headless: S('full', '--print、prompt-file、automation 均在命令页。', ['devinCommands']),
+          protocols: S('full', 'commands reference 明确包含 devin acp。', [
+            'devinCommands',
+            'acpSpec',
+          ]),
+          resume: S('full', '--continue 和 --resume <SESSION_ID> 明确。', ['devinCommands']),
+          multimodal: S('partial', 'prompt-file 和 workspace 明确；图片未在命令页确认。', [
+            'devinCommands',
+          ]),
+          git: S('partial', 'Devin 适合仓库任务；PR/GitHub 细节需查更多 Devin docs。', [
+            'devinCommands',
+          ]),
+          plugins: S('partial', 'rules、skills、MCP 构成扩展面；plugin package 未在命令页确认。', [
+            'devinCommands',
+          ]),
+          ide: S('full', 'ACP 可与兼容编辑器集成。', ['devinCommands']),
+        },
+        kiro: {
+          instructions: S(
+            'full',
+            'Agent Steering 是核心功能，用于 best practices 和 preferences。',
+            ['kiroCli']
+          ),
+          memory: S('partial', 'steering 可持久；自动长期记忆未在 quickstart 页确认。', [
+            'kiroCli',
+          ]),
+          mcp: S('full', 'Core features 明确包含 MCP Integration。', ['kiroCli', 'mcpSpec']),
+          skills: S('partial', 'Custom Agents 明确；SKILL.md 类技能未在 quickstart 页确认。', [
+            'kiroCli',
+          ]),
+          hooks: S('full', 'Smart Hooks 是核心功能，hooks 页给出 JSON event 和 block 行为。', [
+            'kiroCli',
+            'kiroHooks',
+          ]),
+          commands: S('full', 'Auto Complete、custom automation、CLI chat 支持命令化工作流。', [
+            'kiroCli',
+          ]),
+          subagents: S('partial', 'Custom Agents 明确；subagent API 需查 agent config 细节。', [
+            'kiroCli',
+          ]),
+          providers: S(
+            'partial',
+            'API key authentication 用于 headless；多 provider/baseURL 未在 quickstart 页确认。',
+            ['kiroCli']
+          ),
+          permissions: S('full', 'hooks 可 block tool execution，并用于安全验证。', ['kiroHooks']),
+          headless: S('full', 'use cases 明确提到 CI/CD headless automation。', ['kiroCli']),
+          protocols: S(
+            'full',
+            'Kiro CLI implements ACP and extends it with slash commands、MCP、compaction。',
+            ['kiroAcp', 'acpSpec']
+          ),
+          resume: S('partial', 'session_id 出现在 hook event；恢复命令需查 CLI reference。', [
+            'kiroHooks',
+          ]),
+          multimodal: S('partial', 'CLI quickstart 未详述图片；上下文自动补全明确。', ['kiroCli']),
+          git: S(
+            'partial',
+            'build/test/deploy 和 workflow automation 明确；PR agent 需查更多页。',
+            ['kiroCli']
+          ),
+          plugins: S(
+            'partial',
+            'Custom agents 和 MCP 明确；plugin marketplace 未在 quickstart 页确认。',
+            ['kiroCli']
+          ),
+          ide: S('full', 'ACP 使 Kiro agent 能接入 JetBrains、Zed 等兼容编辑器。', ['kiroAcp']),
+        },
+        junie: {
+          instructions: S('full', '.junie/AGENTS.md 为所有任务提供持久 guidance。', ['junieUsage']),
+          memory: S(
+            'full',
+            '官方 Extend 列出 Guidelines and memory，且保留最近 10 个会话上下文。',
+            ['junieUsage']
+          ),
+          mcp: S('full', 'MCP options 支持 mcp-location 与 default locations。', [
+            'junieParams',
+            'mcpSpec',
+          ]),
+          skills: S('full', 'Extend Junie CLI 明确包含 Agent skills。', ['junieUsage']),
+          hooks: S('none', '官方 usage/parameters 未确认生命周期 hooks。', ['junieUsage']),
+          commands: S('full', '支持内建和 custom slash commands。', ['junieUsage']),
+          subagents: S('full', 'Extend Junie CLI 明确包含 Subagents。', ['junieUsage']),
+          providers: S('full', 'BYOK 可添加 OpenAI、Anthropic、Google、xAI API keys。', [
+            'junieUsage',
+          ]),
+          permissions: S('full', 'Action Allowlist 和 brave mode 控制敏感操作审批。', [
+            'junieUsage',
+          ]),
+          headless: S('partial', 'CLI 参数支持 task/auth；完整 CI JSON 模式需查 reference。', [
+            'junieParams',
+          ]),
+          protocols: S('partial', 'MCP 完整；ACP 未在打开的 Junie CLI 页确认。', ['junieParams']),
+          resume: S('full', '/history 可恢复会话，最近 10 个 session 保存完整上下文。', [
+            'junieUsage',
+          ]),
+          multimodal: S('full', '支持拖拽或引用截图/设计稿等图片输入。', ['junieUsage']),
+          git: S('partial', 'Plan mode 和实现模式适合工程流；PR 自动化需查更多页。', [
+            'junieUsage',
+          ]),
+          plugins: S(
+            'partial',
+            'Agent skills、custom commands、MCP 可扩展；插件分发未在 usage 页确认。',
+            ['junieUsage']
+          ),
+          ide: S('full', 'JetBrains agent，CLI 与 JetBrains 生态强集成。', ['junieUsage']),
+        },
+      };
+
+      const STORAGE_KEY = 'agentic-cli-matrix-state:v1';
+      const AGENT_ID_SET = new Set(AGENTS.map((agent) => agent.id));
+      const CATEGORY_ID_SET = new Set(CATEGORIES.map((category) => category.id));
+      const FEATURE_ID_SET = new Set(FEATURES.map((feature) => feature.id));
+
+      const state = loadState();
+      let persistFrame = 0;
+
+      function defaultState() {
+        return {
+          selectedAgents: new Set(AGENTS.filter((agent) => agent.core).map((agent) => agent.id)),
+          selectedCategories: new Set(CATEGORIES.map((category) => category.id)),
+          query: '',
+          sourcesExpanded: false,
+          viewMode: 'compact',
+          drawerCell: null,
+          tableScroll: { left: 0, top: 0 },
+          windowScrollY: 0,
+        };
+      }
+
+      function validSet(values, allowedIds, fallback) {
+        if (!Array.isArray(values)) return new Set(fallback);
+        const next = values.filter((value) => allowedIds.has(value));
+        return next.length ? new Set(next) : new Set(fallback);
+      }
+
+      function validDrawerCell(value) {
+        if (typeof value !== 'string') return null;
+        const [agentId, featureId, criterionIndex] = value.split(':');
+        if (!AGENT_ID_SET.has(agentId) || !FEATURE_ID_SET.has(featureId)) return null;
+        const feature = FEATURES.find((item) => item.id === featureId);
+        if (criterionIndex === undefined) return `${agentId}:${featureId}`;
+        const index = Number(criterionIndex);
+        if (!Number.isInteger(index) || index < 0 || index >= (feature?.criteria?.length ?? 0)) {
+          return `${agentId}:${featureId}`;
+        }
+        return `${agentId}:${featureId}:${index}`;
+      }
+
+      function validScroll(value) {
+        return {
+          left: Number.isFinite(value?.left) ? Math.max(0, value.left) : 0,
+          top: Number.isFinite(value?.top) ? Math.max(0, value.top) : 0,
+        };
+      }
+
+      function loadState() {
+        const fallback = defaultState();
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return fallback;
+          const parsed = JSON.parse(raw);
+          return {
+            selectedAgents: validSet(parsed.selectedAgents, AGENT_ID_SET, fallback.selectedAgents),
+            selectedCategories: validSet(
+              parsed.selectedCategories,
+              CATEGORY_ID_SET,
+              fallback.selectedCategories
+            ),
+            query: typeof parsed.query === 'string' ? parsed.query : fallback.query,
+            sourcesExpanded:
+              typeof parsed.sourcesExpanded === 'boolean'
+                ? parsed.sourcesExpanded
+                : fallback.sourcesExpanded,
+            viewMode: VIEW_MODE_IDS.has(parsed.viewMode) ? parsed.viewMode : fallback.viewMode,
+            drawerCell: validDrawerCell(parsed.drawerCell),
+            tableScroll: validScroll(parsed.tableScroll),
+            windowScrollY: Number.isFinite(parsed.windowScrollY)
+              ? Math.max(0, parsed.windowScrollY)
+              : 0,
+          };
+        } catch {
+          return fallback;
+        }
+      }
+
+      function persistState() {
+        try {
+          localStorage.setItem(
+            STORAGE_KEY,
+            JSON.stringify({
+              selectedAgents: [...state.selectedAgents],
+              selectedCategories: [...state.selectedCategories],
+              query: state.query,
+              sourcesExpanded: state.sourcesExpanded,
+              viewMode: state.viewMode,
+              drawerCell: state.drawerCell,
+              tableScroll: state.tableScroll,
+              windowScrollY: state.windowScrollY,
+            })
+          );
+        } catch {
+          // Persistence is a convenience layer; the matrix remains usable without storage.
+        }
+      }
+
+      function schedulePersistState() {
+        if (persistFrame) return;
+        persistFrame = requestAnimationFrame(() => {
+          persistFrame = 0;
+          persistState();
+        });
+      }
+
+      function captureTableScroll() {
+        const tableWrap = document.querySelector('.table-wrap');
+        if (!tableWrap) return;
+        state.tableScroll = {
+          left: tableWrap.scrollLeft,
+          top: tableWrap.scrollTop,
+        };
+      }
+
+      function restoreScrollState() {
+        requestAnimationFrame(() => {
+          const tableWrap = document.querySelector('.table-wrap');
+          if (tableWrap) {
+            tableWrap.scrollLeft = state.tableScroll.left;
+            tableWrap.scrollTop = state.tableScroll.top;
+          }
+          window.scrollTo({ left: 0, top: state.windowScrollY });
+        });
+      }
+
+      const INSPECTOR_SOURCE_FILE =
+        '/Users/mark/lovstudio/coding/yoda/docs/agentic-cli-matrix/index.html';
+
+      function inspectorLineFor(element) {
+        if (element.id === 'matrixTable') return 675;
+        if (element.id === 'drawer') return 694;
+        if (element.closest?.('#matrixTable')) return 2514;
+        if (element.closest?.('#agentChecks')) return 2328;
+        if (element.closest?.('#categoryChecks')) return 2328;
+        if (element.closest?.('#viewModeControls')) return 2328;
+        if (element.closest?.('#sourceColumns')) return 2607;
+        if (element.closest?.('#drawer')) return 2580;
+        if (element.closest?.('#scoreGrid')) return 2407;
+        if (element.closest?.('#insightGrid')) return 2407;
+        if (element.closest?.('.logo-strip')) return 2322;
+        return 820;
+      }
+
+      function applyInspectorPaths() {
+        const elements = document.body.querySelectorAll('*');
+        elements.forEach((element) => {
+          if (element.closest('lovinsp-component')) return;
+          if (['SCRIPT', 'STYLE'].includes(element.tagName)) return;
+          const line = inspectorLineFor(element);
+          const column = 1;
+          const tag = element.tagName.toLowerCase();
+          element.setAttribute(
+            'data-insp-path',
+            `${INSPECTOR_SOURCE_FILE}:${line}:${column}:${tag}`
+          );
+        });
+      }
+
+      function agentInitials(name) {
+        return name
+          .split(/\s+/)
+          .map((part) => part[0])
+          .join('')
+          .slice(0, 2)
+          .toUpperCase();
+      }
+
+      function logoMarkup(agent) {
+        if (!agent.logo) return `<span class="logo-fallback">${agentInitials(agent.name)}</span>`;
+        return `<img src="${agent.logo}" alt="${agent.name}" onerror="this.replaceWith(Object.assign(document.createElement('span'), {className: 'logo-fallback', textContent: '${agentInitials(agent.name)}'}))" />`;
+      }
+
+      function cellFor(agentId, featureId) {
+        const fallback = S('unknown', '未建立足够官方证据，建议打开产品文档继续核验。', []);
+        return MATRIX[agentId]?.[featureId] ?? fallback;
+      }
+
+      function scoreForStatus(status) {
+        return statusWeight[status] ?? 0;
+      }
+
+      function coverageMarkup(status) {
+        const score = scoreForStatus(status);
+        return `<span class="coverage" aria-label="coverage ${score} of 4">${[0, 1, 2, 3]
+          .map((index) => `<i class="${index < score ? `on ${status}` : ''}"></i>`)
+          .join('')}</span>`;
+      }
+
+      function shortNote(note) {
+        return note.length > 42 ? `${note.slice(0, 42)}…` : note;
+      }
+
+      function featureTags(feature, limit = 4) {
+        return (feature.criteria ?? [])
+          .slice(0, limit)
+          .map((criterion) => `<span>${criterion}</span>`)
+          .join('');
+      }
+
+      function visibleRows() {
+        const features = visibleFeatures();
+        if (state.viewMode !== 'detail') {
+          return features.map((feature) => ({ kind: 'feature', feature }));
+        }
+        return features.flatMap((feature) =>
+          (feature.criteria ?? []).map((criterion, criterionIndex) => ({
+            kind: 'criterion',
+            feature,
+            criterion,
+            criterionIndex,
+          }))
+        );
+      }
+
+      function matchesQuery(agent, feature, cell) {
+        const q = state.query.trim().toLowerCase();
+        if (!q) return true;
+        const haystack = [
+          agent.name,
+          agent.origin,
+          feature.label,
+          feature.meta,
+          ...(feature.criteria ?? []),
+          cell.note,
+          cell.status,
+          ...cell.refs.map((ref) => SOURCES[ref]?.title ?? ref),
+        ]
+          .join(' ')
+          .toLowerCase();
+        return haystack.includes(q);
+      }
+
+      function renderLogos() {
+        document.getElementById('logoStrip').innerHTML = AGENTS.map(
+          (agent) => `<span class="logo-chip" title="${agent.name}">${logoMarkup(agent)}</span>`
+        ).join('');
+      }
+
+      function renderControls() {
+        document.getElementById('searchBox').value = state.query;
+        document.getElementById('sourceToggle').textContent = state.sourcesExpanded
+          ? '当前筛选'
+          : '全部展开';
+
+        document.getElementById('agentChecks').innerHTML = AGENTS.map(
+          (agent) => `
+            <label class="check">
+              <input type="checkbox" data-agent="${agent.id}" ${state.selectedAgents.has(agent.id) ? 'checked' : ''} />
+              <span>${agent.name}</span>
+            </label>
+          `
+        ).join('');
+
+        document.getElementById('categoryChecks').innerHTML = CATEGORIES.map(
+          (category) => `
+            <label>
+              <input type="checkbox" data-category="${category.id}" ${state.selectedCategories.has(category.id) ? 'checked' : ''} />
+              ${category.label}
+            </label>
+          `
+        ).join('');
+
+        document.getElementById('viewModeControls').innerHTML = VIEW_MODES.map(
+          (mode) => `
+            <button type="button" data-view-mode="${mode.id}" class="${state.viewMode === mode.id ? 'active' : ''}">
+              ${mode.label}
+            </button>
+          `
+        ).join('');
+
+        document.querySelectorAll('[data-agent]').forEach((input) => {
+          input.addEventListener('change', (event) => {
+            const id = event.currentTarget.dataset.agent;
+            if (event.currentTarget.checked) state.selectedAgents.add(id);
+            else state.selectedAgents.delete(id);
+            persistState();
+            render();
+          });
+        });
+
+        document.querySelectorAll('[data-category]').forEach((input) => {
+          input.addEventListener('change', (event) => {
+            const id = event.currentTarget.dataset.category;
+            if (event.currentTarget.checked) state.selectedCategories.add(id);
+            else state.selectedCategories.delete(id);
+            persistState();
+            render();
+          });
+        });
+
+        document.querySelectorAll('[data-view-mode]').forEach((button) => {
+          button.addEventListener('click', (event) => {
+            const mode = event.currentTarget.dataset.viewMode;
+            if (!VIEW_MODE_IDS.has(mode)) return;
+            state.viewMode = mode;
+            state.tableScroll = { left: 0, top: 0 };
+            persistState();
+            renderControls();
+            render();
+          });
+        });
+      }
+
+      function visibleAgents() {
+        return AGENTS.filter((agent) => state.selectedAgents.has(agent.id));
+      }
+
+      function visibleFeatures() {
+        const agents = visibleAgents();
+        return FEATURES.filter((feature) => {
+          if (!state.selectedCategories.has(feature.category)) return false;
+          return agents.some((agent) =>
+            matchesQuery(agent, feature, cellFor(agent.id, feature.id))
+          );
+        });
+      }
+
+      function renderScores() {
+        const agents = visibleAgents();
+        const features = visibleFeatures();
+        const rows = visibleRows();
+        const cells = agents.flatMap((agent) =>
+          features.map((feature) => cellFor(agent.id, feature.id))
+        );
+        const full = cells.filter((cell) => cell.status === 'full').length;
+        const partial = cells.filter((cell) => cell.status === 'partial').length;
+        const via = cells.filter((cell) => cell.status === 'via').length;
+        const refs = new Set(cells.flatMap((cell) => cell.refs));
+        document.getElementById('scoreGrid').innerHTML = [
+          ['已选 CLI', agents.length, '列数'],
+          [state.viewMode === 'detail' ? '细分检查项' : '功能维度', rows.length, '行数'],
+          ['强支持项', full, `部分 ${partial} / 扩展 ${via}`],
+          ['引用入口', refs.size, '去重后的官方资料链接'],
+        ]
+          .map(
+            ([label, value, sub]) => `
+              <div class="score">
+                <b>${value}</b>
+                <span>${label}<br />${sub}</span>
+              </div>
+            `
+          )
+          .join('');
+
+        document.getElementById('insightGrid').innerHTML = agents
+          .map((agent) => {
+            const agentCells = features.map((feature) => cellFor(agent.id, feature.id));
+            const score = agentCells.reduce((sum, cell) => sum + scoreForStatus(cell.status), 0);
+            const maxScore = Math.max(1, features.length * 4);
+            const percent = Math.round((score / maxScore) * 100);
+            const strong = agentCells.filter((cell) => cell.status === 'full').length;
+            const gaps = agentCells.filter((cell) =>
+              ['none', 'unknown'].includes(cell.status)
+            ).length;
+            return `
+              <div class="agent-score-card">
+                <div class="agent-score-head">
+                  <strong>${agent.name}</strong>
+                  <b>${percent}</b>
+                </div>
+                <div class="score-bar"><div class="score-fill" style="width: ${percent}%"></div></div>
+                <div class="agent-score-meta">
+                  <span>原生 ${strong}</span>
+                  <span>缺口 ${gaps}</span>
+                </div>
+              </div>
+            `;
+          })
+          .join('');
+      }
+
+      function rowFeatureMarkup(row) {
+        const { feature } = row;
+        if (row.kind === 'criterion') {
+          return `
+            <span class="feature-kicker">${feature.label}</span>
+            <span class="feature-title">${row.criterion}</span>
+            <span class="feature-meta">${feature.meta}</span>
+          `;
+        }
+        return `
+          <span class="feature-title">${feature.label}</span>
+          <span class="feature-meta">${feature.meta}</span>
+          <span class="feature-tags">${featureTags(feature)}</span>
+        `;
+      }
+
+      function cellMarkup(agent, row) {
+        const { feature } = row;
+        const cell = cellFor(agent.id, feature.id);
+        const openKey =
+          row.kind === 'criterion'
+            ? `${agent.id}:${feature.id}:${row.criterionIndex}`
+            : `${agent.id}:${feature.id}`;
+        const score = scoreForStatus(cell.status);
+        const refsLabel = `${cell.refs.length} refs`;
+        const compactBody = `
+          <span class="cell-compact-line">
+            <span class="status ${cell.status}"><i class="dot ${cell.status === 'unknown' ? 'none' : cell.status}"></i>${statusLabel[cell.status]}</span>
+            <span class="cell-score">${score}/4</span>
+          </span>
+          ${coverageMarkup(cell.status)}
+          <span class="cell-summary">${refsLabel}${row.kind === 'criterion' ? ` · ${row.criterion}` : ''}</span>
+        `;
+        const evidenceBody = `
+          <span class="status ${cell.status}"><i class="dot ${cell.status === 'unknown' ? 'none' : cell.status}"></i>${statusLabel[cell.status]}</span>
+          <span class="cell-note">${cell.note}</span>
+          <span class="cell-refs">
+            ${cell.refs
+              .slice(0, 3)
+              .map((ref) => `<span class="ref-pill">${ref}</span>`)
+              .join('')}
+          </span>
+        `;
+        const body = state.viewMode === 'evidence' ? evidenceBody : compactBody;
+        return `
+          <td>
+            <button class="cell-btn ${cell.status}" type="button" data-open-cell="${openKey}">
+              ${body}
+            </button>
+          </td>
+        `;
+      }
+
+      function renderTable() {
+        const agents = visibleAgents();
+        const rows = visibleRows();
+        const table = document.getElementById('matrixTable');
+        if (table.tBodies.length) captureTableScroll();
+        const head = `
+          <thead>
+            <tr>
+              <th class="feature-head">${state.viewMode === 'detail' ? '细分检查项' : '功能点'}</th>
+              ${agents
+                .map(
+                  (agent) => `
+                    <th>
+                      <div class="agent-head">
+                        <span class="agent-name">${logoMarkup(agent)}<strong>${agent.name}</strong></span>
+                        <span class="agent-origin">${agent.origin}</span>
+                      </div>
+                    </th>
+                  `
+                )
+                .join('')}
+            </tr>
+          </thead>
+        `;
+
+        const body = `
+          <tbody>
+            ${rows
+              .map(
+                (row) => `
+                  <tr>
+                    <td class="feature-cell">
+                      ${rowFeatureMarkup(row)}
+                    </td>
+                    ${agents.map((agent) => cellMarkup(agent, row)).join('')}
+                  </tr>
+                `
+              )
+              .join('')}
+          </tbody>
+        `;
+
+        table.innerHTML = head + body;
+        document.querySelectorAll('[data-open-cell]').forEach((button) => {
+          button.addEventListener('click', () => {
+            const [agentId, featureId] = button.dataset.openCell.split(':');
+            openDrawer(agentId, featureId);
+          });
+        });
+      }
+
+      function openDrawer(agentId, featureId) {
+        const agent = AGENTS.find((item) => item.id === agentId);
+        const feature = FEATURES.find((item) => item.id === featureId);
+        if (!agent || !feature) return;
+        const cell = cellFor(agentId, featureId);
+        document.getElementById('drawerTitle').textContent =
+          `${agent.name} · ${feature.label} · ${statusLabel[cell.status]}`;
+        document.getElementById('drawerNote').textContent = cell.note;
+        document.getElementById('drawerSources').innerHTML = cell.refs.length
+          ? cell.refs
+              .map((ref) => {
+                const source = SOURCES[ref];
+                if (!source) return '';
+                return `
+                  <a class="source-link" href="${source.url}" target="_blank" rel="noreferrer">
+                    ${source.title}
+                    <small>${source.url}</small>
+                  </a>
+                `;
+              })
+              .join('')
+          : `<p>当前格子没有足够强的官方资料。建议从产品主页或 CLI reference 继续核验。</p>`;
+        document.getElementById('drawer').classList.add('open');
+        state.drawerCell = `${agentId}:${featureId}`;
+        persistState();
+      }
+
+      function closeDrawer() {
+        document.getElementById('drawer').classList.remove('open');
+        state.drawerCell = null;
+        persistState();
+      }
+
+      function syncDrawer() {
+        if (!state.drawerCell) {
+          document.getElementById('drawer').classList.remove('open');
+          return;
+        }
+        const [agentId, featureId] = state.drawerCell.split(':');
+        openDrawer(agentId, featureId);
+      }
+
+      function renderSources() {
+        const selectedRefs = new Set();
+        visibleAgents().forEach((agent) => {
+          visibleFeatures().forEach((feature) => {
+            cellFor(agent.id, feature.id).refs.forEach((ref) => selectedRefs.add(ref));
+          });
+        });
+        const refs = state.sourcesExpanded ? Object.keys(SOURCES) : [...selectedRefs];
+        document.getElementById('sourceColumns').innerHTML = refs
+          .map((ref) => {
+            const source = SOURCES[ref];
+            if (!source) return '';
+            return `<a href="${source.url}" target="_blank" rel="noreferrer">${source.title}<br /><small>${source.url}</small></a>`;
+          })
+          .join('');
+      }
+
+      function render() {
+        renderScores();
+        renderTable();
+        renderSources();
+        syncDrawer();
+        applyInspectorPaths();
+        restoreScrollState();
+      }
+
+      document.getElementById('searchBox').addEventListener('input', (event) => {
+        state.query = event.target.value;
+        persistState();
+        render();
+      });
+
+      document.getElementById('coreOnly').addEventListener('click', () => {
+        const allCoreSelected = AGENTS.filter((agent) => agent.core).every((agent) =>
+          state.selectedAgents.has(agent.id)
+        );
+        state.selectedAgents = new Set(
+          (allCoreSelected ? AGENTS : AGENTS.filter((agent) => agent.core)).map((agent) => agent.id)
+        );
+        persistState();
+        renderControls();
+        render();
+      });
+
+      document.getElementById('sourceToggle').addEventListener('click', (event) => {
+        state.sourcesExpanded = !state.sourcesExpanded;
+        event.currentTarget.textContent = state.sourcesExpanded ? '当前筛选' : '全部展开';
+        persistState();
+        renderSources();
+      });
+
+      document.getElementById('drawerClose').addEventListener('click', () => {
+        closeDrawer();
+      });
+
+      document.querySelector('.table-wrap').addEventListener('scroll', (event) => {
+        state.tableScroll = {
+          left: event.currentTarget.scrollLeft,
+          top: event.currentTarget.scrollTop,
+        };
+        schedulePersistState();
+      });
+
+      window.addEventListener(
+        'scroll',
+        () => {
+          state.windowScrollY = window.scrollY;
+          schedulePersistState();
+        },
+        { passive: true }
+      );
+
+      renderLogos();
+      renderControls();
+      render();
+    </script>
+  </body>
+</html>
