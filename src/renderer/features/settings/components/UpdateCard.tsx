@@ -124,13 +124,16 @@ export const UpdateCard = observer(function UpdateCard(): React.JSX.Element {
 
       case 'error':
         return (
-          <Badge
-            variant="outline"
-            className="border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400"
-          >
-            <AlertCircle className="h-3 w-3" />
-            {t('settings.update.errorBadge')}
-          </Badge>
+          <div className="grid gap-1">
+            <Badge
+              variant="outline"
+              className="w-fit border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400"
+            >
+              <AlertCircle className="h-3 w-3" />
+              {t('settings.update.errorBadge')}
+            </Badge>
+            <p className="text-xs text-muted-foreground">{update.state.message}</p>
+          </div>
         );
 
       default:

@@ -2,6 +2,7 @@ import type { ComponentType, ReactNode } from 'react';
 import { homeView } from '@renderer/app/home-view';
 import { agentsView } from '@renderer/features/agents/agents-view';
 import { mcpView } from '@renderer/features/mcp/mcp-view';
+import { projectlessView } from '@renderer/features/projectless/projectless-view';
 import { projectView } from '@renderer/features/projects/view';
 import { settingsView } from '@renderer/features/settings/settings-view';
 import { skillsView } from '@renderer/features/skills/skills-view';
@@ -14,6 +15,7 @@ export const views = {
   agents: agentsView,
   skills: skillsView,
   mcp: mcpView,
+  projectless: projectlessView,
   project: projectView,
   task: taskView,
   settings: settingsView,

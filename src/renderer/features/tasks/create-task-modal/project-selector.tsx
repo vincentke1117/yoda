@@ -22,6 +22,7 @@ import {
   ComboboxTrigger,
   ComboboxValue,
 } from '@renderer/lib/ui/combobox';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@renderer/lib/ui/tooltip';
 import { log } from '@renderer/utils/logger';
 
 interface ProjectOption {
@@ -30,24 +31,27 @@ interface ProjectOption {
   label: string;
 }
 
-interface EmptyProjectOption {
-  kind: 'empty';
-  value: '__empty_project__';
+interface ProjectlessOption {
+  kind: 'projectless';
+  value: '__projectless__';
   label: string;
+  description: string;
 }
 
-type ProjectSelectorOption = ProjectOption | EmptyProjectOption;
+type ProjectSelectorOption = ProjectOption | ProjectlessOption;
 
 interface ProjectSelectorProps {
   value: string | undefined;
   onChange: (projectId: string | undefined) => void;
   trigger?: React.ReactNode;
+  allowProjectless?: boolean;
 }
 
 export const ProjectSelector = observer(function ProjectSelector({
   value,
   onChange,
   trigger,
+  allowProjectless = false,
 }: ProjectSelectorProps) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -62,18 +66,31 @@ export const ProjectSelector = observer(function ProjectSelector({
         : [];
     }
   );
+  const projectlessOption: ProjectlessOption = {
+    kind: 'projectless',
+    value: '__projectless__',
+    label: t('projects.noProject'),
+    description: t('projects.noProjectTooltip'),
+  };
   const optionGroups: Array<{ value: string; items: ProjectSelectorOption[] }> = [
-    {
-      value: 'empty',
-      items: [{ kind: 'empty', value: '__empty_project__', label: t('projects.noProject') }],
-    },
+    ...(allowProjectless
+      ? [
+          {
+            value: 'projectless',
+            items: [projectlessOption],
+          },
+        ]
+      : []),
     { value: 'options', items: options },
   ];
 
-  const selectedOption = options.find((o) => o.value === value) ?? null;
+  const selectedOption =
+    options.find((o) => o.value === value) ??
+    (allowProjectless && !value ? projectlessOption : null);
+  const isProjectlessSelected = allowProjectless && !value;
 
   function handleValueChange(item: ProjectSelectorOption | null) {
-    if (!item || item.kind === 'empty') {
+    if (!item || item.kind === 'projectless') {
       onChange(undefined);
       setOpen(false);
       return;
@@ -140,6 +157,24 @@ export const ProjectSelector = observer(function ProjectSelector({
     }
   }
 
+  const triggerNode = trigger ?? (
+    <ComboboxTrigger className="flex h-8 w-full min-w-0 items-center gap-2 rounded-md border border-border bg-transparent px-2.5 py-1 text-sm outline-none">
+      <ComboboxValue placeholder={t('projects.selectProject')} />
+    </ComboboxTrigger>
+  );
+  const renderedTrigger = isProjectlessSelected ? (
+    <Tooltip>
+      <TooltipTrigger render={<span className="inline-flex min-w-0" />}>
+        {triggerNode}
+      </TooltipTrigger>
+      <TooltipContent className="max-w-64 text-left">
+        {projectlessOption.description}
+      </TooltipContent>
+    </Tooltip>
+  ) : (
+    triggerNode
+  );
+
   return (
     <Combobox
       items={optionGroups}
@@ -155,11 +190,7 @@ export const ProjectSelector = observer(function ProjectSelector({
       }
       autoHighlight
     >
-      {trigger ?? (
-        <ComboboxTrigger className="flex h-8 w-full min-w-0 items-center gap-2 rounded-md border border-border bg-transparent px-2.5 py-1 text-sm outline-none">
-          <ComboboxValue placeholder={t('projects.selectProject')} />
-        </ComboboxTrigger>
-      )}
+      {renderedTrigger}
       <ComboboxContent className="w-auto min-w-(--anchor-width)">
         <ComboboxInput
           showTrigger={false}
@@ -171,8 +202,27 @@ export const ProjectSelector = observer(function ProjectSelector({
             <ComboboxGroup key={group.value} items={group.items} className="py-1">
               <ComboboxCollection>
                 {(item: ProjectSelectorOption) => (
-                  <ComboboxItem key={item.value} value={item}>
-                    {item.label}
+                  <ComboboxItem
+                    key={item.value}
+                    value={item}
+                    aria-label={
+                      item.kind === 'projectless'
+                        ? `${item.label}: ${item.description}`
+                        : item.label
+                    }
+                  >
+                    {item.kind === 'projectless' ? (
+                      <Tooltip>
+                        <TooltipTrigger render={<span className="min-w-0 truncate" />}>
+                          {item.label}
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-64 text-left">
+                          {item.description}
+                        </TooltipContent>
+                      </Tooltip>
+                    ) : (
+                      item.label
+                    )}
                   </ComboboxItem>
                 )}
               </ComboboxCollection>

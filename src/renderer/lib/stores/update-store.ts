@@ -11,6 +11,8 @@ import {
   updateNotAvailableEvent,
   updateProgressEvent,
 } from '@shared/events/updateEvents';
+import type { UpdateState as UpdateServiceState } from '@main/core/updates/update-service';
+import i18n from '@renderer/lib/i18n';
 import { events, rpc } from '@renderer/lib/ipc';
 
 const LAST_NOTIFIED_KEY = 'yoda:update:lastNotified';
@@ -21,6 +23,10 @@ type DownloadProgress = {
   transferred?: number;
   total?: number;
   bytesPerSecond?: number;
+};
+
+type CheckOptions = {
+  notify?: boolean;
 };
 
 export type UpdateState =
@@ -37,6 +43,7 @@ export class UpdateStore {
   state: UpdateState = { status: 'idle' };
   currentVersion = '';
   availableVersion: string | undefined = undefined;
+  private manualCheckToastId: string | number | undefined = undefined;
 
   constructor() {
     makeObservable(this, {
@@ -82,7 +89,9 @@ export class UpdateStore {
         this.availableVersion = d.version;
         this.state = { status: 'available', info: { version: d.version } };
       });
-      this._maybeToastAvailable(d.version);
+      if (this.manualCheckToastId === undefined) {
+        this._maybeToastAvailable(d.version);
+      }
     });
 
     events.on(updateNotAvailableEvent, () => {
@@ -130,37 +139,49 @@ export class UpdateStore {
     });
 
     events.on(menuCheckForUpdatesChannel, () => {
-      rpc.update.check().catch(() => {});
+      void this.check({ notify: true });
     });
 
     rpc.update.check().catch(() => {});
   }
 
-  async check(): Promise<void> {
+  async check(options: CheckOptions = {}): Promise<void> {
+    const toastId = options.notify ? toast.loading(i18n.t('settings.update.checking')) : undefined;
+    if (toastId !== undefined) {
+      this.manualCheckToastId = toastId;
+    }
+
     runInAction(() => {
       this.state = { status: 'checking' };
     });
+
     try {
       const res = await rpc.update.check();
       if (!res) {
-        runInAction(() => {
-          this.state = { status: 'error', message: 'Update API unavailable' };
-        });
+        this._setError('Update API unavailable');
+        this._finishManualCheckToast(toastId);
         return;
       }
       if (!res.success) {
-        runInAction(() => {
-          this.state = { status: 'error', message: res.error ?? 'Failed to check for updates' };
-        });
+        this._setError(res.error ?? i18n.t('settings.update.checkFailed'));
       } else if (res.result === null) {
-        runInAction(() => {
-          this.state = { status: 'idle' };
-        });
+        this._setError(i18n.t('settings.update.unavailableInBuild'));
+      } else {
+        await this._syncStateAfterCheck();
+        if (this.state.status === 'checking') {
+          runInAction(() => {
+            this.state = { status: 'not-available' };
+          });
+        }
       }
+      this._finishManualCheckToast(toastId);
     } catch {
-      runInAction(() => {
-        this.state = { status: 'error', message: 'Failed to check for updates' };
-      });
+      this._setError(i18n.t('settings.update.checkFailed'));
+      this._finishManualCheckToast(toastId);
+    } finally {
+      if (this.manualCheckToastId === toastId) {
+        this.manualCheckToastId = undefined;
+      }
     }
   }
 
@@ -220,10 +241,93 @@ export class UpdateStore {
 
   private _maybeToastAvailable(version: string): void {
     if (!this._shouldNotify(version)) return;
-    toast('Update Available', {
-      description: `Version ${version} is ready. Go to Settings to upgrade.`,
+    toast.success(i18n.t('settings.update.availableToast'), {
+      description: i18n.t('settings.update.availableToastDescription', { version }),
     });
     this._rememberNotified(version);
+  }
+
+  private _setError(message: string): void {
+    runInAction(() => {
+      this.state = { status: 'error', message };
+    });
+  }
+
+  private async _syncStateAfterCheck(): Promise<void> {
+    const stateResult = await rpc.update.getState();
+    if (!stateResult?.success || !stateResult.data) return;
+    this._applyServiceState(stateResult.data, { checked: true });
+  }
+
+  private _applyServiceState(
+    serviceState: UpdateServiceState,
+    options: { checked?: boolean } = {}
+  ): void {
+    runInAction(() => {
+      this.currentVersion = serviceState.currentVersion;
+      switch (serviceState.status) {
+        case 'idle':
+          this.state = options.checked ? { status: 'not-available' } : { status: 'idle' };
+          break;
+        case 'checking':
+          this.state = { status: 'checking' };
+          break;
+        case 'available': {
+          const version = serviceState.availableVersion ?? serviceState.updateInfo?.version;
+          this.availableVersion = version;
+          this.state = version
+            ? { status: 'available', info: { version } }
+            : { status: 'available' };
+          break;
+        }
+        case 'downloading':
+          this.state = {
+            status: 'downloading',
+            progress: serviceState.downloadProgress,
+          };
+          break;
+        case 'downloaded':
+          this.state = { status: 'downloaded' };
+          break;
+        case 'installing':
+          this.state = { status: 'installing' };
+          break;
+        case 'error':
+          this.state = {
+            status: 'error',
+            message: serviceState.error ?? i18n.t('settings.update.checkFailed'),
+          };
+          break;
+      }
+    });
+  }
+
+  private _finishManualCheckToast(toastId: string | number | undefined): void {
+    if (toastId === undefined) return;
+
+    switch (this.state.status) {
+      case 'available':
+        toast.success(i18n.t('settings.update.availableToast'), {
+          id: toastId,
+          description: this.state.info?.version
+            ? i18n.t('settings.update.availableToastDescription', {
+                version: this.state.info.version,
+              })
+            : undefined,
+        });
+        return;
+      case 'not-available':
+        toast.success(i18n.t('settings.update.upToDate'), { id: toastId });
+        return;
+      case 'error':
+        toast.error(i18n.t('settings.update.checkFailed'), {
+          id: toastId,
+          description: this.state.message,
+        });
+        return;
+      default:
+        toast.dismiss(toastId);
+    }
   }
 
   private _shouldNotify(version: string): boolean {

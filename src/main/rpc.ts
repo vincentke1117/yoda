@@ -17,6 +17,7 @@ import { linearController } from './core/linear/controller';
 import { lovcodeController } from './core/lovcode/controller';
 import { mcpController } from './core/mcp/controller';
 import { plainController } from './core/plain/controller';
+import { projectlessController } from './core/projectless/controller';
 import { projectController } from './core/projects/controller';
 import { ptyController } from './core/pty/controller';
 import { pullRequestController } from './core/pull-requests/controller';
@@ -53,6 +54,7 @@ export const rpcRouter = createRPCRouter({
   linear: linearController,
   lovcode: lovcodeController,
   plain: plainController,
+  projectless: projectlessController,
   skills: skillsController,
   ssh: sshController,
   projects: projectController,

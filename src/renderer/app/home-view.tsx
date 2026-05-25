@@ -105,19 +105,10 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
 
   const { value: draft, update: updateDraft } = useAppSettingsKey('homeDraft');
 
-  const fallbackProjectId = useMemo(
-    () =>
-      homeProjectId ??
-      navProjectId ??
-      Array.from(projectManager.projects.values())
-        .reverse()
-        .find((p) => p.state === 'mounted')?.data?.id,
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [homeProjectId, navProjectId, projectManager.projects.size]
-  );
-
   const selectedProjectId =
-    draft === undefined ? fallbackProjectId : (draft.selectedProjectId ?? undefined);
+    homeProjectId ??
+    navProjectId ??
+    (draft === undefined ? undefined : (draft.selectedProjectId ?? undefined));
   const setSelectedProjectId = useCallback(
     (next: string | undefined) => {
       updateDraft({ selectedProjectId: next ?? null });
@@ -188,14 +179,36 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
   );
   const effectiveStrategyKind: TaskStrategyKind = isUnborn ? 'no-worktree' : strategyKind;
   const trimmed = prompt.trim();
-  const canSubmit = !!mounted && !!providerId && !!defaultBranch && !submitting;
+  const canSubmit = !!providerId && !submitting && (!mounted || !!defaultBranch);
 
   const handleSubmit = useCallback(async () => {
-    if (!mounted || !providerId || !defaultBranch || submitting) return;
+    if (!providerId || submitting) return;
     setSubmitting(true);
     try {
       const taskId = crypto.randomUUID();
       const baseName = await rpc.tasks.generateTaskName(trimmed ? { title: trimmed } : {});
+      if (!mounted) {
+        const conversationId = crypto.randomUUID();
+        const result = await rpc.projectless.startSession({
+          taskId,
+          conversationId,
+          provider: providerId,
+          title: baseName,
+          initialPrompt: trimmed || undefined,
+          autoApprove: autoApproveDefaults.getDefault(providerId),
+        });
+        navigate('projectless', {
+          sessionId: result.sessionId,
+          title: baseName,
+          cwd: result.cwd,
+        });
+        setPrompt('');
+        updateDraft({ prompt: '' });
+        return;
+      }
+
+      if (!defaultBranch) return;
+
       const existingNames = Array.from(mounted.taskManager.tasks.values(), (t) => t.data.name);
       const taskName = ensureUniqueTaskSlug(baseName, existingNames);
 
@@ -354,6 +367,7 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
           <ProjectSelector
             value={selectedProjectId}
             onChange={setSelectedProjectId}
+            allowProjectless
             trigger={
               <ComboboxTrigger className="flex h-7 items-center gap-1.5 rounded-md border border-border bg-background-1 px-2.5 text-xs text-foreground transition-colors hover:bg-background-2">
                 <FolderOpen className="size-3.5 text-foreground-muted" />
@@ -381,9 +395,6 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
                 noWorktreeDesc: t('home.strategyNoWorktreeDesc'),
               }}
             />
-          )}
-          {!mounted && (
-            <span className="text-xs text-foreground-muted">{t('home.needProjectHint')}</span>
           )}
         </div>
 

@@ -6,6 +6,20 @@ This project resets to **0.1.0** with the rebrand from `emdash` to `yoda`. Older
 release history (`v0.4.x`, `v1.1.x`) belongs to the upstream `emdash` codebase
 and is preserved in git tags only.
 
+## 0.3.3 — 2026-05-25
+
+### Added
+
+- Add projectless home sessions that can run without creating a project task or
+  worktree.
+- Add the docs app entrypoint and build configuration.
+
+### Changed
+
+- Rename the no-project selector option to "Do not use a project" /
+  "不使用项目" and explain the behavior on hover.
+- Improve update check state handling and user-facing update messages.
+
 ## 0.3.2 — 2026-05-25
 
 ### Added

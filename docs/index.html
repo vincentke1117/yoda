@@ -1,0 +1,1283 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Yoda - Parallel agentic coding desktop</title>
+    <meta
+      name="description"
+      content="Yoda is a desktop command center for running many coding agents in parallel across isolated git worktrees, local machines, and SSH hosts."
+    />
+    <link rel="canonical" href="https://yoda.lovstudio.ai/" />
+    <meta property="og:title" content="Yoda - Parallel agentic coding desktop" />
+    <meta
+      property="og:description"
+      content="Run Codex, Claude Code, Gemini, OpenCode, and more in isolated worktrees, then review and merge from one desktop."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://yoda.lovstudio.ai/" />
+    <meta property="og:image" content="https://yoda.lovstudio.ai/images/cover.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="theme-color" content="#10100e" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,500;6..72,650;6..72,700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #10100e;
+        --bg-2: #161610;
+        --ink: #f6f0df;
+        --muted: #b9b09d;
+        --soft: #ded4bd;
+        --line: rgba(246, 240, 223, 0.16);
+        --line-strong: rgba(246, 240, 223, 0.32);
+        --panel: rgba(22, 22, 16, 0.86);
+        --panel-solid: #1c1b14;
+        --lime: #d6ff79;
+        --cyan: #79e8ff;
+        --copper: #d69b63;
+        --red: #ff795f;
+        --shadow: 0 28px 90px rgba(0, 0, 0, 0.45);
+        --sans: 'IBM Plex Sans', 'Aptos', 'Avenir Next', sans-serif;
+        --serif: 'Newsreader', 'Iowan Old Style', 'Times New Roman', serif;
+        --mono: 'IBM Plex Mono', 'SFMono-Regular', monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        min-width: 320px;
+        background:
+          linear-gradient(90deg, rgba(246, 240, 223, 0.035) 1px, transparent 1px) 0 0 / 72px 72px,
+          linear-gradient(180deg, rgba(246, 240, 223, 0.03) 1px, transparent 1px) 0 0 / 72px 72px,
+          var(--bg);
+        color: var(--ink);
+        font-family: var(--sans);
+        letter-spacing: 0;
+      }
+
+      body::before {
+        position: fixed;
+        inset: 0;
+        z-index: -2;
+        pointer-events: none;
+        content: '';
+        background:
+          linear-gradient(120deg, rgba(214, 255, 121, 0.1), transparent 32%),
+          linear-gradient(300deg, rgba(121, 232, 255, 0.08), transparent 38%),
+          linear-gradient(180deg, transparent 0, rgba(0, 0, 0, 0.5) 100%);
+      }
+
+      body::after {
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        pointer-events: none;
+        content: '';
+        opacity: 0.22;
+        background-image: repeating-linear-gradient(
+          0deg,
+          rgba(255, 255, 255, 0.22) 0,
+          rgba(255, 255, 255, 0.22) 1px,
+          transparent 1px,
+          transparent 4px
+        );
+        mix-blend-mode: overlay;
+      }
+
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      img {
+        display: block;
+        max-width: 100%;
+      }
+
+      .site-header {
+        position: fixed;
+        top: 0;
+        right: 0;
+        left: 0;
+        z-index: 20;
+        border-bottom: 1px solid rgba(246, 240, 223, 0.12);
+        background: rgba(16, 16, 14, 0.78);
+        backdrop-filter: blur(18px);
+      }
+
+      .nav {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: min(1180px, calc(100% - 40px));
+        height: 68px;
+        margin: 0 auto;
+        gap: 18px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+        font-family: var(--mono);
+        font-size: 14px;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+
+      .brand-mark {
+        display: grid;
+        place-items: center;
+        width: 32px;
+        height: 32px;
+        border: 1px solid var(--line-strong);
+        background: var(--lime);
+        color: #12120d;
+        font-family: var(--serif);
+        font-size: 22px;
+        font-weight: 700;
+        line-height: 1;
+      }
+
+      .nav-links {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 18px;
+        color: var(--muted);
+        font-family: var(--mono);
+        font-size: 12px;
+      }
+
+      .nav-links a {
+        transition:
+          color 160ms ease,
+          border-color 160ms ease,
+          background 160ms ease;
+      }
+
+      .nav-links a:hover {
+        color: var(--ink);
+      }
+
+      .nav-cta {
+        border: 1px solid var(--line-strong);
+        border-radius: 6px;
+        padding: 9px 12px;
+        color: var(--ink);
+        background: rgba(246, 240, 223, 0.06);
+      }
+
+      .nav-cta:hover {
+        border-color: var(--lime);
+        background: rgba(214, 255, 121, 0.1);
+      }
+
+      main {
+        overflow: hidden;
+      }
+
+      .hero {
+        position: relative;
+        display: grid;
+        align-items: center;
+        min-height: 86svh;
+        padding: 112px 0 72px;
+        border-bottom: 1px solid var(--line);
+        isolation: isolate;
+      }
+
+      .hero-media {
+        position: absolute;
+        inset: 68px 0 0;
+        z-index: -2;
+        overflow: hidden;
+      }
+
+      .hero-media img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: 58% 48%;
+        opacity: 0.52;
+        filter: saturate(0.92) contrast(1.03);
+      }
+
+      .hero-media::after {
+        position: absolute;
+        inset: 0;
+        content: '';
+        background:
+          linear-gradient(
+            90deg,
+            rgba(16, 16, 14, 0.98) 0%,
+            rgba(16, 16, 14, 0.78) 40%,
+            rgba(16, 16, 14, 0.32) 100%
+          ),
+          linear-gradient(
+            0deg,
+            rgba(16, 16, 14, 0.94) 0%,
+            rgba(16, 16, 14, 0.18) 42%,
+            rgba(16, 16, 14, 0.65) 100%
+          );
+      }
+
+      .hero-inner {
+        width: min(1180px, calc(100% - 40px));
+        margin: 0 auto;
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        margin: 0 0 22px;
+        color: var(--lime);
+        font-family: var(--mono);
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+      }
+
+      .eyebrow::before {
+        width: 34px;
+        height: 1px;
+        content: '';
+        background: var(--lime);
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin-top: 0;
+      }
+
+      h1 {
+        max-width: 840px;
+        margin-bottom: 20px;
+        font-family: var(--serif);
+        font-size: 118px;
+        font-weight: 700;
+        line-height: 0.88;
+        letter-spacing: 0;
+      }
+
+      .hero-copy {
+        max-width: 690px;
+        margin-bottom: 30px;
+        color: var(--soft);
+        font-size: 21px;
+        line-height: 1.55;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 34px;
+      }
+
+      .button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 48px;
+        border: 1px solid var(--line-strong);
+        border-radius: 6px;
+        padding: 13px 18px;
+        font-family: var(--mono);
+        font-size: 13px;
+        font-weight: 600;
+        transition:
+          transform 160ms ease,
+          border-color 160ms ease,
+          background 160ms ease,
+          color 160ms ease;
+      }
+
+      .button:hover {
+        transform: translateY(-1px);
+      }
+
+      .button-primary {
+        border-color: var(--lime);
+        background: var(--lime);
+        color: #12120d;
+      }
+
+      .button-primary:hover {
+        background: #efffb8;
+      }
+
+      .button-secondary {
+        background: rgba(246, 240, 223, 0.06);
+        color: var(--ink);
+      }
+
+      .button-secondary:hover {
+        border-color: var(--cyan);
+        background: rgba(121, 232, 255, 0.1);
+      }
+
+      .platforms {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        max-width: 720px;
+      }
+
+      .platforms a,
+      .platforms span {
+        border: 1px solid rgba(246, 240, 223, 0.14);
+        border-radius: 6px;
+        padding: 8px 10px;
+        color: var(--muted);
+        background: rgba(16, 16, 14, 0.62);
+        font-family: var(--mono);
+        font-size: 11px;
+      }
+
+      .platforms a:hover {
+        color: var(--ink);
+        border-color: var(--copper);
+      }
+
+      .hero-proof {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        width: min(1180px, calc(100% - 40px));
+        margin: 0 auto;
+        border-top: 1px solid var(--line);
+        border-left: 1px solid var(--line);
+        background: rgba(16, 16, 14, 0.9);
+      }
+
+      .proof-item {
+        min-height: 110px;
+        border-right: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+        padding: 18px;
+      }
+
+      .proof-item strong {
+        display: block;
+        margin-bottom: 8px;
+        color: var(--ink);
+        font-size: 15px;
+      }
+
+      .proof-item span {
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .section {
+        width: min(1180px, calc(100% - 40px));
+        margin: 0 auto;
+        padding: 92px 0;
+      }
+
+      .section-kicker {
+        margin-bottom: 14px;
+        color: var(--copper);
+        font-family: var(--mono);
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+
+      .section-heading {
+        max-width: 820px;
+        margin-bottom: 20px;
+        font-family: var(--serif);
+        font-size: 58px;
+        font-weight: 650;
+        line-height: 0.98;
+        letter-spacing: 0;
+      }
+
+      .section-lede {
+        max-width: 760px;
+        margin-bottom: 40px;
+        color: var(--muted);
+        font-size: 18px;
+        line-height: 1.7;
+      }
+
+      .workflow {
+        display: grid;
+        grid-template-columns: 0.9fr 1.1fr;
+        gap: 32px;
+        align-items: start;
+      }
+
+      .workflow-visual {
+        position: sticky;
+        top: 98px;
+        border: 1px solid var(--line);
+        background: var(--panel);
+        box-shadow: var(--shadow);
+      }
+
+      .terminal-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 48px;
+        border-bottom: 1px solid var(--line);
+        padding: 0 16px;
+        color: var(--muted);
+        font-family: var(--mono);
+        font-size: 12px;
+      }
+
+      .signal {
+        display: flex;
+        gap: 6px;
+      }
+
+      .signal span {
+        width: 8px;
+        height: 8px;
+        background: var(--line-strong);
+      }
+
+      .signal span:nth-child(1) {
+        background: var(--red);
+      }
+
+      .signal span:nth-child(2) {
+        background: var(--copper);
+      }
+
+      .signal span:nth-child(3) {
+        background: var(--lime);
+      }
+
+      .console {
+        display: grid;
+        gap: 12px;
+        padding: 18px;
+        font-family: var(--mono);
+        font-size: 13px;
+      }
+
+      .console-line {
+        display: grid;
+        grid-template-columns: 82px minmax(0, 1fr);
+        gap: 14px;
+        border: 1px solid rgba(246, 240, 223, 0.12);
+        background: rgba(0, 0, 0, 0.18);
+        padding: 12px;
+      }
+
+      .console-line em {
+        color: var(--lime);
+        font-style: normal;
+      }
+
+      .console-line span {
+        color: var(--muted);
+      }
+
+      .steps {
+        display: grid;
+        gap: 14px;
+      }
+
+      .step {
+        display: grid;
+        grid-template-columns: 54px minmax(0, 1fr);
+        gap: 16px;
+        border: 1px solid var(--line);
+        background: rgba(246, 240, 223, 0.035);
+        padding: 18px;
+      }
+
+      .step-number {
+        display: grid;
+        place-items: center;
+        width: 38px;
+        height: 38px;
+        border: 1px solid var(--line-strong);
+        color: var(--lime);
+        font-family: var(--mono);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .step h3 {
+        margin-bottom: 8px;
+        font-size: 20px;
+        line-height: 1.2;
+      }
+
+      .step p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 15px;
+        line-height: 1.6;
+      }
+
+      .image-band {
+        border-top: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+        background:
+          linear-gradient(90deg, rgba(214, 255, 121, 0.08), transparent 30%), rgba(0, 0, 0, 0.16);
+      }
+
+      .product-shot {
+        width: min(1280px, calc(100% - 40px));
+        margin: 0 auto;
+        padding: 58px 0;
+      }
+
+      .product-shot img {
+        width: 100%;
+        border: 1px solid var(--line-strong);
+        box-shadow: var(--shadow);
+      }
+
+      .feature-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        border-top: 1px solid var(--line);
+        border-left: 1px solid var(--line);
+      }
+
+      .feature {
+        min-height: 248px;
+        border-right: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+        background: rgba(246, 240, 223, 0.035);
+        padding: 24px;
+      }
+
+      .feature-tag {
+        display: inline-flex;
+        margin-bottom: 28px;
+        border: 1px solid rgba(246, 240, 223, 0.18);
+        padding: 7px 9px;
+        color: var(--cyan);
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .feature h3 {
+        margin-bottom: 12px;
+        font-size: 23px;
+        line-height: 1.15;
+      }
+
+      .feature p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 15px;
+        line-height: 1.65;
+      }
+
+      .download-panel {
+        display: grid;
+        grid-template-columns: 0.92fr 1.08fr;
+        gap: 0;
+        border: 1px solid var(--line);
+        background: var(--panel-solid);
+      }
+
+      .download-copy {
+        padding: 34px;
+        border-right: 1px solid var(--line);
+      }
+
+      .download-copy h2 {
+        margin-bottom: 18px;
+        font-family: var(--serif);
+        font-size: 48px;
+        line-height: 1;
+        letter-spacing: 0;
+      }
+
+      .download-copy p {
+        margin-bottom: 0;
+        color: var(--muted);
+        font-size: 17px;
+        line-height: 1.7;
+      }
+
+      .download-list {
+        display: grid;
+      }
+
+      .download-row {
+        display: grid;
+        grid-template-columns: 150px minmax(0, 1fr);
+        gap: 18px;
+        align-items: center;
+        min-height: 92px;
+        border-bottom: 1px solid var(--line);
+        padding: 20px 24px;
+      }
+
+      .download-row:last-child {
+        border-bottom: 0;
+      }
+
+      .download-row strong {
+        font-family: var(--mono);
+        font-size: 13px;
+        text-transform: uppercase;
+      }
+
+      .download-links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .download-links a {
+        border: 1px solid rgba(246, 240, 223, 0.16);
+        border-radius: 6px;
+        padding: 9px 10px;
+        color: var(--soft);
+        font-family: var(--mono);
+        font-size: 12px;
+      }
+
+      .download-links a:hover {
+        border-color: var(--lime);
+        color: var(--ink);
+      }
+
+      .integrations {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        max-width: 980px;
+      }
+
+      .integrations span {
+        border: 1px solid rgba(246, 240, 223, 0.15);
+        border-radius: 6px;
+        padding: 10px 12px;
+        color: var(--soft);
+        background: rgba(246, 240, 223, 0.04);
+        font-family: var(--mono);
+        font-size: 12px;
+      }
+
+      .site-footer {
+        border-top: 1px solid var(--line);
+        padding: 30px 0 42px;
+        color: var(--muted);
+      }
+
+      .footer-inner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: min(1180px, calc(100% - 40px));
+        margin: 0 auto;
+        gap: 20px;
+        font-family: var(--mono);
+        font-size: 12px;
+      }
+
+      .footer-links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 14px;
+      }
+
+      .footer-links a:hover {
+        color: var(--ink);
+      }
+
+      @keyframes rise {
+        from {
+          opacity: 0;
+          transform: translateY(18px);
+        }
+
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .eyebrow,
+      h1,
+      .hero-copy,
+      .actions,
+      .platforms,
+      .hero-proof {
+        animation: rise 620ms ease both;
+      }
+
+      h1 {
+        animation-delay: 80ms;
+      }
+
+      .hero-copy {
+        animation-delay: 160ms;
+      }
+
+      .actions {
+        animation-delay: 240ms;
+      }
+
+      .platforms {
+        animation-delay: 320ms;
+      }
+
+      .hero-proof {
+        animation-delay: 420ms;
+      }
+
+      @media (max-width: 960px) {
+        .nav {
+          width: min(100% - 28px, 1180px);
+        }
+
+        .nav-links a:not(.nav-cta) {
+          display: none;
+        }
+
+        h1 {
+          font-size: 76px;
+        }
+
+        .hero-copy {
+          font-size: 19px;
+        }
+
+        .hero-proof {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          width: min(100% - 28px, 1180px);
+        }
+
+        .section {
+          width: min(100% - 28px, 1180px);
+          padding: 72px 0;
+        }
+
+        .section-heading {
+          font-size: 44px;
+        }
+
+        .workflow,
+        .download-panel {
+          grid-template-columns: 1fr;
+        }
+
+        .workflow-visual {
+          position: relative;
+          top: auto;
+        }
+
+        .download-copy {
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+        }
+
+        .feature-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 640px) {
+        .site-header {
+          position: absolute;
+        }
+
+        .nav {
+          height: 62px;
+        }
+
+        .brand span:last-child {
+          max-width: 140px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .hero {
+          min-height: auto;
+          padding: 94px 0 42px;
+        }
+
+        .hero-media {
+          inset: 62px 0 0;
+        }
+
+        .hero-media img {
+          object-position: 66% 50%;
+          opacity: 0.38;
+        }
+
+        .hero-inner {
+          width: min(100% - 28px, 1180px);
+        }
+
+        h1 {
+          font-size: 56px;
+          line-height: 0.92;
+        }
+
+        .hero-copy {
+          font-size: 17px;
+        }
+
+        .button {
+          width: 100%;
+        }
+
+        .hero-proof,
+        .feature-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .proof-item {
+          min-height: auto;
+        }
+
+        .product-shot {
+          width: min(100% - 28px, 1280px);
+          padding: 34px 0;
+        }
+
+        .step {
+          grid-template-columns: 1fr;
+        }
+
+        .console-line,
+        .download-row {
+          grid-template-columns: 1fr;
+        }
+
+        .download-copy,
+        .download-row {
+          padding: 22px;
+        }
+
+        .download-copy h2 {
+          font-size: 38px;
+        }
+
+        .footer-inner {
+          align-items: flex-start;
+          flex-direction: column;
+          width: min(100% - 28px, 1180px);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          animation-duration: 1ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 1ms !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="site-header">
+      <nav class="nav" aria-label="Primary navigation">
+        <a class="brand" href="#top" aria-label="Yoda home">
+          <span class="brand-mark">Y</span>
+          <span>Yoda</span>
+        </a>
+        <div class="nav-links">
+          <a href="#workflow">Workflow</a>
+          <a href="#features">Features</a>
+          <a href="#download" class="nav-cta">Download</a>
+        </div>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-media" aria-hidden="true">
+          <img src="./images/cover.png" alt="" />
+        </div>
+        <div class="hero-inner">
+          <p class="eyebrow">Open source agent orchestration desktop</p>
+          <h1 id="hero-title">Yoda</h1>
+          <p class="hero-copy">
+            Run Codex, Claude Code, Gemini, OpenCode, and the rest of your agent CLIs in isolated
+            git worktrees. Dispatch work, inspect diffs, watch checks, and merge with one deliberate
+            review surface.
+          </p>
+          <div class="actions" aria-label="Primary actions">
+            <a
+              id="primary-download"
+              class="button button-primary"
+              href="https://github.com/lovstudio/yoda/releases/latest"
+              data-platform="all"
+              >Download Yoda</a
+            >
+            <a class="button button-secondary" href="https://github.com/lovstudio/yoda"
+              >View on GitHub</a
+            >
+          </div>
+          <div class="platforms" aria-label="Available platforms">
+            <span>Apache-2.0</span>
+            <a href="https://github.com/lovstudio/yoda/releases/latest/download/yoda-arm64.dmg"
+              >macOS DMG</a
+            >
+            <a href="https://github.com/lovstudio/yoda/releases/latest/download/yoda-x64.msi"
+              >Windows MSI</a
+            >
+            <a
+              href="https://github.com/lovstudio/yoda/releases/latest/download/yoda-x86_64.AppImage"
+              >Linux AppImage</a
+            >
+            <a href="https://github.com/lovstudio/yoda/releases/latest">All releases</a>
+          </div>
+        </div>
+      </section>
+
+      <div class="hero-proof" aria-label="Yoda capabilities">
+        <div class="proof-item">
+          <strong>Parallel worktrees</strong>
+          <span>Every task gets an isolated git workspace, so agents do not collide.</span>
+        </div>
+        <div class="proof-item">
+          <strong>Bring any CLI</strong>
+          <span>Use the agent providers already installed on your machine.</span>
+        </div>
+        <div class="proof-item">
+          <strong>Remote over SSH</strong>
+          <span>Run agents on remote hosts while keeping one local command center.</span>
+        </div>
+        <div class="proof-item">
+          <strong>Ticket to session</strong>
+          <span>Start from GitHub, Linear, Jira, GitLab, Forgejo, or Plain context.</span>
+        </div>
+        <div class="proof-item">
+          <strong>Review to merge</strong>
+          <span>Read diffs, inspect checks, and archive tasks without losing context.</span>
+        </div>
+      </div>
+
+      <section class="section" id="workflow" aria-labelledby="workflow-title">
+        <p class="section-kicker">How it works</p>
+        <h2 class="section-heading" id="workflow-title">
+          A calm operating model for parallel coding agents.
+        </h2>
+        <p class="section-lede">
+          Yoda turns the messy loop of prompts, terminals, branches, and pull requests into one
+          repeatable desktop workflow. Agents can move fast; your main branch stays controlled.
+        </p>
+        <div class="workflow">
+          <div class="workflow-visual" aria-label="Agent queue preview">
+            <div class="terminal-title">
+              <span>yoda dispatch queue</span>
+              <span class="signal" aria-hidden="true"><span></span><span></span><span></span></span>
+            </div>
+            <div class="console">
+              <div class="console-line">
+                <em>task-184</em><span>codex - refactor auth modal</span>
+              </div>
+              <div class="console-line">
+                <em>task-185</em><span>claude - isolate ssh escape path</span>
+              </div>
+              <div class="console-line">
+                <em>task-186</em><span>gemini - audit settings copy</span>
+              </div>
+              <div class="console-line">
+                <em>review</em><span>3 diffs ready, 2 checks pending</span>
+              </div>
+            </div>
+          </div>
+          <div class="steps">
+            <article class="step">
+              <div class="step-number">01</div>
+              <div>
+                <h3>Choose the work</h3>
+                <p>
+                  Start from a repo, a ticket, or a plain prompt. Yoda keeps the task name, branch,
+                  provider, and project context together.
+                </p>
+              </div>
+            </article>
+            <article class="step">
+              <div class="step-number">02</div>
+              <div>
+                <h3>Spawn an isolated worktree</h3>
+                <p>
+                  Each agent runs in a dedicated git worktree, locally or over SSH, with its own
+                  terminal and lifecycle.
+                </p>
+              </div>
+            </article>
+            <article class="step">
+              <div class="step-number">03</div>
+              <div>
+                <h3>Intervene without context loss</h3>
+                <p>
+                  Pause, redirect, inspect files, and compare conversations while every task keeps
+                  its own state.
+                </p>
+              </div>
+            </article>
+            <article class="step">
+              <div class="step-number">04</div>
+              <div>
+                <h3>Review and ship deliberately</h3>
+                <p>
+                  Check diffs, status, pull requests, and CI before merging or archiving the
+                  finished work.
+                </p>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <div class="image-band" aria-label="Yoda product screenshot">
+        <div class="product-shot">
+          <img
+            src="./images/cover.png"
+            alt="Yoda desktop interface showing agent task orchestration and project workflow"
+          />
+        </div>
+      </div>
+
+      <section class="section" id="features" aria-labelledby="features-title">
+        <p class="section-kicker">Built for serious repo work</p>
+        <h2 class="section-heading" id="features-title">
+          The desktop layer missing from agentic coding.
+        </h2>
+        <p class="section-lede">
+          Yoda is not another model provider. It is the control plane for the tools you already
+          trust, designed around local-first state, explicit review, and provider choice.
+        </p>
+        <div class="feature-grid">
+          <article class="feature">
+            <span class="feature-tag">Isolation</span>
+            <h3>Worktrees by default</h3>
+            <p>
+              Keep experiments, bug fixes, and refactors separate until you decide what deserves a
+              merge.
+            </p>
+          </article>
+          <article class="feature">
+            <span class="feature-tag">Providers</span>
+            <h3>Use the right agent per task</h3>
+            <p>
+              Switch between Codex, Claude Code, OpenCode, Gemini, Amp, Cursor, and more without
+              changing the project workflow.
+            </p>
+          </article>
+          <article class="feature">
+            <span class="feature-tag">Review</span>
+            <h3>Diffs, checks, and PRs together</h3>
+            <p>
+              See what changed, what passed, and what still needs attention before anything touches
+              your main branch.
+            </p>
+          </article>
+          <article class="feature">
+            <span class="feature-tag">Remote</span>
+            <h3>SSH development built in</h3>
+            <p>
+              Connect remote machines, mount projects, and run agent sessions close to the code and
+              dependencies.
+            </p>
+          </article>
+          <article class="feature">
+            <span class="feature-tag">Context</span>
+            <h3>Tickets become sessions</h3>
+            <p>
+              Pull issue context from GitHub, GitLab, Forgejo, Jira, Linear, or Plain directly into
+              a new task.
+            </p>
+          </article>
+          <article class="feature">
+            <span class="feature-tag">Local-first</span>
+            <h3>Your orchestration state stays local</h3>
+            <p>
+              Project state lives in a local database. The agent CLI you choose is the provider
+              boundary.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" aria-labelledby="providers-title">
+        <p class="section-kicker">Provider-agnostic</p>
+        <h2 class="section-heading" id="providers-title">Bring your agent stack with you.</h2>
+        <p class="section-lede">
+          Yoda wraps the command line agents teams already use, then gives them shared task
+          management, terminals, worktrees, MCP settings, and review affordances.
+        </p>
+        <div class="integrations" aria-label="Supported agent and workflow integrations">
+          <span>Codex</span>
+          <span>Claude Code</span>
+          <span>OpenCode</span>
+          <span>Gemini CLI</span>
+          <span>Amp</span>
+          <span>Cursor</span>
+          <span>Copilot</span>
+          <span>Kimi</span>
+          <span>Qwen</span>
+          <span>Linear</span>
+          <span>Jira</span>
+          <span>GitHub</span>
+          <span>GitLab</span>
+          <span>Forgejo</span>
+          <span>MCP</span>
+        </div>
+      </section>
+
+      <section class="section" id="download" aria-labelledby="download-title">
+        <div class="download-panel">
+          <div class="download-copy">
+            <p class="section-kicker">Download</p>
+            <h2 id="download-title">Install Yoda on your workstation.</h2>
+            <p>
+              Native desktop builds are published through GitHub Releases for macOS, Windows, and
+              Linux. Choose the installer that matches your machine.
+            </p>
+          </div>
+          <div class="download-list" aria-label="Download options">
+            <div class="download-row">
+              <strong>macOS</strong>
+              <div class="download-links">
+                <a href="https://github.com/lovstudio/yoda/releases/latest/download/yoda-arm64.dmg"
+                  >Apple Silicon DMG</a
+                >
+                <a href="https://github.com/lovstudio/yoda/releases/latest/download/yoda-x64.dmg"
+                  >Intel DMG</a
+                >
+                <a href="https://github.com/lovstudio/yoda/releases/latest/download/yoda-arm64.zip"
+                  >Apple Silicon ZIP</a
+                >
+                <a href="https://github.com/lovstudio/yoda/releases/latest/download/yoda-x64.zip"
+                  >Intel ZIP</a
+                >
+              </div>
+            </div>
+            <div class="download-row">
+              <strong>Windows</strong>
+              <div class="download-links">
+                <a href="https://github.com/lovstudio/yoda/releases/latest/download/yoda-x64.msi"
+                  >MSI installer</a
+                >
+                <a href="https://github.com/lovstudio/yoda/releases/latest/download/yoda-x64.exe"
+                  >EXE installer</a
+                >
+              </div>
+            </div>
+            <div class="download-row">
+              <strong>Linux</strong>
+              <div class="download-links">
+                <a
+                  href="https://github.com/lovstudio/yoda/releases/latest/download/yoda-x86_64.AppImage"
+                  >AppImage</a
+                >
+                <a href="https://github.com/lovstudio/yoda/releases/latest/download/yoda-amd64.deb"
+                  >Debian package</a
+                >
+                <a href="https://github.com/lovstudio/yoda/releases/latest/download/yoda-x86_64.rpm"
+                  >RPM package</a
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-inner">
+        <span>Apache-2.0 - LovStudio</span>
+        <div class="footer-links">
+          <a href="https://github.com/lovstudio/yoda">GitHub</a>
+          <a href="https://github.com/lovstudio/yoda/releases/latest">Releases</a>
+          <a href="https://lovstudio.ai">LovStudio</a>
+          <a href="./agentic-cli-matrix/">Agent CLI matrix</a>
+        </div>
+      </div>
+    </footer>
+    <script>
+      (() => {
+        const primaryDownload = document.querySelector('#primary-download');
+        if (!primaryDownload) return;
+
+        const downloads = {
+          macos: {
+            label: 'Download for macOS',
+            detail: 'Apple Silicon DMG. Intel builds are available in All releases.',
+            href: 'https://github.com/lovstudio/yoda/releases/latest/download/yoda-arm64.dmg',
+          },
+          windows: {
+            label: 'Download for Windows',
+            detail: 'Windows x64 MSI installer.',
+            href: 'https://github.com/lovstudio/yoda/releases/latest/download/yoda-x64.msi',
+          },
+          linux: {
+            label: 'Download for Linux',
+            detail: 'Linux x86_64 AppImage.',
+            href: 'https://github.com/lovstudio/yoda/releases/latest/download/yoda-x86_64.AppImage',
+          },
+          all: {
+            label: 'View desktop downloads',
+            detail: 'Choose macOS, Windows, or Linux builds.',
+            href: 'https://github.com/lovstudio/yoda/releases/latest',
+          },
+        };
+
+        const userAgent = (navigator.userAgent || '').toLowerCase();
+        const platformSignal = `${navigator.userAgentData?.platform || ''} ${
+          navigator.platform || ''
+        }`.toLowerCase();
+        const mobileSignal = /android|iphone|ipad|ipod|mobile/.test(userAgent);
+
+        let platform = 'all';
+        if (!mobileSignal) {
+          if (/windows|win32|win64/.test(userAgent) || /windows|win32|win64/.test(platformSignal)) {
+            platform = 'windows';
+          } else if (
+            /linux|x11|ubuntu|debian|fedora/.test(userAgent) ||
+            /linux|x11|ubuntu|debian|fedora/.test(platformSignal)
+          ) {
+            platform = 'linux';
+          } else if (
+            /macintosh|mac os x|darwin/.test(userAgent) ||
+            /mac|darwin/.test(platformSignal)
+          ) {
+            platform = 'macos';
+          }
+        }
+
+        const selected = downloads[platform];
+        primaryDownload.href = selected.href;
+        primaryDownload.textContent = selected.label;
+        primaryDownload.dataset.platform = platform;
+        primaryDownload.setAttribute('aria-label', `${selected.label}: ${selected.detail}`);
+        primaryDownload.title = selected.detail;
+      })();
+    </script>
+  </body>
+</html>
