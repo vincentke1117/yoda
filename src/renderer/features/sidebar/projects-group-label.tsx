@@ -98,13 +98,24 @@ export const ProjectsGroupLabel = observer(function ProjectsGroupLabel() {
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuCheckboxItem
-                checked={expressMode}
-                onCheckedChange={(checked) => updateHomeDraft({ expressMode: checked === true })}
-              >
-                <Zap className="size-3.5" />
-                {t('sidebar.expressMode')}
-              </DropdownMenuCheckboxItem>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <DropdownMenuCheckboxItem
+                      checked={expressMode}
+                      onCheckedChange={(checked) =>
+                        updateHomeDraft({ expressMode: checked === true })
+                      }
+                    >
+                      <Zap className="size-3.5" />
+                      {t('sidebar.expressMode')}
+                    </DropdownMenuCheckboxItem>
+                  }
+                />
+                <TooltipContent side="left" align="start" className="max-w-72">
+                  {t('sidebar.expressModeDescription')}
+                </TooltipContent>
+              </Tooltip>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>

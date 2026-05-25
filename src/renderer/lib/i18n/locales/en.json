@@ -89,6 +89,7 @@
     "collapseAll": "Collapse all",
     "clearManualOrder": "Reset task order",
     "expressMode": "Express mode",
+    "expressModeDescription": "When enabled, clicking the “+” on a project creates a task instantly using defaults (default branch + last-used agent), skipping the home configuration panel. Run the home flow once first so the defaults are populated.",
     "update": "Update",
     "creatingWorkspace": "Creating task workspace…",
     "loading": "Loading",

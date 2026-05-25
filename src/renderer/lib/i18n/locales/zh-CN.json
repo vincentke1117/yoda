@@ -138,7 +138,8 @@
       "saveFailed": "保存项目设置失败。"
     },
     "needsReview": "需要审查",
-    "expressMode": "快捷模式"
+    "expressMode": "快捷模式",
+    "expressModeDescription": "开启后，点击项目右侧的「+」会直接用默认配置创建任务（默认分支 + 上次使用的代理），跳过首页的任务配置面板。需要先在首页完成一次设置以确定默认值。"
   },
   "settings": {
     "title": "设置",
