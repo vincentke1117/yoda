@@ -146,6 +146,12 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
     navigate('task', { projectId, taskId });
   };
 
+  const resumeActiveConversation = () => {
+    const conversationId = provisionedTask?.taskView.tabManager.activeConversationId;
+    if (!conversationId) return;
+    void provisionedTask.conversations.resumeConversation(conversationId);
+  };
+
   const menuActions = {
     isPinned: task.data.isPinned,
     canPin,
@@ -181,6 +187,7 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
         onClick={() => {
           handleProvision();
           navigate('task', { projectId, taskId });
+          resumeActiveConversation();
         }}
         onDoubleClick={(e) => {
           e.stopPropagation();
