@@ -87,6 +87,7 @@ export class FrontendPty {
       lineHeight: 1.2,
       letterSpacing: 0,
       allowProposedApi: true,
+      minimumContrastRatio: 4.5,
       scrollOnUserInput: false,
       linkHandler: {
         activate: (_event: MouseEvent, text: string) => {
