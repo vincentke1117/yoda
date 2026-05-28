@@ -3,6 +3,7 @@ import { rpc } from '@renderer/lib/ipc';
 import { log } from '@renderer/utils/logger';
 import { cn } from '@renderer/utils/utils';
 import type { FrontendPty, SessionTheme } from './pty';
+import type { TerminalFileLinkOptions } from './terminal-file-links';
 import { usePty } from './use-pty';
 
 type Props = {
@@ -23,6 +24,7 @@ type Props = {
   onFirstMessage?: (message: string) => void;
   onEnterPress?: (message: string) => void;
   onInterruptPress?: () => void;
+  fileLinks?: TerminalFileLinkOptions | null;
 };
 
 const PtyPaneComponent = forwardRef<{ focus: () => void }, Props>(
@@ -40,6 +42,7 @@ const PtyPaneComponent = forwardRef<{ focus: () => void }, Props>(
       onFirstMessage,
       onEnterPress,
       onInterruptPress,
+      fileLinks,
     },
     ref
   ) => {
@@ -58,6 +61,7 @@ const PtyPaneComponent = forwardRef<{ focus: () => void }, Props>(
         onFirstMessage,
         onEnterPress,
         onInterruptPress,
+        fileLinks,
       },
       containerRef
     );
@@ -123,7 +127,6 @@ const PtyPaneComponent = forwardRef<{ focus: () => void }, Props>(
         <div
           ref={containerRef}
           data-terminal-container
-          className="p-2"
           style={{
             width: '100%',
             height: '100%',

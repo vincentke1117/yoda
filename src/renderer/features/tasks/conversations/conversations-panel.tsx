@@ -9,6 +9,7 @@ import { useProvisionedTask, useTaskViewContext } from '@renderer/features/tasks
 import { useShowModal } from '@renderer/lib/modal/modal-provider';
 import { PaneSizingProvider } from '@renderer/lib/pty/pane-sizing-context';
 import { PtyPane } from '@renderer/lib/pty/pty-pane';
+import type { TerminalFileLinkOptions } from '@renderer/lib/pty/terminal-file-links';
 import { TerminalSearchOverlay } from '@renderer/lib/pty/terminal-search-overlay';
 import { useTerminalSearch } from '@renderer/lib/pty/use-terminal-search';
 import { Button } from '@renderer/lib/ui/button';
@@ -105,9 +106,19 @@ export const ConversationsPanel = observer(function ConversationsPanel() {
     : undefined;
 
   const onInterruptPress = activeConversation ? () => activeConversation.clearWorking() : undefined;
+  const fileLinks = useMemo<TerminalFileLinkOptions>(
+    () => ({
+      workspaceRoot: provisioned.path,
+      onOpen: ({ filePath }) => {
+        provisioned.taskView.tabManager.openFile(filePath);
+        provisioned.taskView.setFocusedRegion('main');
+      },
+    }),
+    [provisioned.path, provisioned.taskView]
+  );
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col p-2">
       <div className="min-h-0 flex-1">
         <div
           ref={containerRef}
@@ -163,6 +174,7 @@ export const ConversationsPanel = observer(function ConversationsPanel() {
                       onInterruptPress={onInterruptPress}
                       mapShiftEnterToCtrlJ
                       remoteConnectionId={remoteConnectionId}
+                      fileLinks={fileLinks}
                     />
                   </div>
                 ) : null}
