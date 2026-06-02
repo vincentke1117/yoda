@@ -22,6 +22,7 @@ interface OpenInMenuProps {
   sshConnectionId?: string | null;
   className?: string;
   borderless?: boolean;
+  showLabel?: boolean;
 }
 
 export const OpenInMenu: React.FC<OpenInMenuProps> = ({
@@ -30,6 +31,7 @@ export const OpenInMenu: React.FC<OpenInMenuProps> = ({
   isRemote = false,
   sshConnectionId = null,
   borderless = false,
+  showLabel = false,
 }) => {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -140,10 +142,14 @@ export const OpenInMenu: React.FC<OpenInMenuProps> = ({
                   <img
                     src={icons[buttonAppId]}
                     alt={labels[buttonAppId] || buttonAppId}
-                    className={`size-3.5 rounded ${
-                      getAppById(buttonAppId)?.invertInDark ? 'dark:invert' : ''
-                    }`}
+                    className={cn(
+                      'size-3.5 rounded',
+                      getAppById(buttonAppId)?.invertInDark && 'dark:invert'
+                    )}
                   />
+                )}
+                {showLabel && buttonAppLabel && (
+                  <span className="ml-1.5 truncate text-xs">{buttonAppLabel}</span>
                 )}
               </button>
             }
