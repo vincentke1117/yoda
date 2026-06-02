@@ -194,9 +194,11 @@ export const SidebarVirtualList = observer(function SidebarVirtualList() {
                   );
                 }
                 return (
-                  <SortableRow key={row.projectId} dndId={dndId} style={vStyle}>
-                    <SidebarProjectItem projectId={row.projectId} />
-                  </SortableRow>
+                  <div key={row.projectId} style={vStyle}>
+                    <SortableRow dndId={dndId}>
+                      <SidebarProjectItem projectId={row.projectId} />
+                    </SortableRow>
+                  </div>
                 );
               }
               const taskNode = (
@@ -214,9 +216,9 @@ export const SidebarVirtualList = observer(function SidebarVirtualList() {
                 );
               }
               return (
-                <SortableRow key={`${row.projectId}:${row.taskId}`} dndId={dndId} style={vStyle}>
-                  {taskNode}
-                </SortableRow>
+                <div key={`${row.projectId}:${row.taskId}`} style={vStyle}>
+                  <SortableRow dndId={dndId}>{taskNode}</SortableRow>
+                </div>
               );
             })}
           </div>
@@ -275,17 +277,15 @@ const typeRestrictedCollision: CollisionDetection = (args) => {
 
 interface SortableRowProps {
   dndId: string;
-  style: React.CSSProperties;
   children: React.ReactNode;
 }
 
-function SortableRow({ dndId, style, children }: SortableRowProps) {
+function SortableRow({ dndId, children }: SortableRowProps) {
   const { setNodeRef, transform, transition, isDragging, listeners, attributes } = useSortable({
     id: dndId,
   });
 
-  const combinedStyle: React.CSSProperties = {
-    ...style,
+  const dndStyle: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.4 : 1,
@@ -293,7 +293,7 @@ function SortableRow({ dndId, style, children }: SortableRowProps) {
   };
 
   return (
-    <div ref={setNodeRef} style={combinedStyle} {...attributes} {...listeners}>
+    <div ref={setNodeRef} style={dndStyle} {...attributes} {...listeners}>
       {children}
     </div>
   );
