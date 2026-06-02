@@ -155,7 +155,17 @@ export class SkillsService {
           if (!stat.isDirectory()) continue;
           skillDir = realPath;
         } catch (err) {
-          log.warn(`Skipping skill "${entry.name}" in ${dir}: failed to resolve path`, err);
+          // Broken symlink: surface the dangling target so the user can fix it
+          // (e.g. `rm <skillDir>` to delete the bad link).
+          if (entry.isSymbolicLink() && (err as NodeJS.ErrnoException)?.code === 'ENOENT') {
+            const target = await fs.promises.readlink(skillDir).catch(() => '<unreadable>');
+            log.warn(
+              `Skipping skill "${entry.name}": broken symlink at ${skillDir} → ${target} (target does not exist). ` +
+                `Fix: \`rm "${skillDir}"\` or restore the target.`
+            );
+          } else {
+            log.warn(`Skipping skill "${entry.name}" in ${dir}: failed to resolve path`, err);
+          }
           continue;
         }
 
