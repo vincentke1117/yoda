@@ -1,7 +1,5 @@
 import type { IDisposable, Terminal } from '@xterm/xterm';
 
-const TRACE_IME_STORAGE_KEY = 'yoda:trace-ime';
-
 const IME_EVENT_TYPES = [
   'keydown',
   'keypress',
@@ -16,12 +14,7 @@ const IME_EVENT_TYPES = [
 type ImeEventType = (typeof IME_EVENT_TYPES)[number];
 
 function isImeTraceEnabled(): boolean {
-  try {
-    const value = window.localStorage.getItem(TRACE_IME_STORAGE_KEY);
-    return value === '1' || value === 'true';
-  } catch {
-    return false;
-  }
+  return false;
 }
 
 function isImeEventType(type: string): type is ImeEventType {
