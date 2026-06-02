@@ -697,7 +697,14 @@
       "markForReview": "标记为待审查",
       "copyBranchName": "复制分支名",
       "branchNameCopied": "分支名已复制",
-      "copyBranchNameFailed": "无法将分支名复制到剪贴板。"
+      "copyBranchNameFailed": "无法将分支名复制到剪贴板。",
+      "copySessionId": "复制会话 ID",
+      "sessionIdCopied": "会话 ID 已复制",
+      "copyProjectPath": "复制项目路径",
+      "projectPathCopied": "项目路径已复制",
+      "copyResumeCommand": "复制 resume 命令",
+      "resumeCommandCopied": "Resume 命令已复制",
+      "copyFailed": "无法复制到剪贴板。"
     }
   },
   "commandPalette": {
@@ -1385,7 +1392,7 @@
   "projects": {
     "selectProject": "选择项目",
     "noProject": "不使用项目",
-    "noProjectTooltip": "不会创建项目任务或 worktree。Agent 会在 ~/Documents/Yoda/<date>/<title> 中启动，这次会话不会关联任何项目。",
+    "noProjectTooltip": "会创建一个隐藏的草稿任务，不创建 worktree。Agent 在 ~/Documents/Yoda 中启动，不出现在项目列表里，并显示在侧栏的“对话”中。",
     "selectLocalProject": "选择本地项目",
     "selectProjectDirectory": "选择项目目录",
     "cannotAddProject": "无法添加项目",

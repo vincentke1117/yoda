@@ -42,6 +42,9 @@ interface TaskMenuActions {
   needsReview: boolean;
   canMarkReview: boolean;
   branchName?: string;
+  sessionId?: string;
+  projectPath?: string;
+  resumeCommand?: string;
   openDetailsLabel?: string;
   onOpenDetails?: () => void;
   onPin: () => void;
@@ -229,7 +232,55 @@ function useMenuItems(actions: TaskMenuActions): MenuItemDescriptor[] {
       icon: Copy,
       label: t('tasks.context.copyBranchName'),
       onSelect: () => {
-        void copyBranchName(branch, t);
+        void copyText(branch, t, {
+          success: t('tasks.context.branchNameCopied'),
+          failure: t('tasks.context.copyBranchNameFailed'),
+        });
+      },
+    });
+  }
+  if (actions.sessionId) {
+    const sessionId = actions.sessionId;
+    items.push({
+      key: 'copy-session-id',
+      group: 4,
+      icon: Copy,
+      label: t('tasks.context.copySessionId'),
+      onSelect: () => {
+        void copyText(sessionId, t, {
+          success: t('tasks.context.sessionIdCopied'),
+          failure: t('tasks.context.copyFailed'),
+        });
+      },
+    });
+  }
+  if (actions.projectPath) {
+    const path = actions.projectPath;
+    items.push({
+      key: 'copy-project-path',
+      group: 4,
+      icon: Copy,
+      label: t('tasks.context.copyProjectPath'),
+      onSelect: () => {
+        void copyText(path, t, {
+          success: t('tasks.context.projectPathCopied'),
+          failure: t('tasks.context.copyFailed'),
+        });
+      },
+    });
+  }
+  if (actions.resumeCommand) {
+    const cmd = actions.resumeCommand;
+    items.push({
+      key: 'copy-resume-command',
+      group: 4,
+      icon: Copy,
+      label: t('tasks.context.copyResumeCommand'),
+      onSelect: () => {
+        void copyText(cmd, t, {
+          success: t('tasks.context.resumeCommandCopied'),
+          failure: t('tasks.context.copyFailed'),
+        });
       },
     });
   }
@@ -247,14 +298,18 @@ function useMenuItems(actions: TaskMenuActions): MenuItemDescriptor[] {
   return items;
 }
 
-async function copyBranchName(branchName: string, t: TFunction) {
+async function copyText(
+  value: string,
+  t: TFunction,
+  messages: { success: string; failure: string }
+) {
   try {
-    await navigator.clipboard.writeText(branchName);
-    toast({ title: t('tasks.context.branchNameCopied') });
+    await navigator.clipboard.writeText(value);
+    toast({ title: messages.success });
   } catch {
     toast({
       title: t('auth.copyFailed'),
-      description: t('tasks.context.copyBranchNameFailed'),
+      description: messages.failure,
       variant: 'destructive',
     });
   }

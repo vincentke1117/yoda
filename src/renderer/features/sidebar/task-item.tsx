@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   AGENT_PROVIDER_IDS,
+  getProvider,
   isValidProviderId,
   type AgentProviderId,
 } from '@shared/agent-provider-registry';
@@ -158,6 +159,19 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
   const project = getProjectStore(projectId);
   const projectName =
     project?.state === 'unregistered' ? projectId : (project?.displayName ?? projectId);
+  const projectPath = project?.data?.path;
+
+  const activeConversationId = provisionedTask?.taskView.tabManager.activeConversationId;
+  const activeConversation = activeConversationId
+    ? provisionedTask?.conversations.conversations.get(activeConversationId)?.data
+    : undefined;
+  const resumeCommand = activeConversation
+    ? buildResumeCommand({
+        providerId: activeConversation.providerId,
+        sessionId: activeConversation.id,
+        cwd: provisionedTask?.path ?? projectPath,
+      })
+    : undefined;
 
   const handleConfigureScripts = () => showManageRunScripts({ projectId, projectName });
 
@@ -198,6 +212,9 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
     needsReview,
     canMarkReview,
     branchName,
+    sessionId: activeConversation?.id,
+    projectPath,
+    resumeCommand,
     openDetailsLabel: t('sidebar.openSessionDetails'),
     onOpenDetails: handleOpenDetails,
     onPin: () => void task.setPinned(true),
@@ -338,6 +355,32 @@ function getSidebarAgentBadges(stats: Record<string, number>): SidebarAgentBadge
     const count = counts.get(providerId);
     return count === undefined ? [] : [{ providerId, count }];
   });
+}
+
+function shellQuote(value: string): string {
+  if (value.length > 0 && /^[A-Za-z0-9_\-./:=@%+,]+$/.test(value)) return value;
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+function buildResumeCommand(input: {
+  providerId: AgentProviderId;
+  sessionId: string;
+  cwd?: string;
+}): string | undefined {
+  const provider = getProvider(input.providerId);
+  if (!provider?.cli) return undefined;
+  const parts: string[] = [provider.cli];
+  parts.push(...(provider.defaultArgs ?? []));
+  if (provider.resumeFlag) {
+    parts.push(...provider.resumeFlag.split(/\s+/).filter(Boolean));
+    if (provider.sessionIdFlag) parts.push(input.sessionId);
+  } else if (provider.sessionIdFlag) {
+    parts.push(...provider.sessionIdFlag.split(/\s+/).filter(Boolean), input.sessionId);
+  } else {
+    return undefined;
+  }
+  const cmd = parts.map(shellQuote).join(' ');
+  return input.cwd ? `cd ${shellQuote(input.cwd)} && ${cmd}` : cmd;
 }
 
 function SidebarTaskAgentBadges({ badges }: { badges: SidebarAgentBadge[] }) {
