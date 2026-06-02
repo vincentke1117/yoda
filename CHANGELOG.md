@@ -6,6 +6,43 @@ This project resets to **0.1.0** with the rebrand from `emdash` to `yoda`. Older
 release history (`v0.4.x`, `v1.1.x`) belongs to the upstream `emdash` codebase
 and is preserved in git tags only.
 
+## 0.3.7 — 2026-06-02
+
+### Added
+
+- Add Codex context-panel support with runtime metadata, system/developer
+  messages, memory files, dynamic tools, turn context, and session prompts.
+- Add live Codex/Claude skill and agent scanning so context details refresh from
+  user, project, and plugin directories instead of relying only on startup
+  transcript snapshots.
+- Add tmux session persistence on app quit, including keep-running decisions,
+  fallback notifications when tmux is unavailable, and install actions from
+  task settings.
+- Add task context-menu copy actions for session id, project path, and provider
+  resume command.
+- Add Typeless voice-input integration on the home prompt.
+
+### Changed
+
+- Move projectless workflows into the regular task pipeline through the internal
+  Drafts project, including automatic return to Home after Drafts sessions exit.
+- Refresh context-panel layout with scrollable long sections, grouped MCP tools,
+  cleaner skill parsing, and denser context rows.
+- Let task titles start rename on click and show concrete IDE names in Open In
+  controls.
+- Upgrade Electron to 41.7.1 and align native dependency rebuilding for the new
+  runtime.
+
+### Fixed
+
+- Harden startup and repository handling for non-git directories and broken
+  skill symlinks.
+- Fix sidebar HMR row positioning by separating virtualizer layout from drag
+  transforms.
+- Fix Vitest better-sqlite3 ABI mismatches by using a Node-ABI test shim while
+  preserving Electron ABI rebuilds for app runtime.
+- Suppress noisy IME diagnostic logging.
+
 ## 0.3.6 — 2026-06-02
 
 ### Added
