@@ -105,11 +105,7 @@ export class ConversationManagerStore {
       .getConversationsForTask(this.projectId, this.taskId)
       .then((conversations) => {
         runInAction(() => {
-          for (const conversation of conversations) {
-            const store = new ConversationStore(conversation);
-            this.conversations.set(conversation.id, store);
-            void store.session.connect();
-          }
+          this.mergeConversations(conversations);
         });
       })
       .catch((error: unknown) => {
@@ -120,6 +116,36 @@ export class ConversationManagerStore {
         this._loadPromise = null;
       });
     return this._loadPromise;
+  }
+
+  async ensureConversation(conversationId: string): Promise<boolean> {
+    if (!this._loaded || this._loadPromise) {
+      await this.load();
+    }
+    if (this.conversations.has(conversationId)) return true;
+
+    const conversations = await rpc.conversations.getConversationsForTask(
+      this.projectId,
+      this.taskId
+    );
+    runInAction(() => {
+      this._loaded = true;
+      this.mergeConversations(conversations);
+    });
+    return this.conversations.has(conversationId);
+  }
+
+  private mergeConversations(conversations: Conversation[]): void {
+    for (const conversation of conversations) {
+      const existing = this.conversations.get(conversation.id);
+      if (existing) {
+        existing.data = conversation;
+        continue;
+      }
+      const store = new ConversationStore(conversation);
+      this.conversations.set(conversation.id, store);
+      void store.session.connect();
+    }
   }
 
   async createConversation(params: CreateConversationParams): Promise<Conversation> {

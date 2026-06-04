@@ -18,7 +18,7 @@ export const SETTINGS_DEFAULTS = {
     pushOnCreate: true,
     createBranchAndWorktree: true,
     branchPrefix: 'yoda',
-    tmuxByDefault: false,
+    tmuxByDefault: true,
   },
   localProject: () => ({
     defaultProjectsDirectory: join(homedir(), 'yoda', 'repositories'),

@@ -24,6 +24,8 @@ import { appSettingsService } from '@main/core/settings/settings-service';
 import { events } from '@main/lib/events';
 import { log } from '@main/lib/logger';
 import { telemetryService } from '@main/lib/telemetry';
+import { resolveAgentResumeSessionId } from '../codex-session-id';
+import { ensureCodexThreadUnarchived } from '../codex-unarchive';
 import { buildAgentCommand } from './agent-command';
 import { resolveProviderEnv } from './provider-env';
 
@@ -93,13 +95,25 @@ export class LocalConversationProvider implements ConversationProvider {
     await this.prepareHookConfig(conversation.providerId);
 
     const providerConfig = await providerOverrideSettings.getItem(conversation.providerId);
+    const agentSessionId = isResuming
+      ? resolveAgentResumeSessionId(conversation, this.taskPath)
+      : conversation.id;
+    if (isResuming) {
+      await ensureCodexThreadUnarchived({
+        providerId: conversation.providerId,
+        providerConfig,
+        threadId: agentSessionId,
+        ctx: this.ctx,
+      });
+    }
     const { command, args } = buildAgentCommand({
       providerId: conversation.providerId,
       providerConfig,
       autoApprove: conversation.autoApprove,
-      sessionId: conversation.id,
+      sessionId: agentSessionId,
       isResuming,
       initialPrompt,
+      workingDirectory: this.taskPath,
     });
     const providerEnv = resolveProviderEnv(providerConfig);
 

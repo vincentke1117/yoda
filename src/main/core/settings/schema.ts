@@ -131,6 +131,7 @@ export const keyboardSettingsSchema = z
 export const providerCustomConfigEntrySchema = z.object({
   cli: z.string().optional(),
   resumeFlag: z.string().optional(),
+  resumeSessionIdArg: z.boolean().optional(),
   defaultArgs: z.array(z.string()).optional(),
   autoApproveFlag: z.string().optional(),
   initialPromptFlag: z.string().optional(),
@@ -148,6 +149,7 @@ export const providerConfigDefaults = Object.fromEntries(
     {
       ...(p.cli ? { cli: p.cli } : {}),
       ...(p.resumeFlag ? { resumeFlag: p.resumeFlag } : {}),
+      ...(p.resumeSessionIdArg ? { resumeSessionIdArg: p.resumeSessionIdArg } : {}),
       ...(p.autoApproveFlag ? { autoApproveFlag: p.autoApproveFlag } : {}),
       ...(p.initialPromptFlag !== undefined ? { initialPromptFlag: p.initialPromptFlag } : {}),
       ...(p.defaultArgs ? { defaultArgs: p.defaultArgs } : {}),

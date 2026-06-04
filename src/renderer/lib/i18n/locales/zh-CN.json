@@ -116,6 +116,7 @@
     "openSessionDetails": "打开会话详情",
     "openTaskDetails": "打开任务详情",
     "archiveProject": "归档项目",
+    "archiveProjectTasks": "归档该项目下所有需求",
     "pinProject": "固定项目",
     "unpinProject": "取消固定项目",
     "copyProjectPath": "复制项目路径",
@@ -553,6 +554,10 @@
       "deleteTitle": "删除会话",
       "deleteDescription": "“{{title}}” 将被永久删除，此操作无法撤销。"
     },
+    "tabs": {
+      "close": "关闭标签页",
+      "preview": "预览"
+    },
     "files": "文件",
     "toggleTerminal": "切换终端",
     "rename": {
@@ -727,12 +732,27 @@
       "copyBranchName": "复制分支名",
       "branchNameCopied": "分支名已复制",
       "copyBranchNameFailed": "无法将分支名复制到剪贴板。",
+      "copySessionBasicInfo": "复制会话基本信息",
+      "sessionBasicInfoCopied": "会话基本信息已复制",
       "copySessionId": "复制会话 ID",
       "sessionIdCopied": "会话 ID 已复制",
       "copyProjectPath": "复制项目路径",
       "projectPathCopied": "项目路径已复制",
       "copyResumeCommand": "复制 resume 命令",
       "resumeCommandCopied": "Resume 命令已复制",
+      "sessionInfo": {
+        "project": "项目",
+        "projectId": "项目 ID",
+        "task": "任务",
+        "taskId": "任务 ID",
+        "agent": "代理",
+        "sessionTitle": "会话标题",
+        "sessionId": "会话 ID",
+        "branch": "分支",
+        "projectPath": "项目路径",
+        "workingDirectory": "工作目录",
+        "resumeCommand": "Resume 命令"
+      },
       "copyFailed": "无法复制到剪贴板。"
     }
   },
@@ -1438,8 +1458,8 @@
     "projectNotFound": "项目未找到",
     "projectDirectoryMissing": "项目目录缺失。",
     "removeProject": "移除项目",
-    "deleteProjectTitle": "删除项目",
-    "deleteProjectDescription": "“{{name}}” 将被删除。项目文件夹和 worktree 会保留在文件系统中。",
+    "deleteProjectTitle": "移除项目",
+    "deleteProjectDescription": "“{{name}}” 将从 Yoda 中移除。项目文件夹和 worktree 会保留在文件系统中。",
     "overview": "概览",
     "openOnGitHub": "在 GitHub 打开",
     "currentBranch": "当前分支",
@@ -1476,6 +1496,7 @@
     "quickActions": {
       "title": "快捷操作",
       "manage": "管理快捷操作",
+      "newRequirement": "新建需求",
       "empty": "尚未配置快捷操作。",
       "addAction": "添加操作",
       "labelPlaceholder": "标签",

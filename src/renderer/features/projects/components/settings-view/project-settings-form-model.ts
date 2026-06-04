@@ -52,7 +52,7 @@ export function settingsToForm(
   return {
     preservePatterns: (s.preservePatterns ?? []).join('\n'),
     shellSetup: s.shellSetup ?? '',
-    tmux: s.tmux ?? false,
+    tmux: s.tmux ?? true,
     scriptSetup: normalizeScript(s.scripts?.setup),
     scriptRun: normalizeScript(s.scripts?.run),
     scriptTeardown: normalizeScript(s.scripts?.teardown),

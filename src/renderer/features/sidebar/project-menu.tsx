@@ -10,6 +10,7 @@ import {
   PinOff,
   RotateCcw,
   Settings2,
+  Trash2,
 } from 'lucide-react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
@@ -43,7 +44,10 @@ interface ProjectMenuActions {
   onChangeSshConnection?: () => void;
   onConfigureScripts?: () => void;
   onRename?: () => void;
-  onArchive: () => void;
+  canArchiveProjectTasks: boolean;
+  canRemoveProject: boolean;
+  onArchiveProjectTasks: () => void;
+  onRemoveProject: () => void;
 }
 
 interface MenuItemDescriptor {
@@ -158,13 +162,23 @@ function useMenuItems(actions: ProjectMenuActions): MenuItemDescriptor[] {
     }
   }
 
-  // group 4 — archive
+  // group 4 — project lifecycle
   items.push({
-    key: 'archive',
+    key: 'archive-project-tasks',
     group: 4,
     icon: Archive,
-    label: t('sidebar.archiveProject'),
-    onSelect: actions.onArchive,
+    label: t('sidebar.archiveProjectTasks'),
+    onSelect: actions.onArchiveProjectTasks,
+    disabled: !actions.canArchiveProjectTasks,
+  });
+  items.push({
+    key: 'remove-project',
+    group: 4,
+    icon: Trash2,
+    label: t('projects.removeProject'),
+    onSelect: actions.onRemoveProject,
+    disabled: !actions.canRemoveProject,
+    variant: 'destructive',
   });
 
   return items;

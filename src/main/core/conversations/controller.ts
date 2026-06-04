@@ -5,6 +5,7 @@ import { getClaudeSessionContext } from './getClaudeSessionContext';
 import { getClaudeSessionMetadata } from './getClaudeSessionMetadata';
 import { getCodexSessionContext } from './getCodexSessionContext';
 import { getConversations } from './getConversations';
+import { getConversationSessionInfo } from './getConversationSessionInfo';
 import { getConversationsForTask } from './getConversationsForTask';
 import { renameConversation } from './renameConversation';
 import { resumeConversation } from './resumeConversation';
@@ -21,4 +22,5 @@ export const conversationController = createRPCController({
   getClaudeSessionMetadata,
   getClaudeSessionContext,
   getCodexSessionContext,
+  getConversationSessionInfo,
 });

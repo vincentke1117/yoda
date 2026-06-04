@@ -112,6 +112,72 @@ export function findRecentCodexThreadTitle(params: {
   });
 }
 
+export function findCodexThreadTitleByTitle(params: {
+  statePath: string;
+  cwd: string;
+  title: string;
+}): CodexThreadTitle | undefined {
+  return withCodexState(params.statePath, (db) => {
+    const row = db
+      .prepare(
+        `
+          SELECT
+            id,
+            cwd,
+            title,
+            COALESCE(created_at_ms, created_at * 1000) AS createdAtMs,
+            COALESCE(updated_at_ms, updated_at * 1000) AS updatedAtMs
+          FROM threads
+          WHERE cwd = ?
+            AND archived = 0
+            AND (
+              title = ?
+              OR first_user_message = ?
+              OR preview = ?
+            )
+          ORDER BY COALESCE(updated_at_ms, updated_at * 1000) DESC, id DESC
+          LIMIT 1
+        `
+      )
+      .get(params.cwd, params.title, params.title, params.title);
+    return parseCodexThreadTitle(row);
+  });
+}
+
+export function findClosestCodexThreadTitleByCreatedAt(params: {
+  statePath: string;
+  cwd: string;
+  targetCreatedAtMs: number;
+  maxDistanceMs: number;
+}): CodexThreadTitle | undefined {
+  const minCreatedAtMs = params.targetCreatedAtMs - params.maxDistanceMs;
+  const maxCreatedAtMs = params.targetCreatedAtMs + params.maxDistanceMs;
+  return withCodexState(params.statePath, (db) => {
+    const row = db
+      .prepare(
+        `
+          SELECT
+            id,
+            cwd,
+            title,
+            COALESCE(created_at_ms, created_at * 1000) AS createdAtMs,
+            COALESCE(updated_at_ms, updated_at * 1000) AS updatedAtMs
+          FROM threads
+          WHERE cwd = ?
+            AND archived = 0
+            AND COALESCE(created_at_ms, created_at * 1000) >= ?
+            AND COALESCE(created_at_ms, created_at * 1000) <= ?
+          ORDER BY ABS(COALESCE(created_at_ms, created_at * 1000) - ?) ASC,
+            COALESCE(created_at_ms, created_at * 1000) ASC,
+            id ASC
+          LIMIT 1
+        `
+      )
+      .get(params.cwd, minCreatedAtMs, maxCreatedAtMs, params.targetCreatedAtMs);
+    return parseCodexThreadTitle(row);
+  });
+}
+
 export function readCodexThreadTitle(
   statePath: string,
   threadId: string
@@ -133,6 +199,29 @@ export function readCodexThreadTitle(
       )
       .get(threadId);
     return parseCodexThreadTitle(row);
+  });
+}
+
+export function readCodexThreadArchiveStatus(
+  statePath: string,
+  threadId: string
+): boolean | undefined {
+  return withCodexState(statePath, (db) => {
+    const row = db
+      .prepare(
+        `
+          SELECT archived
+          FROM threads
+          WHERE id = ?
+          LIMIT 1
+        `
+      )
+      .get(threadId);
+    if (typeof row !== 'object' || row === null) return undefined;
+    const archived = (row as Record<string, unknown>).archived;
+    if (archived === true || archived === 1) return true;
+    if (archived === false || archived === 0) return false;
+    return undefined;
   });
 }
 

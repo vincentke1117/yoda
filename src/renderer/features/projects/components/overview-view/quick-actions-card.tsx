@@ -1,4 +1,4 @@
-import { Play, Settings2 } from 'lucide-react';
+import { Play, Plus, Settings2 } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -41,6 +41,10 @@ export const QuickActionsCard = observer(function QuickActionsCard({
 
   const [runningId, setRunningId] = useState<string | null>(null);
 
+  const handleNewRequirement = () => {
+    navigate('home', { projectId });
+  };
+
   const handleRun = async (action: QuickAction) => {
     if (!project || !providerId) return;
     setRunningId(action.id);
@@ -74,26 +78,26 @@ export const QuickActionsCard = observer(function QuickActionsCard({
           {t('projects.quickActions.manage')}
         </Button>
       </header>
-      {actions.length === 0 ? (
-        <p className="text-xs text-foreground-muted">{t('projects.quickActions.empty')}</p>
-      ) : (
-        <div className="flex flex-wrap gap-2">
-          {actions.map((action) => (
-            <Button
-              key={action.id}
-              variant="outline"
-              size="sm"
-              disabled={!project || !providerId || runningId !== null}
-              onClick={() => void handleRun(action)}
-            >
-              <Play className="size-3.5" />
-              {runningId === action.id
-                ? t('projects.quickActions.running', { label: action.label })
-                : action.label}
-            </Button>
-          ))}
-        </div>
-      )}
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" size="sm" onClick={handleNewRequirement}>
+          <Plus className="size-3.5" />
+          {t('projects.quickActions.newRequirement')}
+        </Button>
+        {actions.map((action) => (
+          <Button
+            key={action.id}
+            variant="outline"
+            size="sm"
+            disabled={!project || !providerId || runningId !== null}
+            onClick={() => void handleRun(action)}
+          >
+            <Play className="size-3.5" />
+            {runningId === action.id
+              ? t('projects.quickActions.running', { label: action.label })
+              : action.label}
+          </Button>
+        ))}
+      </div>
     </section>
   );
 });

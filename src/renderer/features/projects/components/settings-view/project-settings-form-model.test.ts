@@ -18,7 +18,7 @@ function makeForm(overrides: Partial<FormState> = {}): FormState {
   return {
     preservePatterns: '',
     shellSetup: '',
-    tmux: false,
+    tmux: true,
     scriptSetup: '',
     scriptRun: '',
     scriptTeardown: '',
@@ -76,6 +76,10 @@ describe('project settings form model', () => {
       settingsToForm({ defaultBranch: { name: 'develop', remote: true } }, 'origin', [origin])
         .defaultBranch
     ).toEqual({ type: 'remote', branch: 'develop', remote: origin });
+  });
+
+  it('defaults missing tmux project settings to enabled', () => {
+    expect(settingsToForm({}, 'origin', [origin]).tmux).toBe(true);
   });
 
   it('preserves legacy script arrays as newline separated commands', () => {

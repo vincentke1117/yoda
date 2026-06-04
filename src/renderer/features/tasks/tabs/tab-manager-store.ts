@@ -92,6 +92,25 @@ interface OpenFileOptions {
   column?: number;
 }
 
+const SQLITE_TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
+
+function conversationTime(value: string | null | undefined): number {
+  if (!value) return Number.NEGATIVE_INFINITY;
+  const normalized = SQLITE_TIMESTAMP_RE.test(value) ? `${value.replace(' ', 'T')}Z` : value;
+  const ts = Date.parse(normalized);
+  return Number.isNaN(ts) ? Number.NEGATIVE_INFINITY : ts;
+}
+
+function compareConversationOpenPriority(a: ConversationStore, b: ConversationStore): number {
+  const at = conversationTime(a.data.lastInteractedAt);
+  const bt = conversationTime(b.data.lastInteractedAt);
+  if (at !== bt) return bt - at;
+  if (a.isInitialConversation !== b.isInitialConversation) {
+    return a.isInitialConversation ? -1 : 1;
+  }
+  return a.data.id.localeCompare(b.data.id);
+}
+
 // ---------------------------------------------------------------------------
 // TabManagerStore
 // ---------------------------------------------------------------------------
@@ -115,6 +134,7 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
 
   private readonly conversations: ConversationManagerStore;
   private readonly disposers: (() => void)[] = [];
+  private lastClosedConversationId: string | undefined = undefined;
 
   constructor(conversations: ConversationManagerStore, workspaceId: string) {
     this.conversations = conversations;
@@ -144,6 +164,7 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
       openDiffPreview: action,
       closeTab: action,
       closeActiveTab: action,
+      openLastConversation: action,
       setActiveTab: action,
       reorderTabs: action,
       setNextTabActive: action,
@@ -589,6 +610,17 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
     return this._findConversationEntry(conversationId) !== undefined;
   }
 
+  /**
+   * Reopen the most recently closed conversation when possible; otherwise open
+   * the most recently interacted conversation for this task.
+   */
+  openLastConversation(): boolean {
+    const conversationId = this._conversationIdToOpen();
+    if (!conversationId) return false;
+    this.openConversation(conversationId);
+    return true;
+  }
+
   // ---------------------------------------------------------------------------
   // Snapshot
   // ---------------------------------------------------------------------------
@@ -679,8 +711,29 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
     return undefined;
   }
 
+  private _conversationIdToOpen(): string | undefined {
+    if (
+      this.lastClosedConversationId &&
+      this.conversations.conversations.has(this.lastClosedConversationId)
+    ) {
+      return this.lastClosedConversationId;
+    }
+
+    let best: ConversationStore | undefined;
+    for (const conversation of this.conversations.conversations.values()) {
+      if (!best || compareConversationOpenPriority(conversation, best) < 0) {
+        best = conversation;
+      }
+    }
+    return best?.data.id;
+  }
+
   private _removeTab(id: string): void {
-    if (!this.entries.has(id)) return;
+    const entry = this.entries.get(id);
+    if (!entry) return;
+    if (entry.kind === 'conversation') {
+      this.lastClosedConversationId = entry.conversationId;
+    }
     this.entries.delete(id);
     removeTabId(this, id);
   }

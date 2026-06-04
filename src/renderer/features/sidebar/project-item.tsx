@@ -26,6 +26,7 @@ import {
 import { useAppSettingsKey } from '@renderer/features/settings/use-app-settings-key';
 import { useEffectiveProvider } from '@renderer/features/tasks/conversations/use-effective-provider';
 import { useAgentAutoApproveDefaults } from '@renderer/features/tasks/hooks/useAgentAutoApproveDefaults';
+import { isRegistered } from '@renderer/features/tasks/stores/task';
 import { ConnectionStatusDot } from '@renderer/lib/components/connection-status-dot';
 import { rpc } from '@renderer/lib/ipc';
 import {
@@ -60,9 +61,11 @@ export const SidebarProjectItem = observer(function SidebarProjectItem({
   const showChangeConnectionModal = useShowModal('changeProjectConnectionModal');
   const showManageRunScripts = useShowModal('manageRunScriptsModal');
   const showRenameProject = useShowModal('renameProjectModal');
+  const showConfirmRemoveProject = useShowModal('confirmActionModal');
   const [isMenuOpen, setMenuOpen] = useState(false);
 
   const project = getProjectStore(projectId);
+  const mountedProject = asMounted(project);
 
   const prefetchRepository = useCallback(() => {
     const repo = getRepositoryStore(projectId);
@@ -91,10 +94,8 @@ export const SidebarProjectItem = observer(function SidebarProjectItem({
 
   const { value: homeDraft } = useAppSettingsKey('homeDraft');
   const expressMode = homeDraft?.expressMode ?? false;
-  const projectStoreForExpress = getProjectStore(projectId);
-  const mountedForExpress = asMounted(projectStoreForExpress);
   const expressConnectionId =
-    mountedForExpress?.data?.type === 'ssh' ? mountedForExpress.data.connectionId : undefined;
+    mountedProject?.data?.type === 'ssh' ? mountedProject.data.connectionId : undefined;
   const { providerId: expressProviderId } = useEffectiveProvider(expressConnectionId);
   const expressAutoApproveDefaults = useAgentAutoApproveDefaults();
 
@@ -107,6 +108,11 @@ export const SidebarProjectItem = observer(function SidebarProjectItem({
   const currentTaskId = currentView === 'task' ? taskParams.taskId : null;
 
   const isProjectActive = currentProjectId === projectId && !currentTaskId;
+  const activeTaskCount = mountedProject
+    ? Array.from(mountedProject.taskManager.tasks.values()).filter(
+        (task) => isRegistered(task) && !task.data.archivedAt
+      ).length
+    : 0;
 
   useEffect(() => {
     if (isProjectActive) prefetchRepository();
@@ -115,7 +121,7 @@ export const SidebarProjectItem = observer(function SidebarProjectItem({
   const isExpanded = sidebarStore.expandedProjectIds.has(projectId);
 
   const handleAddTask = useCallback(async () => {
-    const mounted = mountedForExpress;
+    const mounted = mountedProject;
     const repo = getRepositoryStore(projectId);
     const defaultBranch = repo?.defaultBranch;
     const isUnborn = repo?.isUnborn ?? false;
@@ -156,7 +162,7 @@ export const SidebarProjectItem = observer(function SidebarProjectItem({
     expressProviderId,
     expressAutoApproveDefaults,
     homeDraft?.strategyKind,
-    mountedForExpress,
+    mountedProject,
     navigate,
     projectId,
   ]);
@@ -192,9 +198,28 @@ export const SidebarProjectItem = observer(function SidebarProjectItem({
     );
   };
 
-  const handleArchive = () => {
-    void getProjectManagerStore().archiveProject(projectId);
-    if (isProjectActive) navigate('home');
+  const handleArchiveProjectTasks = () => {
+    if (!mountedProject || activeTaskCount === 0) return;
+    void (async () => {
+      await mountedProject.taskManager.archiveActiveTasks();
+      if (currentView === 'task' && taskParams.projectId === projectId) {
+        navigate('project', { projectId });
+      }
+    })();
+  };
+
+  const handleRemoveProject = () => {
+    if (project.state === 'unregistered') return;
+    const displayName = project.displayName;
+    showConfirmRemoveProject({
+      title: t('projects.deleteProjectTitle'),
+      description: t('projects.deleteProjectDescription', { name: displayName }),
+      confirmLabel: t('projects.removeProject'),
+      onSuccess: () => {
+        void getProjectManagerStore().deleteProject(projectId);
+        if (currentProjectId === projectId) navigate('home');
+      },
+    });
   };
 
   const menuActions = {
@@ -224,7 +249,10 @@ export const SidebarProjectItem = observer(function SidebarProjectItem({
         ? undefined
         : () => showManageRunScripts({ projectId, projectName: project.displayName }),
     onRename: project.state === 'unregistered' ? undefined : () => showRenameProject({ projectId }),
-    onArchive: handleArchive,
+    canArchiveProjectTasks: Boolean(mountedProject && activeTaskCount > 0),
+    canRemoveProject: project.state !== 'unregistered',
+    onArchiveProjectTasks: handleArchiveProjectTasks,
+    onRemoveProject: handleRemoveProject,
   };
 
   return (

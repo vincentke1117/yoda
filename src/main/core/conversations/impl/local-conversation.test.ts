@@ -19,7 +19,9 @@ const mocks = vi.hoisted(() => ({
   logWarn: vi.fn(),
   maybeAutoTrustLocal: vi.fn(),
   prepareHookConfig: vi.fn(),
+  ensureCodexThreadUnarchived: vi.fn(),
   resolveAvailableTmuxSessionName: vi.fn(),
+  resolveAgentResumeSessionId: vi.fn(),
   resolveLocalPtySpawn: vi.fn(),
   spawnLocalPty: vi.fn(),
   startTitle: vi.fn(),
@@ -81,6 +83,14 @@ vi.mock('@main/core/session-title/session-title-manager', () => ({
     start: mocks.startTitle,
     stop: mocks.stopTitle,
   },
+}));
+
+vi.mock('../codex-session-id', () => ({
+  resolveAgentResumeSessionId: mocks.resolveAgentResumeSessionId,
+}));
+
+vi.mock('../codex-unarchive', () => ({
+  ensureCodexThreadUnarchived: mocks.ensureCodexThreadUnarchived,
 }));
 
 vi.mock('@main/core/settings/provider-settings-service', () => ({
@@ -188,6 +198,10 @@ describe('LocalConversationProvider', () => {
     mocks.appSettingsGet.mockResolvedValue({ writeAgentConfigToGitIgnore: false });
     mocks.maybeAutoTrustLocal.mockResolvedValue(undefined);
     mocks.prepareHookConfig.mockResolvedValue(undefined);
+    mocks.ensureCodexThreadUnarchived.mockResolvedValue(undefined);
+    mocks.resolveAgentResumeSessionId.mockImplementation((conversation: Conversation) => {
+      return conversation.id;
+    });
     mocks.resolveAvailableTmuxSessionName.mockResolvedValue(undefined);
     mocks.resolveLocalPtySpawn.mockImplementation(
       ({
@@ -239,6 +253,42 @@ describe('LocalConversationProvider', () => {
 
     expect(spawned).toHaveLength(2);
     expect(spawned[1].options.args).toEqual(['--resume', 'conv-1']);
+  });
+
+  it('uses the resolved Codex thread id when resuming', async () => {
+    mocks.getProviderConfig.mockResolvedValue({
+      cli: 'codex',
+      resumeFlag: 'resume',
+      resumeSessionIdArg: true,
+      initialPromptFlag: '',
+    });
+    const codexConversation: Conversation = {
+      ...conversation,
+      providerId: 'codex',
+      createdAt: '2026-06-04 06:45:36',
+    };
+    const provider = createProvider();
+
+    await provider.startSession(codexConversation, { cols: 80, rows: 24 }, false, 'Fix this');
+    spawned[0].pty.emitExit({ exitCode: 0 });
+    mocks.resolveAgentResumeSessionId.mockReturnValueOnce('codex-thread-1');
+
+    await provider.startSession(codexConversation, { cols: 80, rows: 24 }, true);
+
+    expect(mocks.resolveAgentResumeSessionId).toHaveBeenCalledWith(codexConversation, '/workspace');
+    expect(mocks.ensureCodexThreadUnarchived).toHaveBeenCalledWith({
+      providerId: 'codex',
+      providerConfig: {
+        cli: 'codex',
+        resumeFlag: 'resume',
+        resumeSessionIdArg: true,
+        initialPromptFlag: '',
+      },
+      threadId: 'codex-thread-1',
+      ctx: expect.anything(),
+    });
+    expect(spawned).toHaveLength(2);
+    expect(spawned[1].options.args).toEqual(['resume', '--cd', '/workspace', 'codex-thread-1']);
   });
 
   it('passes an available tmux session name to the PTY spawn resolver', async () => {

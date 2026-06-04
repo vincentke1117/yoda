@@ -463,6 +463,14 @@ export class TaskManagerStore {
     }
   }
 
+  async archiveActiveTasks(): Promise<void> {
+    await this.loadTasks();
+    const taskIds = Array.from(this.tasks.values()).flatMap((task) =>
+      isRegistered(task) && !task.data.archivedAt ? [task.data.id] : []
+    );
+    await Promise.all(taskIds.map((taskId) => this.archiveTask(taskId)));
+  }
+
   async restoreTask(taskId: string): Promise<void> {
     const task = this.tasks.get(taskId);
     if (!task || !isRegistered(task)) return;

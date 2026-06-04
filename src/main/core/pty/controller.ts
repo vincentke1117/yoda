@@ -1,7 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { basename } from 'node:path';
+import { and, eq } from 'drizzle-orm';
 import { createRPCController } from '@shared/ipc/rpc';
 import { err, ok } from '@shared/result';
+import { loadCodexRolloutTerminalHistoryForConversation } from '@main/core/conversations/codex-rollout-terminal-history';
+import { mapConversationRowToConversation } from '@main/core/conversations/utils';
+import { db } from '@main/db/client';
+import { conversations, projects } from '@main/db/schema';
 import { log } from '@main/lib/logger';
 import { taskManager } from '../tasks/task-manager';
 import { workspaceRegistry } from '../workspaces/workspace-registry';
@@ -29,8 +34,10 @@ export const ptyController = createRPCController({
    * for future IPC delivery. Non-destructive — the ring buffer is kept intact.
    * Called once by the renderer when connecting a FrontendPty to a session.
    */
-  subscribe: (sessionId: string) => {
-    return ok({ buffer: ptySessionRegistry.subscribe(sessionId) });
+  subscribe: async (sessionId: string) => {
+    const buffer = ptySessionRegistry.subscribe(sessionId);
+    if (buffer || ptySessionRegistry.get(sessionId)) return ok({ buffer });
+    return ok({ buffer: await loadHistoricalConversationBuffer(sessionId) });
   },
 
   /**
@@ -93,3 +100,58 @@ export const ptyController = createRPCController({
     }
   },
 });
+
+async function loadHistoricalConversationBuffer(sessionId: string): Promise<string> {
+  const parsed = parseConversationSessionId(sessionId);
+  if (!parsed) return '';
+
+  const [row] = await db
+    .select({
+      conversation: conversations,
+      projectPath: projects.path,
+      projectWorkspaceProvider: projects.workspaceProvider,
+    })
+    .from(conversations)
+    .innerJoin(projects, eq(projects.id, conversations.projectId))
+    .where(
+      and(
+        eq(conversations.projectId, parsed.projectId),
+        eq(conversations.taskId, parsed.taskId),
+        eq(conversations.id, parsed.conversationId)
+      )
+    )
+    .limit(1);
+
+  if (!row || row.projectWorkspaceProvider !== 'local') return '';
+
+  const conversation = mapConversationRowToConversation(row.conversation);
+  if (conversation.providerId !== 'codex') return '';
+
+  const workspaceId = taskManager.getWorkspaceId(parsed.taskId);
+  const cwd = (workspaceId ? workspaceRegistry.get(workspaceId)?.path : null) ?? row.projectPath;
+
+  try {
+    return (
+      (await loadCodexRolloutTerminalHistoryForConversation({
+        conversation,
+        cwd,
+      })) ?? ''
+    );
+  } catch (error) {
+    log.warn('ptyController.subscribe: failed to load Codex rollout history', {
+      sessionId,
+      conversationId: parsed.conversationId,
+      error: String(error),
+    });
+    return '';
+  }
+}
+
+function parseConversationSessionId(
+  sessionId: string
+): { projectId: string; taskId: string; conversationId: string } | null {
+  const [projectId, taskId, ...conversationParts] = sessionId.split(':');
+  const conversationId = conversationParts.join(':');
+  if (!projectId || !taskId || !conversationId) return null;
+  return { projectId, taskId, conversationId };
+}

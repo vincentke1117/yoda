@@ -12,6 +12,8 @@ export function mapConversationRowToConversation(
     taskId: row.taskId,
     projectId: row.projectId,
     providerId: row.provider as AgentProviderId,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
     autoApprove: row.config ? JSON.parse(row.config).autoApprove : undefined,
     resume: resume,
     lastInteractedAt: row.lastInteractedAt ?? null,

@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   ptyConnectMock: vi.fn(),
   ptyDisposeMock: vi.fn(),
   ptyResizeMock: vi.fn(),
+  getConversationsForTaskMock: vi.fn(),
   resumeConversationMock: vi.fn(),
   soundPlayMock: vi.fn(),
   touchConversationMock: vi.fn(),
@@ -18,6 +19,7 @@ vi.mock('@renderer/lib/ipc', () => ({
   },
   rpc: {
     conversations: {
+      getConversationsForTask: mocks.getConversationsForTaskMock,
       resumeConversation: mocks.resumeConversationMock,
       touchConversation: mocks.touchConversationMock,
     },
@@ -61,6 +63,7 @@ describe('ConversationManagerStore', () => {
     mocks.eventOnMock.mockReturnValue(vi.fn());
     mocks.resumeConversationMock.mockResolvedValue(undefined);
     mocks.touchConversationMock.mockResolvedValue(undefined);
+    mocks.getConversationsForTaskMock.mockResolvedValue([]);
   });
 
   it('propagates user prompt timestamps to the owning task', async () => {
@@ -103,5 +106,21 @@ describe('ConversationManagerStore', () => {
       { cols: 132, rows: 37 }
     );
     expect(mocks.ptyResizeMock).toHaveBeenCalledWith('project-1:task-1:conversation-1', 132, 37);
+  });
+
+  it('refreshes loaded conversations when ensuring an externally added conversation', async () => {
+    const externalConversation = {
+      ...conversation,
+      id: 'conversation-2',
+      title: 'Imported Codex',
+      providerId: 'codex' as const,
+    };
+    mocks.getConversationsForTaskMock.mockResolvedValueOnce([conversation, externalConversation]);
+    const store = new ConversationManagerStore('project-1', 'task-1', [conversation]);
+
+    await expect(store.ensureConversation('conversation-2')).resolves.toBe(true);
+
+    expect(mocks.getConversationsForTaskMock).toHaveBeenCalledWith('project-1', 'task-1');
+    expect(store.conversations.get('conversation-2')?.data).toEqual(externalConversation);
   });
 });

@@ -63,7 +63,7 @@ const MountedProjectTitlebarLeft = observer(function ProjectTitlebarLeft({
               showConfirmDeleteProject({
                 title: t('projects.deleteProjectTitle'),
                 description: t('projects.deleteProjectDescription', { name: displayName }),
-                confirmLabel: t('common.delete'),
+                confirmLabel: t('projects.removeProject'),
                 onSuccess: () => {
                   void getProjectManagerStore().deleteProject(projectId);
                   navigate('home');

@@ -50,6 +50,8 @@ export type AgentProviderDefinition = {
    */
   useKeystrokeInjection?: boolean;
   resumeFlag?: string;
+  /** When true, append the session id as a positional argument after resumeFlag. */
+  resumeSessionIdArg?: boolean;
   /**
    * CLI flag to assign a unique session ID per chat instance.
    * Used to isolate session state when multiple chats of the same provider
@@ -91,7 +93,8 @@ export const AGENT_PROVIDERS: AgentProviderDefinition[] = [
     cli: 'codex',
     autoApproveFlag: '--dangerously-bypass-approvals-and-sandbox',
     initialPromptFlag: '',
-    resumeFlag: 'resume --last',
+    resumeFlag: 'resume',
+    resumeSessionIdArg: true,
     commandPrefix: '$',
     commandSubmitDelayMs: 200,
     icon: 'openai.svg',

@@ -47,9 +47,9 @@ export function AppMenuEvents({ onOpenSettings }: { onOpenSettings?: () => boole
           if (!provisioned) return;
 
           void provisioned.conversations
-            .load()
-            .then(() => {
-              if (!provisioned.conversations.conversations.has(conversationId)) return;
+            .ensureConversation(conversationId)
+            .then((found) => {
+              if (!found) return;
 
               provisioned.taskView.tabManager.openConversation(conversationId);
               provisioned.taskView.setFocusedRegion('main');

@@ -8,6 +8,12 @@ import { useAppSettingsKey } from '@renderer/features/settings/use-app-settings-
 import { AgentStatusIndicator } from '@renderer/features/tasks/components/agent-status-indicator';
 import { TaskContextMenu } from '@renderer/features/tasks/components/task-context-menu';
 import { TaskGitDiffStats } from '@renderer/features/tasks/components/task-git-diff-stats';
+import {
+  buildTaskMenuSessionFields,
+  getTaskMenuConversation,
+  resolveTaskMenuSessionFields,
+  selectPreferredConversation,
+} from '@renderer/features/tasks/components/task-menu-session-info';
 import { runPreArchiveCommand } from '@renderer/features/tasks/run-pre-archive-command';
 import { type TaskStore } from '@renderer/features/tasks/stores/task';
 import {
@@ -17,6 +23,7 @@ import {
 } from '@renderer/features/tasks/stores/task-selectors';
 import AgentLogo from '@renderer/lib/components/agent-logo';
 import { PrBadge } from '@renderer/lib/components/pr-badge';
+import { rpc } from '@renderer/lib/ipc';
 import { useNavigate } from '@renderer/lib/layout/navigation-provider';
 import { useShowModal } from '@renderer/lib/modal/modal-provider';
 import { Checkbox } from '@renderer/lib/ui/checkbox';
@@ -91,16 +98,43 @@ export const TaskRow = observer(function TaskRow({
   const canPin = task.state !== 'unregistered';
   const agentAttention = taskAgentStatus(task);
   const currentPr = task.data.prs ? selectCurrentPr(task.data.prs) : undefined;
-  const branchName = asProvisioned(task)?.workspace.git.branchName ?? task.data.taskBranch;
+  const provisionedTask = asProvisioned(task);
+  const branchName = provisionedTask?.workspace.git.branchName ?? task.data.taskBranch;
+  const menuConversation = getTaskMenuConversation(provisionedTask);
+  const sessionInfoCwd = provisionedTask?.path;
+  const sessionFields = menuConversation
+    ? buildTaskMenuSessionFields(menuConversation, sessionInfoCwd)
+    : {};
+  const hasStoredConversations = Object.values(task.conversationStats).some((count) => count > 0);
+  const resolveSessionBasicInfo = menuConversation
+    ? () => resolveTaskMenuSessionFields(menuConversation, sessionInfoCwd)
+    : hasStoredConversations && task.state !== 'unregistered'
+      ? async () => {
+          const conversations = await rpc.conversations.getConversationsForTask(
+            task.data.projectId,
+            task.data.id
+          );
+          const conversation = selectPreferredConversation(conversations);
+          return conversation
+            ? resolveTaskMenuSessionFields(conversation, sessionInfoCwd)
+            : undefined;
+        }
+      : undefined;
 
   return (
     <TaskContextMenu
+      projectId={task.data.projectId}
+      taskId={task.data.id}
+      taskName={task.data.name}
       isPinned={task.data.isPinned}
       canPin={canPin}
       isArchived={isArchived}
       needsReview={task.data.needsReview}
       canMarkReview={task.state !== 'unregistered'}
       branchName={branchName}
+      {...sessionFields}
+      resolveSessionBasicInfo={resolveSessionBasicInfo}
+      workingDirectory={provisionedTask?.path}
       openDetailsLabel={t('sidebar.openTaskDetails')}
       onOpenDetails={isArchived ? undefined : handleOpenDetails}
       onPin={() => void task.setPinned(true)}

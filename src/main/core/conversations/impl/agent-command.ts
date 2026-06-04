@@ -98,6 +98,7 @@ export function buildAgentCommand({
   initialPrompt,
   sessionId,
   isResuming,
+  workingDirectory,
 }: {
   providerId: AgentProviderId;
   providerConfig: ProviderCustomConfig | undefined;
@@ -105,6 +106,7 @@ export function buildAgentCommand({
   initialPrompt?: string;
   sessionId: string;
   isResuming?: boolean;
+  workingDirectory?: string;
 }): AgentCommand {
   const providerDef = getProvider(providerId);
   const [command, ...args] = parseCliPrefix(providerConfig?.cli, providerId);
@@ -113,10 +115,16 @@ export function buildAgentCommand({
 
   const shouldPassSessionId =
     providerConfig?.sessionIdFlag && (!providerConfig.sessionIdOnResumeOnly || isResuming);
+  const shouldAppendResumeSessionId = Boolean(
+    providerConfig?.sessionIdFlag || providerConfig?.resumeSessionIdArg
+  );
 
   if (isResuming && providerConfig?.resumeFlag) {
     args.push(...parseArgField(providerConfig.resumeFlag));
-    if (providerConfig.sessionIdFlag) {
+    if (providerId === 'codex' && workingDirectory?.trim()) {
+      args.push('--cd', workingDirectory);
+    }
+    if (shouldAppendResumeSessionId) {
       args.push(sessionId);
     }
   } else if (shouldPassSessionId) {
@@ -135,5 +143,21 @@ export function buildAgentCommand({
 
   args.push(...parseArgField(providerConfig?.extraArgs));
 
+  return { command, args };
+}
+
+export function buildAgentSubcommand({
+  providerId,
+  providerConfig,
+  subcommand,
+  subcommandArgs = [],
+}: {
+  providerId: AgentProviderId;
+  providerConfig: ProviderCustomConfig | undefined;
+  subcommand: string;
+  subcommandArgs?: string[];
+}): AgentCommand {
+  const [command, ...args] = parseCliPrefix(providerConfig?.cli, providerId);
+  args.push(...(providerConfig?.defaultArgs ?? []), subcommand, ...subcommandArgs);
   return { command, args };
 }

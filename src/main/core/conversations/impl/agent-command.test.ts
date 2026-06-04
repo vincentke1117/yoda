@@ -31,6 +31,35 @@ describe('buildAgentCommand', () => {
     });
   });
 
+  it('resumes the requested Codex session by id', () => {
+    const command = buildAgentCommand({
+      providerId: 'codex',
+      providerConfig: providerConfigDefaults.codex,
+      sessionId: '019e00e5-0aba-7f30-a13e-ddf5df6cd705',
+      isResuming: true,
+    });
+
+    expect(command).toEqual({
+      command: 'codex',
+      args: ['resume', '019e00e5-0aba-7f30-a13e-ddf5df6cd705'],
+    });
+  });
+
+  it('pins Codex resume to the current working directory when provided', () => {
+    const command = buildAgentCommand({
+      providerId: 'codex',
+      providerConfig: providerConfigDefaults.codex,
+      sessionId: '019e00e5-0aba-7f30-a13e-ddf5df6cd705',
+      isResuming: true,
+      workingDirectory: '/workspace/current',
+    });
+
+    expect(command).toEqual({
+      command: 'codex',
+      args: ['resume', '--cd', '/workspace/current', '019e00e5-0aba-7f30-a13e-ddf5df6cd705'],
+    });
+  });
+
   it('supports custom CLI command prefixes and appends managed provider args', () => {
     const result = buildAgentCommand({
       providerId: 'claude',

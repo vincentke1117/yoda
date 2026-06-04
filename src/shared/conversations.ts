@@ -6,10 +6,17 @@ export type Conversation = {
   taskId: string;
   providerId: AgentProviderId;
   title: string;
+  createdAt?: string;
+  updatedAt?: string;
   lastInteractedAt: string | null;
   resume?: boolean;
   autoApprove?: boolean;
   isInitialConversation: boolean | null;
+};
+
+export type ConversationSessionInfo = {
+  sessionId: string;
+  resumeCommand?: string;
 };
 
 export type RenameConversationParams = {

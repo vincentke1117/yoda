@@ -35,16 +35,30 @@ import {
   DropdownMenuTrigger,
 } from '@renderer/lib/ui/dropdown-menu';
 
-interface TaskMenuActions {
+interface SessionBasicInfoFields {
+  projectId?: string;
+  projectName?: string;
+  taskId?: string;
+  taskName?: string;
+  branchName?: string;
+  sessionId?: string;
+  sessionTitle?: string;
+  providerName?: string;
+  projectPath?: string;
+  workingDirectory?: string;
+  resumeCommand?: string;
+}
+
+interface TaskMenuActions extends SessionBasicInfoFields {
   isPinned: boolean;
   canPin: boolean;
   isArchived: boolean;
   needsReview: boolean;
   canMarkReview: boolean;
-  branchName?: string;
-  sessionId?: string;
-  projectPath?: string;
-  resumeCommand?: string;
+  resolveSessionBasicInfo?: () =>
+    | SessionBasicInfoFields
+    | undefined
+    | Promise<SessionBasicInfoFields | undefined>;
   openDetailsLabel?: string;
   onOpenDetails?: () => void;
   onPin: () => void;
@@ -224,6 +238,17 @@ function useMenuItems(actions: TaskMenuActions): MenuItemDescriptor[] {
   }
 
   // group 4 — utilities
+  if (actions.sessionId || actions.resolveSessionBasicInfo) {
+    items.push({
+      key: 'copy-session-basic-info',
+      group: 4,
+      icon: Copy,
+      label: t('tasks.context.copySessionBasicInfo'),
+      onSelect: () => {
+        void copySessionBasicInfo(actions, t);
+      },
+    });
+  }
   if (actions.branchName) {
     const branch = actions.branchName;
     items.push({
@@ -239,18 +264,14 @@ function useMenuItems(actions: TaskMenuActions): MenuItemDescriptor[] {
       },
     });
   }
-  if (actions.sessionId) {
-    const sessionId = actions.sessionId;
+  if (actions.sessionId || actions.resolveSessionBasicInfo) {
     items.push({
       key: 'copy-session-id',
       group: 4,
       icon: Copy,
       label: t('tasks.context.copySessionId'),
       onSelect: () => {
-        void copyText(sessionId, t, {
-          success: t('tasks.context.sessionIdCopied'),
-          failure: t('tasks.context.copyFailed'),
-        });
+        void copyResolvedSessionId(actions, t);
       },
     });
   }
@@ -269,18 +290,14 @@ function useMenuItems(actions: TaskMenuActions): MenuItemDescriptor[] {
       },
     });
   }
-  if (actions.resumeCommand) {
-    const cmd = actions.resumeCommand;
+  if (actions.resumeCommand || (!actions.sessionId && actions.resolveSessionBasicInfo)) {
     items.push({
       key: 'copy-resume-command',
       group: 4,
       icon: Copy,
       label: t('tasks.context.copyResumeCommand'),
       onSelect: () => {
-        void copyText(cmd, t, {
-          success: t('tasks.context.resumeCommandCopied'),
-          failure: t('tasks.context.copyFailed'),
-        });
+        void copyResolvedResumeCommand(actions, t);
       },
     });
   }
@@ -298,6 +315,90 @@ function useMenuItems(actions: TaskMenuActions): MenuItemDescriptor[] {
   return items;
 }
 
+async function copySessionBasicInfo(actions: TaskMenuActions, t: TFunction): Promise<void> {
+  try {
+    const value = buildSessionBasicInfo(await resolveSessionBasicInfoFields(actions), t);
+
+    if (!value) {
+      showCopyFailure(t);
+      return;
+    }
+
+    await copyText(value, t, {
+      success: t('tasks.context.sessionBasicInfoCopied'),
+      failure: t('tasks.context.copyFailed'),
+    });
+  } catch {
+    showCopyFailure(t);
+  }
+}
+
+async function copyResolvedSessionId(actions: TaskMenuActions, t: TFunction): Promise<void> {
+  try {
+    const sessionId = (await resolveSessionBasicInfoFields(actions)).sessionId?.trim();
+    if (!sessionId) {
+      showCopyFailure(t);
+      return;
+    }
+
+    await copyText(sessionId, t, {
+      success: t('tasks.context.sessionIdCopied'),
+      failure: t('tasks.context.copyFailed'),
+    });
+  } catch {
+    showCopyFailure(t);
+  }
+}
+
+async function copyResolvedResumeCommand(actions: TaskMenuActions, t: TFunction): Promise<void> {
+  try {
+    const command = (await resolveSessionBasicInfoFields(actions)).resumeCommand?.trim();
+    if (!command) {
+      showCopyFailure(t);
+      return;
+    }
+
+    await copyText(command, t, {
+      success: t('tasks.context.resumeCommandCopied'),
+      failure: t('tasks.context.copyFailed'),
+    });
+  } catch {
+    showCopyFailure(t);
+  }
+}
+
+async function resolveSessionBasicInfoFields(
+  actions: TaskMenuActions
+): Promise<SessionBasicInfoFields> {
+  const resolved = await actions.resolveSessionBasicInfo?.();
+  return { ...actions, ...(resolved ?? {}) };
+}
+
+function buildSessionBasicInfo(actions: SessionBasicInfoFields, t: TFunction): string | undefined {
+  if (!actions.sessionId?.trim()) return undefined;
+
+  const rows: Array<[label: string, value: string | undefined]> = [
+    [t('tasks.context.sessionInfo.project'), actions.projectName],
+    [t('tasks.context.sessionInfo.projectId'), actions.projectId],
+    [t('tasks.context.sessionInfo.task'), actions.taskName],
+    [t('tasks.context.sessionInfo.taskId'), actions.taskId],
+    [t('tasks.context.sessionInfo.agent'), actions.providerName],
+    [t('tasks.context.sessionInfo.sessionTitle'), actions.sessionTitle],
+    [t('tasks.context.sessionInfo.sessionId'), actions.sessionId],
+    [t('tasks.context.sessionInfo.branch'), actions.branchName],
+    [t('tasks.context.sessionInfo.projectPath'), actions.projectPath],
+    [t('tasks.context.sessionInfo.workingDirectory'), actions.workingDirectory],
+    [t('tasks.context.sessionInfo.resumeCommand'), actions.resumeCommand],
+  ];
+
+  const lines = rows.flatMap(([label, value]) => {
+    const trimmed = value?.trim();
+    return trimmed ? [`${label}: ${trimmed}`] : [];
+  });
+
+  return lines.length > 0 ? lines.join('\n') : undefined;
+}
+
 async function copyText(
   value: string,
   t: TFunction,
@@ -313,6 +414,14 @@ async function copyText(
       variant: 'destructive',
     });
   }
+}
+
+function showCopyFailure(t: TFunction): void {
+  toast({
+    title: t('auth.copyFailed'),
+    description: t('tasks.context.copyFailed'),
+    variant: 'destructive',
+  });
 }
 
 interface TaskContextMenuProps extends TaskMenuActions {

@@ -60,7 +60,11 @@ export async function getProjectById(
 }
 
 export async function getLocalProjectByPath(path: string): Promise<LocalProject | undefined> {
-  const [row] = await db.select().from(projects).where(eq(projects.path, path)).limit(1);
+  const [row] = await db
+    .select()
+    .from(projects)
+    .where(and(eq(projects.path, path), isNull(projects.archivedAt)))
+    .limit(1);
   if (!row) return undefined;
   const project = mapProjectRow(row);
   return project.type === 'local' ? project : undefined;
@@ -73,7 +77,13 @@ export async function getSshProjectByPath(
   const [row] = await db
     .select()
     .from(projects)
-    .where(and(eq(projects.path, path), eq(projects.sshConnectionId, connectionId)))
+    .where(
+      and(
+        eq(projects.path, path),
+        eq(projects.sshConnectionId, connectionId),
+        isNull(projects.archivedAt)
+      )
+    )
     .limit(1);
   if (!row) return undefined;
   const project = mapProjectRow(row);

@@ -158,7 +158,7 @@ export const EnableTmuxRow: React.FC = observer(() => {
     resetField,
   } = useAppSettingsKey('project');
 
-  const tmuxByDefault = projects?.tmuxByDefault ?? false;
+  const tmuxByDefault = projects?.tmuxByDefault ?? true;
   const tmuxState = appState.dependencies.allStatuses['tmux'];
   const tmuxMissing = tmuxState?.status === 'missing';
   const installingTmux = appState.dependencies.isInstalling('tmux');
@@ -193,7 +193,7 @@ export const EnableTmuxRow: React.FC = observer(() => {
           )}
           <ResetToDefaultButton
             visible={isFieldOverridden('tmuxByDefault')}
-            defaultLabel="off"
+            defaultLabel="on"
             onReset={() => resetField('tmuxByDefault')}
             disabled={loading || saving}
           />

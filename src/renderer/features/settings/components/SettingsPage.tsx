@@ -228,8 +228,8 @@ export function SettingsPage({
           </div>
           {/* Content container */}
           {currentContent && (
-            <div className="min-h-0 min-w-0 flex-1 justify-center overflow-x-hidden overflow-y-auto">
-              <div className="mx-auto w-full max-w-4xl space-y-8 px-1 py-10">
+            <div className="min-h-0 min-w-0 flex-1 justify-center overflow-x-hidden overflow-y-auto [scrollbar-gutter:stable]">
+              <div className="mx-auto w-full max-w-4xl space-y-8 py-10 pr-4 pl-1">
                 <div className="flex flex-col gap-6">
                   <div className="flex flex-col gap-1">
                     <h2 className="text-xl">{currentContent.title}</h2>

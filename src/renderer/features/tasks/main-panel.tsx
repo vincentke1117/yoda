@@ -9,6 +9,7 @@ import {
   taskViewKind,
 } from '@renderer/features/tasks/stores/task-selectors';
 import { useProvisionedTask, useTaskViewContext } from '@renderer/features/tasks/task-view-context';
+import { useTabShortcuts } from '@renderer/lib/hooks/useTabShortcuts';
 import { panelDragStore } from '@renderer/lib/layout/panel-drag-store';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@renderer/lib/ui/resizable';
 import { ToggleGroup, ToggleGroupItem } from '@renderer/lib/ui/toggle-group';
@@ -17,6 +18,8 @@ import { DiffView } from './diff-view/main-panel/diff-view';
 import { EditorMainPanel } from './editor/editor-main-panel';
 import { useEditorContext } from './editor/editor-provider';
 import { MarkdownEditorPanel } from './editor/markdown-editor-panel';
+import { useIsActiveTask } from './hooks/use-is-active-task';
+import { TaskTabStrip } from './tabs/task-tab-strip';
 import { TerminalsPanel } from './terminals/terminal-panel';
 import { TaskSidebar } from './view/task-sidebar';
 
@@ -239,10 +242,15 @@ const TaskMainColumn = observer(function TaskMainColumn() {
 });
 
 const UnifiedMainContent = observer(function UnifiedMainContent() {
+  const { taskId } = useTaskViewContext();
   const { taskView } = useProvisionedTask();
   const { setEditorHost, triggerLayout } = useEditorContext();
+  const isActive = useIsActiveTask(taskId);
 
   const renderer = taskView.activeRenderer;
+  useTabShortcuts(taskView.tabManager, {
+    focused: isActive && taskView.focusedRegion === 'main',
+  });
 
   // Re-run Monaco layout whenever the Monaco slot becomes visible so the editor
   // fills the host after transitioning from hidden to flex.
@@ -251,7 +259,12 @@ const UnifiedMainContent = observer(function UnifiedMainContent() {
   }, [renderer, triggerLayout]);
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
+    <div
+      className="flex h-full flex-col overflow-hidden"
+      onFocus={() => taskView.setFocusedRegion('main')}
+      onPointerDown={() => taskView.setFocusedRegion('main')}
+    >
+      <TaskTabStrip />
       <div className="relative min-h-0 flex-1">
         {/*
          * Persistent Monaco host — always in the DOM, never inside an Activity.

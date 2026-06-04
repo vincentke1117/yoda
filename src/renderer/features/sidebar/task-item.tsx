@@ -4,7 +4,6 @@ import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   AGENT_PROVIDER_IDS,
-  getProvider,
   isValidProviderId,
   type AgentProviderId,
 } from '@shared/agent-provider-registry';
@@ -16,6 +15,12 @@ import {
   TaskActionsMenu,
   TaskContextMenu,
 } from '@renderer/features/tasks/components/task-context-menu';
+import {
+  buildTaskMenuSessionFields,
+  getTaskMenuConversation,
+  resolveTaskMenuSessionFields,
+  selectPreferredConversation,
+} from '@renderer/features/tasks/components/task-menu-session-info';
 import { runPreArchiveCommand } from '@renderer/features/tasks/run-pre-archive-command';
 import { type TaskStore } from '@renderer/features/tasks/stores/task';
 import {
@@ -161,17 +166,23 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
     project?.state === 'unregistered' ? projectId : (project?.displayName ?? projectId);
   const projectPath = project?.data?.path;
 
-  const activeConversationId = provisionedTask?.taskView.tabManager.activeConversationId;
-  const activeConversation = activeConversationId
-    ? provisionedTask?.conversations.conversations.get(activeConversationId)?.data
-    : undefined;
-  const resumeCommand = activeConversation
-    ? buildResumeCommand({
-        providerId: activeConversation.providerId,
-        sessionId: activeConversation.id,
-        cwd: provisionedTask?.path ?? projectPath,
-      })
-    : undefined;
+  const menuConversation = getTaskMenuConversation(provisionedTask);
+  const sessionInfoCwd = provisionedTask?.path ?? projectPath;
+  const sessionFields = menuConversation
+    ? buildTaskMenuSessionFields(menuConversation, sessionInfoCwd)
+    : {};
+  const hasStoredConversations = Object.values(task.conversationStats).some((count) => count > 0);
+  const resolveSessionBasicInfo = menuConversation
+    ? () => resolveTaskMenuSessionFields(menuConversation, sessionInfoCwd)
+    : hasStoredConversations && task.state !== 'unregistered'
+      ? async () => {
+          const conversations = await rpc.conversations.getConversationsForTask(projectId, taskId);
+          const conversation = selectPreferredConversation(conversations);
+          return conversation
+            ? resolveTaskMenuSessionFields(conversation, sessionInfoCwd)
+            : undefined;
+        }
+      : undefined;
 
   const handleConfigureScripts = () => showManageRunScripts({ projectId, projectName });
 
@@ -193,21 +204,36 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
     navigate('task', { projectId, taskId });
   };
 
+  const openLastConversationIfEmpty = () => {
+    if (!provisionedTask) return;
+    const { taskView } = provisionedTask;
+    if (taskView.tabManager.resolvedTabs.length > 0) return;
+    if (taskView.tabManager.openLastConversation()) {
+      taskView.setFocusedRegion('main');
+    }
+  };
+
   const handleOpenDetails = () => {
     handleProvision();
+    openLastConversationIfEmpty();
     navigate('task', { projectId, taskId });
   };
 
   const menuActions = {
+    projectId,
+    projectName,
+    taskId,
+    taskName,
     isPinned: task.data.isPinned,
     canPin,
     isArchived: false,
     needsReview,
     canMarkReview,
     branchName,
-    sessionId: activeConversation?.id,
+    ...sessionFields,
+    resolveSessionBasicInfo,
     projectPath,
-    resumeCommand,
+    workingDirectory: provisionedTask?.path,
     openDetailsLabel: t('sidebar.openSessionDetails'),
     onOpenDetails: handleOpenDetails,
     onPin: () => void task.setPinned(true),
@@ -348,32 +374,6 @@ function getSidebarAgentBadges(stats: Record<string, number>): SidebarAgentBadge
     const count = counts.get(providerId);
     return count === undefined ? [] : [{ providerId, count }];
   });
-}
-
-function shellQuote(value: string): string {
-  if (value.length > 0 && /^[A-Za-z0-9_\-./:=@%+,]+$/.test(value)) return value;
-  return `'${value.replace(/'/g, `'\\''`)}'`;
-}
-
-function buildResumeCommand(input: {
-  providerId: AgentProviderId;
-  sessionId: string;
-  cwd?: string;
-}): string | undefined {
-  const provider = getProvider(input.providerId);
-  if (!provider?.cli) return undefined;
-  const parts: string[] = [provider.cli];
-  parts.push(...(provider.defaultArgs ?? []));
-  if (provider.resumeFlag) {
-    parts.push(...provider.resumeFlag.split(/\s+/).filter(Boolean));
-    if (provider.sessionIdFlag) parts.push(input.sessionId);
-  } else if (provider.sessionIdFlag) {
-    parts.push(...provider.sessionIdFlag.split(/\s+/).filter(Boolean), input.sessionId);
-  } else {
-    return undefined;
-  }
-  const cmd = parts.map(shellQuote).join(' ');
-  return input.cwd ? `cd ${shellQuote(input.cwd)} && ${cmd}` : cmd;
 }
 
 function SidebarTaskAgentBadges({ badges }: { badges: SidebarAgentBadge[] }) {
