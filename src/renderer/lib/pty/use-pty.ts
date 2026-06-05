@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react';
 import type { AppSettings } from '@shared/app-settings';
 import { appPasteChannel } from '@shared/events/appEvents';
 import { ptyDataChannel, ptyExitChannel } from '@shared/events/ptyEvents';
+import { DEFAULT_TERMINAL_SCROLLBACK_LINES } from '@shared/terminal-settings';
 import { events, rpc } from '@renderer/lib/ipc';
 import { panelDragStore } from '@renderer/lib/layout/panel-drag-store';
 import { log } from '@renderer/utils/logger';
@@ -20,11 +21,14 @@ import {
   shouldPasteToTerminal,
 } from './pty-keybindings';
 import {
+  getTerminalFileLinkAtCell,
   registerTerminalFileLinkProvider,
   type TerminalFileLinkOptions,
 } from './terminal-file-links';
 import { registerTerminalImeDiagnostics } from './terminal-ime-diagnostics';
 import { registerTerminalImeNativePunctuation } from './terminal-ime-native-punctuation';
+import type { TerminalLinkTarget } from './terminal-link-target';
+import { getTerminalWebLinkAtCell, registerTerminalWebLinkProvider } from './terminal-web-links';
 
 const PTY_RESIZE_DEBOUNCE_MS = 120;
 const MIN_TERMINAL_COLS = 2;
@@ -127,6 +131,7 @@ export interface UseTerminalReturn {
   focus: () => void;
   setTheme: (theme: SessionTheme) => void;
   sendInput: (data: string, options?: { track?: boolean }) => void;
+  getLinkTargetAtEvent: (event: MouseEvent) => TerminalLinkTarget | null;
 }
 
 /**
@@ -388,6 +393,27 @@ export function usePty(
     [sessionId]
   );
 
+  const getLinkTargetAtEvent = useCallback((event: MouseEvent): TerminalLinkTarget | null => {
+    const terminal = termRef.current;
+    const terminalElement = (terminal as unknown as { element?: HTMLElement } | null)?.element;
+    if (!terminal || !terminalElement) return null;
+
+    const cell = getBufferCellFromMouseEvent(terminal, terminalElement, event);
+    if (!cell) return null;
+
+    const position = { x: cell.col + 1, y: cell.row + 1 };
+    const fileOptions = fileLinksRef.current;
+    if (fileOptions) {
+      const fileMatch = getTerminalFileLinkAtCell(terminal, cell.row + 1, position, fileOptions);
+      if (fileMatch) return { kind: 'file', target: fileMatch.target };
+    }
+
+    const webMatch = getTerminalWebLinkAtCell(terminal, cell.row + 1, position);
+    if (webMatch) return { kind: 'url', url: webMatch.url };
+
+    return null;
+  }, []);
+
   const pasteFromClipboard = useCallback(() => {
     navigator.clipboard
       .readText()
@@ -454,6 +480,9 @@ export function usePty(
             customFontFamily = terminalSettings.fontFamily.trim();
             if (customFontFamily) frontendPty.terminal.options.fontFamily = customFontFamily;
           }
+          frontendPty.setScrollbackLines(
+            terminalSettings?.scrollbackLines ?? DEFAULT_TERMINAL_SCROLLBACK_LINES
+          );
           autoCopyOnSelectionRef.current = terminalSettings?.autoCopyOnSelection ?? false;
         }
       );
@@ -601,6 +630,15 @@ export function usePty(
         () => fileLinksRef.current
       );
       cleanups.push(() => fileLinkProviderDisposable.dispose());
+
+      const webLinkProviderDisposable = registerTerminalWebLinkProvider(terminal, () => ({
+        onOpen: (url) => {
+          rpc.app.openExternal(url).catch((error) => {
+            log.warn('Failed to open URL from terminal', { url, error });
+          });
+        },
+      }));
+      cleanups.push(() => webLinkProviderDisposable.dispose());
 
       // ── ptyStartedRef — detect first PTY output ────────────────────────────
       // FrontendPty owns the data subscription and writes directly to the
@@ -764,11 +802,23 @@ export function usePty(
         const detail = (e as CustomEvent<{ autoCopyOnSelection?: boolean }>).detail;
         autoCopyOnSelectionRef.current = detail?.autoCopyOnSelection ?? false;
       };
+      const handleScrollbackLinesChange = (e: Event) => {
+        const detail = (e as CustomEvent<{ scrollbackLines?: number }>).detail;
+        frontendPty.setScrollbackLines(
+          detail?.scrollbackLines ?? DEFAULT_TERMINAL_SCROLLBACK_LINES
+        );
+      };
       window.addEventListener('terminal-font-changed', handleFontChange);
       window.addEventListener('terminal-auto-copy-changed', handleAutoCopyChange);
+      window.addEventListener('terminal-scrollback-lines-changed', handleScrollbackLinesChange);
       cleanups.push(
         () => window.removeEventListener('terminal-font-changed', handleFontChange),
-        () => window.removeEventListener('terminal-auto-copy-changed', handleAutoCopyChange)
+        () => window.removeEventListener('terminal-auto-copy-changed', handleAutoCopyChange),
+        () =>
+          window.removeEventListener(
+            'terminal-scrollback-lines-changed',
+            handleScrollbackLinesChange
+          )
       );
 
       // ── ResizeObserver (observes the mount-target, not the owned container) ─
@@ -855,5 +905,5 @@ export function usePty(
     }
   }, [isPanelDragging, measureAndResize]);
 
-  return { focus, setTheme, sendInput };
+  return { focus, setTheme, sendInput, getLinkTargetAtEvent };
 }

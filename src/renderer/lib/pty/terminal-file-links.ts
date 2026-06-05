@@ -1,24 +1,54 @@
 import type { IBufferLine, ILink, ILinkProvider, Terminal } from '@xterm/xterm';
+import { isTerminalLinkCellInRange, type TerminalLinkCellPosition } from './terminal-link-target';
 
 const MAX_WRAPPED_LINE_LENGTH = 2048;
-const FILE_PATH_CANDIDATE_REGEX =
-  /(^|[\s"'([{<:：])(@?(?:(?:~|\.{1,2})\/|\/)?(?:[^\s"'`$<>|\\:：]+\/)+[^\s"'`$<>|\\/:：]*\.[^\s"'`$<>|\\/:：]{1,32}(?::\d+(?::\d+)?)?)(?=$|[\s"')\]}>,，。；;!?！？(])/gu;
+// Characters that may not appear inside a file path segment (the negated set
+// below). Includes ASCII whitespace/quotes/shell metas plus CJK punctuation and
+// brackets so paths like `bar.txt。` or `foo.md（…）` terminate cleanly.
+const PATH_SEG_EXCLUDED = `\\s"'\`$<>|\\\\:：（）「」『』【】〈〉《》，。；！？`;
+const PATH_LEADING = `\\s"'([{<:：（「『【〈《`;
+const PATH_TRAILING = `\\s"')\\]}>,，。；;!?！？(（）「」『』【】〈〉《》`;
+const FILE_PATH_CANDIDATE_REGEX = new RegExp(
+  `(^|[${PATH_LEADING}])(@?(?:(?:~|\\.{1,2})\\/|\\/)?(?:[^${PATH_SEG_EXCLUDED}]+\\/)+[^${PATH_SEG_EXCLUDED}\\/]*\\.[^${PATH_SEG_EXCLUDED}\\/]{1,32}(?::\\d+(?::\\d+)?)?)(?=$|[${PATH_TRAILING}])`,
+  'gu'
+);
 
 export interface TerminalFileLinkTarget {
   originalText: string;
-  filePath: string;
+  /**
+   * Workspace-relative path. Set only when the link resolves inside the
+   * current workspace; absent for `~/...` paths or absolute paths that fall
+   * outside `workspaceRoot`.
+   */
+  filePath?: string;
+  /**
+   * Absolute filesystem path. Always set for local sessions when the home dir
+   * is known (so `~/...` can be expanded); may be derived by joining
+   * `workspaceRoot` + `filePath` for workspace-internal paths.
+   */
+  absolutePath?: string;
   line?: number;
   column?: number;
 }
 
 export interface TerminalFileLinkOptions {
   workspaceRoot?: string;
+  /** Home directory used to expand `~/...` paths. */
+  homeDir?: string;
+  /** Disable menu items that require local filesystem access. */
+  isRemote?: boolean;
   onOpen: (target: TerminalFileLinkTarget) => void;
 }
 
 interface TerminalFileLinkCandidate {
   text: string;
   index: number;
+}
+
+export interface TerminalFileLinkMatch {
+  range: ILink['range'];
+  text: string;
+  target: TerminalFileLinkTarget;
 }
 
 export function extractTerminalFileLinkCandidates(line: string): TerminalFileLinkCandidate[] {
@@ -39,30 +69,102 @@ export function extractTerminalFileLinkCandidates(line: string): TerminalFileLin
   return candidates;
 }
 
+export function getTerminalFileLinkMatches(
+  terminal: Terminal,
+  bufferLineNumber: number,
+  options: TerminalFileLinkOptions
+): TerminalFileLinkMatch[] {
+  const [lines, startLineIndex] = getWindowedLineStrings(bufferLineNumber - 1, terminal);
+  const line = lines.join('');
+  if (!line) return [];
+
+  const matches: TerminalFileLinkMatch[] = [];
+  for (const candidate of extractTerminalFileLinkCandidates(line)) {
+    const target = resolveTerminalFileLinkTarget(
+      candidate.text,
+      options.workspaceRoot,
+      options.homeDir
+    );
+    if (!target) continue;
+
+    const range = mapStringRangeToViewportRange(
+      terminal,
+      startLineIndex,
+      candidate.index,
+      candidate.text.length
+    );
+    if (!range) continue;
+
+    matches.push({ range, text: candidate.text, target });
+  }
+
+  return matches;
+}
+
+export function getTerminalFileLinkAtCell(
+  terminal: Terminal,
+  bufferLineNumber: number,
+  position: TerminalLinkCellPosition,
+  options: TerminalFileLinkOptions
+): TerminalFileLinkMatch | null {
+  return (
+    getTerminalFileLinkMatches(terminal, bufferLineNumber, options).find((match) =>
+      isTerminalLinkCellInRange(match.range, position)
+    ) ?? null
+  );
+}
+
 export function resolveTerminalFileLinkTarget(
   text: string,
-  workspaceRoot?: string
+  workspaceRoot?: string,
+  homeDir?: string
 ): TerminalFileLinkTarget | null {
   const parsed = parsePathLocation(text);
   if (!parsed) return null;
 
-  let filePath = parsed.path.replace(/\\/g, '/');
-  if (filePath.startsWith('@')) filePath = filePath.slice(1);
+  let rawPath = parsed.path.replace(/\\/g, '/');
+  if (rawPath.startsWith('@')) rawPath = rawPath.slice(1);
   const normalizedRoot = workspaceRoot?.replace(/\\/g, '/').replace(/\/+$/g, '');
+  const normalizedHome = homeDir?.replace(/\\/g, '/').replace(/\/+$/g, '');
 
-  if (filePath.startsWith('~/')) return null;
-
-  if (filePath.startsWith('/')) {
-    if (!normalizedRoot || !filePath.startsWith(`${normalizedRoot}/`)) return null;
-    filePath = filePath.slice(normalizedRoot.length + 1);
+  // Expand `~/...` against the home dir when provided.
+  if (rawPath.startsWith('~/')) {
+    if (!normalizedHome) return null;
+    rawPath = `${normalizedHome}/${rawPath.slice(2)}`;
   }
 
-  const normalizedPath = normalizeWorkspaceRelativePath(filePath);
-  if (!normalizedPath) return null;
+  // Absolute path: try to slot into the workspace; otherwise keep as absolute.
+  if (rawPath.startsWith('/')) {
+    const inWorkspace =
+      normalizedRoot && (rawPath === normalizedRoot || rawPath.startsWith(`${normalizedRoot}/`));
+    if (inWorkspace) {
+      const relative = rawPath === normalizedRoot ? '' : rawPath.slice(normalizedRoot.length + 1);
+      const normalizedRelative = normalizeWorkspaceRelativePath(relative);
+      if (!normalizedRelative) return null;
+      return {
+        originalText: text,
+        filePath: normalizedRelative,
+        absolutePath: `${normalizedRoot}/${normalizedRelative}`,
+        line: parsed.line,
+        column: parsed.column,
+      };
+    }
+    return {
+      originalText: text,
+      absolutePath: rawPath,
+      line: parsed.line,
+      column: parsed.column,
+    };
+  }
+
+  // Workspace-relative path.
+  const normalizedRelative = normalizeWorkspaceRelativePath(rawPath);
+  if (!normalizedRelative) return null;
 
   return {
     originalText: text,
-    filePath: normalizedPath,
+    filePath: normalizedRelative,
+    absolutePath: normalizedRoot ? `${normalizedRoot}/${normalizedRelative}` : undefined,
     line: parsed.line,
     column: parsed.column,
   };
@@ -88,29 +190,10 @@ class TerminalFileLinkProvider implements ILinkProvider {
       return;
     }
 
-    const [lines, startLineIndex] = getWindowedLineStrings(bufferLineNumber - 1, this.terminal);
-    const line = lines.join('');
-    if (!line) {
-      callback(undefined);
-      return;
-    }
-
-    const links: ILink[] = [];
-    for (const candidate of extractTerminalFileLinkCandidates(line)) {
-      const target = resolveTerminalFileLinkTarget(candidate.text, options.workspaceRoot);
-      if (!target) continue;
-
-      const range = mapStringRangeToViewportRange(
-        this.terminal,
-        startLineIndex,
-        candidate.index,
-        candidate.text.length
-      );
-      if (!range) continue;
-
-      links.push({
-        range,
-        text: candidate.text,
+    const links = getTerminalFileLinkMatches(this.terminal, bufferLineNumber, options).map(
+      (match): ILink => ({
+        range: match.range,
+        text: match.text,
         decorations: {
           pointerCursor: true,
           underline: true,
@@ -119,10 +202,10 @@ class TerminalFileLinkProvider implements ILinkProvider {
           if (!isTerminalFileLinkActivation(event)) return;
           event.preventDefault();
           event.stopPropagation();
-          this.getOptions()?.onOpen(target);
+          this.getOptions()?.onOpen(match.target);
         },
-      });
-    }
+      })
+    );
 
     callback(links.length > 0 ? links : undefined);
   }
@@ -160,7 +243,7 @@ function normalizeWorkspaceRelativePath(path: string): string | null {
   return segments.length > 0 ? segments.join('/') : null;
 }
 
-function getWindowedLineStrings(lineIndex: number, terminal: Terminal): [string[], number] {
+export function getWindowedLineStrings(lineIndex: number, terminal: Terminal): [string[], number] {
   let line: IBufferLine | undefined;
   let topIndex = lineIndex;
   let bottomIndex = lineIndex;
@@ -203,7 +286,7 @@ function getWindowedLineStrings(lineIndex: number, terminal: Terminal): [string[
   return [lines, topIndex];
 }
 
-function mapStringRangeToViewportRange(
+export function mapStringRangeToViewportRange(
   terminal: Terminal,
   lineIndex: number,
   stringIndex: number,

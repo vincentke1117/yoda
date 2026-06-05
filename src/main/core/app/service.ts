@@ -1,4 +1,6 @@
 import { exec } from 'node:child_process';
+import { stat } from 'node:fs/promises';
+import { dirname } from 'node:path';
 import { eq } from 'drizzle-orm';
 import { clipboard, dialog, shell } from 'electron';
 import { appPasteChannel, appRedoChannel, appUndoChannel } from '@shared/events/appEvents';
@@ -186,11 +188,18 @@ class AppService implements IInitializable, IDisposable {
     path: string;
     isRemote?: boolean;
     sshConnectionId?: string | null;
+    reveal?: boolean;
   }): Promise<void> {
-    const { path: target, app: appId, isRemote = false, sshConnectionId } = args;
+    const { path: target, app: appId, isRemote = false, sshConnectionId, reveal = false } = args;
 
     if (!target || typeof target !== 'string' || !appId) {
       throw new Error('Invalid arguments');
+    }
+
+    if (reveal) {
+      if (isRemote) throw new Error('Reveal is not available for remote paths.');
+      shell.showItemInFolder(target);
+      return;
     }
 
     const platform = process.platform as PlatformKey;
@@ -359,9 +368,10 @@ class AppService implements IInitializable, IDisposable {
       .join(' || ');
 
     if (!command) throw new Error('Unsupported platform or app');
+    const cwd = await resolveOpenCommandCwd(target);
 
     await new Promise<void>((resolve, reject) => {
-      exec(command, { cwd: target, env: buildExternalToolEnv() }, (err) => {
+      exec(command, { cwd, env: buildExternalToolEnv() }, (err) => {
         if (err) return reject(err);
         resolve();
       });
@@ -379,6 +389,15 @@ class AppService implements IInitializable, IDisposable {
     });
     if (result.canceled) return undefined;
     return result.filePaths[0];
+  }
+}
+
+async function resolveOpenCommandCwd(target: string): Promise<string> {
+  try {
+    const targetStat = await stat(target);
+    return targetStat.isDirectory() ? target : dirname(target);
+  } catch {
+    return dirname(target);
   }
 }
 

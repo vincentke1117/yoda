@@ -1,9 +1,10 @@
-import React, { forwardRef, useImperativeHandle, useRef } from 'react';
+import React, { forwardRef, useImperativeHandle, useRef, useState } from 'react';
 import { rpc } from '@renderer/lib/ipc';
 import { log } from '@renderer/utils/logger';
 import { cn } from '@renderer/utils/utils';
 import type { FrontendPty, SessionTheme } from './pty';
 import type { TerminalFileLinkOptions } from './terminal-file-links';
+import { TerminalLinkMenu, type TerminalLinkMenuState } from './terminal-link-menu';
 import { usePty } from './use-pty';
 
 type Props = {
@@ -49,10 +50,11 @@ const PtyPaneComponent = forwardRef<{ focus: () => void }, Props>(
     ref
   ) => {
     const containerRef = useRef<HTMLDivElement | null>(null);
+    const [linkMenu, setLinkMenu] = useState<TerminalLinkMenuState | null>(null);
 
     const theme: SessionTheme = { override: themeOverride };
 
-    const { focus, sendInput } = usePty(
+    const { focus, sendInput, getLinkTargetAtEvent } = usePty(
       {
         sessionId,
         pty,
@@ -72,6 +74,13 @@ const PtyPaneComponent = forwardRef<{ focus: () => void }, Props>(
     useImperativeHandle(ref, () => ({ focus }), [focus]);
 
     const handleFocus = () => {
+      focus();
+    };
+
+    // Right-click should open the link menu without also focusing/clicking
+    // through to xterm.
+    const handlePointerDown: React.MouseEventHandler<HTMLDivElement> = (event) => {
+      if (event.button !== 0) return;
       focus();
     };
 
@@ -116,6 +125,32 @@ const PtyPaneComponent = forwardRef<{ focus: () => void }, Props>(
       }
     };
 
+    const handleContextMenu: React.MouseEventHandler<HTMLDivElement> = (event) => {
+      const target = getLinkTargetAtEvent(event.nativeEvent);
+      if (!target) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const { clientX: x, clientY: y } = event;
+      // Defer the open until after the right-click mouseup so the release
+      // cannot be treated as an outside interaction by the menu.
+      const open = () => setLinkMenu({ target, x, y });
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
+      const cleanup = () => {
+        document.removeEventListener('mouseup', onceMouseUp, true);
+        if (timeoutId !== null) clearTimeout(timeoutId);
+      };
+      const onceMouseUp = () => {
+        cleanup();
+        open();
+      };
+      document.addEventListener('mouseup', onceMouseUp, true);
+      // Fallback in case mouseup never fires (e.g. focus stolen, keyboard-driven).
+      timeoutId = setTimeout(() => {
+        cleanup();
+        open();
+      }, 100);
+    };
+
     return (
       <div
         className={cn('terminal-pane flex h-full w-full min-w-0 bg', className)}
@@ -138,9 +173,15 @@ const PtyPaneComponent = forwardRef<{ focus: () => void }, Props>(
             filter: contentFilter || undefined,
           }}
           onClick={handleFocus}
-          onMouseDown={handleFocus}
+          onMouseDown={handlePointerDown}
+          onContextMenu={handleContextMenu}
           onDragOver={(event) => event.preventDefault()}
           onDrop={handleDrop}
+        />
+        <TerminalLinkMenu
+          state={linkMenu}
+          fileLinks={fileLinks ?? null}
+          onClose={() => setLinkMenu(null)}
         />
       </div>
     );

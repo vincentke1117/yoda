@@ -1,4 +1,5 @@
 import { useHotkey } from '@tanstack/react-hotkeys';
+import { useQuery } from '@tanstack/react-query';
 import { Terminal } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useMemo, useState } from 'react';
@@ -132,15 +133,29 @@ export const TerminalsPanel = observer(function TerminalsPanel() {
     conflictBehavior: 'replace',
   });
 
+  const { data: homeDir } = useQuery({
+    queryKey: ['homeDir'],
+    queryFn: () => rpc.app.getHomeDir(),
+    staleTime: Infinity,
+    enabled: !remoteConnectionId,
+  });
   const fileLinks = useMemo<TerminalFileLinkOptions>(
     () => ({
       workspaceRoot: provisionedTask.path,
-      onOpen: ({ filePath, line, column }) => {
-        provisionedTask.taskView.tabManager.openFile(filePath, { line, column });
-        provisionedTask.taskView.setFocusedRegion('main');
+      homeDir: typeof homeDir === 'string' ? homeDir : undefined,
+      isRemote: Boolean(remoteConnectionId),
+      onOpen: ({ filePath, absolutePath, line, column }) => {
+        if (filePath) {
+          provisionedTask.taskView.tabManager.openFile(filePath, { line, column });
+          provisionedTask.taskView.setFocusedRegion('main');
+          return;
+        }
+        if (absolutePath) {
+          void rpc.app.openIn({ app: 'finder', path: absolutePath });
+        }
       },
     }),
-    [provisionedTask.path, provisionedTask.taskView]
+    [provisionedTask.path, provisionedTask.taskView, remoteConnectionId, homeDir]
   );
 
   const emptyState = (

@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query';
 import { MessageSquare } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useMemo, useRef } from 'react';
@@ -6,6 +7,7 @@ import { asMounted, getProjectStore } from '@renderer/features/projects/stores/p
 import { useIsActiveTask } from '@renderer/features/tasks/hooks/use-is-active-task';
 import { getTaskStore } from '@renderer/features/tasks/stores/task-selectors';
 import { useProvisionedTask, useTaskViewContext } from '@renderer/features/tasks/task-view-context';
+import { rpc } from '@renderer/lib/ipc';
 import { useShowModal } from '@renderer/lib/modal/modal-provider';
 import { PaneSizingProvider } from '@renderer/lib/pty/pane-sizing-context';
 import type { FrontendPty } from '@renderer/lib/pty/pty';
@@ -156,15 +158,29 @@ export const ConversationsPanel = observer(function ConversationsPanel() {
     : undefined;
 
   const onInterruptPress = activeConversation ? () => activeConversation.clearWorking() : undefined;
+  const { data: homeDir } = useQuery({
+    queryKey: ['homeDir'],
+    queryFn: () => rpc.app.getHomeDir(),
+    staleTime: Infinity,
+    enabled: !remoteConnectionId,
+  });
   const fileLinks = useMemo<TerminalFileLinkOptions>(
     () => ({
       workspaceRoot: provisioned.path,
-      onOpen: ({ filePath, line, column }) => {
-        provisioned.taskView.tabManager.openFile(filePath, { line, column });
-        provisioned.taskView.setFocusedRegion('main');
+      homeDir: typeof homeDir === 'string' ? homeDir : undefined,
+      isRemote: Boolean(remoteConnectionId),
+      onOpen: ({ filePath, absolutePath, line, column }) => {
+        if (filePath) {
+          provisioned.taskView.tabManager.openFile(filePath, { line, column });
+          provisioned.taskView.setFocusedRegion('main');
+          return;
+        }
+        if (absolutePath) {
+          void rpc.app.openIn({ app: 'finder', path: absolutePath });
+        }
       },
     }),
-    [provisioned.path, provisioned.taskView]
+    [provisioned.path, provisioned.taskView, remoteConnectionId, homeDir]
   );
 
   return (
