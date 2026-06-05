@@ -3,6 +3,7 @@ import { runPreArchiveCommand } from './run-pre-archive-command';
 
 const mocks = vi.hoisted(() => ({
   asProvisioned: vi.fn(),
+  getConversationSessionInfo: vi.fn(),
   getCodexSessionContext: vi.fn(),
   getTaskStore: vi.fn(),
   sendInput: vi.fn(),
@@ -17,6 +18,7 @@ vi.mock('@renderer/features/tasks/stores/task-selectors', () => ({
 vi.mock('@renderer/lib/ipc', () => ({
   rpc: {
     conversations: {
+      getConversationSessionInfo: mocks.getConversationSessionInfo,
       getCodexSessionContext: mocks.getCodexSessionContext,
     },
     pty: {
@@ -71,6 +73,10 @@ function mockProvisionedConversation(conversation: ReturnType<typeof makeConvers
 describe('runPreArchiveCommand', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.getConversationSessionInfo.mockResolvedValue({
+      sessionId: 'codex-thread-1',
+      sessionTitle: 'Resolved Codex thread',
+    });
     mocks.getCodexSessionContext.mockResolvedValue({ completedTurnCount: 0 });
     mocks.sendInput.mockResolvedValue({ ok: true });
   });
@@ -144,10 +150,77 @@ describe('runPreArchiveCommand', () => {
 
     expect(mocks.getCodexSessionContext).toHaveBeenCalledWith(
       '/workspace',
-      'conversation-1',
-      'Codex'
+      'codex-thread-1',
+      'Resolved Codex thread'
     );
     expect(conversation.status).toBe('completed');
+    vi.useRealTimers();
+  });
+
+  it('uses the resolved Codex thread id when polling completion', async () => {
+    vi.useFakeTimers();
+    const conversation = makeConversation('codex');
+    mockProvisionedConversation(conversation);
+    mocks.getConversationSessionInfo.mockResolvedValue({
+      sessionId: 'actual-codex-thread',
+      sessionTitle: 'Actual Codex title',
+    });
+    mocks.getCodexSessionContext
+      .mockResolvedValueOnce({
+        threadId: 'actual-codex-thread',
+        title: 'Actual Codex title',
+        completedTurnCount: 8,
+      })
+      .mockResolvedValueOnce({
+        threadId: 'actual-codex-thread',
+        title: 'Actual Codex title',
+        completedTurnCount: 9,
+      });
+
+    const run = runPreArchiveCommand('project-1', 'task-1', 'lovstudio-git-commit-with-context');
+    await vi.runAllTimersAsync();
+    await run;
+
+    expect(mocks.getConversationSessionInfo).toHaveBeenCalledWith(
+      'project-1',
+      'task-1',
+      'conversation-1',
+      '/workspace'
+    );
+    expect(mocks.getCodexSessionContext).toHaveBeenNthCalledWith(
+      1,
+      '/workspace',
+      'actual-codex-thread',
+      'Actual Codex title'
+    );
+    expect(mocks.getCodexSessionContext).toHaveBeenNthCalledWith(
+      2,
+      '/workspace',
+      'actual-codex-thread',
+      'Actual Codex title'
+    );
+    vi.useRealTimers();
+  });
+
+  it('returns after the Codex-specific timeout when no completion signal arrives', async () => {
+    vi.useFakeTimers();
+    const conversation = makeConversation('codex');
+    mockProvisionedConversation(conversation);
+    mocks.getCodexSessionContext.mockResolvedValue({
+      threadId: 'codex-thread-1',
+      title: 'Resolved Codex thread',
+      completedTurnCount: 4,
+    });
+
+    const run = runPreArchiveCommand('project-1', 'task-1', 'lovstudio-git-commit-with-context');
+    await vi.runAllTimersAsync();
+    await run;
+
+    expect(mocks.warn).toHaveBeenCalledWith('runPreArchiveCommand failed', {
+      projectId: 'project-1',
+      taskId: 'task-1',
+      error: 'Error: Timed out waiting for pre-archive command to finish',
+    });
     vi.useRealTimers();
   });
 });

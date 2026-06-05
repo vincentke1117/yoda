@@ -15,6 +15,7 @@ import { buildPromptInjectionPayload } from '@renderer/lib/pty/prompt-injection'
 import { log } from '@renderer/utils/logger';
 
 const COMPLETION_TIMEOUT_MS = 10 * 60_000;
+const CODEX_COMPLETION_TIMEOUT_MS = 2 * 60_000;
 const CODEX_COMPLETION_POLL_MS = 2_000;
 const INTERRUPT_INPUT = '\x03';
 
@@ -56,7 +57,12 @@ export async function runPreArchiveCommand(
   const submitDelayMs = getAgentCommandSubmitDelayMs(target.data.providerId);
   const submitInput = getAgentCommandSubmitInput(target.data.providerId);
   const sessionId = target.session.sessionId;
-  const codexBaseline = await getCodexCompletionBaseline(target, provisioned.path);
+  const codexBaseline = await getCodexCompletionBaseline(
+    projectId,
+    taskId,
+    target,
+    provisioned.path
+  );
 
   const interrupt = () => {
     void rpc.pty.sendInput(sessionId, INTERRUPT_INPUT).catch(() => {});
@@ -113,21 +119,28 @@ type CodexCompletionBaseline = {
 };
 
 async function getCodexCompletionBaseline(
+  projectId: string,
+  taskId: string,
   target: ConversationStore,
   cwd: string | undefined
 ): Promise<CodexCompletionBaseline | undefined> {
   if (target.data.providerId !== 'codex' || !cwd) return undefined;
   try {
+    const sessionInfo = await rpc.conversations
+      .getConversationSessionInfo(projectId, taskId, target.data.id, cwd)
+      .catch(() => null);
+    const codexThreadId = sessionInfo?.sessionId || target.data.id;
+    const codexThreadTitle = sessionInfo?.sessionTitle ?? target.data.title;
     const context = await rpc.conversations.getCodexSessionContext(
       cwd,
-      target.data.id,
-      target.data.title
+      codexThreadId,
+      codexThreadTitle
     );
     if (!context) return undefined;
     return {
       cwd,
-      conversationId: target.data.id,
-      conversationTitle: target.data.title,
+      conversationId: context.threadId || codexThreadId,
+      conversationTitle: context.title || codexThreadTitle,
       completedTurnCount: context.completedTurnCount,
     };
   } catch {
@@ -167,10 +180,13 @@ function waitForCompletion(
       resolveDone('abort');
     };
 
-    const timeout = setTimeout(() => {
-      cleanup();
-      reject(new Error('Timed out waiting for pre-archive command to finish'));
-    }, COMPLETION_TIMEOUT_MS);
+    const timeout = setTimeout(
+      () => {
+        cleanup();
+        reject(new Error('Timed out waiting for pre-archive command to finish'));
+      },
+      options.codexBaseline ? CODEX_COMPLETION_TIMEOUT_MS : COMPLETION_TIMEOUT_MS
+    );
 
     options.signal?.addEventListener('abort', onAbort, { once: true });
     dispose = reaction(
