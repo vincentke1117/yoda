@@ -1,5 +1,5 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { IssueProviderType } from '@shared/issue-providers';
 import type { Issue } from '@shared/tasks';
 import { rpc } from '@renderer/lib/ipc';
@@ -19,6 +19,9 @@ export interface UseIssuesResult {
   searchTerm: string;
   setSearchTerm: (term: string) => void;
   isSearching: boolean;
+  isRefreshing: boolean;
+  refresh: () => Promise<void>;
+  syncCreatedIssue: (issue: Issue) => void;
 }
 
 interface UseIssuesOptions {
@@ -35,6 +38,33 @@ function getSearchMinLength(provider: IssueProviderType | null): number {
   return SEARCH_MIN_LENGTH_BY_PROVIDER[provider] ?? 1;
 }
 
+function getIssueCacheKey(issue: Issue): string {
+  return issue.url || `${issue.provider}:${issue.identifier}`;
+}
+
+function upsertCreatedIssue(
+  issues: Issue[] | undefined,
+  createdIssue: Issue,
+  limit: number
+): Issue[] {
+  const createdIssueKey = getIssueCacheKey(createdIssue);
+  const nextIssues = [
+    createdIssue,
+    ...(issues ?? []).filter((issue) => getIssueCacheKey(issue) !== createdIssueKey),
+  ];
+
+  return nextIssues.slice(0, limit);
+}
+
+function issueMatchesSearch(issue: Issue, searchTerm: string): boolean {
+  const normalizedSearchTerm = searchTerm.trim().toLocaleLowerCase();
+  if (!normalizedSearchTerm) return true;
+
+  return [issue.title, issue.identifier, issue.url].some((value) =>
+    value.toLocaleLowerCase().includes(normalizedSearchTerm)
+  );
+}
+
 export function useIssues(
   provider: IssueProviderType | null,
   {
@@ -46,6 +76,7 @@ export function useIssues(
     searchLimit = SEARCH_LIMIT,
   }: UseIssuesOptions = {}
 ): UseIssuesResult {
+  const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedTerm, setDebouncedTerm] = useState('');
 
@@ -55,20 +86,21 @@ export function useIssues(
   }, [searchTerm]);
 
   const isReady = enabled && !!provider;
+  const initialQueryKey = useMemo(
+    () =>
+      [
+        'issues:initial',
+        provider,
+        projectId ?? '',
+        projectPath ?? '',
+        repositoryUrl ?? '',
+        initialLimit,
+      ] as const,
+    [initialLimit, projectId, projectPath, provider, repositoryUrl]
+  );
 
-  const {
-    data: initialIssues,
-    isLoading: isLoadingInitial,
-    error: initialError,
-  } = useQuery({
-    queryKey: [
-      'issues:initial',
-      provider,
-      projectId ?? '',
-      projectPath ?? '',
-      repositoryUrl ?? '',
-      initialLimit,
-    ],
+  const initialQuery = useQuery({
+    queryKey: initialQueryKey,
     queryFn: async () => {
       if (!provider) return [] as Issue[];
 
@@ -89,25 +121,39 @@ export function useIssues(
     enabled: isReady,
   });
 
-  const minSearchLength = getSearchMinLength(provider);
-  const isActiveSearch = debouncedTerm.trim().length >= minSearchLength;
+  const {
+    data: initialIssues,
+    isLoading: isLoadingInitial,
+    isFetching: isFetchingInitial,
+    error: initialError,
+    refetch: refetchInitialIssues,
+  } = initialQuery;
 
-  const { data: searchIssues, isFetching: isSearching } = useQuery({
-    queryKey: [
-      'issues:search',
-      provider,
-      projectId ?? '',
-      projectPath ?? '',
-      repositoryUrl ?? '',
-      debouncedTerm.trim(),
-      searchLimit,
-    ],
+  const minSearchLength = getSearchMinLength(provider);
+  const normalizedDebouncedTerm = debouncedTerm.trim();
+  const isActiveSearch = normalizedDebouncedTerm.length >= minSearchLength;
+  const searchQueryKey = useMemo(
+    () =>
+      [
+        'issues:search',
+        provider,
+        projectId ?? '',
+        projectPath ?? '',
+        repositoryUrl ?? '',
+        normalizedDebouncedTerm,
+        searchLimit,
+      ] as const,
+    [normalizedDebouncedTerm, projectId, projectPath, provider, repositoryUrl, searchLimit]
+  );
+
+  const searchQuery = useQuery({
+    queryKey: searchQueryKey,
     queryFn: async () => {
       if (!provider) return [] as Issue[];
 
       const result = await rpc.issues.searchIssues(provider, {
         limit: searchLimit,
-        searchTerm: debouncedTerm.trim(),
+        searchTerm: normalizedDebouncedTerm,
         projectId,
         projectPath,
         repositoryUrl,
@@ -124,12 +170,53 @@ export function useIssues(
     placeholderData: keepPreviousData,
   });
 
+  const { data: searchIssues, isFetching: isSearching, refetch: refetchSearchIssues } = searchQuery;
+
   const issues = useMemo<Issue[]>(() => {
     if (isActiveSearch) return searchIssues ?? [];
     return initialIssues ?? [];
   }, [initialIssues, isActiveSearch, searchIssues]);
 
   const error = initialError instanceof Error ? initialError.message : null;
+  const refresh = useCallback(async () => {
+    if (isActiveSearch) {
+      await refetchSearchIssues();
+      return;
+    }
+
+    await refetchInitialIssues();
+  }, [isActiveSearch, refetchInitialIssues, refetchSearchIssues]);
+  const applyCreatedIssueToCache = useCallback(
+    (issue: Issue) => {
+      queryClient.setQueryData<Issue[]>(initialQueryKey, (currentIssues) =>
+        upsertCreatedIssue(currentIssues, issue, initialLimit)
+      );
+
+      if (!isActiveSearch || !issueMatchesSearch(issue, normalizedDebouncedTerm)) return;
+
+      queryClient.setQueryData<Issue[]>(searchQueryKey, (currentIssues) =>
+        upsertCreatedIssue(currentIssues, issue, searchLimit)
+      );
+    },
+    [
+      initialLimit,
+      initialQueryKey,
+      isActiveSearch,
+      normalizedDebouncedTerm,
+      queryClient,
+      searchLimit,
+      searchQueryKey,
+    ]
+  );
+  const syncCreatedIssue = useCallback(
+    (issue: Issue) => {
+      applyCreatedIssueToCache(issue);
+      void refresh()
+        .catch(() => undefined)
+        .then(() => applyCreatedIssueToCache(issue));
+    },
+    [applyCreatedIssueToCache, refresh]
+  );
 
   return {
     issues,
@@ -138,5 +225,8 @@ export function useIssues(
     searchTerm,
     setSearchTerm,
     isSearching: isActiveSearch && isSearching,
+    isRefreshing: isActiveSearch ? isSearching : isFetchingInitial && !isLoadingInitial,
+    refresh,
+    syncCreatedIssue,
   };
 }
