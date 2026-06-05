@@ -61,6 +61,7 @@ import {
 } from '@renderer/features/projects/stores/project-selectors';
 import { useAppSettingsKey } from '@renderer/features/settings/use-app-settings-key';
 import type { ConversationStore } from '@renderer/features/tasks/conversations/conversation-manager';
+import { nextDefaultConversationTitle } from '@renderer/features/tasks/conversations/conversation-title-utils';
 import { useEffectiveProvider } from '@renderer/features/tasks/conversations/use-effective-provider';
 import { ProjectSelector } from '@renderer/features/tasks/create-task-modal/project-selector';
 import { useAgentAutoApproveDefaults } from '@renderer/features/tasks/hooks/useAgentAutoApproveDefaults';
@@ -102,6 +103,11 @@ import {
 } from '@renderer/lib/ui/popover';
 import { Textarea } from '@renderer/lib/ui/textarea';
 import { cn } from '@renderer/utils/utils';
+import {
+  applyMarkdownEnterEdit,
+  applyMarkdownTabEdit,
+  type MarkdownTextareaEdit,
+} from './markdown-textarea-editing';
 import {
   applyPathCompletion,
   buildPathCompletionItems,
@@ -1103,7 +1109,7 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
               projectId: INTERNAL_PROJECT_ID,
               taskId,
               provider: providerId,
-              title: taskName,
+              title: nextDefaultConversationTitle(providerId, []),
               initialPrompt: trimmed || undefined,
               autoApprove: autoApproveDefaults.getDefault(providerId),
             },
@@ -1152,7 +1158,7 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
             projectId: mounted.data.id,
             taskId,
             provider: args.provider,
-            title: taskName,
+            title: nextDefaultConversationTitle(args.provider, []),
             initialPrompt: args.initialPrompt,
             autoApprove: autoApproveDefaults.getDefault(args.provider),
           },
@@ -1336,6 +1342,47 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
     [prompt, promptSelection]
   );
 
+  const applyPromptMarkdownEdit = useCallback(
+    (next: MarkdownTextareaEdit) => {
+      setPrompt(next.value);
+      setPromptSelection(next.selection);
+      requestAnimationFrame(() => {
+        const textarea = promptTextareaRef.current;
+        if (!textarea) return;
+        textarea.focus();
+        textarea.setSelectionRange(next.selection.start, next.selection.end);
+        updatePromptSelection(textarea);
+      });
+    },
+    [updatePromptSelection]
+  );
+
+  const applyPromptTabEdit = useCallback(
+    (target: HTMLTextAreaElement, direction: 'indent' | 'outdent') => {
+      applyPromptMarkdownEdit(
+        applyMarkdownTabEdit(
+          prompt,
+          { start: target.selectionStart, end: target.selectionEnd },
+          direction
+        )
+      );
+    },
+    [applyPromptMarkdownEdit, prompt]
+  );
+
+  const applyPromptEnterEdit = useCallback(
+    (target: HTMLTextAreaElement): boolean => {
+      const next = applyMarkdownEnterEdit(prompt, {
+        start: target.selectionStart,
+        end: target.selectionEnd,
+      });
+      if (!next) return false;
+      applyPromptMarkdownEdit(next);
+      return true;
+    },
+    [applyPromptMarkdownEdit, prompt]
+  );
+
   const handlePromptKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
       if (skillShortcutMenuOpen && activeSkillShortcut) {
@@ -1359,8 +1406,13 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
           return;
         }
         if (e.key === 'Enter' || e.key === 'Tab') {
-          e.preventDefault();
           const item = filteredSkillShortcutOptions[effectiveSkillShortcutIndex];
+          if (!item && e.key === 'Tab') {
+            e.preventDefault();
+            applyPromptTabEdit(e.currentTarget, e.shiftKey ? 'outdent' : 'indent');
+            return;
+          }
+          e.preventDefault();
           if (item) commitSkillShortcut(item.command, activeSkillShortcut);
           return;
         }
@@ -1396,9 +1448,22 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
         }
       }
 
-      if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) {
+      if (e.key === 'Tab') {
         e.preventDefault();
-        if (canSubmit) void handleSubmit();
+        applyPromptTabEdit(e.currentTarget, e.shiftKey ? 'outdent' : 'indent');
+        return;
+      }
+
+      if (e.key === 'Enter' && !e.nativeEvent.isComposing && e.keyCode !== 229) {
+        if (applyPromptEnterEdit(e.currentTarget)) {
+          e.preventDefault();
+          return;
+        }
+
+        if (!e.shiftKey) {
+          e.preventDefault();
+          if (canSubmit) void handleSubmit();
+        }
       }
     },
     [
@@ -1406,6 +1471,8 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
       activePathMention,
       activeSkillShortcut,
       activeSkillShortcutKey,
+      applyPromptEnterEdit,
+      applyPromptTabEdit,
       canSubmit,
       commitPathCompletion,
       commitSkillShortcut,

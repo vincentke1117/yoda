@@ -24,6 +24,7 @@ import {
   projectViewKind,
 } from '@renderer/features/projects/stores/project-selectors';
 import { useAppSettingsKey } from '@renderer/features/settings/use-app-settings-key';
+import { nextDefaultConversationTitle } from '@renderer/features/tasks/conversations/conversation-title-utils';
 import { useEffectiveProvider } from '@renderer/features/tasks/conversations/use-effective-provider';
 import { useAgentAutoApproveDefaults } from '@renderer/features/tasks/hooks/useAgentAutoApproveDefaults';
 import { isRegistered } from '@renderer/features/tasks/stores/task';
@@ -152,7 +153,7 @@ export const SidebarProjectItem = observer(function SidebarProjectItem({
         projectId: mounted.data.id,
         taskId,
         provider: expressProviderId,
-        title: taskName,
+        title: nextDefaultConversationTitle(expressProviderId, []),
         autoApprove: expressAutoApproveDefaults.getDefault(expressProviderId),
       },
     });

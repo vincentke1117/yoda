@@ -2,7 +2,6 @@ import { GitCompare, MessageSquare, X } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useMemo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { formatConversationTitleForDisplay } from '@renderer/features/tasks/conversations/conversation-title-utils';
 import { GitChangeStatusIcon } from '@renderer/features/tasks/diff-view/changes-panel/components/changes-list-item';
 import type { ResolvedDiffTab, ResolvedTab } from '@renderer/features/tasks/tabs/tab-manager-store';
 import { useProvisionedTask } from '@renderer/features/tasks/task-view-context';
@@ -162,11 +161,9 @@ function getTabMeta(tab: ResolvedTab): {
   title: string;
 } {
   if (tab.kind === 'conversation') {
-    const config = agentConfig[tab.store.data.providerId];
-    const label = formatConversationTitleForDisplay(
-      tab.store.data.providerId,
-      tab.store.data.title
-    );
+    const providerId = tab.store.data.providerId;
+    const config = agentConfig[providerId];
+    const label = config?.name ?? providerId;
     return {
       icon: config ? (
         <AgentLogo
