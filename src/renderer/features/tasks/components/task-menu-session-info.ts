@@ -5,6 +5,7 @@ import { rpc } from '@renderer/lib/ipc';
 import { agentConfig } from '@renderer/utils/agentConfig';
 
 export type TaskMenuSessionFields = {
+  providerId?: AgentProviderId;
   sessionId?: string;
   sessionTitle?: string;
   providerName?: string;
@@ -63,6 +64,7 @@ export function buildTaskMenuSessionFields(
   cwd?: string
 ): TaskMenuSessionFields {
   return {
+    providerId: conversation.providerId,
     sessionId: conversation.id,
     sessionTitle: conversation.title,
     providerName: agentConfig[conversation.providerId].name,
@@ -89,6 +91,7 @@ export async function resolveTaskMenuSessionFields(
     return {
       ...fallback,
       sessionId: resolved.sessionId || fallback.sessionId,
+      sessionTitle: resolved.sessionTitle ?? fallback.sessionTitle,
       resumeCommand: resolved.resumeCommand ?? fallback.resumeCommand,
     };
   } catch {

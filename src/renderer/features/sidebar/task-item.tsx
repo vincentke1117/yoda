@@ -172,7 +172,7 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
     ? buildTaskMenuSessionFields(menuConversation, sessionInfoCwd)
     : {};
   const hasStoredConversations = Object.values(task.conversationStats).some((count) => count > 0);
-  const resolveSessionBasicInfo = menuConversation
+  const resolveSessionInfo = menuConversation
     ? () => resolveTaskMenuSessionFields(menuConversation, sessionInfoCwd)
     : hasStoredConversations && task.state !== 'unregistered'
       ? async () => {
@@ -231,10 +231,10 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
     canMarkReview,
     branchName,
     ...sessionFields,
-    resolveSessionBasicInfo,
+    resolveSessionInfo,
     projectPath,
     workingDirectory: provisionedTask?.path,
-    openDetailsLabel: t('sidebar.openSessionDetails'),
+    openDetailsLabel: t('tasks.context.openDetails'),
     onOpenDetails: handleOpenDetails,
     onPin: () => void task.setPinned(true),
     onUnpin: () => void task.setPinned(false),

@@ -19,7 +19,9 @@ import {
 } from 'lucide-react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import type { AgentProviderId } from '@shared/agent-provider-registry';
 import { toast } from '@renderer/lib/hooks/use-toast';
+import { rpc } from '@renderer/lib/ipc';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -34,31 +36,31 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@renderer/lib/ui/dropdown-menu';
+import { buildTaskBasicInfo, type TaskBasicInfoFields } from './task-menu-basic-info';
 
-interface SessionBasicInfoFields {
-  projectId?: string;
-  projectName?: string;
-  taskId?: string;
-  taskName?: string;
-  branchName?: string;
+interface TaskSessionInfoFields {
+  providerId?: AgentProviderId;
   sessionId?: string;
   sessionTitle?: string;
   providerName?: string;
-  projectPath?: string;
-  workingDirectory?: string;
   resumeCommand?: string;
 }
 
-interface TaskMenuActions extends SessionBasicInfoFields {
+interface TaskMenuInfoFields extends TaskBasicInfoFields, TaskSessionInfoFields {
+  projectPath?: string;
+  workingDirectory?: string;
+}
+
+interface TaskMenuActions extends TaskMenuInfoFields {
   isPinned: boolean;
   canPin: boolean;
   isArchived: boolean;
   needsReview: boolean;
   canMarkReview: boolean;
-  resolveSessionBasicInfo?: () =>
-    | SessionBasicInfoFields
+  resolveSessionInfo?: () =>
+    | TaskSessionInfoFields
     | undefined
-    | Promise<SessionBasicInfoFields | undefined>;
+    | Promise<TaskSessionInfoFields | undefined>;
   openDetailsLabel?: string;
   onOpenDetails?: () => void;
   onPin: () => void;
@@ -99,38 +101,32 @@ function useMenuItems(actions: TaskMenuActions): MenuItemDescriptor[] {
       key: 'open-details',
       group: 0,
       icon: Info,
-      label: actions.openDetailsLabel ?? t('sidebar.openSessionDetails'),
+      label: actions.openDetailsLabel ?? t('tasks.context.openDetails'),
       onSelect: actions.onOpenDetails,
     });
   }
 
-  // group 1 — run scripts
-  if (actions.onRunScript) {
+  // group 1 — copy
+  if (actions.taskId) {
     items.push({
-      key: 'run-script',
+      key: 'copy-task-id',
       group: 1,
-      icon: PlayCircle,
-      label: t('sidebar.runScripts.runScript'),
-      onSelect: actions.onRunScript,
-      disabled: actions.canRunScript === false,
+      icon: Copy,
+      label: t('tasks.context.copyTaskId'),
+      onSelect: () => {
+        void copyTaskId(actions, t);
+      },
     });
   }
-  if (actions.onViewStatus) {
+  if (actions.taskId || actions.taskName) {
     items.push({
-      key: 'view-status',
+      key: 'copy-task-basic-info',
       group: 1,
-      icon: Activity,
-      label: t('sidebar.runScripts.scriptStatus'),
-      onSelect: actions.onViewStatus,
-    });
-  }
-  if (actions.onConfigureScripts) {
-    items.push({
-      key: 'configure-scripts',
-      group: 1,
-      icon: Settings2,
-      label: t('sidebar.runScripts.configure'),
-      onSelect: actions.onConfigureScripts,
+      icon: Copy,
+      label: t('tasks.context.copyTaskBasicInfo'),
+      onSelect: () => {
+        void copyTaskBasicInfo(actions, t);
+      },
     });
   }
 
@@ -196,7 +192,7 @@ function useMenuItems(actions: TaskMenuActions): MenuItemDescriptor[] {
       key: 'archive',
       group: 3,
       icon: Archive,
-      label: t('sidebar.archiveTask'),
+      label: t('tasks.context.archive'),
       onSelect: actions.onArchive,
     });
     if (actions.onArchiveSkipPreCommand) {
@@ -204,7 +200,7 @@ function useMenuItems(actions: TaskMenuActions): MenuItemDescriptor[] {
         key: 'archive-skip-pre',
         group: 3,
         icon: ArchiveX,
-        label: t('sidebar.archiveTaskSkipPre'),
+        label: t('tasks.context.archiveSkipPre'),
         onSelect: actions.onArchiveSkipPreCommand,
       });
     }
@@ -213,7 +209,7 @@ function useMenuItems(actions: TaskMenuActions): MenuItemDescriptor[] {
         key: 'archive-with-note',
         group: 3,
         icon: FileText,
-        label: t('sidebar.archiveTaskWithNote'),
+        label: t('tasks.context.archiveWithNote'),
         onSelect: actions.onArchiveWithNote,
       });
     }
@@ -237,68 +233,33 @@ function useMenuItems(actions: TaskMenuActions): MenuItemDescriptor[] {
     });
   }
 
-  // group 4 — utilities
-  if (actions.sessionId || actions.resolveSessionBasicInfo) {
+  // group 4 — run scripts
+  if (actions.onRunScript) {
     items.push({
-      key: 'copy-session-basic-info',
+      key: 'run-script',
       group: 4,
-      icon: Copy,
-      label: t('tasks.context.copySessionBasicInfo'),
-      onSelect: () => {
-        void copySessionBasicInfo(actions, t);
-      },
+      icon: PlayCircle,
+      label: t('sidebar.runScripts.runScript'),
+      onSelect: actions.onRunScript,
+      disabled: actions.canRunScript === false,
     });
   }
-  if (actions.branchName) {
-    const branch = actions.branchName;
+  if (actions.onViewStatus) {
     items.push({
-      key: 'copy-branch',
+      key: 'view-status',
       group: 4,
-      icon: Copy,
-      label: t('tasks.context.copyBranchName'),
-      onSelect: () => {
-        void copyText(branch, t, {
-          success: t('tasks.context.branchNameCopied'),
-          failure: t('tasks.context.copyBranchNameFailed'),
-        });
-      },
+      icon: Activity,
+      label: t('sidebar.runScripts.scriptStatus'),
+      onSelect: actions.onViewStatus,
     });
   }
-  if (actions.sessionId || actions.resolveSessionBasicInfo) {
+  if (actions.onConfigureScripts) {
     items.push({
-      key: 'copy-session-id',
+      key: 'configure-scripts',
       group: 4,
-      icon: Copy,
-      label: t('tasks.context.copySessionId'),
-      onSelect: () => {
-        void copyResolvedSessionId(actions, t);
-      },
-    });
-  }
-  if (actions.projectPath) {
-    const path = actions.projectPath;
-    items.push({
-      key: 'copy-project-path',
-      group: 4,
-      icon: Copy,
-      label: t('tasks.context.copyProjectPath'),
-      onSelect: () => {
-        void copyText(path, t, {
-          success: t('tasks.context.projectPathCopied'),
-          failure: t('tasks.context.copyFailed'),
-        });
-      },
-    });
-  }
-  if (actions.resumeCommand || (!actions.sessionId && actions.resolveSessionBasicInfo)) {
-    items.push({
-      key: 'copy-resume-command',
-      group: 4,
-      icon: Copy,
-      label: t('tasks.context.copyResumeCommand'),
-      onSelect: () => {
-        void copyResolvedResumeCommand(actions, t);
-      },
+      icon: Settings2,
+      label: t('sidebar.runScripts.configure'),
+      onSelect: actions.onConfigureScripts,
     });
   }
 
@@ -315,9 +276,28 @@ function useMenuItems(actions: TaskMenuActions): MenuItemDescriptor[] {
   return items;
 }
 
-async function copySessionBasicInfo(actions: TaskMenuActions, t: TFunction): Promise<void> {
+async function copyTaskBasicInfo(actions: TaskMenuActions, t: TFunction): Promise<void> {
   try {
-    const value = buildSessionBasicInfo(await resolveSessionBasicInfoFields(actions), t);
+    const fields = await resolveOptionalSessionInfoFields(actions);
+    const contentSourcePath = await resolveSessionContentSourcePath(fields);
+    const value = buildTaskBasicInfo(
+      {
+        ...fields,
+        contentSourcePath,
+      },
+      {
+        provider: t('tasks.context.taskInfo.provider'),
+        project: t('tasks.context.taskInfo.project'),
+        projectPath: t('tasks.context.taskInfo.projectPath'),
+        task: t('tasks.context.taskInfo.task'),
+        taskId: t('tasks.context.taskInfo.taskId'),
+        branch: t('tasks.context.taskInfo.branch'),
+        sessionId: t('tasks.context.taskInfo.sessionId'),
+        contentSource: t('tasks.context.taskInfo.contentSource'),
+        readInstruction: t('tasks.context.taskInfo.readInstruction'),
+        readInstructionValue: t('tasks.context.taskInfo.readInstructionValue'),
+      }
+    );
 
     if (!value) {
       showCopyFailure(t);
@@ -325,7 +305,7 @@ async function copySessionBasicInfo(actions: TaskMenuActions, t: TFunction): Pro
     }
 
     await copyText(value, t, {
-      success: t('tasks.context.sessionBasicInfoCopied'),
+      success: t('tasks.context.taskBasicInfoCopied'),
       failure: t('tasks.context.copyFailed'),
     });
   } catch {
@@ -333,16 +313,16 @@ async function copySessionBasicInfo(actions: TaskMenuActions, t: TFunction): Pro
   }
 }
 
-async function copyResolvedSessionId(actions: TaskMenuActions, t: TFunction): Promise<void> {
+async function copyTaskId(actions: TaskMenuActions, t: TFunction): Promise<void> {
   try {
-    const sessionId = (await resolveSessionBasicInfoFields(actions)).sessionId?.trim();
-    if (!sessionId) {
+    const taskId = actions.taskId?.trim();
+    if (!taskId) {
       showCopyFailure(t);
       return;
     }
 
-    await copyText(sessionId, t, {
-      success: t('tasks.context.sessionIdCopied'),
+    await copyText(taskId, t, {
+      success: t('tasks.context.taskIdCopied'),
       failure: t('tasks.context.copyFailed'),
     });
   } catch {
@@ -350,53 +330,54 @@ async function copyResolvedSessionId(actions: TaskMenuActions, t: TFunction): Pr
   }
 }
 
-async function copyResolvedResumeCommand(actions: TaskMenuActions, t: TFunction): Promise<void> {
-  try {
-    const command = (await resolveSessionBasicInfoFields(actions)).resumeCommand?.trim();
-    if (!command) {
-      showCopyFailure(t);
-      return;
-    }
-
-    await copyText(command, t, {
-      success: t('tasks.context.resumeCommandCopied'),
-      failure: t('tasks.context.copyFailed'),
-    });
-  } catch {
-    showCopyFailure(t);
-  }
-}
-
-async function resolveSessionBasicInfoFields(
+async function resolveOptionalSessionInfoFields(
   actions: TaskMenuActions
-): Promise<SessionBasicInfoFields> {
-  const resolved = await actions.resolveSessionBasicInfo?.();
+): Promise<TaskMenuInfoFields> {
+  try {
+    return await resolveSessionInfoFields(actions);
+  } catch {
+    return actions;
+  }
+}
+
+async function resolveSessionInfoFields(actions: TaskMenuActions): Promise<TaskMenuInfoFields> {
+  const resolved = await actions.resolveSessionInfo?.();
   return { ...actions, ...(resolved ?? {}) };
 }
 
-function buildSessionBasicInfo(actions: SessionBasicInfoFields, t: TFunction): string | undefined {
-  if (!actions.sessionId?.trim()) return undefined;
+async function resolveSessionContentSourcePath(
+  fields: TaskMenuInfoFields
+): Promise<string | undefined> {
+  const cwd = firstTrimmed(fields.workingDirectory, fields.projectPath);
+  const sessionId = fields.sessionId?.trim();
+  if (!cwd || !sessionId) return undefined;
 
-  const rows: Array<[label: string, value: string | undefined]> = [
-    [t('tasks.context.sessionInfo.project'), actions.projectName],
-    [t('tasks.context.sessionInfo.projectId'), actions.projectId],
-    [t('tasks.context.sessionInfo.task'), actions.taskName],
-    [t('tasks.context.sessionInfo.taskId'), actions.taskId],
-    [t('tasks.context.sessionInfo.agent'), actions.providerName],
-    [t('tasks.context.sessionInfo.sessionTitle'), actions.sessionTitle],
-    [t('tasks.context.sessionInfo.sessionId'), actions.sessionId],
-    [t('tasks.context.sessionInfo.branch'), actions.branchName],
-    [t('tasks.context.sessionInfo.projectPath'), actions.projectPath],
-    [t('tasks.context.sessionInfo.workingDirectory'), actions.workingDirectory],
-    [t('tasks.context.sessionInfo.resumeCommand'), actions.resumeCommand],
-  ];
+  try {
+    if (fields.providerId === 'claude') {
+      const context = await rpc.conversations.getClaudeSessionContext(cwd, sessionId);
+      return context?.transcriptPath;
+    }
+    if (fields.providerId === 'codex') {
+      const context = await rpc.conversations.getCodexSessionContext(
+        cwd,
+        sessionId,
+        fields.sessionTitle
+      );
+      return context?.rolloutPath ?? undefined;
+    }
+  } catch {
+    return undefined;
+  }
 
-  const lines = rows.flatMap(([label, value]) => {
+  return undefined;
+}
+
+function firstTrimmed(...values: Array<string | undefined>): string | undefined {
+  for (const value of values) {
     const trimmed = value?.trim();
-    return trimmed ? [`${label}: ${trimmed}`] : [];
-  });
-
-  return lines.length > 0 ? lines.join('\n') : undefined;
+    if (trimmed) return trimmed;
+  }
+  return undefined;
 }
 
 async function copyText(

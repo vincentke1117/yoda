@@ -106,7 +106,7 @@ export const TaskRow = observer(function TaskRow({
     ? buildTaskMenuSessionFields(menuConversation, sessionInfoCwd)
     : {};
   const hasStoredConversations = Object.values(task.conversationStats).some((count) => count > 0);
-  const resolveSessionBasicInfo = menuConversation
+  const resolveSessionInfo = menuConversation
     ? () => resolveTaskMenuSessionFields(menuConversation, sessionInfoCwd)
     : hasStoredConversations && task.state !== 'unregistered'
       ? async () => {
@@ -133,9 +133,9 @@ export const TaskRow = observer(function TaskRow({
       canMarkReview={task.state !== 'unregistered'}
       branchName={branchName}
       {...sessionFields}
-      resolveSessionBasicInfo={resolveSessionBasicInfo}
+      resolveSessionInfo={resolveSessionInfo}
       workingDirectory={provisionedTask?.path}
-      openDetailsLabel={t('sidebar.openTaskDetails')}
+      openDetailsLabel={t('tasks.context.openDetails')}
       onOpenDetails={isArchived ? undefined : handleOpenDetails}
       onPin={() => void task.setPinned(true)}
       onUnpin={() => void task.setPinned(false)}
