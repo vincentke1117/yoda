@@ -33,6 +33,7 @@ import {
   contextPanelFocusStore,
   type ContextPromptFocusTarget,
 } from '@renderer/features/tasks/context-panel-focus';
+import { displaySessionPromptText } from '@renderer/features/tasks/context-panel-prompt-display';
 import {
   buildDraftCommentsContextAction,
   buildLinkedIssueContextAction,
@@ -644,7 +645,8 @@ function PromptItem({
   sourcePath?: string;
 }) {
   const ref = useRef<HTMLDetailsElement>(null);
-  const preview = prompt.text.replace(/\s+/g, ' ').slice(0, 80);
+  const displayText = displaySessionPromptText(prompt.text);
+  const preview = displayText.replace(/\s+/g, ' ').slice(0, 80);
   const timestamp = prompt.timestamp ? new Date(prompt.timestamp).toLocaleTimeString() : null;
 
   useEffect(() => {
@@ -667,14 +669,14 @@ function PromptItem({
     >
       <summary className="flex min-w-0 cursor-pointer select-none items-center gap-1.5 text-xs">
         <span className="shrink-0 font-mono text-[10px] text-foreground-passive">#{index}</span>
-        <span className="min-w-0 flex-1 truncate" title={prompt.text}>
+        <span className="min-w-0 flex-1 truncate" title={displayText}>
           {preview}
-          {prompt.text.length > 80 ? '…' : ''}
+          {displayText.length > 80 ? '…' : ''}
         </span>
         <ContextItemTrailing meta={timestamp ?? undefined} sourcePath={sourcePath} />
       </summary>
       <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-foreground">
-        {prompt.text}
+        {displayText}
       </pre>
     </details>
   );
