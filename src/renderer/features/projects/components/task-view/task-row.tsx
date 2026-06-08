@@ -9,6 +9,7 @@ import {
   TaskLinkedIssues,
   type TaskIssueLinkingState,
 } from '@renderer/features/projects/components/issues-view/task-issue-links';
+import { useArchiveTask } from '@renderer/features/tasks/archive-task';
 import { AgentStatusIndicator } from '@renderer/features/tasks/components/agent-status-indicator';
 import { TaskContextMenu } from '@renderer/features/tasks/components/task-context-menu';
 import { TaskGitDiffStats } from '@renderer/features/tasks/components/task-git-diff-stats';
@@ -50,15 +51,17 @@ export const TaskRow = observer(function TaskRow({
   const showRename = useShowModal('renameTaskModal');
   const showArchiveWithNote = useShowModal('archiveTaskWithNoteModal');
   const showConfirm = useShowModal('confirmActionModal');
+  const showEditPreArchiveCommand = useShowModal('editPreArchiveCommandModal');
   const taskManager = getTaskManagerStore(task.data.projectId);
+  const { archiveTask, hasPreArchiveCommand } = useArchiveTask(task.data.projectId);
   const [isArchiving, setIsArchiving] = useState(false);
 
-  const handleArchive = () => {
+  const handleArchive = (options?: { skipPreCommand?: boolean }) => {
     if (isArchiving) return;
     setIsArchiving(true);
     void (async () => {
       try {
-        await taskManager?.archiveTask(task.data.id);
+        await archiveTask(task.data.id, options);
       } finally {
         setIsArchiving(false);
       }
@@ -157,7 +160,11 @@ export const TaskRow = observer(function TaskRow({
       onUnmarkNeedsReview={() => void task.setNeedsReview(false)}
       onRename={handleRename}
       onArchive={handleArchive}
+      onArchiveSkipPreCommand={
+        hasPreArchiveCommand ? () => handleArchive({ skipPreCommand: true }) : undefined
+      }
       onArchiveWithNote={handleArchiveWithNote}
+      onConfigurePreArchive={() => showEditPreArchiveCommand({})}
       onRestore={handleRestore}
       onDelete={handleDelete}
     >

@@ -139,10 +139,10 @@
       "failed": "重命名项目失败"
     },
     "archiveTask": "归档任务",
-    "interruptPreArchive": "打断归档前命令",
-    "archiveTaskSkipPre": "归档（跳过归档前命令）",
+    "interruptPreArchive": "打断归档前 skill",
+    "archiveTaskSkipPre": "归档（跳过归档前 skill）",
     "archiveTaskWithNote": "归档任务（附备注）…",
-    "configurePreArchive": "配置归档前命令…",
+    "configurePreArchive": "配置归档前 skill…",
     "phase": {
       "creatingRepo": "创建仓库中…",
       "cloning": "克隆中…",
@@ -405,8 +405,8 @@
       "tmuxNotDetectedAfterInstall": "安装后仍未检测到 tmux。",
       "tmuxNoInstallCommand": "当前系统没有可用的自动 tmux 安装命令。",
       "tmuxInstallFailed": "安装 tmux 失败",
-      "preArchiveCommand": "归档前自动命令",
-      "preArchiveCommandDescription": "设置后，归档会话前会先把这段文本发送到该会话，并等 agent 完成再执行归档。留空则直接归档。",
+      "preArchiveCommand": "归档前调用 skill",
+      "preArchiveCommandDescription": "设置后，归档任务或会话前会先把这个 skill 或命令发送到目标会话，并等 agent 完成再执行归档。留空则直接归档。",
       "preArchiveCommandPlaceholder": "例如 lovstudio-git-commit-with-context"
     },
     "terminal": {
@@ -634,7 +634,7 @@
       "close": "关闭标签页",
       "newConversation": "新建会话",
       "archiveConversation": "归档会话",
-      "archiveConversationSkipPre": "归档会话（跳过归档前命令）",
+      "archiveConversationSkipPre": "归档会话（跳过归档前 skill）",
       "preview": "预览"
     },
     "files": "文件",
@@ -682,9 +682,9 @@
       "submit": "归档"
     },
     "editPreArchiveCommand": {
-      "title": "归档前命令",
-      "label": "命令",
-      "hint": "归档会话前发送到该会话。留空则直接归档。",
+      "title": "归档前调用 skill",
+      "label": "Skill 或命令",
+      "hint": "归档前发送到目标会话。留空则直接归档。",
       "submit": "保存"
     },
     "addRemote": {
@@ -861,7 +861,7 @@
       "unmarkReview": "取消审查标记",
       "markForReview": "标记为待审查",
       "archive": "归档",
-      "archiveSkipPre": "归档（跳过归档前命令）",
+      "archiveSkipPre": "归档（跳过归档前 skill）",
       "archiveWithNote": "归档（附备注）…",
       "copyTaskBasicInfo": "复制基本信息",
       "taskBasicInfoCopied": "任务基本信息已复制",

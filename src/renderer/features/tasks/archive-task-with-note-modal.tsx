@@ -1,6 +1,7 @@
 import { observer } from 'mobx-react-lite';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useArchiveTask } from '@renderer/features/tasks/archive-task';
 import { getTaskManagerStore } from '@renderer/features/tasks/stores/task-selectors';
 import { type BaseModalProps } from '@renderer/lib/modal/modal-provider';
 import { Button } from '@renderer/lib/ui/button';
@@ -36,6 +37,7 @@ export const ArchiveTaskWithNoteModal = observer(function ArchiveTaskWithNoteMod
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const { archiveTask } = useArchiveTask(projectId);
   const taskManager = getTaskManagerStore(projectId);
 
   const handleSubmit = useCallback(async () => {
@@ -43,13 +45,13 @@ export const ArchiveTaskWithNoteModal = observer(function ArchiveTaskWithNoteMod
     setIsSubmitting(true);
     setError(null);
     try {
-      await taskManager.archiveTask(taskId, note);
+      await archiveTask(taskId, { note });
       onSuccess();
     } catch (e) {
       setError(e instanceof Error ? e.message : t('sidebar.archiveTask'));
       setIsSubmitting(false);
     }
-  }, [taskManager, taskId, note, onSuccess, t]);
+  }, [archiveTask, taskId, note, onSuccess, taskManager, t]);
 
   return (
     <>

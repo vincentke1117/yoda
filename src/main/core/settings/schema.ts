@@ -259,11 +259,11 @@ export const homeDraftSchema = z.object({
   /** When true, the sidebar "+" button creates a task immediately using the
    *  last home-draft agent runtime config instead of opening the home view. */
   expressMode: z.boolean(),
-  /** When non-empty, archiving a task first sends this text to the task's
-   *  most-recently-used conversation and waits for the agent to finish
-   *  before performing the actual archive. Bare command names are prefixed
-   *  for the target agent, e.g. "lovstudio-git-commit-with-context" becomes
-   *  "$lovstudio-git-commit-with-context" for Codex or
+  /** When non-empty, archiving a task or session first sends this skill or
+   *  command to the target conversation and waits for the agent to finish
+   *  before performing the actual archive. Bare skill/command names are
+   *  prefixed for the target agent, e.g. "lovstudio-git-commit-with-context"
+   *  becomes "$lovstudio-git-commit-with-context" for Codex or
    *  "/lovstudio-git-commit-with-context" for Claude. */
   preArchiveCommand: z.string(),
   /** Global default quick-action commands shown on each project's overview.

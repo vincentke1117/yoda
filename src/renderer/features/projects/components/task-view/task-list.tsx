@@ -4,6 +4,7 @@ import { observer } from 'mobx-react-lite';
 import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { asMounted, getProjectStore } from '@renderer/features/projects/stores/project-selectors';
+import { useArchiveTask } from '@renderer/features/tasks/archive-task';
 import { useIssueSearch } from '@renderer/features/tasks/components/issue-selector/useIssueSearch';
 import { getTaskManagerStore } from '@renderer/features/tasks/stores/task-selectors';
 import { ListPopoverCard } from '@renderer/lib/components/list-popover-card';
@@ -151,6 +152,7 @@ export const TaskList = observer(function TaskList() {
   } = useParams('project');
   const store = asMounted(getProjectStore(projectId));
   const taskManager = getTaskManagerStore(projectId);
+  const { archiveTask } = useArchiveTask(projectId);
   const showConfirm = useShowModal('confirmActionModal');
   const showCreateTaskModal = useShowModal('taskModal');
 
@@ -194,7 +196,7 @@ export const TaskList = observer(function TaskList() {
 
   const bulkArchive = () => {
     const ids = [...taskView.selectedIds];
-    ids.forEach((id) => void taskManager?.archiveTask(id));
+    ids.forEach((id) => void archiveTask(id));
     clearSelection();
   };
 

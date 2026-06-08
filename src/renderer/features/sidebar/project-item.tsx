@@ -23,6 +23,7 @@ import {
   projectViewKind,
 } from '@renderer/features/projects/stores/project-selectors';
 import { useAppSettingsKey } from '@renderer/features/settings/use-app-settings-key';
+import { useArchiveTask } from '@renderer/features/tasks/archive-task';
 import { nextDefaultConversationTitle } from '@renderer/features/tasks/conversations/conversation-title-utils';
 import { useEffectiveProvider } from '@renderer/features/tasks/conversations/use-effective-provider';
 import { useAgentAutoApproveDefaults } from '@renderer/features/tasks/hooks/useAgentAutoApproveDefaults';
@@ -66,6 +67,7 @@ export const SidebarProjectItem = observer(function SidebarProjectItem({
 
   const project = getProjectStore(projectId);
   const mountedProject = asMounted(project);
+  const { archiveTask } = useArchiveTask(projectId);
 
   const prefetchRepository = useCallback(() => {
     const repo = getRepositoryStore(projectId);
@@ -201,7 +203,10 @@ export const SidebarProjectItem = observer(function SidebarProjectItem({
   const handleArchiveProjectTasks = () => {
     if (!mountedProject || activeTaskCount === 0) return;
     void (async () => {
-      await mountedProject.taskManager.archiveActiveTasks();
+      const taskIds = Array.from(mountedProject.taskManager.tasks.values()).flatMap((task) =>
+        isRegistered(task) && !task.data.archivedAt ? [task.data.id] : []
+      );
+      await Promise.all(taskIds.map((taskId) => archiveTask(taskId)));
       if (currentView === 'task' && taskParams.projectId === projectId) {
         navigate('project', { projectId });
       }

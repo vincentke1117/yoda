@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { selectCurrentPr } from '@shared/pull-requests';
 import { getProjectStore } from '@renderer/features/projects/stores/project-selectors';
 import { TaskSidebarAgentStatus } from '@renderer/features/sidebar/task-sidebar-agent-status';
+import { useArchiveTask } from '@renderer/features/tasks/archive-task';
 import {
   TaskActionsMenu,
   TaskContextMenu,
@@ -55,6 +56,7 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
   const showArchiveWithNote = useShowModal('archiveTaskWithNoteModal');
   const showConfirm = useShowModal('confirmActionModal');
   const showManageRunScripts = useShowModal('manageRunScriptsModal');
+  const showEditPreArchiveCommand = useShowModal('editPreArchiveCommandModal');
 
   const { currentView } = useWorkspaceSlots();
   const { params } = useParams('task');
@@ -64,6 +66,7 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
 
   const task = getTaskStore(projectId, taskId)!;
   const taskManager = getTaskManagerStore(projectId);
+  const { archiveTask, hasPreArchiveCommand } = useArchiveTask(projectId);
   const [isArchiving, setIsArchiving] = useState(false);
 
   const isBootstrapping =
@@ -80,12 +83,12 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
     void taskManager?.provisionTask(taskId);
   };
 
-  const handleArchive = () => {
+  const handleArchive = (options?: { skipPreCommand?: boolean }) => {
     if (isArchiving) return;
     void (async () => {
       try {
         setIsArchiving(true);
-        await taskManager?.archiveTask(taskId);
+        await archiveTask(taskId, options);
       } finally {
         setIsArchiving(false);
       }
@@ -206,7 +209,11 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
     onUnmarkNeedsReview: () => void task.setNeedsReview(false),
     onRename: handleRename,
     onArchive: handleArchive,
+    onArchiveSkipPreCommand: hasPreArchiveCommand
+      ? () => handleArchive({ skipPreCommand: true })
+      : undefined,
     onArchiveWithNote: handleArchiveWithNote,
+    onConfigurePreArchive: () => showEditPreArchiveCommand({}),
     onReconnect: handleReconnect,
     onDelete: handleDelete,
     onRunScript: handleRunScript,

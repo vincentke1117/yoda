@@ -141,10 +141,10 @@
       "failed": "Failed to rename project"
     },
     "archiveTask": "Archive task",
-    "interruptPreArchive": "Interrupt pre-archive command",
-    "archiveTaskSkipPre": "Archive without pre-command",
+    "interruptPreArchive": "Interrupt pre-archive skill",
+    "archiveTaskSkipPre": "Archive without pre-archive skill",
     "archiveTaskWithNote": "Archive task with note…",
-    "configurePreArchive": "Configure pre-archive command…",
+    "configurePreArchive": "Configure pre-archive skill…",
     "phase": {
       "creatingRepo": "Creating repository…",
       "cloning": "Cloning…",
@@ -405,8 +405,8 @@
       "tmuxNotDetectedAfterInstall": "tmux was not detected after installation.",
       "tmuxNoInstallCommand": "No automatic tmux install command is available for this system.",
       "tmuxInstallFailed": "Failed to install tmux",
-      "preArchiveCommand": "Pre-archive command",
-      "preArchiveCommandDescription": "When set, archiving a session first sends this text to that session and waits for the agent to finish. Leave empty to archive immediately.",
+      "preArchiveCommand": "Pre-archive skill",
+      "preArchiveCommandDescription": "When set, archiving a task or session first sends this skill or command to the target session and waits for the agent to finish. Leave empty to archive immediately.",
       "preArchiveCommandPlaceholder": "e.g. lovstudio-git-commit-with-context"
     },
     "terminal": {
@@ -634,7 +634,7 @@
       "close": "Close tab",
       "newConversation": "New conversation",
       "archiveConversation": "Archive session",
-      "archiveConversationSkipPre": "Archive session without pre-command",
+      "archiveConversationSkipPre": "Archive session without pre-archive skill",
       "preview": "Preview"
     },
     "files": "Files",
@@ -682,9 +682,9 @@
       "submit": "Archive"
     },
     "editPreArchiveCommand": {
-      "title": "Pre-archive command",
-      "label": "Command",
-      "hint": "Sent to the session before archiving it. Leave empty to archive immediately.",
+      "title": "Pre-archive skill",
+      "label": "Skill or command",
+      "hint": "Sent to the target session before archiving it. Leave empty to archive immediately.",
       "submit": "Save"
     },
     "addRemote": {
@@ -861,7 +861,7 @@
       "unmarkReview": "Unmark review",
       "markForReview": "Mark for review",
       "archive": "Archive",
-      "archiveSkipPre": "Archive without pre-command",
+      "archiveSkipPre": "Archive without pre-archive skill",
       "archiveWithNote": "Archive with note…",
       "copyTaskBasicInfo": "Copy basic info",
       "taskBasicInfoCopied": "Task info copied",
