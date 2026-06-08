@@ -50,14 +50,30 @@ export async function archiveTaskWithPreCommand(
   const taskManager = getTaskManagerStore(projectId);
   if (!taskManager) return;
 
-  if (!options.skipPreCommand && options.preArchiveCommand.trim().length > 0) {
-    const conversationId = await resolvePreArchiveConversationId(projectId, taskId);
-    if (conversationId) {
-      await runPreArchiveCommand(projectId, taskId, conversationId, options.preArchiveCommand);
-    }
-  }
+  const runsPreCommand = !options.skipPreCommand && options.preArchiveCommand.trim().length > 0;
 
-  await taskManager.archiveTask(taskId, options.note);
+  // When a pre-archive command runs it can block for minutes while the agent
+  // works. Flip the row into the archived state up front so it leaves the
+  // sidebar immediately instead of trapping a spinning archive icon. The
+  // command still runs against the (still-live) conversation before the server
+  // archive lands.
+  const rollback = runsPreCommand
+    ? taskManager.markTaskArchivedOptimistic(taskId, options.note)
+    : null;
+
+  try {
+    if (runsPreCommand) {
+      const conversationId = await resolvePreArchiveConversationId(projectId, taskId);
+      if (conversationId) {
+        await runPreArchiveCommand(projectId, taskId, conversationId, options.preArchiveCommand);
+      }
+    }
+
+    await taskManager.archiveTask(taskId, options.note);
+  } catch (e) {
+    rollback?.();
+    throw e;
+  }
 }
 
 async function resolvePreArchiveConversationId(

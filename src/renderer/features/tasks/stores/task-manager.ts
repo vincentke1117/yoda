@@ -578,24 +578,29 @@ export class TaskManagerStore {
     await task.setPinned(isPinned);
   }
 
-  async archiveTask(taskId: string, note?: string): Promise<void> {
+  /**
+   * Flip the task into the archived state locally without hitting the server.
+   * Removes the row from the active sidebar immediately so a slow pre-archive
+   * step never traps the row with a spinning icon. Returns a rollback that
+   * restores the previous state (call it if the eventual server archive fails).
+   */
+  markTaskArchivedOptimistic(taskId: string, note?: string): () => void {
     const currentTask = this.tasks.get(taskId);
-    if (!currentTask || !isRegistered(currentTask)) return;
+    if (!currentTask || !isRegistered(currentTask)) return () => {};
     const previousArchivedAt = currentTask.data.archivedAt;
     const previousArchiveNote = currentTask.data.archiveNote;
     const trimmedNote = note?.trim();
     const nextNote = trimmedNote && trimmedNote.length > 0 ? trimmedNote : undefined;
 
-    try {
-      runInAction(() => {
-        const task = this.tasks.get(taskId);
-        if (task && isRegistered(task)) {
-          task.data.archivedAt = new Date().toISOString();
-          task.data.archiveNote = nextNote;
-        }
-      });
-      await rpc.tasks.archiveTask(this.projectId, taskId, nextNote);
-    } catch (e) {
+    runInAction(() => {
+      const task = this.tasks.get(taskId);
+      if (task && isRegistered(task)) {
+        task.data.archivedAt = new Date().toISOString();
+        task.data.archiveNote = nextNote;
+      }
+    });
+
+    return () => {
       runInAction(() => {
         const task = this.tasks.get(taskId);
         if (task && isRegistered(task)) {
@@ -603,6 +608,20 @@ export class TaskManagerStore {
           task.data.archiveNote = previousArchiveNote;
         }
       });
+    };
+  }
+
+  async archiveTask(taskId: string, note?: string): Promise<void> {
+    const currentTask = this.tasks.get(taskId);
+    if (!currentTask || !isRegistered(currentTask)) return;
+    const trimmedNote = note?.trim();
+    const nextNote = trimmedNote && trimmedNote.length > 0 ? trimmedNote : undefined;
+
+    const rollback = this.markTaskArchivedOptimistic(taskId, note);
+    try {
+      await rpc.tasks.archiveTask(this.projectId, taskId, nextNote);
+    } catch (e) {
+      rollback();
       throw e;
     }
   }

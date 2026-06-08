@@ -4,6 +4,7 @@ import { archiveTaskWithPreCommand } from './archive-task';
 
 const mocks = vi.hoisted(() => ({
   archiveTask: vi.fn(),
+  markTaskArchivedOptimistic: vi.fn(),
   asProvisioned: vi.fn(),
   getConversationsForTask: vi.fn(),
   getTaskManagerStore: vi.fn(),
@@ -40,7 +41,11 @@ describe('archiveTaskWithPreCommand', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.archiveTask.mockResolvedValue(undefined);
-    mocks.getTaskManagerStore.mockReturnValue({ archiveTask: mocks.archiveTask });
+    mocks.markTaskArchivedOptimistic.mockReturnValue(() => {});
+    mocks.getTaskManagerStore.mockReturnValue({
+      archiveTask: mocks.archiveTask,
+      markTaskArchivedOptimistic: mocks.markTaskArchivedOptimistic,
+    });
     mocks.getTaskStore.mockReturnValue({});
     mocks.runPreArchiveCommand.mockResolvedValue(undefined);
     mocks.getConversationsForTask.mockResolvedValue([]);
@@ -67,6 +72,11 @@ describe('archiveTaskWithPreCommand', () => {
     expect(mocks.archiveTask).toHaveBeenCalledWith('task-1', undefined);
     expect(mocks.runPreArchiveCommand.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.archiveTask.mock.invocationCallOrder[0]!
+    );
+    // Row must leave the sidebar before the (potentially slow) skill runs, so
+    // the optimistic archive flip comes first.
+    expect(mocks.markTaskArchivedOptimistic.mock.invocationCallOrder[0]!).toBeLessThan(
+      mocks.runPreArchiveCommand.mock.invocationCallOrder[0]!
     );
   });
 
