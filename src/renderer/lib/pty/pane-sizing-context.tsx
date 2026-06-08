@@ -33,6 +33,7 @@ import {
   type ReactNode,
 } from 'react';
 import { rpc } from '@renderer/lib/ipc';
+import { FrontendPty } from './pty';
 import { measureDimensions, type TerminalDimensions } from './pty-dimensions';
 
 const PTY_RESIZE_DEBOUNCE_MS = 60;
@@ -80,7 +81,12 @@ export interface PaneSizingContextValue {
    * getCurrentDimensions() when cell metrics are available because it reads the
    * live DOM instead of a cached value.
    */
-  measureCurrentDimensions: (cellWidth: number, cellHeight: number) => TerminalDimensions | null;
+  measureCurrentDimensions: (
+    cellWidth: number,
+    cellHeight: number,
+    scrollbarWidth?: number,
+    guardColumns?: number
+  ) => TerminalDimensions | null;
 }
 
 const PaneSizingContext = createContext<PaneSizingContextValue | null>(null);
@@ -135,6 +141,7 @@ export function PaneSizingProvider({ paneId, sessionIds, children }: PaneSizingP
     const dims = lastDimensionsRef.current;
     if (dims && added.length > 0) {
       for (const id of added) {
+        FrontendPty.noteResize(id, dims.cols, dims.rows);
         void rpc.pty.resize(id, dims.cols, dims.rows);
       }
     }
@@ -154,6 +161,14 @@ export function PaneSizingProvider({ paneId, sessionIds, children }: PaneSizingP
     pendingDimsRef.current = null;
     if (!dims) return;
     lastDimensionsRef.current = dims;
+    // Always record the dims on each live FrontendPty, even when the IPC
+    // broadcast is deduped below. A restarted session reuses the same sessionId
+    // but gets a NEW FrontendPty (lastSentDims=null); if the broadcast is skipped
+    // because the pane size is unchanged, that pty must still learn its size so a
+    // subsequent restart spawns the backend PTY at the real dims instead of 80x24.
+    for (const id of sessionsRef.current) {
+      FrontendPty.noteResize(id, dims.cols, dims.rows);
+    }
     const sessionIdsKey = sessionsRef.current.join('\0');
     const last = lastBroadcastRef.current;
     if (
@@ -191,10 +206,15 @@ export function PaneSizingProvider({ paneId, sessionIds, children }: PaneSizingP
   );
 
   const measureCurrentDimensions = useCallback(
-    (cellWidth: number, cellHeight: number): TerminalDimensions | null => {
+    (
+      cellWidth: number,
+      cellHeight: number,
+      scrollbarWidth = 0,
+      guardColumns = 0
+    ): TerminalDimensions | null => {
       const el = containerRef.current;
       if (!el) return null;
-      return measureDimensions(el, cellWidth, cellHeight);
+      return measureDimensions(el, cellWidth, cellHeight, scrollbarWidth, guardColumns);
     },
     []
   );
@@ -206,7 +226,10 @@ export function PaneSizingProvider({ paneId, sessionIds, children }: PaneSizingP
 
   return (
     <PaneSizingContext.Provider value={value}>
-      <div ref={containerRef} className="flex min-h-0 flex-1 flex-col">
+      <div
+        ref={containerRef}
+        className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden w-full max-w-full"
+      >
         {children}
       </div>
     </PaneSizingContext.Provider>

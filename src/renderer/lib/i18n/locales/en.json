@@ -681,6 +681,18 @@
       "truncatedPrompts_plural": "{{count}} truncated prompts",
       "promptsModalTitle": "User prompts"
     },
+    "hooks": {
+      "title": "Hooks",
+      "unsupported": "Hooks not supported",
+      "unsupportedDescription": "This provider does not expose configurable hooks.",
+      "none": "No hooks configured",
+      "noneDescription": "No hooks were found in the active settings for this session.",
+      "debug": "Debug",
+      "debugDescription": "Log every executed hook. Restarts the session to take effect.",
+      "restartToApply": "Restart session to apply changes",
+      "execLog": "Execution log",
+      "execLogEmpty": "Waiting for hook executions…"
+    },
     "rename": {
       "title": "Rename task",
       "panelTitle": "Task naming",

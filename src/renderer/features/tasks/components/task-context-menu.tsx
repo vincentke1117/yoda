@@ -90,7 +90,8 @@ interface TaskMenuActions extends TaskMenuInfoFields {
   onConfigurePreArchive?: () => void;
   onRestore?: () => void;
   onReconnect?: () => void;
-  onRestartSession?: () => void;
+  /** Restart the session. Pass a tmux override to force tmux on/off for this restart only. */
+  onRestartSession?: (tmuxOverride?: boolean) => void;
   onDelete: () => void;
   onRunScript?: () => void;
   canRunScript?: boolean;
@@ -101,6 +102,9 @@ interface TaskMenuActions extends TaskMenuInfoFields {
   /** Assign this task to a sidebar workspace, or null for the default. */
   onAssignWorkspace?: (workspaceId: string | null) => void;
 }
+
+/** Session-management group; restart is rendered inline after the last item in it. */
+const TASK_MANAGEMENT_GROUP = 2;
 
 interface MenuItemDescriptor {
   key: string;
@@ -206,15 +210,7 @@ function useMenuItems(actions: TaskMenuActions): MenuItemDescriptor[] {
       onSelect: actions.onReconnect,
     });
   }
-  if (actions.onRestartSession) {
-    items.push({
-      key: 'restart-session',
-      group: 2,
-      icon: RotateCcw,
-      label: t('tasks.context.restartSession'),
-      onSelect: actions.onRestartSession,
-    });
-  }
+  // Restart is rendered as a submenu (tmux / no-tmux) directly in the menu bodies.
 
   // group 3 — archive / restore
   if (!actions.isArchived) {
@@ -473,6 +469,54 @@ const TaskWorkspaceContextSubmenu = observer(function TaskWorkspaceContextSubmen
   );
 });
 
+function RestartSessionContextSubmenu({
+  onRestart,
+}: {
+  onRestart: (tmuxOverride?: boolean) => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <ContextMenuSub>
+      <ContextMenuSubTrigger className="whitespace-nowrap">
+        <RotateCcw className="size-4" />
+        {t('tasks.context.restartSession')}
+      </ContextMenuSubTrigger>
+      <ContextMenuSubContent>
+        <ContextMenuItem className="whitespace-nowrap" onClick={() => onRestart(true)}>
+          {t('tasks.context.restartSessionWithTmux')}
+        </ContextMenuItem>
+        <ContextMenuItem className="whitespace-nowrap" onClick={() => onRestart(false)}>
+          {t('tasks.context.restartSessionWithoutTmux')}
+        </ContextMenuItem>
+      </ContextMenuSubContent>
+    </ContextMenuSub>
+  );
+}
+
+function RestartSessionDropdownSubmenu({
+  onRestart,
+}: {
+  onRestart: (tmuxOverride?: boolean) => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger className="whitespace-nowrap">
+        <RotateCcw className="size-4" />
+        {t('tasks.context.restartSession')}
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent>
+        <DropdownMenuItem className="whitespace-nowrap" onClick={() => onRestart(true)}>
+          {t('tasks.context.restartSessionWithTmux')}
+        </DropdownMenuItem>
+        <DropdownMenuItem className="whitespace-nowrap" onClick={() => onRestart(false)}>
+          {t('tasks.context.restartSessionWithoutTmux')}
+        </DropdownMenuItem>
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
+  );
+}
+
 const TaskWorkspaceDropdownSubmenu = observer(function TaskWorkspaceDropdownSubmenu({
   currentWorkspaceId,
   onAssign,
@@ -525,6 +569,12 @@ export function TaskContextMenu({ children, ...actions }: TaskContextMenuProps) 
           const prev = items[index - 1];
           const showSeparator = prev && prev.group !== item.group;
           const Icon = item.icon;
+          // Restart sits with the session-management group (2); render it inline
+          // right after that group rather than dangling below the destructive item.
+          const showRestartAfter =
+            actions.onRestartSession &&
+            item.group === TASK_MANAGEMENT_GROUP &&
+            items[index + 1]?.group !== TASK_MANAGEMENT_GROUP;
           return (
             <React.Fragment key={item.key}>
               {showSeparator && <ContextMenuSeparator />}
@@ -540,6 +590,9 @@ export function TaskContextMenu({ children, ...actions }: TaskContextMenuProps) 
                 <Icon className="size-4" />
                 {item.label}
               </ContextMenuItem>
+              {showRestartAfter && actions.onRestartSession && (
+                <RestartSessionContextSubmenu onRestart={actions.onRestartSession} />
+              )}
             </React.Fragment>
           );
         })}
@@ -577,6 +630,12 @@ export function TaskActionsMenu({
           const prev = items[index - 1];
           const showSeparator = prev && prev.group !== item.group;
           const Icon = item.icon;
+          // Restart sits with the session-management group (2); render it inline
+          // right after that group rather than dangling below the destructive item.
+          const showRestartAfter =
+            actions.onRestartSession &&
+            item.group === TASK_MANAGEMENT_GROUP &&
+            items[index + 1]?.group !== TASK_MANAGEMENT_GROUP;
           return (
             <React.Fragment key={item.key}>
               {showSeparator && <DropdownMenuSeparator />}
@@ -592,6 +651,9 @@ export function TaskActionsMenu({
                 <Icon className="size-4" />
                 {item.label}
               </DropdownMenuItem>
+              {showRestartAfter && actions.onRestartSession && (
+                <RestartSessionDropdownSubmenu onRestart={actions.onRestartSession} />
+              )}
             </React.Fragment>
           );
         })}

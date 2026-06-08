@@ -46,12 +46,20 @@ export class PtySession {
   }
 
   async reconnect() {
+    // Carry the last known size forward: the new FrontendPty starts with
+    // lastSentDims=null, and the post-mount resize broadcast can be deduped when
+    // the pane size is unchanged. Without seeding, a subsequent restart would
+    // read null and spawn the backend PTY at the 80x24 fallback (half-height TUI).
+    const carriedDims = this.pty?.lastSentDims ?? null;
     this.pty?.dispose();
     runInAction(() => {
       this.pty = null;
       this.status = 'disconnected';
     });
     await this.connect();
+    if (carriedDims && this.pty) {
+      this.pty.lastSentDims = carriedDims;
+    }
   }
 
   dispose() {

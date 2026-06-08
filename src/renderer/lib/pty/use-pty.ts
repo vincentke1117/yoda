@@ -8,7 +8,7 @@ import { events, rpc } from '@renderer/lib/ipc';
 import { panelDragStore } from '@renderer/lib/layout/panel-drag-store';
 import { log } from '@renderer/utils/logger';
 import { usePaneSizingContext } from './pane-sizing-context';
-import { buildTerminalFontFamily, buildTheme, type FrontendPty, type SessionTheme } from './pty';
+import { buildTerminalFontFamily, buildTheme, FrontendPty, type SessionTheme } from './pty';
 import {
   getCellMetrics,
   getTerminalFitScrollbarWidth,
@@ -97,14 +97,6 @@ function selectBetweenBufferCells(
 interface MeasureAndResizeOptions {
   forceRefresh?: boolean;
   resetResizeDedup?: boolean;
-  /**
-   * Rebuild the WebGL renderer (clear texture atlas + refresh) after measuring.
-   * Set only by the mount-time call: a freshly created terminal loads its WebGL
-   * canvas while parented in the 1px off-screen host, so after being reparented
-   * and sized to the real pane it can paint only the top rows until forced to
-   * rebind. See FrontendPty.refreshRenderer().
-   */
-  forceResize?: boolean;
 }
 
 function isMeasureTargetReady(
@@ -253,6 +245,7 @@ export function usePty(
       pendingResizeTimerRef.current = setTimeout(() => {
         pendingResizeTimerRef.current = null;
         lastSentResizeRef.current = { cols: c, rows: r };
+        FrontendPty.noteResize(sessionId, c, r);
         void rpc.pty.resize(sessionId, c, r);
       }, PTY_RESIZE_DEBOUNCE_MS);
     },
@@ -339,13 +332,7 @@ export function usePty(
             didResize = true;
           }
 
-          // On mount, the WebGL canvas may have been sized while the terminal was
-          // in the 1px off-screen host, so it paints only the top rows even though
-          // the buffer is now full height. Rebuild the renderer against the live
-          // grid. (forceResize is set only by the mount-time call.)
-          if (options.forceResize) {
-            pty.refreshRenderer();
-          } else if (options.forceRefresh && !didResize) {
+          if (options.forceRefresh && !didResize) {
             refreshTerminal(term);
           }
 
@@ -502,11 +489,7 @@ export function usePty(
       // Always sync after mounting — targetDims may be stale if the pane was
       // resized while this session was off-screen.  measureAndResize defers to
       // rAF so it reads the live DOM and only calls term.resize() when needed.
-      // forceResize re-fits even when cols/rows already match, so a terminal
-      // opened in the 1px off-screen host (e.g. after a session restart) gets
-      // its canvas geometry recomputed against the live pane instead of staying
-      // stuck painting only the top of the container until the next resize.
-      measureAndResize(0, { forceResize: true });
+      measureAndResize();
 
       // ── Load settings ──────────────────────────────────────────────────────
       let customFontFamily = '';
@@ -637,9 +620,16 @@ export function usePty(
       const handleTerminalInput = (data: string) => {
         onActivityRef.current?.();
 
-        let filtered = data;
+        // xterm.js auto-answers Device Attributes queries (`\x1b[c` / `\x1b[>c`)
+        // by emitting the reply back through onData. Inside tmux the inner agent's
+        // query is already answered by tmux's own emulation, so this outer reply is
+        // a duplicate that tmux passes through to the pane as literal input — it
+        // surfaces in the prompt box as stray text like `0;276;0c`. Drop the
+        // Primary (`\x1b[?...c`) and Secondary (`\x1b[>...c`) DA replies; they are
+        // never legitimate keystrokes.
+        let filtered = data.replace(/\x1b\[[?>][0-9;]*c/g, '');
         if (!ptyStartedRef.current) {
-          filtered = data.replace(/\x1b\[I|\x1b\[O/g, '');
+          filtered = filtered.replace(/\x1b\[I|\x1b\[O/g, '');
         }
         if (!filtered) return;
 

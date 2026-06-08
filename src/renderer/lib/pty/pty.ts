@@ -84,6 +84,22 @@ export function buildTheme(theme?: SessionTheme): ITerminalOptions['theme'] {
 export class FrontendPty {
   /** All live FrontendPty instances — used for app-wide operations (e.g. theme updates). */
   static readonly all = new Set<FrontendPty>();
+
+  /**
+   * Record the dimensions last sent to the backend for a session. Called by
+   * every resize path (per-session and pane broadcast) so that a restart can
+   * spawn the new PTY at the real pane size instead of the 80x24 fallback —
+   * without this, a restarted tmux/TUI session is born at 24 rows and only
+   * paints the top half of the pane.
+   */
+  static noteResize(sessionId: string, cols: number, rows: number): void {
+    for (const pty of FrontendPty.all) {
+      if (pty.sessionId === sessionId) {
+        pty.lastSentDims = { cols, rows };
+        return;
+      }
+    }
+  }
   readonly terminal: Terminal;
   readonly ownedContainer: HTMLDivElement;
   private offData: (() => void) | null = null;
@@ -187,24 +203,6 @@ export class FrontendPty {
 
   setScrollbackLines(scrollbackLines: unknown): void {
     this.terminal.options.scrollback = normalizeTerminalScrollbackLines(scrollbackLines);
-  }
-
-  /**
-   * Force the WebGL renderer to rebuild its canvas/texture atlas against the
-   * terminal's current dimensions. The renderer's backing canvas is sized when
-   * the addon loads — which, for a freshly created session, happens while the
-   * terminal is parented in the 1px off-screen host. After the terminal is
-   * reparented and resized to the real pane, the WebGL canvas can keep its stale
-   * (tiny) backing height and only paint the top rows. Clearing the atlas and
-   * refreshing rebinds the canvas to the live cell grid.
-   */
-  refreshRenderer(): void {
-    try {
-      this.webglAddon?.clearTextureAtlas();
-    } catch {}
-    try {
-      this.terminal.refresh(0, Math.max(0, this.terminal.rows - 1));
-    } catch {}
   }
 
   /**

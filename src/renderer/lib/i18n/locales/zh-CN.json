@@ -681,6 +681,18 @@
       "truncatedPrompts_plural": "已截断 {{count}} 条 prompt",
       "promptsModalTitle": "用户 prompts"
     },
+    "hooks": {
+      "title": "Hooks",
+      "unsupported": "不支持 Hooks",
+      "unsupportedDescription": "该提供方未提供可配置的 hooks。",
+      "none": "未配置 Hooks",
+      "noneDescription": "当前会话的生效配置中未找到任何 hooks。",
+      "debug": "调试",
+      "debugDescription": "记录每次执行的 hook。重启会话后生效。",
+      "restartToApply": "重启会话以应用更改",
+      "execLog": "执行日志",
+      "execLogEmpty": "等待 hook 执行…"
+    },
     "rename": {
       "title": "重命名任务",
       "panelTitle": "任务命名",
