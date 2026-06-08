@@ -321,6 +321,25 @@ export class TaskStore {
     }
   }
 
+  async setSidebarWorkspaceId(workspaceId: string | null): Promise<void> {
+    if (this.state === 'unregistered') return;
+    const task = registeredTaskData(this);
+    if (!task) return;
+    const previous = task.sidebarWorkspaceId;
+    runInAction(() => {
+      task.sidebarWorkspaceId = workspaceId ?? undefined;
+    });
+    try {
+      await rpc.workspaces.assignTaskToWorkspace(task.id, workspaceId);
+    } catch (e) {
+      runInAction(() => {
+        task.sidebarWorkspaceId = previous;
+      });
+      log.error(e);
+      throw e;
+    }
+  }
+
   async setNeedsReview(needsReview: boolean): Promise<void> {
     if (this.state === 'unregistered') return;
     const task = registeredTaskData(this);

@@ -56,5 +56,6 @@ export function mapTaskRowToTask(
     workspaceProvider: (row.workspaceProvider as 'byoi') ?? undefined,
     workspaceId: row.workspaceId ?? undefined,
     workspaceProviderData: row.workspaceProviderData ?? undefined,
+    sidebarWorkspaceId: row.sidebarWorkspaceId ?? undefined,
   };
 }

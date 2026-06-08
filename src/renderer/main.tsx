@@ -42,6 +42,7 @@ async function bootstrap() {
     rpc.viewState.get('sidebar'),
     rpc.viewState.getAll(),
     appState.projects.load(),
+    appState.workspaces.load(),
   ]);
 
   viewStateCache.populate(allViewState as Record<string, unknown>);

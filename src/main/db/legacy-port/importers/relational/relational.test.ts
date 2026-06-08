@@ -39,6 +39,7 @@ function createAppDb(): {
       alias TEXT,
       path TEXT NOT NULL UNIQUE,
       workspace_provider TEXT NOT NULL DEFAULT 'local',
+      workspace_id TEXT,
       base_ref TEXT,
       ssh_connection_id TEXT,
       archived_at TEXT,
@@ -69,7 +70,8 @@ function createAppDb(): {
       setup_data TEXT,
       workspace_provider TEXT,
       workspace_id TEXT,
-      workspace_provider_data TEXT
+      workspace_provider_data TEXT,
+      sidebar_workspace_id TEXT
     );
 
     CREATE TABLE conversations (

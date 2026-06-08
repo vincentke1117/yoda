@@ -111,6 +111,10 @@ export class ProjectStore {
     if (this.data) this.data = { ...this.data, alias } as LocalProject | SshProject;
   }
 
+  setWorkspaceId(workspaceId: string | null): void {
+    if (this.data) this.data = { ...this.data, workspaceId } as LocalProject | SshProject;
+  }
+
   transitionToMounted(data: LocalProject | SshProject, savedSnapshot?: ProjectViewSnapshot): void {
     this.mountedProject = new MountedProject(data, savedSnapshot);
     this.data = data;

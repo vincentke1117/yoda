@@ -258,6 +258,14 @@ export const SidebarProjectItem = observer(function SidebarProjectItem({
     canRemoveProject: project.state !== 'unregistered',
     onArchiveProjectTasks: handleArchiveProjectTasks,
     onRemoveProject: handleRemoveProject,
+    currentWorkspaceId: project.data?.workspaceId ?? null,
+    onAssignWorkspace:
+      project.state === 'unregistered'
+        ? undefined
+        : (workspaceId: string | null) => {
+            project.setWorkspaceId(workspaceId);
+            void appState.workspaces.assignProject(projectId, workspaceId);
+          },
   };
 
   return (
@@ -296,18 +304,18 @@ export const SidebarProjectItem = observer(function SidebarProjectItem({
           )}
           <span
             className={cn(
-              'flex-1 min-w-0 self-stretch flex items-center truncate text-left transition-colors select-none',
+              'flex-1 min-w-0 self-stretch flex items-center overflow-hidden text-left transition-colors select-none',
               projectViewKind(getProjectStore(projectId)) === 'bootstrapping' &&
                 'text-foreground-tertiary-passive'
             )}
           >
             {isSshProject ? (
-              <span className="min-w-0 flex items-center gap-2">
+              <span className="min-w-0 flex items-center gap-2 overflow-hidden">
                 <span className="truncate">{project.displayName}</span>
                 <ConnectionStatusDot state={sshConnectionState} />
               </span>
             ) : (
-              <span className="min-w-0 flex items-center gap-1.5">
+              <span className="min-w-0 flex items-center gap-1.5 overflow-hidden">
                 <span className="truncate">{project.displayName}</span>
                 {projectViewKind(project) === 'path_not_found' && (
                   <Tooltip>

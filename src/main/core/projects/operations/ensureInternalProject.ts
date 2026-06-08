@@ -61,6 +61,7 @@ export async function ensureInternalProject(): Promise<LocalProject> {
     alias: row.alias,
     path: row.path,
     baseRef: row.baseRef ?? 'main',
+    workspaceId: row.workspaceId ?? null,
     isInternal: row.isInternal === 1,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,

@@ -5,6 +5,7 @@ import type { Task } from '@shared/tasks';
 import type { ProjectStore } from '@renderer/features/projects/stores/project';
 import type { ProjectManagerStore } from '@renderer/features/projects/stores/project-manager';
 import { createUnprovisionedTask, type TaskStore } from '@renderer/features/tasks/stores/task';
+import type { WorkspaceStore } from '@renderer/features/workspaces/workspace-store';
 import { SidebarStore, type SidebarRow } from './sidebar-store';
 
 vi.mock('@renderer/lib/ipc', () => ({
@@ -135,6 +136,7 @@ function makeProject(projectId: string, tasks: TaskStore[]): ProjectStore {
     alias: null,
     path: `/tmp/${projectId}`,
     baseRef: 'main',
+    workspaceId: null,
     isInternal: false,
     createdAt: '2026-01-01 00:00:00',
     updatedAt: '2026-01-01 00:00:00',
@@ -158,9 +160,16 @@ function makeProject(projectId: string, tasks: TaskStore[]): ProjectStore {
 }
 
 function makeSidebarStore(projects: ProjectStore[]): SidebarStore {
-  return new SidebarStore({
-    projects: observable.map(projects.map((project) => [project.id, project])),
-  } as ProjectManagerStore);
+  return new SidebarStore(
+    {
+      projects: observable.map(projects.map((project) => [project.id, project])),
+    } as ProjectManagerStore,
+    {
+      activeWorkspaceId: 'all',
+      isFiltering: false,
+      matchesActive: () => true,
+    } as unknown as WorkspaceStore
+  );
 }
 
 function taskIds(rows: SidebarRow[]): string[] {

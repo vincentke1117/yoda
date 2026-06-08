@@ -1,12 +1,13 @@
 import {
   AlertTriangle,
   Bot,
+  Cloud,
   FolderInput,
-  Layers,
   Puzzle,
   Search,
   Smartphone,
   SquarePen,
+  Terminal,
   Workflow,
 } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
@@ -16,6 +17,7 @@ import {
   useSkillValidationIssues,
   type SkillValidationIssueEntry,
 } from '@renderer/features/skills/useSkillValidationIssues';
+import { WorkspaceSwitcher } from '@renderer/features/workspaces/workspace-switcher';
 import {
   isCurrentView,
   useNavigate,
@@ -42,7 +44,6 @@ import {
 } from './sidebar-primitives';
 import { SidebarSpace } from './sidebar-space';
 import { SidebarVirtualList } from './sidebar-virtual-list';
-import { UpdateSection } from './update-section';
 import { useSidebarDrop } from './use-sidebar-drop';
 
 export const LeftSidebar: React.FC = observer(function LeftSidebar() {
@@ -106,7 +107,7 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
       )}
       <SidebarSpace />
       <SidebarContainer className="w-full border-r-0 flex-1 min-h-0">
-        <SidebarFooter className="mt-0 border-t-0 border-b">
+        <SidebarFooter className="mt-0 border-t-0 px-2 pb-0">
           <SidebarMenu>
             <SidebarMenuButton
               isActive={isCurrentView(currentView, 'home')}
@@ -133,6 +134,8 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
               </span>
               <ShortcutHint settingsKey="commandPalette" />
             </SidebarMenuButton>
+            <div className="my-1 border-t border-border" />
+            <WorkspaceSwitcher />
           </SidebarMenu>
         </SidebarFooter>
         <SidebarContent className="flex flex-col overflow-y-auto">
@@ -152,22 +155,31 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
         <div className="flex flex-col border-t border-border">
           <SidebarMenu className="px-2 pt-2">
             <SidebarMenuButton
-              isActive={isCurrentView(currentView, 'agents')}
-              onClick={() => navigate('agents')}
-              aria-label={t('sidebar.agents')}
-              className="w-full justify-start"
-            >
-              <Bot className="h-5 w-5 sm:h-4 sm:w-4" />
-              {t('sidebar.agents')}
-            </SidebarMenuButton>
-            <SidebarMenuButton
               isActive={isCurrentView(currentView, 'maas')}
               onClick={() => navigate('maas')}
               aria-label={t('sidebar.maas')}
               className="w-full justify-start"
             >
-              <Layers className="h-5 w-5 sm:h-4 sm:w-4" />
+              <Cloud className="h-5 w-5 sm:h-4 sm:w-4" />
               {t('sidebar.maas')}
+            </SidebarMenuButton>
+            <SidebarMenuButton
+              isActive={isCurrentView(currentView, 'agents')}
+              onClick={() => navigate('agents')}
+              aria-label={t('sidebar.agents')}
+              className="w-full justify-start"
+            >
+              <Terminal className="h-5 w-5 sm:h-4 sm:w-4" />
+              {t('sidebar.agents')}
+            </SidebarMenuButton>
+            <SidebarMenuButton
+              isActive={isCurrentView(currentView, 'agentManager')}
+              onClick={() => navigate('agentManager')}
+              aria-label={t('sidebar.agentManager')}
+              className="w-full justify-start"
+            >
+              <Bot className="h-5 w-5 sm:h-4 sm:w-4" />
+              {t('sidebar.agentManager')}
             </SidebarMenuButton>
             <SidebarMenuRow
               isActive={isCurrentView(currentView, 'skills')}
@@ -215,9 +227,6 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
               {t('sidebar.mobile')}
             </SidebarMenuButton>
           </SidebarMenu>
-          <div className="flex items-center justify-end px-3 py-2 border-t border-border">
-            <UpdateSection />
-          </div>
           <div className="border-t border-border">
             <SidebarAccount />
           </div>

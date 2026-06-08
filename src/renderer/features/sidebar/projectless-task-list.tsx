@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { INTERNAL_PROJECT_ID } from '@shared/projects';
 import { asMounted, getProjectStore } from '@renderer/features/projects/stores/project-selectors';
+import { workspaceStore } from '@renderer/lib/stores/app-state';
 import {
   SidebarGroup,
   SidebarGroupContent,
@@ -23,6 +24,11 @@ export const SidebarProjectlessTaskList = observer(function SidebarProjectlessTa
   const tasks = Array.from(internalProject.taskManager.tasks.values())
     .filter((task) => !('archivedAt' in task.data) || !task.data.archivedAt)
     .filter((task) => !task.data.isPinned)
+    .filter((task) =>
+      workspaceStore.matchesActive(
+        'sidebarWorkspaceId' in task.data ? task.data.sidebarWorkspaceId : null
+      )
+    )
     .sort((a, b) => {
       const aTime = a.data.lastInteractedAt ?? a.data.createdAt;
       const bTime = b.data.lastInteractedAt ?? b.data.createdAt;

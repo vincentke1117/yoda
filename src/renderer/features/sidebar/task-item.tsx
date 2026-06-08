@@ -2,6 +2,7 @@ import { Archive, Loader2, MoreHorizontal } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { INTERNAL_PROJECT_ID } from '@shared/projects';
 import { selectCurrentPr } from '@shared/pull-requests';
 import { getProjectStore } from '@renderer/features/projects/stores/project-selectors';
 import { TaskSidebarAgentStatus } from '@renderer/features/sidebar/task-sidebar-agent-status';
@@ -16,7 +17,7 @@ import {
   resolveTaskMenuSessionFields,
   selectPreferredConversation,
 } from '@renderer/features/tasks/components/task-menu-session-info';
-import { type TaskStore } from '@renderer/features/tasks/stores/task';
+import { registeredTaskData, type TaskStore } from '@renderer/features/tasks/stores/task';
 import {
   asProvisioned,
   getTaskManagerStore,
@@ -170,6 +171,10 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
   const handleViewStatus = () => {
     navigate('task', { projectId, taskId });
   };
+  const handleRestartSession =
+    provisionedTask && menuConversation
+      ? () => void provisionedTask.conversations.restartConversation(menuConversation.id)
+      : undefined;
 
   const openPreferredConversationIfEmpty = () => {
     if (!provisionedTask) return;
@@ -215,11 +220,22 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
     onArchiveWithNote: handleArchiveWithNote,
     onConfigurePreArchive: () => showEditPreArchiveCommand({}),
     onReconnect: handleReconnect,
+    onRestartSession: handleRestartSession,
     onDelete: handleDelete,
     onRunScript: handleRunScript,
     canRunScript: Boolean(provisionedTask),
     onConfigureScripts: handleConfigureScripts,
     onViewStatus: handleViewStatus,
+    // Projectless Drafts tasks belong directly to a workspace; project-bound
+    // tasks follow their project's workspace, so the submenu only shows here.
+    currentWorkspaceId:
+      projectId === INTERNAL_PROJECT_ID
+        ? (registeredTaskData(task)?.sidebarWorkspaceId ?? null)
+        : undefined,
+    onAssignWorkspace:
+      projectId === INTERNAL_PROJECT_ID
+        ? (workspaceId: string | null) => void task.setSidebarWorkspaceId(workspaceId)
+        : undefined,
   };
 
   return (

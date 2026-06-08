@@ -3,6 +3,7 @@ import {
   Archive,
   CableIcon,
   Copy,
+  FolderInput,
   FolderOpen,
   Info,
   PencilLine,
@@ -12,22 +13,35 @@ import {
   Settings2,
   Trash2,
 } from 'lucide-react';
+import { observer } from 'mobx-react-lite';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { ALL_WORKSPACES_ID } from '@shared/workspaces';
 import { toast } from '@renderer/lib/hooks/use-toast';
 import { rpc } from '@renderer/lib/ipc';
+import { workspaceStore } from '@renderer/lib/stores/app-state';
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuRadioGroup,
+  ContextMenuRadioItem,
   ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from '@renderer/lib/ui/context-menu';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@renderer/lib/ui/dropdown-menu';
 
@@ -48,6 +62,10 @@ interface ProjectMenuActions {
   canRemoveProject: boolean;
   onArchiveProjectTasks: () => void;
   onRemoveProject: () => void;
+  /** Current sidebar workspace assignment (null = default/unassigned). */
+  currentWorkspaceId?: string | null;
+  /** Assign this project to a workspace, or null to move it to the default. */
+  onAssignWorkspace?: (workspaceId: string | null) => void;
 }
 
 interface MenuItemDescriptor {
@@ -211,6 +229,85 @@ async function openProjectPath(path: string, t: TFunction) {
   }
 }
 
+/** Radio value used for the "default / unassigned" workspace choice. */
+const DEFAULT_WORKSPACE_VALUE = ALL_WORKSPACES_ID;
+
+const WorkspaceContextSubmenu = observer(function WorkspaceContextSubmenu({
+  currentWorkspaceId,
+  onAssign,
+}: {
+  currentWorkspaceId: string | null;
+  onAssign: (workspaceId: string | null) => void;
+}) {
+  const { t } = useTranslation();
+  if (workspaceStore.workspaces.length === 0) return null;
+  return (
+    <>
+      <ContextMenuSeparator />
+      <ContextMenuSub>
+        <ContextMenuSubTrigger>
+          <FolderInput className="size-4" />
+          {t('workspaces.moveToWorkspace')}
+        </ContextMenuSubTrigger>
+        <ContextMenuSubContent>
+          <ContextMenuRadioGroup value={currentWorkspaceId ?? DEFAULT_WORKSPACE_VALUE}>
+            <ContextMenuRadioItem value={DEFAULT_WORKSPACE_VALUE} onClick={() => onAssign(null)}>
+              {t('workspaces.defaultWorkspace')}
+            </ContextMenuRadioItem>
+            {workspaceStore.workspaces.map((workspace) => (
+              <ContextMenuRadioItem
+                key={workspace.id}
+                value={workspace.id}
+                onClick={() => onAssign(workspace.id)}
+              >
+                {workspace.name}
+              </ContextMenuRadioItem>
+            ))}
+          </ContextMenuRadioGroup>
+        </ContextMenuSubContent>
+      </ContextMenuSub>
+    </>
+  );
+});
+
+const WorkspaceDropdownSubmenu = observer(function WorkspaceDropdownSubmenu({
+  currentWorkspaceId,
+  onAssign,
+}: {
+  currentWorkspaceId: string | null;
+  onAssign: (workspaceId: string | null) => void;
+}) {
+  const { t } = useTranslation();
+  if (workspaceStore.workspaces.length === 0) return null;
+  return (
+    <>
+      <DropdownMenuSeparator />
+      <DropdownMenuSub>
+        <DropdownMenuSubTrigger>
+          <FolderInput className="size-4" />
+          {t('workspaces.moveToWorkspace')}
+        </DropdownMenuSubTrigger>
+        <DropdownMenuSubContent>
+          <DropdownMenuRadioGroup value={currentWorkspaceId ?? DEFAULT_WORKSPACE_VALUE}>
+            <DropdownMenuRadioItem value={DEFAULT_WORKSPACE_VALUE} onClick={() => onAssign(null)}>
+              {t('workspaces.defaultWorkspace')}
+            </DropdownMenuRadioItem>
+            {workspaceStore.workspaces.map((workspace) => (
+              <DropdownMenuRadioItem
+                key={workspace.id}
+                value={workspace.id}
+                onClick={() => onAssign(workspace.id)}
+              >
+                {workspace.name}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuSubContent>
+      </DropdownMenuSub>
+    </>
+  );
+});
+
 interface ProjectContextMenuProps extends ProjectMenuActions {
   children: React.ReactNode;
 }
@@ -219,7 +316,9 @@ export function ProjectContextMenu({ children, ...actions }: ProjectContextMenuP
   const items = useMenuItems(actions);
   return (
     <ContextMenu>
-      <ContextMenuTrigger>{children}</ContextMenuTrigger>
+      <ContextMenuTrigger className="block w-full min-w-0 overflow-hidden">
+        {children}
+      </ContextMenuTrigger>
       <ContextMenuContent>
         {items.map((item, index) => {
           const prev = items[index - 1];
@@ -242,6 +341,12 @@ export function ProjectContextMenu({ children, ...actions }: ProjectContextMenuP
             </React.Fragment>
           );
         })}
+        {actions.onAssignWorkspace && (
+          <WorkspaceContextSubmenu
+            currentWorkspaceId={actions.currentWorkspaceId ?? null}
+            onAssign={actions.onAssignWorkspace}
+          />
+        )}
       </ContextMenuContent>
     </ContextMenu>
   );
@@ -287,6 +392,12 @@ export function ProjectActionsMenu({
             </React.Fragment>
           );
         })}
+        {actions.onAssignWorkspace && (
+          <WorkspaceDropdownSubmenu
+            currentWorkspaceId={actions.currentWorkspaceId ?? null}
+            onAssign={actions.onAssignWorkspace}
+          />
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -11,6 +11,7 @@ import {
   unregisteredTaskData,
   type TaskStore,
 } from '@renderer/features/tasks/stores/task';
+import type { WorkspaceStore } from '@renderer/features/workspaces/workspace-store';
 import type { Snapshottable } from '@renderer/lib/stores/snapshottable';
 
 function parseSidebarTaskSortBy(value: unknown): SidebarTaskSortBy | undefined {
@@ -112,7 +113,10 @@ export class SidebarStore implements Snapshottable<SidebarSnapshot> {
   projectTypeFilter: ProjectTypeFilter = 'all';
   hideProjectsWithoutActiveTasks = false;
 
-  constructor(private readonly projectManager: ProjectManagerStore) {
+  constructor(
+    private readonly projectManager: ProjectManagerStore,
+    private readonly workspaceStore: WorkspaceStore
+  ) {
     makeAutoObservable(this, {
       expandedProjectIds: false,
       pinnedProjectIds: false,
@@ -146,11 +150,27 @@ export class SidebarStore implements Snapshottable<SidebarSnapshot> {
     );
   }
 
+  /**
+   * Whether a project belongs to the active workspace selection. "All" matches
+   * everything; "Default" matches projects with no workspace. Unregistered
+   * projects (no DB row) are treated as unassigned.
+   */
+  private matchesActiveWorkspace(project: ProjectStore): boolean {
+    const workspaceId =
+      project.state === 'unregistered' ? null : (project.data?.workspaceId ?? null);
+    return this.workspaceStore.matchesActive(workspaceId);
+  }
+
   get orderedProjects(): ProjectStore[] {
     const all = Array.from(this.projectManager.projects.values());
 
-    const unregistered = all.filter((p): p is UnregisteredProject => p.state === 'unregistered');
-    const real = all.filter(isRegisteredProject).filter((p) => !p.data.isInternal);
+    const unregistered = all
+      .filter((p): p is UnregisteredProject => p.state === 'unregistered')
+      .filter((p) => this.matchesActiveWorkspace(p));
+    const real = all
+      .filter(isRegisteredProject)
+      .filter((p) => !p.data.isInternal)
+      .filter((p) => this.matchesActiveWorkspace(p));
 
     const typeFiltered =
       this.projectTypeFilter === 'all'
@@ -296,6 +316,7 @@ export class SidebarStore implements Snapshottable<SidebarSnapshot> {
       Array.from(this.projectManager.projects.values())
         .filter(isRegisteredProject)
         .filter((p) => !p.data.isInternal)
+        .filter((p) => this.matchesActiveWorkspace(p))
     ).filter((project) => pinnedProjectIds.has(project.data.id));
 
     for (const project of pinnedProjects) {
@@ -318,6 +339,7 @@ export class SidebarStore implements Snapshottable<SidebarSnapshot> {
     const pairs: { projectId: string; task: TaskStore }[] = [];
     for (const project of this.projectManager.projects.values()) {
       if (!project.mountedProject) continue;
+      if (!this.matchesActiveWorkspace(project)) continue;
       const projectId = project.state === 'unregistered' ? project.id : project.data?.id;
       if (!projectId) continue;
       if (pinnedProjectIds.has(projectId) && this.expandedProjectIds.has(projectId)) continue;
@@ -356,6 +378,7 @@ export class SidebarStore implements Snapshottable<SidebarSnapshot> {
       pinnedCollapsed: this.pinnedCollapsed,
       projectsCollapsed: this.projectsCollapsed,
       hideProjectsWithoutActiveTasks: this.hideProjectsWithoutActiveTasks,
+      activeWorkspaceId: this.workspaceStore.activeWorkspaceId,
     };
   }
 
@@ -388,6 +411,9 @@ export class SidebarStore implements Snapshottable<SidebarSnapshot> {
     }
     if (snapshot.hideProjectsWithoutActiveTasks !== undefined) {
       this.hideProjectsWithoutActiveTasks = snapshot.hideProjectsWithoutActiveTasks === true;
+    }
+    if (snapshot.activeWorkspaceId !== undefined) {
+      this.workspaceStore.restoreActiveWorkspaceId(snapshot.activeWorkspaceId);
     }
   }
 

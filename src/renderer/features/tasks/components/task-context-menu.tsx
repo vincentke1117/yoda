@@ -7,6 +7,7 @@ import {
   CircleSlash,
   Copy,
   FileText,
+  FolderInput,
   Info,
   Pencil,
   Pin,
@@ -17,23 +18,36 @@ import {
   Terminal,
   Trash2,
 } from 'lucide-react';
+import { observer } from 'mobx-react-lite';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AgentProviderId } from '@shared/agent-provider-registry';
+import { ALL_WORKSPACES_ID } from '@shared/workspaces';
 import { toast } from '@renderer/lib/hooks/use-toast';
 import { rpc } from '@renderer/lib/ipc';
+import { workspaceStore } from '@renderer/lib/stores/app-state';
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuRadioGroup,
+  ContextMenuRadioItem,
   ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from '@renderer/lib/ui/context-menu';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@renderer/lib/ui/dropdown-menu';
 import { buildTaskBasicInfo, type TaskBasicInfoFields } from './task-menu-basic-info';
@@ -44,6 +58,8 @@ interface TaskSessionInfoFields {
   sessionTitle?: string;
   providerName?: string;
   resumeCommand?: string;
+  running?: boolean;
+  tmuxEnabled?: boolean;
 }
 
 interface TaskMenuInfoFields extends TaskBasicInfoFields, TaskSessionInfoFields {
@@ -74,11 +90,16 @@ interface TaskMenuActions extends TaskMenuInfoFields {
   onConfigurePreArchive?: () => void;
   onRestore?: () => void;
   onReconnect?: () => void;
+  onRestartSession?: () => void;
   onDelete: () => void;
   onRunScript?: () => void;
   canRunScript?: boolean;
   onConfigureScripts?: () => void;
   onViewStatus?: () => void;
+  /** Current sidebar workspace assignment (null = default). Projectless tasks only. */
+  currentWorkspaceId?: string | null;
+  /** Assign this task to a sidebar workspace, or null for the default. */
+  onAssignWorkspace?: (workspaceId: string | null) => void;
 }
 
 interface MenuItemDescriptor {
@@ -183,6 +204,15 @@ function useMenuItems(actions: TaskMenuActions): MenuItemDescriptor[] {
       icon: RotateCcw,
       label: t('sidebar.reconnect'),
       onSelect: actions.onReconnect,
+    });
+  }
+  if (actions.onRestartSession) {
+    items.push({
+      key: 'restart-session',
+      group: 2,
+      icon: RotateCcw,
+      label: t('tasks.context.restartSession'),
+      onSelect: actions.onRestartSession,
     });
   }
 
@@ -405,6 +435,82 @@ function showCopyFailure(t: TFunction): void {
   });
 }
 
+const TaskWorkspaceContextSubmenu = observer(function TaskWorkspaceContextSubmenu({
+  currentWorkspaceId,
+  onAssign,
+}: {
+  currentWorkspaceId: string | null;
+  onAssign: (workspaceId: string | null) => void;
+}) {
+  const { t } = useTranslation();
+  if (workspaceStore.workspaces.length === 0) return null;
+  return (
+    <>
+      <ContextMenuSeparator />
+      <ContextMenuSub>
+        <ContextMenuSubTrigger className="whitespace-nowrap">
+          <FolderInput className="size-4" />
+          {t('workspaces.moveToWorkspace')}
+        </ContextMenuSubTrigger>
+        <ContextMenuSubContent>
+          <ContextMenuRadioGroup value={currentWorkspaceId ?? ALL_WORKSPACES_ID}>
+            <ContextMenuRadioItem value={ALL_WORKSPACES_ID} onClick={() => onAssign(null)}>
+              {t('workspaces.defaultWorkspace')}
+            </ContextMenuRadioItem>
+            {workspaceStore.workspaces.map((workspace) => (
+              <ContextMenuRadioItem
+                key={workspace.id}
+                value={workspace.id}
+                onClick={() => onAssign(workspace.id)}
+              >
+                {workspace.name}
+              </ContextMenuRadioItem>
+            ))}
+          </ContextMenuRadioGroup>
+        </ContextMenuSubContent>
+      </ContextMenuSub>
+    </>
+  );
+});
+
+const TaskWorkspaceDropdownSubmenu = observer(function TaskWorkspaceDropdownSubmenu({
+  currentWorkspaceId,
+  onAssign,
+}: {
+  currentWorkspaceId: string | null;
+  onAssign: (workspaceId: string | null) => void;
+}) {
+  const { t } = useTranslation();
+  if (workspaceStore.workspaces.length === 0) return null;
+  return (
+    <>
+      <DropdownMenuSeparator />
+      <DropdownMenuSub>
+        <DropdownMenuSubTrigger className="whitespace-nowrap">
+          <FolderInput className="size-4" />
+          {t('workspaces.moveToWorkspace')}
+        </DropdownMenuSubTrigger>
+        <DropdownMenuSubContent>
+          <DropdownMenuRadioGroup value={currentWorkspaceId ?? ALL_WORKSPACES_ID}>
+            <DropdownMenuRadioItem value={ALL_WORKSPACES_ID} onClick={() => onAssign(null)}>
+              {t('workspaces.defaultWorkspace')}
+            </DropdownMenuRadioItem>
+            {workspaceStore.workspaces.map((workspace) => (
+              <DropdownMenuRadioItem
+                key={workspace.id}
+                value={workspace.id}
+                onClick={() => onAssign(workspace.id)}
+              >
+                {workspace.name}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuSubContent>
+      </DropdownMenuSub>
+    </>
+  );
+});
+
 interface TaskContextMenuProps extends TaskMenuActions {
   children: React.ReactNode;
 }
@@ -437,6 +543,12 @@ export function TaskContextMenu({ children, ...actions }: TaskContextMenuProps) 
             </React.Fragment>
           );
         })}
+        {actions.onAssignWorkspace && (
+          <TaskWorkspaceContextSubmenu
+            currentWorkspaceId={actions.currentWorkspaceId ?? null}
+            onAssign={actions.onAssignWorkspace}
+          />
+        )}
       </ContextMenuContent>
     </ContextMenu>
   );
@@ -483,6 +595,12 @@ export function TaskActionsMenu({
             </React.Fragment>
           );
         })}
+        {actions.onAssignWorkspace && (
+          <TaskWorkspaceDropdownSubmenu
+            currentWorkspaceId={actions.currentWorkspaceId ?? null}
+            onAssign={actions.onAssignWorkspace}
+          />
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

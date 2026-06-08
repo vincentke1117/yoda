@@ -1942,6 +1942,8 @@
     "createFailed": "Failed to create workspace",
     "renameFailed": "Failed to rename workspace",
     "deleteFailed": "Failed to delete workspace",
-    "switch": "Switch workspace"
+    "switch": "Switch workspace",
+    "current": "Workspace ({{name}})",
+    "defaultTab": "Default"
   }
 }

@@ -35,6 +35,18 @@ export const sshConnections = sqliteTable(
   })
 );
 
+export const workspaces = sqliteTable('workspaces', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: text('created_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text('updated_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
 export const projects = sqliteTable(
   'projects',
   {
@@ -43,6 +55,9 @@ export const projects = sqliteTable(
     alias: text('alias'),
     path: text('path').notNull(),
     workspaceProvider: text('workspace_provider').notNull().default('local'), // 'local' | 'ssh'
+    workspaceId: text('workspace_id').references(() => workspaces.id, {
+      onDelete: 'set null',
+    }),
     baseRef: text('base_ref'),
     sshConnectionId: text('ssh_connection_id').references(() => sshConnections.id, {
       onDelete: 'set null',
@@ -59,6 +74,7 @@ export const projects = sqliteTable(
   (table) => ({
     pathIdx: uniqueIndex('idx_projects_path').on(table.path),
     sshConnectionIdIdx: index('idx_projects_ssh_connection_id').on(table.sshConnectionId),
+    workspaceIdIdx: index('idx_projects_workspace_id').on(table.workspaceId),
     archivedAtIdx: index('idx_projects_archived_at').on(table.archivedAt),
   })
 );
@@ -139,9 +155,15 @@ export const tasks = sqliteTable(
     workspaceProvider: text('workspace_provider'), // 'local' | 'ssh' | null (null = inherit from project settings)
     workspaceId: text('workspace_id'),
     workspaceProviderData: text('workspace_provider_data'), // JSON, BYOI only
+    // Sidebar workspace (user-defined grouping tab) — distinct from the agent
+    // runtime `workspaceId` above. Only meaningful for projectless Drafts tasks.
+    sidebarWorkspaceId: text('sidebar_workspace_id').references(() => workspaces.id, {
+      onDelete: 'set null',
+    }),
   },
   (table) => ({
     projectIdIdx: index('idx_tasks_project_id').on(table.projectId),
+    sidebarWorkspaceIdIdx: index('idx_tasks_sidebar_workspace_id').on(table.sidebarWorkspaceId),
   })
 );
 
@@ -420,6 +442,34 @@ export const editorBuffers = sqliteTable(
   })
 );
 
+export const agents = sqliteTable(
+  'agents',
+  {
+    id: text('id').primaryKey(),
+    slug: text('slug').notNull(),
+    name: text('name').notNull(),
+    description: text('description').notNull().default(''),
+    icon: text('icon').notNull().default(''),
+    systemPrompt: text('system_prompt').notNull().default(''),
+    enabledSkillIds: text('enabled_skill_ids', { mode: 'json' })
+      .notNull()
+      .$type<string[]>()
+      .default(sql`'[]'`),
+    preferredRuntimeProvider: text('preferred_runtime_provider'), // AgentProviderId | null
+    model: text('model'),
+    source: text('source').notNull().default('local'), // 'local' | 'imported'
+    createdAt: text('created_at')
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text('updated_at')
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    slugIdx: uniqueIndex('idx_agents_slug').on(table.slug),
+  })
+);
+
 export const kv = sqliteTable(
   'kv',
   {
@@ -449,6 +499,11 @@ export const sshConnectionsRelations = relations(sshConnections, ({ many }) => (
   projects: many(projects),
 }));
 
+export const workspacesRelations = relations(workspaces, ({ many }) => ({
+  projects: many(projects),
+  tasks: many(tasks),
+}));
+
 export const projectsRelations = relations(projects, ({ one, many }) => ({
   tasks: many(tasks),
   settings: one(projectSettings, {
@@ -458,6 +513,10 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
   sshConnection: one(sshConnections, {
     fields: [projects.sshConnectionId],
     references: [sshConnections.id],
+  }),
+  workspace: one(workspaces, {
+    fields: [projects.workspaceId],
+    references: [workspaces.id],
   }),
 }));
 
@@ -509,6 +568,8 @@ export const messagesRelations = relations(messages, ({ one }) => ({
 
 export type SshConnectionRow = typeof sshConnections.$inferSelect;
 export type SshConnectionInsert = typeof sshConnections.$inferInsert;
+export type WorkspaceRow = typeof workspaces.$inferSelect;
+export type WorkspaceInsert = typeof workspaces.$inferInsert;
 export type ProjectRow = typeof projects.$inferSelect;
 export type ProjectSettingsRow = typeof projectSettings.$inferSelect;
 export type ProjectSettingsInsert = typeof projectSettings.$inferInsert;
@@ -525,5 +586,7 @@ export type EditorBufferRow = typeof editorBuffers.$inferSelect;
 export type EditorBufferInsert = typeof editorBuffers.$inferInsert;
 export type KvRow = typeof kv.$inferSelect;
 export type KvInsert = typeof kv.$inferInsert;
+export type AgentRow = typeof agents.$inferSelect;
+export type AgentInsert = typeof agents.$inferInsert;
 export type AppSecretRow = typeof appSecrets.$inferSelect;
 export type AppSecretInsert = typeof appSecrets.$inferInsert;

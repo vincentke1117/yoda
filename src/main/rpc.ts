@@ -1,5 +1,6 @@
 import { createRPCRouter } from '../shared/ipc/rpc';
 import { accountController } from './core/account/controller';
+import { agentsConfigController } from './core/agents-config/controller';
 import { appController } from './core/app/controller';
 import { conversationController } from './core/conversations/controller';
 import { dependenciesController } from './core/dependencies/controller';
@@ -32,10 +33,12 @@ import { telemetryController } from './core/telemetry/controller';
 import { terminalsController } from './core/terminals/controller';
 import { updateController } from './core/updates/controller';
 import { viewStateController } from './core/view-state/controller';
+import { workspaceController } from './core/workspaces/controller';
 import { legacyPortController } from './db/legacy-port/controller';
 
 export const rpcRouter = createRPCRouter({
   account: accountController,
+  agentsConfig: agentsConfigController,
   legacyPort: legacyPortController,
   app: appController,
   appSettings: appSettingsController,
@@ -58,6 +61,7 @@ export const rpcRouter = createRPCRouter({
   skills: skillsController,
   ssh: sshController,
   projects: projectController,
+  workspaces: workspaceController,
   tasks: taskController,
   conversations: conversationController,
   terminals: terminalsController,

@@ -118,7 +118,7 @@ export function SidebarSectionHeader({
   rightSlot,
 }: SidebarSectionHeaderProps) {
   return (
-    <div className="flex items-center pl-5 pr-2.5 h-[40px]">
+    <div className="flex items-center pl-5 pr-2.5 h-8">
       <button
         type="button"
         onClick={onToggle}

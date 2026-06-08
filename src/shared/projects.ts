@@ -17,6 +17,7 @@ export type LocalProject = {
   alias: string | null;
   path: string;
   baseRef: string;
+  workspaceId: string | null;
   isInternal: boolean;
   createdAt: string;
   updatedAt: string;
@@ -30,6 +31,7 @@ export type SshProject = {
   path: string;
   baseRef: string;
   connectionId: string;
+  workspaceId: string | null;
   isInternal: boolean;
   createdAt: string;
   updatedAt: string;

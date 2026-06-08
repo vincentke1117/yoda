@@ -105,4 +105,5 @@ export type SidebarSnapshot = {
   pinnedCollapsed?: boolean;
   projectsCollapsed?: boolean;
   hideProjectsWithoutActiveTasks?: boolean;
+  activeWorkspaceId?: string;
 };

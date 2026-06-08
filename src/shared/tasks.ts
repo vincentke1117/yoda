@@ -49,6 +49,8 @@ export type Task = {
   workspaceProvider?: 'byoi';
   workspaceId?: string;
   workspaceProviderData?: string; // JSON, BYOI only
+  /** Sidebar workspace (grouping tab). Distinct from the agent-runtime `workspaceId`. */
+  sidebarWorkspaceId?: string;
 };
 
 export type TaskBootstrapStatus =
