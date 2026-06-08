@@ -8,8 +8,13 @@ import { events, rpc } from '@renderer/lib/ipc';
 import { panelDragStore } from '@renderer/lib/layout/panel-drag-store';
 import { log } from '@renderer/utils/logger';
 import { usePaneSizingContext } from './pane-sizing-context';
-import { buildTheme, type FrontendPty, type SessionTheme } from './pty';
-import { getCellMetrics, measureDimensions } from './pty-dimensions';
+import { buildTerminalFontFamily, buildTheme, type FrontendPty, type SessionTheme } from './pty';
+import {
+  getCellMetrics,
+  getTerminalFitScrollbarWidth,
+  measureDimensions,
+  TERMINAL_FIT_GUARD_COLUMNS,
+} from './pty-dimensions';
 import { isRealTaskInput, SubmittedInputBuffer } from './pty-input-buffer';
 import {
   CTRL_J_ASCII,
@@ -92,6 +97,14 @@ function selectBetweenBufferCells(
 interface MeasureAndResizeOptions {
   forceRefresh?: boolean;
   resetResizeDedup?: boolean;
+  /**
+   * Rebuild the WebGL renderer (clear texture atlas + refresh) after measuring.
+   * Set only by the mount-time call: a freshly created terminal loads its WebGL
+   * canvas while parented in the 1px off-screen host, so after being reparented
+   * and sized to the real pane it can paint only the top rows until forced to
+   * rebind. See FrontendPty.refreshRenderer().
+   */
+  forceResize?: boolean;
 }
 
 function isMeasureTargetReady(
@@ -139,7 +152,7 @@ export interface UseTerminalReturn {
  * React hook that manages a full xterm.js terminal instance attached to
  * `containerRef`, wired to a PTY session via the deterministic `sessionId`.
  *
- * Each session owns a persistent FrontendPty (terminal + Canvas2D renderer)
+ * Each session owns a persistent FrontendPty (terminal + renderer)
  * for its full lifetime.  On unmount the terminal's ownedContainer is
  * reparented to the off-screen xterm host rather than disposed, so scrollback
  * is preserved across tab switches.
@@ -279,9 +292,6 @@ export function usePty(
 
           const cell = getCellMetrics(term);
           if (!cell) {
-            // Cold-path: terminal was opened off-DOM so xterm's font measurement
-            // hasn't populated yet.  Retry a bounded number of times to avoid
-            // flushing scrollback at stale constructor dimensions.
             retryMeasureAndResize(retries, options);
             return;
           }
@@ -294,6 +304,7 @@ export function usePty(
             termParent ??
             (containerRef.current as HTMLElement | null);
           if (!measureTarget) return;
+          const scrollbarWidth = getTerminalFitScrollbarWidth(term);
 
           if (
             !isMeasureTargetReady(measureTarget, cell) &&
@@ -303,8 +314,19 @@ export function usePty(
           }
 
           const dims =
-            pane?.measureCurrentDimensions(cell.width, cell.height) ??
-            measureDimensions(measureTarget, cell.width, cell.height);
+            pane?.measureCurrentDimensions(
+              cell.width,
+              cell.height,
+              scrollbarWidth,
+              TERMINAL_FIT_GUARD_COLUMNS
+            ) ??
+            measureDimensions(
+              measureTarget,
+              cell.width,
+              cell.height,
+              scrollbarWidth,
+              TERMINAL_FIT_GUARD_COLUMNS
+            );
           if (!dims) {
             retryMeasureAndResize(retries, options);
             return;
@@ -317,7 +339,13 @@ export function usePty(
             didResize = true;
           }
 
-          if (options.forceRefresh && !didResize) {
+          // On mount, the WebGL canvas may have been sized while the terminal was
+          // in the 1px off-screen host, so it paints only the top rows even though
+          // the buffer is now full height. Rebuild the renderer against the live
+          // grid. (forceResize is set only by the mount-time call.)
+          if (options.forceResize) {
+            pty.refreshRenderer();
+          } else if (options.forceRefresh && !didResize) {
             refreshTerminal(term);
           }
 
@@ -435,14 +463,17 @@ export function usePty(
     // termRef. PaneSizingContext dimensions are also sampled here so the
     // pre-resize happens against the live pane dimensions.
     const pane = paneSizingRef.current;
-    const prevCell = termRef.current ? getCellMetrics(termRef.current) : null;
+    const previousTerm = termRef.current;
+    const prevCell = previousTerm ? getCellMetrics(previousTerm) : null;
     let targetDims: { cols: number; rows: number } | undefined;
 
-    if (pane?.containerRef.current && prevCell) {
+    if (pane?.containerRef.current && previousTerm && prevCell) {
       const measured = measureDimensions(
         pane.containerRef.current,
         prevCell.width,
-        prevCell.height
+        prevCell.height,
+        getTerminalFitScrollbarWidth(previousTerm),
+        TERMINAL_FIT_GUARD_COLUMNS
       );
       if (measured) targetDims = measured;
     }
@@ -471,7 +502,11 @@ export function usePty(
       // Always sync after mounting — targetDims may be stale if the pane was
       // resized while this session was off-screen.  measureAndResize defers to
       // rAF so it reads the live DOM and only calls term.resize() when needed.
-      measureAndResize();
+      // forceResize re-fits even when cols/rows already match, so a terminal
+      // opened in the 1px off-screen host (e.g. after a session restart) gets
+      // its canvas geometry recomputed against the live pane instead of staying
+      // stuck painting only the top of the container until the next resize.
+      measureAndResize(0, { forceResize: true });
 
       // ── Load settings ──────────────────────────────────────────────────────
       let customFontFamily = '';
@@ -479,7 +514,9 @@ export function usePty(
         (terminalSettings) => {
           if (terminalSettings?.fontFamily) {
             customFontFamily = terminalSettings.fontFamily.trim();
-            if (customFontFamily) frontendPty.terminal.options.fontFamily = customFontFamily;
+            if (customFontFamily) {
+              frontendPty.terminal.options.fontFamily = buildTerminalFontFamily(customFontFamily);
+            }
           }
           frontendPty.setScrollbackLines(
             terminalSettings?.scrollbackLines ?? DEFAULT_TERMINAL_SCROLLBACK_LINES
@@ -689,7 +726,9 @@ export function usePty(
           anchor: BufferCellPosition;
           startX: number;
           startY: number;
+          viewportY: number;
         } | null = null;
+        let viewportRestoreTimeout: ReturnType<typeof setTimeout> | null = null;
 
         const shouldCapturePlainDragSelection = (event: MouseEvent) => {
           return (
@@ -706,6 +745,23 @@ export function usePty(
           event.preventDefault();
           event.stopPropagation();
           event.stopImmediatePropagation();
+        };
+
+        const restoreViewportAfterSelection = (viewportY: number) => {
+          const restore = () => {
+            try {
+              if (terminal.buffer.active.viewportY !== viewportY) {
+                terminal.scrollToLine(viewportY);
+              }
+            } catch {}
+          };
+
+          requestAnimationFrame(restore);
+          if (viewportRestoreTimeout) clearTimeout(viewportRestoreTimeout);
+          viewportRestoreTimeout = setTimeout(() => {
+            viewportRestoreTimeout = null;
+            restore();
+          }, 50);
         };
 
         const openLinkTarget = (target: TerminalLinkTarget) => {
@@ -740,6 +796,7 @@ export function usePty(
               anchor,
               startX: event.clientX,
               startY: event.clientY,
+              viewportY: terminal.buffer.active.viewportY,
             };
           }
         };
@@ -759,12 +816,16 @@ export function usePty(
           selectBetweenBufferCells(terminal, forcedSelection.anchor, focus);
           stopMouseModeEvent(event);
         };
-        const handleForcedSelectionMouseUp = () => {
+        const handleForcedSelectionMouseUp = (event: MouseEvent) => {
           if (!forcedSelection) return;
           const wasActive = forcedSelection.active;
+          const viewportY = forcedSelection.viewportY;
           forcedSelection = null;
           if (!wasActive) return;
 
+          selectionGestureStart = null;
+          stopMouseModeEvent(event);
+          restoreViewportAfterSelection(viewportY);
           queueSelectionCopy(0);
         };
         const handleSelectionGestureEnd = () => {
@@ -786,6 +847,7 @@ export function usePty(
         terminalDocument.addEventListener('touchcancel', handleSelectionGestureCancel, true);
         cleanups.push(() => {
           forcedSelection = null;
+          if (viewportRestoreTimeout) clearTimeout(viewportRestoreTimeout);
           terminalElement.removeEventListener('mousedown', handleSelectionGestureStart, true);
           terminalElement.removeEventListener('touchstart', handleSelectionGestureStart, true);
           terminalDocument.removeEventListener('mousemove', handleForcedSelectionMouseMove, true);
@@ -816,7 +878,7 @@ export function usePty(
       const handleFontChange = (e: Event) => {
         const detail = (e as CustomEvent<{ fontFamily?: string }>).detail;
         customFontFamily = detail?.fontFamily?.trim() ?? '';
-        terminal.options.fontFamily = customFontFamily || undefined;
+        terminal.options.fontFamily = buildTerminalFontFamily(customFontFamily);
         measureAndResize();
       };
       const handleAutoCopyChange = (e: Event) => {

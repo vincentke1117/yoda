@@ -1,4 +1,5 @@
-import { Terminal, type ITerminalOptions } from '@xterm/xterm';
+import { WebglAddon } from '@xterm/addon-webgl';
+import { Terminal, type IDisposable, type ITerminalOptions } from '@xterm/xterm';
 import { ptyDataChannel } from '@shared/events/ptyEvents';
 import {
   DEFAULT_TERMINAL_SCROLLBACK_LINES,
@@ -13,6 +14,35 @@ import { ensureXtermHost } from './xterm-host';
 
 export interface SessionTheme {
   override?: ITerminalOptions['theme'];
+}
+
+/**
+ * xterm's renderers only fully support lineHeight 1.0. Any other value makes
+ * each rendered row taller than the glyph cell, so on scroll the renderer
+ * clears a vertically-misaligned region and the outgoing row's left cells
+ * aren't erased before the incoming row paints — the left-gutter ghosting seen
+ * during scroll. Keep this at 1.0; add row spacing via container CSS if needed,
+ * never via xterm lineHeight.
+ */
+export const TERMINAL_LINE_HEIGHT = 1.0;
+
+export const DEFAULT_TERMINAL_FONT_FAMILY = [
+  'Menlo',
+  'Monaco',
+  'Consolas',
+  '"Liberation Mono"',
+  '"Noto Sans Mono CJK SC"',
+  '"Noto Sans Mono CJK TC"',
+  '"Noto Sans Mono CJK JP"',
+  '"PingFang SC"',
+  '"Microsoft YaHei UI"',
+  'monospace',
+].join(', ');
+
+export function buildTerminalFontFamily(fontFamily?: string): string {
+  const trimmed = fontFamily?.trim();
+  if (!trimmed) return DEFAULT_TERMINAL_FONT_FAMILY;
+  return `${trimmed}, ${DEFAULT_TERMINAL_FONT_FAMILY}`;
 }
 
 export function readXtermCssVars(): ITerminalOptions['theme'] {
@@ -69,6 +99,8 @@ export class FrontendPty {
   private hasFlushed = false;
   private savedViewportY: number | null = null;
   private readonly scrollDisposable: { dispose(): void };
+  private webglAddon: WebglAddon | null = null;
+  private webglContextLossDisposable: IDisposable | null = null;
 
   constructor(
     readonly sessionId: string,
@@ -88,9 +120,12 @@ export class FrontendPty {
         options?.scrollbackLines ?? DEFAULT_TERMINAL_SCROLLBACK_LINES
       ),
       convertEol: true,
+      fontFamily: DEFAULT_TERMINAL_FONT_FAMILY,
       fontSize: 13,
-      lineHeight: 1.2,
+      lineHeight: TERMINAL_LINE_HEIGHT,
       letterSpacing: 0,
+      reflowCursorLine: true,
+      rescaleOverlappingGlyphs: true,
       allowProposedApi: true,
       macOptionClickForcesSelection: true,
       minimumContrastRatio: 4.5,
@@ -106,6 +141,7 @@ export class FrontendPty {
     });
 
     this.terminal.open(this.ownedContainer);
+    this.loadWebglRenderer();
     this.scrollDisposable = this.terminal.onScroll((viewportY) => {
       this.savedViewportY = viewportY;
     });
@@ -121,8 +157,54 @@ export class FrontendPty {
     FrontendPty.all.add(this);
   }
 
+  private loadWebglRenderer(): void {
+    try {
+      const webglAddon = new WebglAddon();
+      const contextLossDisposable = webglAddon.onContextLoss(() => {
+        log.warn('FrontendPty: WebGL renderer context lost; falling back to DOM renderer', {
+          sessionId: this.sessionId,
+        });
+        this.webglContextLossDisposable?.dispose();
+        this.webglContextLossDisposable = null;
+        this.webglAddon?.dispose();
+        this.webglAddon = null;
+        this.terminal.refresh(0, Math.max(0, this.terminal.rows - 1));
+      });
+      this.terminal.loadAddon(webglAddon);
+      this.webglAddon = webglAddon;
+      this.webglContextLossDisposable = contextLossDisposable;
+    } catch (error) {
+      log.debug('FrontendPty: WebGL renderer unavailable; using DOM renderer', {
+        sessionId: this.sessionId,
+        error: String(error),
+      });
+      this.webglContextLossDisposable?.dispose();
+      this.webglContextLossDisposable = null;
+      this.webglAddon?.dispose();
+      this.webglAddon = null;
+    }
+  }
+
   setScrollbackLines(scrollbackLines: unknown): void {
     this.terminal.options.scrollback = normalizeTerminalScrollbackLines(scrollbackLines);
+  }
+
+  /**
+   * Force the WebGL renderer to rebuild its canvas/texture atlas against the
+   * terminal's current dimensions. The renderer's backing canvas is sized when
+   * the addon loads — which, for a freshly created session, happens while the
+   * terminal is parented in the 1px off-screen host. After the terminal is
+   * reparented and resized to the real pane, the WebGL canvas can keep its stale
+   * (tiny) backing height and only paint the top rows. Clearing the atlas and
+   * refreshing rebinds the canvas to the live cell grid.
+   */
+  refreshRenderer(): void {
+    try {
+      this.webglAddon?.clearTextureAtlas();
+    } catch {}
+    try {
+      this.terminal.refresh(0, Math.max(0, this.terminal.rows - 1));
+    } catch {}
   }
 
   /**
@@ -222,6 +304,10 @@ export class FrontendPty {
     this.offData?.();
     this.offData = null;
     this.scrollDisposable.dispose();
+    this.webglContextLossDisposable?.dispose();
+    this.webglContextLossDisposable = null;
+    this.webglAddon?.dispose();
+    this.webglAddon = null;
     rpc.pty.unsubscribe(this.sessionId).catch(() => {});
     try {
       this.terminal.dispose();
@@ -241,6 +327,21 @@ export function applyThemeToAll(theme?: SessionTheme): void {
     pty.terminal.options.theme = xTermTheme;
   }
 }
+
+/**
+ * Apply the canonical lineHeight to every live terminal. lineHeight is set at
+ * construction, so terminals that survive an HMR module swap keep the old value
+ * until reconstructed. Calling this on module eval pushes the corrected value
+ * to all existing sessions so a render-option fix lands everywhere immediately,
+ * without forcing a new session.
+ */
+export function applyLineHeightToAll(): void {
+  for (const pty of FrontendPty.all) {
+    pty.terminal.options.lineHeight = TERMINAL_LINE_HEIGHT;
+  }
+}
+
+applyLineHeightToAll();
 
 /** Dispose all live FrontendPty instances. Called on app teardown. */
 export function disposeAllPtys(): void {

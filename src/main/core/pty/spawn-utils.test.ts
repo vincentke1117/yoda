@@ -93,9 +93,10 @@ describe('resolveSshCommand', () => {
       zshProfile
     );
 
-    expect(result).toContain('tmux has-session -t "agent-session"');
-    expect(result).toContain('tmux new-session -d -s "agent-session"');
-    expect(result).toContain('tmux attach-session -t "agent-session"');
+    expect(result).toContain('tmux -L yoda -f /dev/null has-session -t "agent-session"');
+    expect(result).toContain('tmux -L yoda -f /dev/null new-session -d -s "agent-session"');
+    expect(result).toContain('tmux -L yoda -f /dev/null attach-session -t "agent-session"');
+    expect(result).toContain('"copy-mode -H -e"');
     expect(result).toContain("'\\''claude'\\'' '\\''--resume'\\'' '\\''conv-1'\\''");
   });
 
