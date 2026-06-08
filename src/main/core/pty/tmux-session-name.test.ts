@@ -43,6 +43,16 @@ describe('buildTmuxShellLine', () => {
     expect(line).not.toContain('-x ');
     expect(line).not.toContain('-y ');
   });
+
+  it('exports explicit environment variables inside tmux-created commands', () => {
+    const line = buildTmuxShellLine('agent-session', 'claude', undefined, {
+      CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN: '1',
+      'INVALID-NAME': 'ignored',
+    });
+
+    expect(line).toContain('"export CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=\'1\'; claude"');
+    expect(line).not.toContain('INVALID-NAME');
+  });
 });
 
 describe('killTmuxSession', () => {

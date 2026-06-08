@@ -32,7 +32,7 @@ import { telemetryService } from '@main/lib/telemetry';
 import { resolveAgentResumeSessionId } from '../codex-session-id';
 import { ensureCodexThreadUnarchived } from '../codex-unarchive';
 import { buildAgentCommand } from './agent-command';
-import { resolveProviderEnv } from './provider-env';
+import { resolveProviderEnv, resolveProviderTmuxEnv } from './provider-env';
 
 const DEFAULT_COLS = 80;
 const DEFAULT_ROWS = 24;
@@ -124,9 +124,12 @@ export class LocalConversationProvider implements ConversationProvider {
       workingDirectory: this.taskPath,
     });
     const args = withCodexRuntimeNotifyArgs(conversation.providerId, baseArgs, port);
-    const providerEnv = resolveProviderEnv(providerConfig);
 
     const tmuxSessionName = await this.resolveTmuxSessionName(sessionId);
+    const providerEnv = resolveProviderEnv(providerConfig, {
+      providerId: conversation.providerId,
+      tmuxEnabled: Boolean(tmuxSessionName),
+    });
 
     const resolved = resolveLocalPtySpawn({
       platform: process.platform,
@@ -137,6 +140,7 @@ export class LocalConversationProvider implements ConversationProvider {
         command: { kind: 'argv', command, args },
         shellSetup: this.shellSetup,
         tmuxSessionName,
+        tmuxEnv: resolveProviderTmuxEnv(providerEnv),
       },
     });
 

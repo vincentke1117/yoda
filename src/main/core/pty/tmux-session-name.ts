@@ -5,6 +5,7 @@ const TMUX_SESSION_PREFIX = 'yoda-';
 const YODA_TMUX_SOCKET_NAME = 'yoda';
 
 const YODA_TMUX_SERVER_ARGS = ['-L', YODA_TMUX_SOCKET_NAME, '-f', '/dev/null'] as const;
+const ENV_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 function tmuxShellPrefix(): string {
   return ['tmux', ...YODA_TMUX_SERVER_ARGS].join(' ');
@@ -14,13 +15,24 @@ function tmuxCommandShellLine(command: string): string {
   return `${tmuxShellPrefix()} ${command}`;
 }
 
+function quotePosixValue(value: string): string {
+  return `'${value.replace(/'/g, "'\\''")}'`;
+}
+
+function buildEnvironmentPrefix(environment?: Record<string, string>): string {
+  const entries = Object.entries(environment ?? {}).filter(([key]) => ENV_NAME_PATTERN.test(key));
+  if (entries.length === 0) return '';
+  return entries.map(([key, value]) => `export ${key}=${quotePosixValue(value)};`).join(' ') + ' ';
+}
+
 export function buildTmuxShellLine(
   sessionName: string,
   commandLine: string,
-  size?: { cols: number; rows: number }
+  size?: { cols: number; rows: number },
+  environment?: Record<string, string>
 ): string {
   const quotedName = JSON.stringify(sessionName);
-  const quotedCmd = JSON.stringify(commandLine);
+  const quotedCmd = JSON.stringify(`${buildEnvironmentPrefix(environment)}${commandLine}`);
   const paneMouseFormat = JSON.stringify('#{||:#{pane_in_mode},#{mouse_any_flag}}');
   // Create the window at the client's real size so tmux draws at the same width
   // xterm renders at. Without this, `new-session -d` is born at tmux's default

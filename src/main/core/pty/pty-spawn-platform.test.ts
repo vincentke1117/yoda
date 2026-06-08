@@ -254,4 +254,26 @@ describe('resolveLocalPtySpawn - POSIX', () => {
       warnings: [],
     });
   });
+
+  it('exports tmux environment inside tmux-created commands', () => {
+    const result = resolveLocalPtySpawn({
+      platform: 'linux',
+      env: posixEnv,
+      intent: {
+        kind: 'run-command',
+        cwd: '/repo',
+        command: { kind: 'argv', command: 'claude', args: ['--resume', 'conv-1'] },
+        tmuxSessionName: 'agent-session',
+        tmuxEnv: {
+          CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN: '1',
+        },
+      },
+    });
+
+    expect(result.command).toBe('/bin/bash');
+    expect(result.args[0]).toBe('-c');
+    expect(result.args[1]).toContain(
+      '"export CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=\'1\'; claude --resume conv-1"'
+    );
+  });
 });

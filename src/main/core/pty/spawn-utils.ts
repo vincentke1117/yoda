@@ -25,7 +25,9 @@ function posixShellLineForSsh(
       const line = cfg.shellSetup ? `${cfg.shellSetup} && ${baseCmd}` : baseCmd;
       return {
         cwd: cfg.cwd,
-        line: cfg.tmuxSessionName ? buildTmuxShellLine(cfg.tmuxSessionName, line) : line,
+        line: cfg.tmuxSessionName
+          ? buildTmuxShellLine(cfg.tmuxSessionName, line, undefined, cfg.tmuxEnv)
+          : line,
       };
     }
     case 'general': {

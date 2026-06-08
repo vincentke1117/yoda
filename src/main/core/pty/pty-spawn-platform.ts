@@ -14,6 +14,8 @@ export type PtySpawnIntent =
       cwd: string;
       shellSetup?: string;
       tmuxSessionName?: string;
+      /** Environment exported inside the tmux-created shell command. */
+      tmuxEnv?: Record<string, string>;
     }
   | {
       kind: 'run-command';
@@ -21,6 +23,8 @@ export type PtySpawnIntent =
       command: PtyCommandSpec;
       shellSetup?: string;
       tmuxSessionName?: string;
+      /** Environment exported inside the tmux-created shell command. */
+      tmuxEnv?: Record<string, string>;
     };
 
 export type LocalPtySpawnWarning = 'shell_setup_ignored_on_windows' | 'tmux_unsupported_on_windows';
@@ -195,7 +199,10 @@ function resolvePosixSpawn(intent: PtySpawnIntent, env: NodeJS.ProcessEnv): Reso
         : `exec ${quotePosixArg(shell)} -il`;
       return {
         command: shell,
-        args: ['-c', buildTmuxShellLine(intent.tmuxSessionName, commandLine)],
+        args: [
+          '-c',
+          buildTmuxShellLine(intent.tmuxSessionName, commandLine, undefined, intent.tmuxEnv),
+        ],
         cwd: intent.cwd,
         warnings: [],
       };
@@ -224,7 +231,15 @@ function resolvePosixSpawn(intent: PtySpawnIntent, env: NodeJS.ProcessEnv): Reso
   if (intent.tmuxSessionName) {
     return {
       command: shell,
-      args: ['-c', buildTmuxShellLine(intent.tmuxSessionName, fullCommandLine)],
+      args: [
+        '-c',
+        buildTmuxShellLine(
+          intent.tmuxSessionName,
+          fullCommandLine,
+          undefined,
+          intent.tmuxEnv
+        ),
+      ],
       cwd: intent.cwd,
       warnings: [],
     };

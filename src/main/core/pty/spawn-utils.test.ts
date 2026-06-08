@@ -100,6 +100,24 @@ describe('resolveSshCommand', () => {
     expect(result).toContain("'\\''claude'\\'' '\\''--resume'\\'' '\\''conv-1'\\''");
   });
 
+  it('exports agent tmux env inside remote tmux-created commands', () => {
+    const result = resolveSshCommand(
+      'agent',
+      makeAgentConfig({
+        tmuxSessionName: 'agent-session',
+        tmuxEnv: {
+          CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN: '1',
+        },
+      }),
+      undefined,
+      zshProfile
+    );
+
+    expect(result).toContain('tmux -L yoda -f /dev/null new-session -d -s "agent-session"');
+    expect(result).toContain('export CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=');
+    expect(result).toContain("'\\''claude'\\'' '\\''--resume'\\'' '\\''conv-1'\\''");
+  });
+
   it('launches remote general terminals with the captured remote shell', () => {
     const result = resolveSshCommand('general', makeGeneralConfig(), undefined, zshProfile);
 

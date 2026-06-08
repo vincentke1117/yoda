@@ -10,6 +10,7 @@ export interface AgentSessionConfig {
   sessionId?: string;
   shellSetup?: string;
   tmuxSessionName?: string;
+  tmuxEnv?: Record<string, string>;
   autoApprove: boolean;
   resume: boolean;
 }
