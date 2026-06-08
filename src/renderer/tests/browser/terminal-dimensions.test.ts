@@ -84,9 +84,27 @@ describe('measureDimensions', () => {
     });
   });
 
+  it('reserves guard columns from available width', () => {
+    container = makeContainer('800px', '400px');
+    const SCROLLBAR = 14;
+    const GUARD_COLS = 2;
+    const dims = measureDimensions(container, CW, CH, SCROLLBAR, GUARD_COLS);
+    expect(dims).toEqual({
+      cols: Math.floor((800 - SCROLLBAR) / CW) - GUARD_COLS, // 96
+      rows: Math.floor(400 / CH), // 25
+    });
+  });
+
   it('clamps cols to MINIMUM_COLS (2) when container is very narrow', () => {
     container = makeContainer('3px', '400px'); // 3 / 8 = 0 → clamp to 2
     const dims = measureDimensions(container, CW, CH);
+    expect(dims).not.toBeNull();
+    expect(dims!.cols).toBe(2);
+  });
+
+  it('clamps guarded cols to MINIMUM_COLS (2) when reserve exceeds available width', () => {
+    container = makeContainer('32px', '400px'); // 32 / 8 = 4, minus 10 → clamp to 2
+    const dims = measureDimensions(container, CW, CH, 0, 10);
     expect(dims).not.toBeNull();
     expect(dims!.cols).toBe(2);
   });

@@ -2,11 +2,23 @@ import { CircleFadingArrowUp, CirclePlayIcon } from 'lucide-react';
 import React from 'react';
 import { type ScriptType } from '@renderer/features/tasks/stores/lifecycle-scripts';
 import { getPaneContainer } from '@renderer/lib/pty/pane-sizing-context';
-import { measureDimensions } from '@renderer/lib/pty/pty-dimensions';
+import {
+  DEFAULT_XTERM_SCROLLBAR_WIDTH,
+  measureDimensions,
+  TERMINAL_FIT_GUARD_COLUMNS,
+} from '@renderer/lib/pty/pty-dimensions';
 
 export function getTerminalsPaneSize() {
   const container = getPaneContainer('terminal-drawer');
-  return container ? (measureDimensions(container, 8, 16) ?? undefined) : undefined;
+  return container
+    ? (measureDimensions(
+        container,
+        8,
+        16,
+        DEFAULT_XTERM_SCROLLBAR_WIDTH,
+        TERMINAL_FIT_GUARD_COLUMNS
+      ) ?? undefined)
+    : undefined;
 }
 
 export function nextTerminalName(names: string[]): string {

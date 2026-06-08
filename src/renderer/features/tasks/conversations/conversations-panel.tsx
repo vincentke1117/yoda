@@ -15,7 +15,9 @@ import { PaneSizingProvider } from '@renderer/lib/pty/pane-sizing-context';
 import type { FrontendPty } from '@renderer/lib/pty/pty';
 import {
   getCellMetrics,
+  getTerminalFitScrollbarWidth,
   measureDimensions,
+  TERMINAL_FIT_GUARD_COLUMNS,
   type TerminalDimensions,
 } from '@renderer/lib/pty/pty-dimensions';
 import { PtyPane } from '@renderer/lib/pty/pty-pane';
@@ -36,7 +38,13 @@ function getResumeInitialSize(
 ): TerminalDimensions | undefined {
   const cell = getCellMetrics(pty.terminal);
   if (container && cell) {
-    const measured = measureDimensions(container, cell.width, cell.height);
+    const measured = measureDimensions(
+      container,
+      cell.width,
+      cell.height,
+      getTerminalFitScrollbarWidth(pty.terminal),
+      TERMINAL_FIT_GUARD_COLUMNS
+    );
     if (measured) return measured;
   }
   if (pty.terminal.cols > 0 && pty.terminal.rows > 0) {
@@ -194,12 +202,12 @@ export const ConversationsPanel = observer(function ConversationsPanel() {
   );
 
   return (
-    <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden p-2">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+    <div className="flex h-full min-h-0 min-w-0 w-full flex-col overflow-hidden p-2">
+      <div className="flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden">
         <div
           ref={containerRef}
           tabIndex={-1}
-          className="flex min-h-0 min-w-0 flex-1 flex-col outline-none"
+          className="flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden outline-none"
           onFocus={() => {
             if (isActive) provisioned.taskView.setFocusedRegion('main');
           }}
@@ -241,9 +249,12 @@ export const ConversationsPanel = observer(function ConversationsPanel() {
                 />
               )
             ) : (
-              <div className="flex min-h-0 flex-1 flex-col">
+              <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                 {activeSessionId && activeSession?.status === 'ready' && activeSession.pty ? (
-                  <div ref={terminalContainerRef} className="relative flex h-full min-h-0 flex-1">
+                  <div
+                    ref={terminalContainerRef}
+                    className="relative flex h-full min-h-0 min-w-0 w-full flex-1 overflow-hidden"
+                  >
                     <TerminalSearchOverlay
                       isOpen={isSearchOpen}
                       fullWidth
@@ -258,7 +269,7 @@ export const ConversationsPanel = observer(function ConversationsPanel() {
                       ref={terminalRef}
                       sessionId={activeSessionId}
                       pty={activeSession.pty}
-                      className="h-full w-full"
+                      className="h-full w-full min-w-0"
                       onEnterPress={onEnterPress}
                       onSubmittedInput={onSubmittedInput}
                       onInterruptPress={onInterruptPress}
@@ -291,20 +302,25 @@ const ConversationSessionList = observer(function ConversationSessionList({
   onOpen: (conversationId: string) => void;
 }) {
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-2">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="flex min-w-0 shrink-0 items-center justify-between gap-2 overflow-hidden border-b border-border px-3 py-2">
         <div className="flex min-w-0 items-center gap-2">
           <span className="truncate text-sm font-medium text-foreground">{title}</span>
           <span className="shrink-0 text-xs tabular-nums text-foreground-passive">
             {conversations.length}
           </span>
         </div>
-        <Button size="sm" variant="outline" onClick={createAction} className="flex gap-2">
-          {createLabel}
-          <ShortcutHint settingsKey="newConversation" />
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={createAction}
+          className="min-w-0 max-w-[60%] gap-2 overflow-hidden"
+        >
+          <span className="truncate">{createLabel}</span>
+          <ShortcutHint settingsKey="newConversation" className="shrink-0" />
         </Button>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-3">
+      <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-3">
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-1">
           {conversations.map((conversation) => (
             <ConversationSessionListItem
@@ -334,7 +350,7 @@ const ConversationSessionListItem = observer(function ConversationSessionListIte
     <button
       type="button"
       className={cn(
-        'group flex h-9 w-full items-center gap-2 rounded-md border border-transparent px-2 text-left outline-none transition-colors',
+        'group flex h-9 w-full min-w-0 items-center gap-2 overflow-hidden rounded-md border border-transparent px-2 text-left outline-none transition-colors',
         'hover:border-border hover:bg-background-1 focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring'
       )}
       onClick={() => onOpen(conversation.data.id)}

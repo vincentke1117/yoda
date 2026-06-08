@@ -26,6 +26,10 @@ interface XtermInternals {
 
 const MINIMUM_COLS = 2;
 const MINIMUM_ROWS = 1;
+// Embedded xterm viewport scrollbars are hidden in index.css, so subtracting
+// xterm's addon-fit 14px fallback creates visible fake padding on the right.
+export const DEFAULT_XTERM_SCROLLBAR_WIDTH = 0;
+export const TERMINAL_FIT_GUARD_COLUMNS = 1;
 
 export interface TerminalDimensions {
   cols: number;
@@ -63,6 +67,14 @@ export function getCellMetrics(terminal: Terminal): { width: number; height: num
   );
 }
 
+export function getTerminalFitScrollbarWidth(terminal: Terminal): number {
+  if (terminal.options.scrollback === 0) return 0;
+  const width = terminal.options.overviewRuler?.width;
+  return typeof width === 'number' && Number.isFinite(width) && width > 0
+    ? width
+    : DEFAULT_XTERM_SCROLLBAR_WIDTH;
+}
+
 /**
  * Compute terminal cols/rows from a container element's pixel dimensions and
  * the terminal's CSS cell size.
@@ -71,20 +83,23 @@ export function getCellMetrics(terminal: Terminal): { width: number; height: num
  * @param cellWidth  Terminal cell width in CSS pixels (terminal.dimensions.css.cell.width).
  * @param cellHeight Terminal cell height in CSS pixels (terminal.dimensions.css.cell.height).
  * @param scrollbarWidth Width in pixels to subtract for the scrollbar (0 when scrollback=0).
+ * @param guardColumns Extra columns to reserve for glyph/font rounding at the right edge.
  */
 export function measureDimensions(
   container: HTMLElement,
   cellWidth: number,
   cellHeight: number,
-  scrollbarWidth = 0
+  scrollbarWidth = 0,
+  guardColumns = 0
 ): TerminalDimensions | null {
   if (cellWidth === 0 || cellHeight === 0) return null;
   const style = window.getComputedStyle(container);
   const width = Math.max(0, Number.parseInt(style.width));
   const height = Number.parseInt(style.height);
   if (Number.isNaN(width) || Number.isNaN(height) || width === 0 || height === 0) return null;
+  const availableCols = Math.floor((width - scrollbarWidth) / cellWidth) - guardColumns;
   return {
-    cols: Math.max(MINIMUM_COLS, Math.floor((width - scrollbarWidth) / cellWidth)),
+    cols: Math.max(MINIMUM_COLS, availableCols),
     rows: Math.max(MINIMUM_ROWS, Math.floor(height / cellHeight)),
   };
 }

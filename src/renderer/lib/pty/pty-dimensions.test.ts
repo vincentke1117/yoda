@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getCellMetrics } from './pty-dimensions';
+import { getCellMetrics, getTerminalFitScrollbarWidth } from './pty-dimensions';
 
 function asTerminal(value: unknown): Parameters<typeof getCellMetrics>[0] {
   return value as Parameters<typeof getCellMetrics>[0];
@@ -51,5 +51,31 @@ describe('getCellMetrics', () => {
     });
 
     expect(getCellMetrics(terminal)).toBeNull();
+  });
+});
+
+describe('getTerminalFitScrollbarWidth', () => {
+  it('returns 0 when scrollback is disabled', () => {
+    const terminal = asTerminal({
+      options: { scrollback: 0 },
+    });
+
+    expect(getTerminalFitScrollbarWidth(terminal)).toBe(0);
+  });
+
+  it('uses the embedded terminal default width when scrollback is enabled', () => {
+    const terminal = asTerminal({
+      options: { scrollback: 1000 },
+    });
+
+    expect(getTerminalFitScrollbarWidth(terminal)).toBe(0);
+  });
+
+  it('uses the configured overview ruler width when available', () => {
+    const terminal = asTerminal({
+      options: { scrollback: 1000, overviewRuler: { width: 8 } },
+    });
+
+    expect(getTerminalFitScrollbarWidth(terminal)).toBe(8);
   });
 });
