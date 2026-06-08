@@ -1,5 +1,4 @@
 import { makeObservable, observable, reaction, runInAction, toJS } from 'mobx';
-import { toast } from 'sonner';
 import type { Conversation } from '@shared/conversations';
 import { prSyncProgressChannel, prUpdatedChannel } from '@shared/events/prEvents';
 import {
@@ -20,6 +19,7 @@ import { getProjectManagerStore } from '@renderer/features/projects/stores/proje
 import type { ProjectSettingsStore } from '@renderer/features/projects/stores/project-settings-store';
 import type { RepositoryStore } from '@renderer/features/projects/stores/repository-store';
 import { TASK_SIDEBAR_VIEW_STATE_KEY } from '@renderer/features/tasks/stores/task-sidebar-preferences';
+import { toast } from '@renderer/lib/hooks/use-toast';
 import { events, rpc } from '@renderer/lib/ipc';
 import { viewStateCache } from '@renderer/lib/stores/view-state-cache';
 import { log } from '@renderer/utils/logger';

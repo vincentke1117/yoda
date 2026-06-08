@@ -1,10 +1,11 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Copy, Pencil, RefreshCw } from 'lucide-react';
+import { ChevronRight, Copy, Pencil, RefreshCw, SlidersHorizontal } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { taskNamingUpdatedChannel } from '@shared/events/taskEvents';
 import type { TaskNamingContextSnapshot, TaskNamingSnapshot } from '@shared/task-naming';
+import { NamingConfigFields } from '@renderer/features/tasks/components/naming-config-fields';
 import {
   getRegisteredTaskData,
   getTaskManagerStore,
@@ -188,41 +189,43 @@ export const RenamePanel = observer(function RenamePanel({ active }: { active: b
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden bg-background">
-      <div className="flex h-7 shrink-0 items-center border-b border-border/70 px-3">
-        <MicroLabel className="text-foreground-passive">{t('tasks.rename.panelTitle')}</MicroLabel>
+      <div className="flex h-7 shrink-0 items-center justify-between gap-2 border-b border-border/70 pl-3 pr-1.5">
+        <MicroLabel className="truncate text-foreground-passive">
+          {t('tasks.rename.panelTitle')}
+        </MicroLabel>
+        <Button
+          type="button"
+          size="xs"
+          variant="ghost"
+          className="h-5 px-1.5 text-foreground-passive hover:text-foreground"
+          onClick={openManualRename}
+        >
+          <Pencil className="size-3" />
+          {t('common.rename')}
+        </Button>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
         <div className="flex min-w-0 flex-col gap-3">
-          <section className="flex min-w-0 flex-col gap-2 rounded-md border border-border p-2">
-            <header className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <MicroLabel className="text-foreground-passive">
-                  {t('tasks.rename.panelTitle')}
-                </MicroLabel>
-                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                  {t('tasks.panel.renameContextHint')}
-                </p>
-              </div>
-              <Button type="button" size="xs" variant="outline" onClick={openManualRename}>
-                <Pencil className="size-3" />
-                {t('common.rename')}
-              </Button>
-            </header>
-
+          <section className="flex min-w-0 flex-col gap-2">
             <div className="grid gap-1.5 rounded-md border border-border bg-background-1/40 p-2">
-              <NamingValue label={t('tasks.rename.status')} value={namingStatus} />
+              <NamingValue
+                label={t('tasks.rename.status')}
+                value={namingStatus}
+                accent={snapshotGenerating || isRegenerating}
+              />
+              <NamingValue label={t('tasks.panel.model')} value={namingModel} mono />
               <NamingValue
                 label={t('tasks.rename.durationEstimate')}
                 value={namingDurationLabel}
                 mono
               />
-              <NamingValue label={t('tasks.panel.model')} value={namingModel} mono />
               <NamingValue
                 label={t('tasks.rename.contextTokens')}
                 value={formatTokenCount(namingContext?.estimatedTokens)}
                 mono
               />
+              <NamingDivider />
               <NamingValue label={t('tasks.rename.currentTaskName')} value={taskName} />
               <NamingValue
                 label={t('tasks.rename.generatedTaskName')}
@@ -253,29 +256,45 @@ export const RenamePanel = observer(function RenamePanel({ active }: { active: b
                 </div>
               </div>
             ) : null}
-          </section>
 
-          <section className="flex min-w-0 flex-col gap-2 rounded-md border border-border p-2">
-            <header className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <MicroLabel className="text-foreground-passive">{contextTitle}</MicroLabel>
-                <p className="mt-1 truncate text-xs text-foreground-passive">
-                  {contextStats
-                    ? t('tasks.rename.contextStats', contextStats)
-                    : t('tasks.rename.contextStatsUnavailable')}
-                </p>
-              </div>
+            <div className="flex items-center gap-2">
               <Button
                 type="button"
                 size="xs"
-                variant="outline"
+                variant="default"
+                className="flex-1"
                 disabled={isRegenerating || !taskManager}
                 onClick={regenerate}
               >
                 <RefreshCw className={cn('size-3', isRegenerating && 'animate-spin')} />
                 {isRegenerating ? t('common.loading') : t('tasks.panel.regenerateName')}
               </Button>
-            </header>
+            </div>
+          </section>
+
+          <details className="group min-w-0 rounded-md border border-border">
+            <summary className="flex cursor-pointer list-none items-center gap-1.5 px-2 py-1.5 text-xs text-foreground-passive transition-colors hover:text-foreground [&::-webkit-details-marker]:hidden">
+              <ChevronRight className="size-3 transition-transform group-open:rotate-90" />
+              <SlidersHorizontal className="size-3" />
+              <span className="font-medium">{t('tasks.rename.configure')}</span>
+            </summary>
+            <div className="flex flex-col gap-2 border-t border-border/70 px-2 pb-2 pt-2">
+              <p className="text-[11px] leading-relaxed text-foreground-passive">
+                {t('tasks.rename.configureHint')}
+              </p>
+              <NamingConfigFields compact />
+            </div>
+          </details>
+
+          <section className="flex min-w-0 flex-col gap-1.5">
+            <div className="min-w-0 px-0.5">
+              <MicroLabel className="text-foreground-passive">{contextTitle}</MicroLabel>
+              <p className="mt-0.5 truncate text-[11px] text-foreground-passive">
+                {contextStats
+                  ? t('tasks.rename.contextStats', contextStats)
+                  : t('tasks.rename.contextStatsUnavailable')}
+              </p>
+            </div>
 
             {namingQuery.isLoading || (!snapshot?.context && contextPreviewQuery.isLoading) ? (
               <RenamePanelEmpty>{t('common.loading')}</RenamePanelEmpty>
@@ -325,18 +344,36 @@ export const RenamePanel = observer(function RenamePanel({ active }: { active: b
   );
 });
 
-function NamingValue({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+function NamingValue({
+  label,
+  value,
+  mono,
+  accent,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+  accent?: boolean;
+}) {
   return (
-    <div className="grid min-w-0 grid-cols-[7rem_minmax(0,1fr)] gap-2 text-xs">
+    <div className="grid min-w-0 grid-cols-[6rem_minmax(0,1fr)] gap-2 text-xs">
       <span className="shrink-0 text-foreground-passive">{label}</span>
       <span
-        className={cn('min-w-0 truncate text-foreground-muted', mono && 'font-mono')}
+        className={cn(
+          'min-w-0 truncate text-foreground-muted',
+          mono && 'font-mono',
+          accent && 'font-medium text-foreground'
+        )}
         title={value}
       >
         {value}
       </span>
     </div>
   );
+}
+
+function NamingDivider() {
+  return <div className="my-0.5 h-px bg-border/60" />;
 }
 
 function RenamePanelEmpty({ children }: { children: ReactNode }) {

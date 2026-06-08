@@ -71,7 +71,8 @@
   "sidebar": {
     "newTask": "新建任务",
     "searchTasks": "搜索任务",
-    "agents": "Agents",
+    "agentManager": "Agent",
+    "agents": "Agent Runtime",
     "maas": "MaaS",
     "skills": "技能",
     "skillIssues": "{{count}} 个 skill 校验问题",
@@ -409,7 +410,7 @@
       "autoTrustWorktreesInfo": "仅对 Claude Code 生效。会在启动前向 ~/.claude.json 写入信任记录。",
       "autoTrustWorktreesInfoLabel": "关于自动信任 worktree 的更多信息",
       "enableTmux": "启用 tmux",
-      "enableTmuxDescription": "默认在 tmux session 中运行代理与终端，使它们在重启 Yoda 后仍可继续连接。",
+      "enableTmuxDescription": "在 tmux session 中运行代理与终端，使它们在重启 Yoda 后仍可继续连接。",
       "tmuxMissing": "尚未安装 tmux。在安装前，会话会先直接运行。",
       "tmuxUnavailableTitle": "尚未安装 tmux",
       "tmuxUnavailableDescription": "这次会话会先直接运行。安装 tmux 后，agent 会话可在重启 Yoda 后继续连接。",
@@ -584,6 +585,7 @@
     "runHostAria": "选择运行宿主机",
     "runHostLocal": "本机",
     "runHostSsh": "SSH 主机",
+    "agentLabel": "Agent",
     "brainstormPolicy": "先做 Spec",
     "brainstormAgent": "Spec agent",
     "brainstormGuide": "Agent 会只在影响范围、UIUX、数据模型、约束或验收的关键不确定点上提问，并把已确认内容沉淀为条目化 PRD、设计说明、任务拆解、验收标准和待确认问题。",
@@ -1809,7 +1811,6 @@
       "lifecycleScriptsDescription": "任务工作区创建或清理时运行的命令。",
       "provisionCommand": "Provision 命令",
       "terminateCommand": "Terminate 命令",
-      "enableTmuxDescription": "为任务代理会话和终端使用 tmux，使它们在重启 Yoda 后可重新连接。",
       "shareable": {
         "fields": {
           "preservePatterns": {

@@ -18,10 +18,12 @@ import { generateTaskNames } from '@main/core/tasks/name-generation/task-naming-
 import { taskEvents } from '@main/core/tasks/task-events';
 import { taskManager } from '@main/core/tasks/task-manager';
 import { db } from '@main/db/client';
-import { tasks, type TaskRow } from '@main/db/schema';
+import { conversations, tasks, type TaskRow } from '@main/db/schema';
 import { events } from '@main/lib/events';
+import { log } from '@main/lib/logger';
 import { telemetryService } from '@main/lib/telemetry';
 import { createConversation } from '../../conversations/createConversation';
+import { renameConversation } from '../../conversations/renameConversation';
 import { prQueryService } from '../../pull-requests/pr-query-service';
 import { appSettingsService } from '../../settings/settings-service';
 import type { ProvisionTaskError } from '../provision-task-error';
@@ -29,6 +31,7 @@ import { resolveTaskBranchName } from '../resolveTaskBranchName';
 import { toStoredBranch } from '../stored-branch';
 import { mapTaskRowToTask } from '../utils/utils';
 import { replaceTaskIssueLinks } from './task-issues';
+import { renameTaskBranchForName } from './taskBranchRename';
 
 function mapProvisionError(error: ProvisionTaskError): CreateTaskError {
   switch (error.type) {
@@ -95,6 +98,84 @@ async function markSetupFailure(
 async function loadTaskRow(taskId: string): Promise<TaskRow | undefined> {
   const [row] = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1);
   return row;
+}
+
+async function applyBackgroundTaskNaming(input: {
+  namingPromise: ReturnType<typeof generateTaskNames>;
+  project: ProjectProvider;
+  projectId: string;
+  taskId: string;
+  initialConversationId?: string;
+  initialConversationTitle?: string;
+}): Promise<void> {
+  const naming = await input.namingPromise;
+  if (!naming.success || !naming.taskName) {
+    log.warn('createTask: background task naming did not produce a task name', {
+      taskId: input.taskId,
+      projectId: input.projectId,
+      success: naming.success,
+      message: naming.success ? undefined : naming.message,
+    });
+    return;
+  }
+
+  const row = await loadTaskRow(input.taskId);
+  if (!row) return;
+  if (row.isUserNamed) {
+    log.info('createTask: skipping background task naming because task is user named', {
+      taskId: input.taskId,
+      projectId: input.projectId,
+    });
+    return;
+  }
+
+  const branchRename = await renameTaskBranchForName({
+    project: input.project,
+    projectId: input.projectId,
+    taskId: input.taskId,
+    oldBranch: row.taskBranch,
+    sourceBranch: row.sourceBranch,
+    displayName: naming.branchName ?? naming.taskName,
+  });
+  if (!branchRename.success) {
+    log.warn('createTask: background task branch rename failed', {
+      taskId: input.taskId,
+      projectId: input.projectId,
+      error: branchRename.error,
+    });
+  }
+
+  const nextBranch = branchRename.success ? (branchRename.data ?? row.taskBranch) : row.taskBranch;
+  const [updatedRow] = await db
+    .update(tasks)
+    .set({
+      name: naming.taskName,
+      taskBranch: nextBranch,
+      updatedAt: sql`CURRENT_TIMESTAMP`,
+    })
+    .where(eq(tasks.id, input.taskId))
+    .returning();
+  const task = mapTaskRowToTask(
+    updatedRow ?? { ...row, name: naming.taskName, taskBranch: nextBranch }
+  );
+  taskEvents._emit('task:updated', task);
+  events.emit(taskRenamedChannel, {
+    taskId: input.taskId,
+    projectId: input.projectId,
+    name: naming.taskName,
+    isUserNamed: task.isUserNamed,
+  });
+
+  if (input.initialConversationId && input.initialConversationTitle) {
+    const [conversation] = await db
+      .select({ title: conversations.title })
+      .from(conversations)
+      .where(eq(conversations.id, input.initialConversationId))
+      .limit(1);
+    if (conversation?.title === input.initialConversationTitle) {
+      await renameConversation(input.initialConversationId, naming.taskName);
+    }
+  }
 }
 
 async function setupBranch(options: {
@@ -318,42 +399,27 @@ export async function createTask(
 
   taskEvents._emit('task:created', initialTask);
 
-  let displayName = params.name;
-  let branchSeedName = branchSeed(strategy);
+  const displayName = params.name;
+  const branchSeedName = branchSeed(strategy);
   const shouldGenerate = taskSettings.autoGenerateName;
   const includeBranchName = shouldGenerate && createTaskStrategyRequiresBranchName(strategy);
-  if (shouldGenerate) {
-    const naming = await generateTaskNames({
-      taskId: params.id,
-      projectId: params.projectId,
-      project,
-      params: { ...params, sourceBranch: dbSourceBranch },
-      includeBranchName,
-    });
-    if (naming.success) {
-      if (naming.taskName) {
-        displayName = naming.taskName;
-        await db
-          .update(tasks)
-          .set({ name: displayName, updatedAt: sql`CURRENT_TIMESTAMP` })
-          .where(eq(tasks.id, params.id));
-        events.emit(taskRenamedChannel, {
-          taskId: params.id,
-          projectId: params.projectId,
-          name: displayName,
-          isUserNamed: false,
-        });
-      }
-      if (naming.branchName) branchSeedName = naming.branchName;
-    } else if (includeBranchName) {
-      const failedRow = await markSetupFailure(params.id, 'naming_failed', naming.message, taskRow);
-      return ok({
-        task: mapTaskRowToTask(failedRow, prs, {}, linkedIssues),
-        warning: { type: 'task-naming-failed', message: naming.message, blocksProvision: true },
+  const namingPromise = shouldGenerate
+    ? generateTaskNames({
+        taskId: params.id,
+        projectId: params.projectId,
+        project,
+        params: { ...params, sourceBranch: dbSourceBranch },
+        includeBranchName,
+      })
+    : null;
+  if (namingPromise) {
+    void namingPromise.catch((error: unknown) => {
+      log.warn('createTask: background task naming failed', {
+        taskId: params.id,
+        projectId: params.projectId,
+        error: error instanceof Error ? error.message : String(error),
       });
-    } else {
-      warning = { type: 'task-naming-failed', message: naming.message, blocksProvision: false };
-    }
+    });
   }
 
   const branchSetup = await setupBranch({
@@ -425,6 +491,16 @@ export async function createTask(
         agentAutoApproveDefaults,
         params.initialConversation.provider
       ),
+    });
+  }
+  if (namingPromise) {
+    void applyBackgroundTaskNaming({
+      namingPromise,
+      project,
+      projectId: params.projectId,
+      taskId: params.id,
+      initialConversationId: params.initialConversation?.id,
+      initialConversationTitle: params.initialConversation?.title,
     });
   }
 

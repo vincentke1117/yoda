@@ -71,7 +71,8 @@
   "sidebar": {
     "newTask": "New task",
     "searchTasks": "Search tasks",
-    "agents": "Agents",
+    "agentManager": "Agents",
+    "agents": "Agent Runtime",
     "maas": "MaaS",
     "skills": "Skills",
     "skillIssues": "{{count}} skill issue(s)",
@@ -409,7 +410,7 @@
       "autoTrustWorktreesInfo": "Only applies to Claude Code. Writes trust entries to ~/.claude.json before launching.",
       "autoTrustWorktreesInfoLabel": "More info about auto-trust worktrees",
       "enableTmux": "Enable tmux",
-      "enableTmuxDescription": "Run agent sessions and terminals in tmux sessions by default so they survive Yoda restarts.",
+      "enableTmuxDescription": "Run agent sessions and terminals in tmux sessions so they survive Yoda restarts.",
       "tmuxMissing": "tmux is not installed. Sessions will run directly until tmux is available.",
       "tmuxUnavailableTitle": "tmux is not installed",
       "tmuxUnavailableDescription": "This session will run directly for now. Install tmux to keep agent sessions alive across Yoda restarts.",
@@ -584,6 +585,7 @@
     "runHostAria": "Choose run host",
     "runHostLocal": "Local host",
     "runHostSsh": "SSH host",
+    "agentLabel": "Agent",
     "brainstormPolicy": "Spec first",
     "brainstormAgent": "Spec agent",
     "brainstormGuide": "The agent asks only about material uncertainty affecting scope, UI/UX, data model, constraints, or acceptance, then captures confirmed decisions as an itemized PRD, design notes, task breakdown, acceptance checks, and open questions.",
@@ -1809,7 +1811,6 @@
       "lifecycleScriptsDescription": "Commands that run when setting up or tearing down task workspaces.",
       "provisionCommand": "Provision command",
       "terminateCommand": "Terminate command",
-      "enableTmuxDescription": "Use tmux for task agent sessions and terminals so they can be reattached after Yoda restarts.",
       "shareable": {
         "fields": {
           "preservePatterns": {
