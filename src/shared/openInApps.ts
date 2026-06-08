@@ -56,7 +56,7 @@ const _OPEN_IN_APPS = {
     iconPath: ICON_PATHS.finder,
     alwaysAvailable: true,
     platforms: {
-      darwin: { openCommands: ['open {{path}}'] },
+      darwin: { openCommands: ['open -a Finder {{path}}'] },
       win32: {
         openCommands: ['explorer "{{path_raw}}"'],
         label: 'Explorer',
