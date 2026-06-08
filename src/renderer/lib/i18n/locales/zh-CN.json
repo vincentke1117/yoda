@@ -1303,12 +1303,11 @@
     "selectOrAddConnection": "请选择或添加一个 SSH 连接。"
   },
   "feedback": {
-    "title": "发送反馈",
-    "removeAttachment": "移除附件",
-    "signInTitle": "登录后发送反馈",
-    "signInDescription": "请登录 Yoda 账号，方便我们必要时与你跟进。",
-    "dropImageHere": "将图片拖到这里",
-    "sendingAs": "将以 {{email}} 发送",
+    "title": "在 GitHub 反馈",
+    "githubDescription": "将在 Yoda 仓库打开 GitHub Issue，方便公开追踪、补充截图和后续讨论。",
+    "githubIssueTitle": "GitHub Issues",
+    "githubIssueDescription": "我们会预填标题、描述、类型和环境信息。GitHub 打开后你可以继续附加截图或日志。",
+    "viewIssues": "查看 issues",
     "category": {
       "label": "类型",
       "idea": "想法",
@@ -1316,10 +1315,13 @@
       "contact": "联系"
     },
     "detailsLabel": "详情",
-    "detailsPlaceholder": "告诉我们发生了什么，或你希望看到什么。",
-    "attachImage": "附加图片",
-    "sending": "发送中…",
-    "send": "发送反馈"
+    "detailsPlaceholder": "描述你要反馈的 Bug、想法或问题。",
+    "detailsMinimum": "至少输入 {{count}} 个字符后才能创建 issue。",
+    "detailsRemaining": "还需 {{count}} 个字符才能创建 issue。",
+    "githubReady": "已可打开预填好的 GitHub issue。",
+    "copyIssueDetails": "复制 issue 内容",
+    "openingGithub": "正在打开 GitHub…",
+    "openGithubIssue": "打开 GitHub issue"
   },
   "branchSelector": {
     "selectBranch": "选择分支",

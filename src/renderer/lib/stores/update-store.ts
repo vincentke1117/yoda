@@ -1,5 +1,4 @@
 import { action, computed, makeObservable, observable, runInAction } from 'mobx';
-import { toast } from 'sonner';
 import { menuCheckForUpdatesChannel } from '@shared/events/appEvents';
 import {
   updateAvailableEvent,
@@ -12,6 +11,7 @@ import {
   updateProgressEvent,
 } from '@shared/events/updateEvents';
 import type { UpdateState as UpdateServiceState } from '@main/core/updates/update-service';
+import { toast } from '@renderer/lib/hooks/use-toast';
 import i18n from '@renderer/lib/i18n';
 import { events, rpc } from '@renderer/lib/ipc';
 

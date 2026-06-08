@@ -43,6 +43,22 @@ describe('toast', () => {
     await i18n.changeLanguage('en');
   });
 
+  it('adds a copy action to regular toasts by default', async () => {
+    toast({
+      title: 'Saved',
+      description: 'Project settings updated.',
+    });
+
+    expect(mocks.sonnerToast).toHaveBeenCalledTimes(1);
+    const options = mocks.sonnerToast.mock.calls[0][1] as ToastOptions;
+    expect(options.action?.label).toBe('Copy');
+
+    await options.action?.onClick();
+
+    expect(mocks.writeText).toHaveBeenCalledWith('Saved\n\nProject settings updated.');
+    expect(mocks.sonnerToast.success).toHaveBeenCalledWith('Copied');
+  });
+
   it('adds a one-click debug info copy action', async () => {
     toast({
       title: 'Clone failed',
@@ -60,6 +76,8 @@ describe('toast', () => {
 
     expect(mocks.writeText).toHaveBeenCalledTimes(1);
     const copiedText = mocks.writeText.mock.calls[0][0];
+    expect(copiedText).toContain('Clone failed');
+    expect(copiedText).toContain('Could not create the worktree.');
     expect(copiedText).toContain('"step": "clone"');
     expect(copiedText).toContain('"message": "branch not found"');
     expect(mocks.sonnerToast.success).toHaveBeenCalledWith('Debug info copied');
@@ -92,6 +110,6 @@ describe('toast', () => {
     const options = mocks.sonnerToast.mock.calls[0][1] as ToastOptions;
     await options.action?.onClick();
 
-    expect(mocks.writeText).toHaveBeenCalledWith('connecting\nauth failed');
+    expect(mocks.writeText).toHaveBeenCalledWith('SSH failed\n\nconnecting\nauth failed');
   });
 });

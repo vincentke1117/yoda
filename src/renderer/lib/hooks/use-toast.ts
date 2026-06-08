@@ -1,3 +1,4 @@
+import { isValidElement, type ReactNode } from 'react';
 import { toast as sonnerToast, type ExternalToast } from 'sonner';
 import i18n from '@renderer/lib/i18n';
 
@@ -14,7 +15,20 @@ type Toast = {
   debugInfo?: unknown;
 };
 
-function toast({ title, description, variant, action, debugInfo }: Toast) {
+type ToastDisplayContent = ReactNode | (() => ReactNode);
+
+type ToastCopyPayload = {
+  title?: ToastDisplayContent;
+  description?: ToastDisplayContent;
+  debugInfo?: unknown;
+};
+
+function toast(input: Toast | ToastDisplayContent, externalOptions?: ExternalToast) {
+  if (!isToastObject(input)) {
+    return sonnerToast(input, withCopyAction(externalOptions, { title: input }));
+  }
+
+  const { title, description, variant, action, debugInfo } = input;
   const options: ExternalToast = {
     description,
   };
@@ -23,18 +37,7 @@ function toast({ title, description, variant, action, debugInfo }: Toast) {
     options.action = { label: action.label, onClick: action.onClick };
   }
 
-  if (debugInfo !== undefined) {
-    const copyDebugAction = {
-      label: i18n.t('common.copyDebugInfo'),
-      onClick: () => copyDebugInfo(debugInfo),
-    };
-
-    if (action) {
-      options.cancel = copyDebugAction;
-    } else {
-      options.action = copyDebugAction;
-    }
-  }
+  addCopyAction(options, { title, description, debugInfo });
 
   if (variant === 'destructive') {
     return sonnerToast.error(title, options);
@@ -42,14 +45,65 @@ function toast({ title, description, variant, action, debugInfo }: Toast) {
   return sonnerToast(title ?? '', options);
 }
 
+toast.success = (message: ToastDisplayContent, options?: ExternalToast) =>
+  sonnerToast.success(message, withCopyAction(options, { title: message }));
+
+toast.error = (message: ToastDisplayContent, options?: ExternalToast) =>
+  sonnerToast.error(
+    message,
+    withCopyAction(options, { title: message, description: options?.description })
+  );
+
+toast.loading = (message: ToastDisplayContent, options?: ExternalToast) =>
+  sonnerToast.loading(
+    message,
+    withCopyAction(options, { title: message, description: options?.description })
+  );
+
+toast.dismiss = sonnerToast.dismiss;
+
 function useToast() {
   return { toast };
 }
 
-async function copyDebugInfo(debugInfo: unknown): Promise<void> {
+function isToastObject(value: Toast | ToastDisplayContent): value is Toast {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !isValidElement(value) &&
+    ('title' in value || 'description' in value || 'variant' in value || 'debugInfo' in value)
+  );
+}
+
+function withCopyAction(options: ExternalToast | undefined, payload: ToastCopyPayload) {
+  const nextOptions: ExternalToast = { ...(options ?? {}) };
+  addCopyAction(nextOptions, payload);
+  return nextOptions;
+}
+
+function addCopyAction(options: ExternalToast, payload: ToastCopyPayload): void {
+  const hasDebugInfo = payload.debugInfo !== undefined;
+  const copyAction = {
+    label: i18n.t(hasDebugInfo ? 'common.copyDebugInfo' : 'common.copy'),
+    onClick: () => copyToastContent(payload),
+  };
+
+  if (!options.action) {
+    options.action = copyAction;
+    return;
+  }
+
+  if (!options.cancel) {
+    options.cancel = copyAction;
+  }
+}
+
+async function copyToastContent(payload: ToastCopyPayload): Promise<void> {
   try {
-    await writeTextToClipboard(formatDebugInfo(debugInfo));
-    sonnerToast.success(i18n.t('common.debugInfoCopied'));
+    await writeTextToClipboard(formatToastCopyText(payload));
+    sonnerToast.success(
+      i18n.t(payload.debugInfo !== undefined ? 'common.debugInfoCopied' : 'common.copied')
+    );
   } catch {
     sonnerToast.error(i18n.t('common.copyFailed'));
   }
@@ -107,6 +161,42 @@ function createDebugInfoReplacer(): (key: string, value: unknown) => unknown {
     }
     return value;
   };
+}
+
+function formatToastCopyText({ title, description, debugInfo }: ToastCopyPayload): string {
+  const parts = [nodeToText(title), nodeToText(description)].filter((part): part is string =>
+    Boolean(part)
+  );
+
+  if (debugInfo !== undefined) {
+    parts.push(formatDebugInfo(debugInfo));
+  }
+
+  return parts.join('\n\n');
+}
+
+function nodeToText(value: unknown): string | null {
+  if (value == null || typeof value === 'boolean') return null;
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'bigint') return String(value);
+  if (Array.isArray(value)) {
+    const text = value
+      .map((item) => nodeToText(item))
+      .filter((item): item is string => Boolean(item))
+      .join('');
+    return text || null;
+  }
+  if (typeof value === 'function') {
+    try {
+      return nodeToText(value());
+    } catch {
+      return null;
+    }
+  }
+  if (isValidElement(value)) {
+    return nodeToText((value.props as { children?: unknown }).children);
+  }
+  return null;
 }
 
 function formatError(error: Error): string {

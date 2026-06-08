@@ -1303,12 +1303,11 @@
     "selectOrAddConnection": "Select or add an SSH connection."
   },
   "feedback": {
-    "title": "Send feedback",
-    "removeAttachment": "Remove attachment",
-    "signInTitle": "Sign in to send feedback",
-    "signInDescription": "Sign in to your Yoda account so we can follow up if needed.",
-    "dropImageHere": "Drop image here",
-    "sendingAs": "Sending as {{email}}",
+    "title": "Report on GitHub",
+    "githubDescription": "Open a GitHub issue in the Yoda repository so the discussion, screenshots, and follow-up stay public and trackable.",
+    "githubIssueTitle": "GitHub Issues",
+    "githubIssueDescription": "We will prefill the issue title, description, category, and environment. You can attach screenshots or logs after GitHub opens.",
+    "viewIssues": "View issues",
     "category": {
       "label": "Category",
       "idea": "Idea",
@@ -1316,10 +1315,13 @@
       "contact": "Contact"
     },
     "detailsLabel": "Details",
-    "detailsPlaceholder": "Tell us what happened or what you would like to see.",
-    "attachImage": "Attach image",
-    "sending": "Sending...",
-    "send": "Send feedback"
+    "detailsPlaceholder": "Describe the bug, idea, or question you want to share.",
+    "detailsMinimum": "Enter at least {{count}} characters to create an issue.",
+    "detailsRemaining": "Need {{count}} more to create an issue.",
+    "githubReady": "Ready to open a prefilled GitHub issue.",
+    "copyIssueDetails": "Copy issue details",
+    "openingGithub": "Opening GitHub...",
+    "openGithubIssue": "Open GitHub issue"
   },
   "branchSelector": {
     "selectBranch": "Select branch",

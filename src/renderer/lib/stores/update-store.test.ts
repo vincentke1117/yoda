@@ -91,11 +91,20 @@ describe('UpdateStore', () => {
     mocks.eventHandlers.get(menuCheckForUpdatesChannel.name)?.(undefined);
     await flushAsync();
 
-    expect(mocks.toast.loading).toHaveBeenCalledWith('Checking for updates...');
-    expect(mocks.toast.error).toHaveBeenCalledWith("Couldn't check for updates", {
-      id: 'toast-id',
-      description: 'Update checks are only available in packaged builds.',
-    });
+    expect(mocks.toast.loading).toHaveBeenCalledWith(
+      'Checking for updates...',
+      expect.objectContaining({
+        action: expect.objectContaining({ label: 'common.copy' }),
+      })
+    );
+    expect(mocks.toast.error).toHaveBeenCalledWith(
+      "Couldn't check for updates",
+      expect.objectContaining({
+        id: 'toast-id',
+        description: 'Update checks are only available in packaged builds.',
+        action: expect.objectContaining({ label: 'common.copy' }),
+      })
+    );
     expect(store.state).toEqual({
       status: 'error',
       message: 'Update checks are only available in packaged builds.',
@@ -116,7 +125,13 @@ describe('UpdateStore', () => {
     await store.check({ notify: true });
 
     expect(store.state).toEqual({ status: 'not-available' });
-    expect(mocks.toast.success).toHaveBeenCalledWith("You're up to date.", { id: 'toast-id' });
+    expect(mocks.toast.success).toHaveBeenCalledWith(
+      "You're up to date.",
+      expect.objectContaining({
+        id: 'toast-id',
+        action: expect.objectContaining({ label: 'common.copy' }),
+      })
+    );
   });
 
   it('reports the available version after a successful manual check', async () => {
@@ -137,9 +152,13 @@ describe('UpdateStore', () => {
     await store.check({ notify: true });
 
     expect(store.state).toEqual({ status: 'available', info: { version: '0.3.3' } });
-    expect(mocks.toast.success).toHaveBeenCalledWith('Update available', {
-      id: 'toast-id',
-      description: 'Version 0.3.3 is ready to download.',
-    });
+    expect(mocks.toast.success).toHaveBeenCalledWith(
+      'Update available',
+      expect.objectContaining({
+        id: 'toast-id',
+        description: 'Version 0.3.3 is ready to download.',
+        action: expect.objectContaining({ label: 'common.copy' }),
+      })
+    );
   });
 });
