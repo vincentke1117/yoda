@@ -27,6 +27,7 @@ import {
   Server,
   ShieldCheck,
   Sparkles,
+  Terminal,
   Users,
   X,
 } from 'lucide-react';
@@ -49,7 +50,11 @@ import {
   applyAgentCommandPrefix,
   getAgentCommandSubmitDelayMs,
 } from '@shared/agent-command-prefix';
-import { AGENT_PROVIDER_IDS, type AgentProviderId } from '@shared/agent-provider-registry';
+import {
+  AGENT_PROVIDER_IDS,
+  getProvider,
+  type AgentProviderId,
+} from '@shared/agent-provider-registry';
 import type { Agent } from '@shared/agents';
 import { INTERNAL_PROJECT_ID } from '@shared/projects';
 import type { CatalogIndex } from '@shared/skills/types';
@@ -104,6 +109,7 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from '@renderer/lib/ui/popover';
+import { Switch } from '@renderer/lib/ui/switch';
 import { Textarea } from '@renderer/lib/ui/textarea';
 import { cn } from '@renderer/utils/utils';
 import {
@@ -127,6 +133,25 @@ type SkillShortcutPrefix = '/' | '$';
 type TeamRoleId = 'ceo' | 'product' | 'engineering' | 'uiux' | 'operations';
 type TeamProviderSelection = Record<TeamRoleId, AgentProviderId>;
 type AgentSystemPromptOverrides = Record<string, string | null>;
+
+/**
+ * Humanize a model id for the run-mode chip, e.g. `claude-opus-4-8` → `Opus 4.8`.
+ * Falls back to the raw id when the shape is unfamiliar. `null` (runtime default)
+ * is handled by the caller, not here.
+ */
+function formatModelLabel(model: string): string {
+  const known = ['opus', 'sonnet', 'haiku', 'gpt', 'gemini', 'qwen', 'kimi', 'mistral'];
+  const segments = model.split(/[-_]/).filter(Boolean);
+  const tierIndex = segments.findIndex((segment) => known.includes(segment.toLowerCase()));
+  if (tierIndex === -1) return model;
+  const tier = segments[tierIndex];
+  const version = segments
+    .slice(tierIndex + 1)
+    .filter((segment) => /\d/.test(segment))
+    .join('.');
+  const tierLabel = tier.charAt(0).toUpperCase() + tier.slice(1);
+  return version ? `${tierLabel} ${version}` : tierLabel;
+}
 
 interface RunModeInputChrome {
   icon: ComponentType<{ className?: string }>;
@@ -900,6 +925,46 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
   );
   const { agents: userAgents } = useAgents();
   const autoApproveDefaults = useAgentAutoApproveDefaults();
+  const runModeSummary = useMemo(() => {
+    const providerName = (id: AgentProviderId | null) =>
+      id ? (getProvider(id)?.name ?? id) : null;
+    const modelLabel = (model: string | null) =>
+      model ? formatModelLabel(model) : t('home.modelDefault');
+
+    if (runMode === 'compare') {
+      return t('home.modeSummaryAgentCount', { count: compareProviders.length });
+    }
+    if (runMode === 'team') {
+      const roleCount = Object.keys(teamProviders).length;
+      return t('home.modeSummaryAgentCount', { count: roleCount });
+    }
+
+    // Single-provider modes (normal / brainstorm / review): provider · model.
+    let provider = providerId;
+    let model: string | null = null;
+    if (runMode === 'normal') {
+      const agent = userAgents.find((a) => a.id === (selectedAgentIdsByMode.normal ?? [])[0]);
+      if (agent) {
+        provider = agent.preferredRuntimeProvider ?? providerId;
+        model = agent.model;
+      }
+    } else if (runMode === 'review') {
+      provider = reviewerProvider;
+    }
+
+    const name = providerName(provider);
+    if (!name) return null;
+    return `${name} · ${modelLabel(model)}`;
+  }, [
+    runMode,
+    providerId,
+    compareProviders.length,
+    teamProviders,
+    reviewerProvider,
+    userAgents,
+    selectedAgentIdsByMode,
+    t,
+  ]);
   const {
     data: skillCatalog = null,
     isPending: skillsLoading,
@@ -1838,6 +1903,7 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
                 <div className="flex min-w-max flex-wrap items-center gap-2">
                   <RunModeSelector
                     mode={runMode}
+                    summary={runModeSummary}
                     onChange={setRunMode}
                     renderConfiguration={(configurationMode) => (
                       <ModeConfigurationPanel
@@ -1877,6 +1943,7 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
                     }
                   />
                   <RunHostSelector kind={runHostKind} />
+                  <TmuxChip />
                   {mounted && runMode === 'normal' && (
                     <StrategyChip
                       strategyKind={effectiveStandardStrategyKind}
@@ -2220,11 +2287,12 @@ const RUN_MODE_OPTIONS: Array<{
 
 interface RunModeSelectorProps {
   mode: HomeRunMode;
+  summary?: string | null;
   onChange: (mode: HomeRunMode) => void;
   renderConfiguration: (mode: HomeRunMode) => ReactNode;
 }
 
-function RunModeSelector({ mode, onChange, renderConfiguration }: RunModeSelectorProps) {
+function RunModeSelector({ mode, summary, onChange, renderConfiguration }: RunModeSelectorProps) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const current = RUN_MODE_OPTIONS.find((option) => option.mode === mode) ?? RUN_MODE_OPTIONS[0];
@@ -2241,6 +2309,14 @@ function RunModeSelector({ mode, onChange, renderConfiguration }: RunModeSelecto
           >
             <CurrentIcon className="size-3.5" />
             <span>{t(current.labelKey)}</span>
+            {summary ? (
+              <>
+                <span className="text-primary/40">·</span>
+                <span className="max-w-[14rem] truncate font-normal text-primary/80">
+                  {summary}
+                </span>
+              </>
+            ) : null}
             <ChevronDown className="size-3 text-primary/70" />
           </button>
         }
@@ -2707,6 +2783,32 @@ function Chip({ icon: Icon, children }: ChipProps) {
       <Icon className="size-3.5 text-foreground-muted" />
       {children}
     </span>
+  );
+}
+
+function TmuxChip() {
+  const { t } = useTranslation();
+  const { value: project, update, isLoading, isSaving } = useAppSettingsKey('project');
+  const enabled = project?.tmuxByDefault ?? true;
+
+  return (
+    <label
+      title={t('settings.tasks.enableTmuxDescription')}
+      className={cn(
+        'flex h-7 cursor-pointer items-center gap-1.5 rounded-md border border-border bg-background-1 px-2.5 text-xs text-foreground transition-colors hover:bg-background-2',
+        (isLoading || isSaving) && 'cursor-not-allowed opacity-50'
+      )}
+    >
+      <Terminal className="size-3.5 text-foreground-muted" />
+      tmux
+      <Switch
+        size="sm"
+        checked={enabled}
+        disabled={isLoading || isSaving}
+        onCheckedChange={(checked) => update({ tmuxByDefault: checked })}
+        aria-label={t('settings.tasks.enableTmux')}
+      />
+    </label>
   );
 }
 
