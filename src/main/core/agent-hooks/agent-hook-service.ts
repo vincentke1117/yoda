@@ -17,6 +17,7 @@ class AgentHookService implements IInitializable, IDisposable {
         return;
       }
       const event = await enrichEvent(raw);
+      if (!event) return;
       event.source = 'hook';
       agentSessionRuntimeStore.setFromAgentEvent(event);
       const appFocused = isAppFocused();

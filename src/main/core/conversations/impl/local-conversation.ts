@@ -13,6 +13,10 @@ import { applyHookOverrides } from '@main/core/agent-hooks/inspect/hook-override
 import { hookOverridesStore } from '@main/core/agent-hooks/inspect/hook-overrides-store';
 import { agentSessionRuntimeStore } from '@main/core/conversations/agent-session-runtime';
 import {
+  watchClaudeRunState,
+  type ClaudeRunStateWatcher,
+} from '@main/core/conversations/claude-run-state-source';
+import {
   watchCodexRunState,
   type CodexRunStateWatcher,
 } from '@main/core/conversations/codex-run-state-source';
@@ -47,7 +51,7 @@ export class LocalConversationProvider implements ConversationProvider {
   private sessions = new Map<string, Pty>();
   private knownSessionIds = new Set<string>();
   private readonly projectId: string;
-  private readonly taskPath: string;
+  readonly taskPath: string;
   private readonly taskId: string;
   private readonly tmux: boolean;
   private readonly shellSetup?: string;
@@ -57,7 +61,10 @@ export class LocalConversationProvider implements ConversationProvider {
   private readonly preparedHookProviders = new Map<string, boolean>();
   private readonly tmuxSessionNames = new Map<string, string>();
   private readonly sessionInfos = new Map<string, Omit<ActiveConversationSession, 'detachable'>>();
-  private readonly runStateWatchers = new Map<string, CodexRunStateWatcher>();
+  private readonly runStateWatchers = new Map<
+    string,
+    CodexRunStateWatcher | ClaudeRunStateWatcher
+  >();
 
   constructor({
     projectId,
@@ -260,26 +267,34 @@ export class LocalConversationProvider implements ConversationProvider {
   }
 
   /**
-   * For Codex, attach a deterministic run-state source that tails the rollout
-   * JSONL the CLI itself writes. This is the authoritative source for
-   * turn-started / turn-completed / turn-aborted; the classifier remains only
-   * as a fallback. No-op for other providers.
+   * Attach a deterministic run-state source that tails the transcript the CLI
+   * writes itself — the authoritative turn-started/ended signal, independent of
+   * how the user submits and of hook delivery. Codex tails its rollout JSONL;
+   * Claude tails its session transcript. No-op for other providers (they fall
+   * back to the classifier).
    */
   private startRunStateWatcher(conversation: Conversation, startedAtMs: number): void {
-    if (conversation.providerId !== 'codex') return;
     this.stopRunStateWatcher(conversation.id);
     const session = {
       projectId: conversation.projectId,
       taskId: conversation.taskId,
       conversationId: conversation.id,
     };
-    const watcher = watchCodexRunState(
-      { conversationId: conversation.id, cwd: this.taskPath, startedAtMs },
-      (event) => {
-        agentSessionRuntimeStore.dispatch(session, event, 'codex-rollout');
-      }
-    );
-    this.runStateWatchers.set(conversation.id, watcher);
+    if (conversation.providerId === 'codex') {
+      const watcher = watchCodexRunState(
+        { conversationId: conversation.id, cwd: this.taskPath, startedAtMs },
+        (event) => agentSessionRuntimeStore.dispatch(session, event, 'codex-rollout')
+      );
+      this.runStateWatchers.set(conversation.id, watcher);
+      return;
+    }
+    if (conversation.providerId === 'claude') {
+      const watcher = watchClaudeRunState(
+        { conversationId: conversation.id, cwd: this.taskPath },
+        (event) => agentSessionRuntimeStore.dispatch(session, event, 'claude-transcript')
+      );
+      this.runStateWatchers.set(conversation.id, watcher);
+    }
   }
 
   private stopRunStateWatcher(conversationId: string): void {

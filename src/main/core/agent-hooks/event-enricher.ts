@@ -31,7 +31,7 @@ function normalizeEventType(
   return rawType as AgentEvent['type'];
 }
 
-export async function enrichEvent(raw: RawHookRequest): Promise<AgentEvent> {
+export async function enrichEvent(raw: RawHookRequest): Promise<AgentEvent | null> {
   const parsed = parsePtyId(raw.ptyId);
   if (!parsed) {
     throw new Error(`Unrecognised ptyId: ${raw.ptyId}`);
@@ -42,6 +42,11 @@ export async function enrichEvent(raw: RawHookRequest): Promise<AgentEvent> {
     .from(conversations)
     .where(eq(conversations.id, parsed.conversationId))
     .limit(1);
+
+  // The conversation may have been deleted between the agent firing the hook and
+  // us handling it. Return null so the hook server replies 200 (best-effort) and
+  // does not 500 on a benign race.
+  if (!convRows) return null;
 
   const taskId = convRows.taskId;
   const projectId = convRows.projectId;
