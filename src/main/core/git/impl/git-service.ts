@@ -1547,6 +1547,18 @@ export class GitService implements GitProvider, IDisposable {
       return { isGitRepo: false, baseRef: 'main', rootPath: this.ctx.root ?? '' };
     }
 
+    // Treat the directory as a git repo only when it IS the repo root, not a
+    // subdirectory of an enclosing one. `--show-prefix` is empty at the root and
+    // a non-empty relative path inside a subdirectory; reporting `false` here
+    // lets project creation init/register at the picked directory instead of
+    // climbing to the enclosing repo's toplevel.
+    try {
+      const { stdout } = await this.ctx.exec('git', ['rev-parse', '--show-prefix']);
+      if (stdout.trim()) {
+        return { isGitRepo: false, baseRef: 'main', rootPath: this.ctx.root ?? '' };
+      }
+    } catch {}
+
     let remoteName: string | undefined;
     try {
       const { stdout } = await this.ctx.exec('git', ['remote']);

@@ -28,6 +28,7 @@ interface ProjectOption {
   kind: 'project';
   value: string;
   label: string;
+  path: string;
 }
 
 interface ProjectlessOption {
@@ -69,7 +70,14 @@ export const ProjectSelector = observer(function ProjectSelector({
     ([id, store]) => {
       const mounted = asMounted(store);
       if (!mounted || mounted.data.isInternal) return [];
-      return [{ kind: 'project', value: id, label: projectDisplayName(mounted.data) }];
+      return [
+        {
+          kind: 'project',
+          value: id,
+          label: projectDisplayName(mounted.data),
+          path: mounted.data.path,
+        },
+      ];
     }
   );
   const projectlessOption: ProjectlessOption = {
@@ -202,9 +210,12 @@ export const ProjectSelector = observer(function ProjectSelector({
       isItemEqualToValue={(a: ProjectSelectorOption, b: ProjectSelectorOption) =>
         a.kind === b.kind && a.value === b.value
       }
-      filter={(item: ProjectSelectorOption, query) =>
-        item.kind === 'browse' || item.label.toLowerCase().includes(query.toLowerCase())
-      }
+      filter={(item: ProjectSelectorOption, query) => {
+        if (item.kind === 'browse') return true;
+        const q = query.toLowerCase();
+        if (item.label.toLowerCase().includes(q)) return true;
+        return item.kind === 'project' && item.path.toLowerCase().includes(q);
+      }}
       autoHighlight
     >
       {renderedTrigger}
@@ -252,7 +263,12 @@ export const ProjectSelector = observer(function ProjectSelector({
                         </TooltipContent>
                       </Tooltip>
                     ) : (
-                      item.label
+                      <span className="flex min-w-0 flex-col">
+                        <span className="min-w-0 truncate">{item.label}</span>
+                        <span className="min-w-0 truncate text-xs text-foreground-muted" dir="rtl">
+                          {item.path}
+                        </span>
+                      </span>
                     )}
                   </ComboboxItem>
                 )}
