@@ -4,6 +4,8 @@ import type {
   MobileCreateDemandResponse,
   MobileDashboardSnapshot,
   MobileSessionDetail,
+  MobileSessionInputRequest,
+  MobileSessionInputResponse,
   MobileTaskSessionsResponse,
 } from '../../../src/shared/mobile-api';
 
@@ -83,6 +85,23 @@ export function fetchSessionDetail(
   return request<MobileSessionDetail>(
     connection,
     `/v1/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}/sessions/${encodeURIComponent(sessionId)}`
+  );
+}
+
+export function sendSessionInput(
+  connection: MobileConnection,
+  projectId: string,
+  taskId: string,
+  sessionId: string,
+  body: MobileSessionInputRequest
+): Promise<MobileSessionInputResponse> {
+  return request<MobileSessionInputResponse>(
+    connection,
+    `/v1/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}/sessions/${encodeURIComponent(sessionId)}/input`,
+    {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }
   );
 }
 

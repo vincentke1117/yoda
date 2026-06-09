@@ -3,6 +3,11 @@ import { randomUUID } from 'node:crypto';
 import http from 'node:http';
 import { networkInterfaces } from 'node:os';
 import { URL } from 'node:url';
+import {
+  buildPromptInjectionPayload,
+  getAgentCommandSubmitDelayMs,
+  getAgentCommandSubmitInput,
+} from '@shared/agent-command-prefix';
 import { AGENT_PROVIDER_IDS, type AgentProviderId } from '@shared/agent-provider-registry';
 import type { Conversation } from '@shared/conversations';
 import type { AgentSessionRuntimeStatus } from '@shared/events/agentEvents';
@@ -13,6 +18,7 @@ import {
   MOBILE_GATEWAY_DEFAULT_DEV_TOKEN,
   MOBILE_GATEWAY_DEFAULT_PORT,
   MOBILE_SESSION_CONTENT_MAX_CHARS,
+  MOBILE_SESSION_INPUT_MAX_CHARS,
   type MobileApiError,
   type MobileCreateDemandRequest,
   type MobileCreateDemandResponse,
@@ -21,8 +27,11 @@ import {
   type MobileProjectSummary,
   type MobileSessionContentSource,
   type MobileSessionDetail,
+  type MobileSessionInputRequest,
+  type MobileSessionInputResponse,
   type MobileSessionSummary,
   type MobileSessionTranscriptBlock,
+  type MobileTaskActivityStatus,
   type MobileTaskSessionsResponse,
   type MobileTaskSummary,
 } from '@shared/mobile-api';
@@ -376,6 +385,11 @@ function mapCreateTaskWarning(warning: CreateTaskWarning): string {
   }
 }
 
+function sleep(ms: number): Promise<void> {
+  if (ms <= 0) return Promise.resolve();
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function normalizeCreateDemandRequest(body: unknown): MobileCreateDemandRequest {
   if (!body || typeof body !== 'object') {
     throw new MobileGatewayError(400, 'invalid_body', 'Request body must be an object.');
@@ -395,8 +409,54 @@ function normalizeCreateDemandRequest(body: unknown): MobileCreateDemandRequest 
   };
 }
 
+function normalizeSessionInputRequest(body: unknown): MobileSessionInputRequest {
+  if (!body || typeof body !== 'object') {
+    throw new MobileGatewayError(400, 'invalid_body', 'Request body must be an object.');
+  }
+
+  const value = body as Record<string, unknown>;
+  const input = typeof value.input === 'string' ? value.input.trim() : '';
+  if (!input) {
+    throw new MobileGatewayError(400, 'missing_input', 'Input is required.');
+  }
+  if (input.length > MOBILE_SESSION_INPUT_MAX_CHARS) {
+    throw new MobileGatewayError(
+      413,
+      'input_too_large',
+      `Input must be ${MOBILE_SESSION_INPUT_MAX_CHARS} characters or fewer.`
+    );
+  }
+
+  return {
+    input,
+    submit: typeof value.submit === 'boolean' ? value.submit : true,
+  };
+}
+
 function isAgentProviderId(value: string): value is AgentProviderId {
   return AGENT_PROVIDER_IDS.includes(value as AgentProviderId);
+}
+
+function isTaskActivityRunning(status: MobileTaskActivityStatus): boolean {
+  return status === 'working' || status === 'awaiting-input' || status === 'bootstrapping';
+}
+
+function resolveTaskActivityStatus(
+  task: Task,
+  runtimeStatuses: AgentSessionRuntimeStatus[],
+  bootstrapStatus = taskManager.getBootstrapStatus(task.id)
+): MobileTaskActivityStatus {
+  if (bootstrapStatus.status === 'bootstrapping') return 'bootstrapping';
+  if (bootstrapStatus.status === 'error') return 'error';
+  if (runtimeStatuses.includes('working')) return 'working';
+  if (runtimeStatuses.includes('awaiting-input')) return 'awaiting-input';
+  if (runtimeStatuses.includes('error')) return 'error';
+  if (task.status === 'review' || task.needsReview) return 'review';
+  if (task.status === 'done') return 'done';
+  if (task.status === 'cancelled') return 'cancelled';
+  if (task.status === 'todo') return 'todo';
+  if (runtimeStatuses.includes('completed')) return 'completed';
+  return 'idle';
 }
 
 export class MobileGatewayService {
@@ -591,6 +651,22 @@ export class MobileGatewayService {
       return;
     }
 
+    if (
+      req.method === 'POST' &&
+      isTaskSessionsRoute &&
+      segments.length === 8 &&
+      segments[6] &&
+      segments[7] === 'input'
+    ) {
+      const body = normalizeSessionInputRequest(await readJsonBody(req));
+      writeJson(
+        res,
+        200,
+        await this.sendSessionInput(segments[2]!, segments[4]!, segments[6], body)
+      );
+      return;
+    }
+
     if (req.method === 'POST' && url.pathname === '/v1/demands') {
       const body = normalizeCreateDemandRequest(await readJsonBody(req));
       writeJson(res, 201, await this.createDemand(body));
@@ -614,7 +690,10 @@ export class MobileGatewayService {
     const [projects, tasks] = await Promise.all([getProjects(), getTasks()]);
     const mappedProjects = projects.map((project) => this.mapProject(project));
     const activeTasks = tasks.filter((task) => !task.archivedAt);
-    const mappedTasks = activeTasks.map((task) => this.mapTask(task));
+    const activityStatuses = await this.getTaskActivityStatuses(activeTasks);
+    const mappedTasks = activeTasks.map((task) =>
+      this.mapTask(task, activityStatuses.get(task.id) ?? 'idle')
+    );
 
     return {
       generatedAt: new Date().toISOString(),
@@ -625,8 +704,10 @@ export class MobileGatewayService {
         openProjectCount: mappedProjects.filter((project) => project.isOpen && !project.isInternal)
           .length,
         activeTaskCount: mappedTasks.length,
-        inProgressTaskCount: mappedTasks.filter((task) => task.status === 'in_progress').length,
-        reviewTaskCount: mappedTasks.filter((task) => task.status === 'review').length,
+        inProgressTaskCount: mappedTasks.filter((task) =>
+          isTaskActivityRunning(task.activityStatus)
+        ).length,
+        reviewTaskCount: mappedTasks.filter((task) => task.activityStatus === 'review').length,
       },
     };
   }
@@ -644,12 +725,13 @@ export class MobileGatewayService {
     };
   }
 
-  private mapTask(task: Task): MobileTaskSummary {
+  private mapTask(task: Task, activityStatus: MobileTaskActivityStatus): MobileTaskSummary {
     return {
       id: task.id,
       projectId: task.projectId,
       name: task.name,
       status: task.status,
+      activityStatus,
       bootstrapStatus: taskManager.getBootstrapStatus(task.id),
       taskBranch: task.taskBranch,
       updatedAt: task.updatedAt,
@@ -659,6 +741,50 @@ export class MobileGatewayService {
       providerCounts: task.conversations,
       conversationCount: Object.values(task.conversations).reduce((sum, count) => sum + count, 0),
     };
+  }
+
+  private async getTaskActivityStatuses(
+    tasks: Task[]
+  ): Promise<Map<string, MobileTaskActivityStatus>> {
+    const entries = await Promise.all(
+      tasks.map(async (task): Promise<[string, MobileTaskActivityStatus]> => {
+        const bootstrapStatus = taskManager.getBootstrapStatus(task.id);
+        const conversationCount = Object.values(task.conversations).reduce(
+          (sum, count) => sum + count,
+          0
+        );
+        if (conversationCount === 0) {
+          return [task.id, resolveTaskActivityStatus(task, [], bootstrapStatus)];
+        }
+
+        const conversations = await getConversationsForTask(task.projectId, task.id).catch(
+          (error: unknown) => {
+            log.warn('MobileGateway: failed to load task conversations for activity status', {
+              taskId: task.id,
+              error: String(error),
+            });
+            return [];
+          }
+        );
+        const runtimeByConversation = await getConversationRuntimeStatuses(
+          task.projectId,
+          task.id,
+          conversations.map((conversation) => conversation.id)
+        ).catch((error: unknown) => {
+          log.warn('MobileGateway: failed to load task runtime status', {
+            taskId: task.id,
+            error: String(error),
+          });
+          return {};
+        });
+
+        return [
+          task.id,
+          resolveTaskActivityStatus(task, Object.values(runtimeByConversation), bootstrapStatus),
+        ];
+      })
+    );
+    return new Map(entries);
   }
 
   private async getTaskSessions(
@@ -702,6 +828,76 @@ export class MobileGatewayService {
       source: output.source,
       transcript,
     };
+  }
+
+  private async sendSessionInput(
+    projectId: string,
+    taskId: string,
+    conversationId: string,
+    params: MobileSessionInputRequest
+  ): Promise<MobileSessionInputResponse> {
+    const data = await this.loadTaskSessionData(projectId, taskId);
+    const conversation = data.conversations.find((item) => item.id === conversationId);
+
+    if (!conversation) {
+      throw new MobileGatewayError(404, 'session_not_found', 'Mobile session was not found.');
+    }
+
+    const payload = buildPromptInjectionPayload({
+      providerId: conversation.providerId,
+      text: params.input,
+    });
+    if (!payload) {
+      throw new MobileGatewayError(400, 'missing_input', 'Input is required.');
+    }
+
+    if (!(await this.writeConversationInput(projectId, taskId, conversationId, payload))) {
+      throw new MobileGatewayError(
+        409,
+        'session_not_live',
+        'This session is not currently accepting input.'
+      );
+    }
+    if (params.submit !== false) {
+      await sleep(getAgentCommandSubmitDelayMs(conversation.providerId));
+      if (
+        !(await this.writeConversationInput(
+          projectId,
+          taskId,
+          conversationId,
+          getAgentCommandSubmitInput(conversation.providerId)
+        ))
+      ) {
+        throw new MobileGatewayError(
+          409,
+          'session_not_live',
+          'This session stopped before the input could be submitted.'
+        );
+      }
+    }
+
+    return {
+      ok: true,
+      generatedAt: new Date().toISOString(),
+    };
+  }
+
+  private async writeConversationInput(
+    projectId: string,
+    taskId: string,
+    conversationId: string,
+    data: string
+  ): Promise<boolean> {
+    const ptySessionId = makePtySessionId(projectId, taskId, conversationId);
+    const pty = ptySessionRegistry.get(ptySessionId);
+    if (pty) {
+      pty.write(data);
+      return true;
+    }
+
+    return (
+      (await taskManager.getTask(taskId)?.conversations.sendInput(conversationId, data)) ?? false
+    );
   }
 
   private async loadTaskSessionData(projectId: string, taskId: string): Promise<TaskSessionData> {
@@ -759,6 +955,7 @@ export class MobileGatewayService {
       });
       return null;
     });
+    const acceptsInput = Boolean(sessionInfo?.running || ptySessionRegistry.get(ptySessionId));
 
     return {
       id: conversation.id,
@@ -771,7 +968,8 @@ export class MobileGatewayService {
       lastInteractedAt: conversation.lastInteractedAt,
       isInitialConversation: conversation.isInitialConversation,
       runtimeStatus,
-      running: Boolean(sessionInfo?.running || ptySessionRegistry.get(ptySessionId)),
+      running: Boolean(sessionInfo?.running || acceptsInput),
+      acceptsInput,
       tmuxEnabled: sessionInfo?.tmuxEnabled ?? false,
       sessionId: sessionInfo?.sessionId ?? conversation.id,
       sessionTitle: sessionInfo?.sessionTitle,
@@ -874,7 +1072,7 @@ export class MobileGatewayService {
     }
 
     return {
-      task: this.mapTask(result.data.task),
+      task: this.mapTask(result.data.task, resolveTaskActivityStatus(result.data.task, [])),
       warning: result.data.warning ? mapCreateTaskWarning(result.data.warning) : undefined,
     };
   }

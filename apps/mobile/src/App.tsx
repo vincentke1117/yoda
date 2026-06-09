@@ -31,12 +31,14 @@ import {
 } from 'react-native';
 import {
   MOBILE_GATEWAY_DEFAULT_DEV_TOKEN,
+  MOBILE_SESSION_INPUT_MAX_CHARS,
   parseMobilePairingUrl,
   type MobileDashboardSnapshot,
   type MobileProjectSummary,
   type MobileSessionDetail,
   type MobileSessionSummary,
   type MobileSessionTranscriptBlock,
+  type MobileTaskActivityStatus,
   type MobileTaskSummary,
 } from '../../../src/shared/mobile-api';
 import {
@@ -44,6 +46,7 @@ import {
   fetchSessionDetail,
   fetchSnapshot,
   fetchTaskSessions,
+  sendSessionInput,
   type MobileConnection,
 } from './api-client';
 import { clearConnection, loadConnection, saveConnection } from './connection-storage';
@@ -151,6 +154,18 @@ function homeTabTitle(tab: HomeTab): { eyebrow: string; title: string; subtitle:
 
 function statusLabel(status: string): string {
   switch (status) {
+    case 'working':
+      return 'Working';
+    case 'awaiting-input':
+      return 'Waiting';
+    case 'error':
+      return 'Error';
+    case 'completed':
+      return 'Completed';
+    case 'idle':
+      return 'Idle';
+    case 'bootstrapping':
+      return 'Booting';
     case 'in_progress':
       return 'In progress';
     case 'review':
@@ -168,17 +183,27 @@ function statusLabel(status: string): string {
 
 function statusColor(status: string): string {
   switch (status) {
+    case 'working':
     case 'in_progress':
       return COLORS.blue;
+    case 'awaiting-input':
+    case 'bootstrapping':
     case 'review':
       return COLORS.amber;
+    case 'completed':
     case 'done':
       return COLORS.green;
+    case 'error':
     case 'cancelled':
       return COLORS.red;
+    case 'idle':
     default:
       return COLORS.muted;
   }
+}
+
+function isTaskActivityRunning(status: MobileTaskActivityStatus): boolean {
+  return status === 'working' || status === 'awaiting-input' || status === 'bootstrapping';
 }
 
 function runtimeLabel(status: MobileSessionSummary['runtimeStatus']): string {
@@ -676,8 +701,8 @@ export function App() {
     return tasks.filter((task) => {
       if (selectedProjectId !== 'all' && task.projectId !== selectedProjectId) return false;
       if (taskScope === 'open' && !openProjectIds.has(task.projectId)) return false;
-      if (taskScope === 'inProgress' && task.status !== 'in_progress') return false;
-      if (taskScope === 'review' && task.status !== 'review' && !task.needsReview) return false;
+      if (taskScope === 'inProgress' && !isTaskActivityRunning(task.activityStatus)) return false;
+      if (taskScope === 'review' && task.activityStatus !== 'review') return false;
       return true;
     });
   }, [openProjectIds, selectedProjectId, snapshot, taskScope]);
@@ -1688,7 +1713,7 @@ function SessionRow({ session, onPress }: { session: MobileSessionSummary; onPre
         <MetaItem icon="hardware-chip-outline" label={session.providerId} />
         <MetaItem
           icon={session.running ? 'radio-outline' : 'pause-circle-outline'}
-          label={session.running ? 'Live' : 'Stopped'}
+          label={session.acceptsInput ? 'Live' : session.running ? 'Detached' : 'Stopped'}
         />
         <MetaItem
           icon="time-outline"
@@ -1721,6 +1746,8 @@ function SessionDetailScreen({
   const [detail, setDetail] = useState<MobileSessionDetail | null>(null);
   const [outputMode, setOutputMode] = useState<SessionOutputMode>('rendered');
   const [isAtBottom, setIsAtBottom] = useState(true);
+  const [sessionInput, setSessionInput] = useState('');
+  const [sendingInput, setSendingInput] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1788,6 +1815,36 @@ function SessionDetailScreen({
     setRefreshing(false);
   }, [loadDetail]);
 
+  const handleSendInput = useCallback(async () => {
+    const input = sessionInput.trim();
+    if (!input || !detail?.session.acceptsInput || sendingInput) return;
+
+    setSendingInput(true);
+    try {
+      await sendSessionInput(connection, task.projectId, task.id, sessionId, { input });
+      setSessionInput('');
+      setBottomState(true);
+      await loadDetail(true);
+      scrollToBottom(true);
+      setError(null);
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setSendingInput(false);
+    }
+  }, [
+    connection,
+    detail?.session.acceptsInput,
+    loadDetail,
+    scrollToBottom,
+    sendingInput,
+    sessionId,
+    sessionInput,
+    setBottomState,
+    task.id,
+    task.projectId,
+  ]);
+
   const session = detail?.session;
   const output = detail?.content.trimEnd() ?? '';
   const latestTranscriptBlockId = detail?.transcript[detail.transcript.length - 1]?.id;
@@ -1807,77 +1864,202 @@ function SessionDetailScreen({
   return (
     <SwipeBackScreen onBack={onBack}>
       <StatusBar style="dark" />
-      <View style={styles.sessionDetailShell}>
-        <ScrollView
-          ref={scrollViewRef}
-          contentContainerStyle={styles.scrollContent}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              tintColor={COLORS.charcoal}
-              onRefresh={handleRefresh}
-            />
-          }
-          scrollEventThrottle={80}
-          onContentSizeChange={() => {
-            if (detail && isAtBottomRef.current) scrollToBottom(true);
-          }}
-          onScroll={handleScroll}
-        >
-          <ScreenHeader
-            eyebrow="Session"
-            subtitle={projectName(projects, task.projectId)}
-            title={session?.title ?? 'Session output'}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.flex}
+      >
+        <View style={styles.sessionDetailShell}>
+          <SessionNavigationBar
+            projectLabel={projectName(projects, task.projectId)}
+            runtimeStatus={detail?.session.runtimeStatus ?? null}
+            title={session?.title ?? task.name}
             onBack={onBack}
           />
-
-          {error ? <Notice message={error} tone="error" /> : null}
-          {loading && !detail ? <ActivityIndicator color={COLORS.charcoal} /> : null}
-
-          {detail ? (
-            <>
-              <View style={styles.summaryPanel}>
-                <DetailItem label="Provider" value={detail.session.providerId} />
-                <DetailItem label="Runtime" value={runtimeLabel(detail.session.runtimeStatus)} />
-                <DetailItem label="Source" value={contentSourceLabel(detail.source)} />
-                <DetailItem
-                  label="Updated"
-                  value={formatTimestamp(detail.session.lastInteractedAt ?? detail.generatedAt)}
-                />
-              </View>
-              <View style={styles.outputHeader}>
-                <Text style={styles.sectionTitle}>Transcript</Text>
-                <Text style={styles.sectionMeta}>
-                  {detail.truncated
-                    ? `Tail ${detail.content.length}/${detail.contentLength}`
-                    : detail.contentLength}
-                </Text>
-              </View>
-              <OutputModeToggle mode={outputMode} onChange={setOutputMode} />
-              {outputMode === 'rendered' ? (
-                <RenderedSessionTranscript detail={detail} fallbackOutput={output} />
-              ) : (
-                <RawSessionOutput output={output} />
-              )}
-            </>
-          ) : null}
-        </ScrollView>
-        {detail && !isAtBottom ? (
-          <Pressable
-            accessibilityLabel="Scroll to bottom"
-            accessibilityRole="button"
-            style={({ pressed }) => [
-              styles.scrollToBottomButton,
-              pressed ? styles.buttonPressed : null,
-            ]}
-            onPress={handleScrollToBottomPress}
+          <ScrollView
+            ref={scrollViewRef}
+            contentContainerStyle={styles.scrollContent}
+            keyboardDismissMode="interactive"
+            keyboardShouldPersistTaps="handled"
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                tintColor={COLORS.charcoal}
+                onRefresh={handleRefresh}
+              />
+            }
+            scrollEventThrottle={80}
+            onContentSizeChange={() => {
+              if (detail && isAtBottomRef.current) scrollToBottom(true);
+            }}
+            onScroll={handleScroll}
           >
-            <Ionicons color={COLORS.surface} name="arrow-down-outline" size={17} />
-            <Text style={styles.scrollToBottomText}>Bottom</Text>
-          </Pressable>
-        ) : null}
-      </View>
+            {error ? <Notice message={error} tone="error" /> : null}
+            {loading && !detail ? <ActivityIndicator color={COLORS.charcoal} /> : null}
+
+            {detail ? (
+              <>
+                <View style={styles.summaryPanel}>
+                  <DetailItem label="Provider" value={detail.session.providerId} />
+                  <DetailItem label="Runtime" value={runtimeLabel(detail.session.runtimeStatus)} />
+                  <DetailItem label="Source" value={contentSourceLabel(detail.source)} />
+                  <DetailItem
+                    label="Updated"
+                    value={formatTimestamp(detail.session.lastInteractedAt ?? detail.generatedAt)}
+                  />
+                </View>
+                <View style={styles.outputHeader}>
+                  <Text style={styles.sectionTitle}>Transcript</Text>
+                  <Text style={styles.sectionMeta}>
+                    {detail.truncated
+                      ? `Tail ${detail.content.length}/${detail.contentLength}`
+                      : detail.contentLength}
+                  </Text>
+                </View>
+                <OutputModeToggle mode={outputMode} onChange={setOutputMode} />
+                {outputMode === 'rendered' ? (
+                  <RenderedSessionTranscript detail={detail} fallbackOutput={output} />
+                ) : (
+                  <RawSessionOutput output={output} />
+                )}
+              </>
+            ) : null}
+          </ScrollView>
+          {detail && !isAtBottom ? (
+            <Pressable
+              accessibilityLabel="Scroll to bottom"
+              accessibilityRole="button"
+              style={({ pressed }) => [
+                styles.scrollToBottomButton,
+                pressed ? styles.buttonPressed : null,
+              ]}
+              onPress={handleScrollToBottomPress}
+            >
+              <Ionicons color={COLORS.surface} name="arrow-down-outline" size={17} />
+              <Text style={styles.scrollToBottomText}>Bottom</Text>
+            </Pressable>
+          ) : null}
+          <SessionInputComposer
+            live={detail?.session.running ?? false}
+            acceptsInput={detail?.session.acceptsInput ?? false}
+            sending={sendingInput}
+            value={sessionInput}
+            onChange={setSessionInput}
+            onSend={handleSendInput}
+          />
+        </View>
+      </KeyboardAvoidingView>
     </SwipeBackScreen>
+  );
+}
+
+function SessionNavigationBar({
+  projectLabel,
+  runtimeStatus,
+  title,
+  onBack,
+}: {
+  projectLabel: string;
+  runtimeStatus: MobileSessionSummary['runtimeStatus'] | null;
+  title: string;
+  onBack: () => void;
+}) {
+  const status = runtimeStatus ? runtimeLabel(runtimeStatus) : 'Loading';
+  const color = runtimeStatus ? runtimeColor(runtimeStatus) : COLORS.muted;
+  return (
+    <View style={styles.sessionNavBar}>
+      <Pressable
+        accessibilityLabel="Back to sessions"
+        accessibilityRole="button"
+        style={({ pressed }) => [
+          styles.sessionNavBackButton,
+          pressed ? styles.buttonPressed : null,
+        ]}
+        onPress={onBack}
+      >
+        <Ionicons color={COLORS.charcoal} name="chevron-back-outline" size={22} />
+      </Pressable>
+      <View style={styles.sessionNavTitleBlock}>
+        <Text style={styles.sessionNavEyebrow} numberOfLines={1}>
+          Session · {projectLabel}
+        </Text>
+        <Text style={styles.sessionNavTitle} numberOfLines={1}>
+          {title}
+        </Text>
+      </View>
+      <View style={[styles.sessionNavStatus, { borderColor: color }]}>
+        <Text style={[styles.sessionNavStatusText, { color }]} numberOfLines={1}>
+          {status}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function SessionInputComposer({
+  live,
+  acceptsInput,
+  sending,
+  value,
+  onChange,
+  onSend,
+}: {
+  live: boolean;
+  acceptsInput: boolean;
+  sending: boolean;
+  value: string;
+  onChange: (value: string) => void;
+  onSend: () => void;
+}) {
+  const canSend = acceptsInput && value.trim().length > 0 && !sending;
+  return (
+    <View style={styles.sessionInputBar}>
+      <View style={styles.sessionInputTopLine}>
+        <View
+          style={[
+            styles.sessionInputStatusDot,
+            acceptsInput ? styles.sessionInputStatusDotLive : null,
+          ]}
+        />
+        <Text style={styles.sessionInputStatus}>
+          {acceptsInput ? 'Live input' : live ? 'Session detached' : 'Session offline'}
+        </Text>
+        <Text style={styles.sessionInputCount}>
+          {value.length}/{MOBILE_SESSION_INPUT_MAX_CHARS}
+        </Text>
+      </View>
+      <View style={styles.sessionInputRow}>
+        <TextInput
+          autoCapitalize="sentences"
+          maxLength={MOBILE_SESSION_INPUT_MAX_CHARS}
+          multiline
+          placeholder="Send a follow-up..."
+          placeholderTextColor="#9A958C"
+          scrollEnabled
+          style={styles.sessionInput}
+          textAlignVertical="top"
+          value={value}
+          onChangeText={onChange}
+        />
+        <Pressable
+          accessibilityLabel="Send input to session"
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !canSend }}
+          disabled={!canSend}
+          style={({ pressed }) => [
+            styles.sessionSendButton,
+            !canSend ? styles.buttonDisabled : null,
+            pressed ? styles.buttonPressed : null,
+          ]}
+          onPress={onSend}
+        >
+          {sending ? (
+            <ActivityIndicator color={COLORS.surface} />
+          ) : (
+            <Ionicons color={COLORS.surface} name="arrow-up-outline" size={20} />
+          )}
+        </Pressable>
+      </View>
+    </View>
   );
 }
 
@@ -2289,9 +2471,9 @@ function TaskRow({
         <Text style={styles.taskName} numberOfLines={2}>
           {task.name}
         </Text>
-        <View style={[styles.statusPill, { borderColor: statusColor(task.status) }]}>
-          <Text style={[styles.statusText, { color: statusColor(task.status) }]}>
-            {statusLabel(task.status)}
+        <View style={[styles.statusPill, { borderColor: statusColor(task.activityStatus) }]}>
+          <Text style={[styles.statusText, { color: statusColor(task.activityStatus) }]}>
+            {statusLabel(task.activityStatus)}
           </Text>
         </View>
       </View>
@@ -2387,10 +2569,60 @@ const styles = StyleSheet.create({
   sessionDetailShell: {
     flex: 1,
   },
+  sessionNavBar: {
+    minHeight: 64,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.line,
+    backgroundColor: COLORS.surface,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  sessionNavBackButton: {
+    width: 42,
+    height: 42,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.line,
+    borderRadius: 8,
+    backgroundColor: COLORS.page,
+  },
+  sessionNavTitleBlock: {
+    minWidth: 0,
+    flex: 1,
+    gap: 2,
+  },
+  sessionNavEyebrow: {
+    color: COLORS.muted,
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+  sessionNavTitle: {
+    color: COLORS.ink,
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '800',
+  },
+  sessionNavStatus: {
+    maxWidth: 92,
+    minHeight: 30,
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+  },
+  sessionNavStatusText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
   scrollToBottomButton: {
     position: 'absolute',
     right: 18,
-    bottom: Platform.OS === 'ios' ? 24 : 18,
+    bottom: Platform.OS === 'ios' ? 116 : 108,
     minHeight: 42,
     flexDirection: 'row',
     alignItems: 'center',
@@ -2403,6 +2635,70 @@ const styles = StyleSheet.create({
     color: COLORS.surface,
     fontSize: 13,
     fontWeight: '800',
+  },
+  sessionInputBar: {
+    borderTopWidth: 1,
+    borderTopColor: COLORS.line,
+    backgroundColor: COLORS.surface,
+    paddingHorizontal: 12,
+    paddingTop: 9,
+    paddingBottom: Platform.OS === 'ios' ? 10 : 12,
+    gap: 7,
+  },
+  sessionInputTopLine: {
+    minHeight: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  sessionInputStatusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: COLORS.muted,
+  },
+  sessionInputStatusDotLive: {
+    backgroundColor: COLORS.green,
+  },
+  sessionInputStatus: {
+    flex: 1,
+    color: COLORS.muted,
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+  sessionInputCount: {
+    color: COLORS.muted,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  sessionInputRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 9,
+  },
+  sessionInput: {
+    minHeight: 44,
+    maxHeight: 112,
+    flex: 1,
+    borderWidth: 1,
+    borderColor: COLORS.line,
+    borderRadius: 8,
+    backgroundColor: COLORS.page,
+    color: COLORS.ink,
+    fontSize: 15,
+    lineHeight: 21,
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 10,
+  },
+  sessionSendButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    backgroundColor: COLORS.charcoal,
   },
   homeShell: {
     flex: 1,

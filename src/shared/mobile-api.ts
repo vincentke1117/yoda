@@ -5,6 +5,7 @@ export const MOBILE_GATEWAY_DEFAULT_DEV_TOKEN = 'dev-mobile-token';
 export const MOBILE_APP_SCHEME = 'yodamobile';
 export const MOBILE_APP_DEFAULT_INSTALL_URL = 'https://lovstudio.ai/yoda/mobile';
 export const MOBILE_SESSION_CONTENT_MAX_CHARS = 120_000;
+export const MOBILE_SESSION_INPUT_MAX_CHARS = 20_000;
 
 export type MobilePairingConnection = {
   baseUrl: string;
@@ -59,6 +60,18 @@ export type MobileTaskBootstrapStatus =
   | { status: 'error'; message: string }
   | { status: 'not-started' };
 
+export type MobileTaskActivityStatus =
+  | 'working'
+  | 'awaiting-input'
+  | 'error'
+  | 'completed'
+  | 'idle'
+  | 'bootstrapping'
+  | 'review'
+  | 'done'
+  | 'cancelled'
+  | 'todo';
+
 export type MobileProjectSummary = {
   id: string;
   name: string;
@@ -75,6 +88,7 @@ export type MobileTaskSummary = {
   projectId: string;
   name: string;
   status: string;
+  activityStatus: MobileTaskActivityStatus;
   bootstrapStatus: MobileTaskBootstrapStatus;
   taskBranch?: string;
   updatedAt: string;
@@ -131,6 +145,7 @@ export type MobileSessionSummary = {
   isInitialConversation: boolean | null;
   runtimeStatus: MobileSessionRuntimeStatus;
   running: boolean;
+  acceptsInput: boolean;
   tmuxEnabled: boolean;
   sessionId: string;
   sessionTitle?: string;
@@ -164,6 +179,16 @@ export type MobileSessionDetail = {
   truncated: boolean;
   source: MobileSessionContentSource;
   transcript: MobileSessionTranscriptBlock[];
+};
+
+export type MobileSessionInputRequest = {
+  input: string;
+  submit?: boolean;
+};
+
+export type MobileSessionInputResponse = {
+  ok: true;
+  generatedAt: string;
 };
 
 export type MobileGatewayConnectionInfo = {
