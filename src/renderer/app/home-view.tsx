@@ -915,9 +915,16 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
     () => draft?.selectedAgentIds ?? {},
     [draft?.selectedAgentIds]
   );
-  const setSelectedAgentsForMode = useCallback(
-    (mode: HomeRunMode, ids: string[]) => {
-      updateDraft({ selectedAgentIds: { ...selectedAgentIdsByMode, [mode]: ids } });
+  // Per-slot user-Agent selection. We reuse the persisted `selectedAgentIds`
+  // string→string[] map, keying it by each slot's prompt key (one selected
+  // agent id per slot, or empty).
+  const slotAgentId = useCallback(
+    (slotKey: string): string | null => selectedAgentIdsByMode[slotKey]?.[0] ?? null,
+    [selectedAgentIdsByMode]
+  );
+  const setSlotAgent = useCallback(
+    (slotKey: string, agentId: string) => {
+      updateDraft({ selectedAgentIds: { ...selectedAgentIdsByMode, [slotKey]: [agentId] } });
     },
     [selectedAgentIdsByMode, updateDraft]
   );
