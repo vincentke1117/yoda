@@ -6,7 +6,7 @@ import { Switch } from '@renderer/lib/ui/switch';
 import { ResetToDefaultButton } from './ResetToDefaultButton';
 import { SettingRow } from './SettingRow';
 
-const RepositorySettingsCard: React.FC = () => {
+const GithubSettingsCard: React.FC = () => {
   const { t } = useTranslation();
   const {
     value: project,
@@ -111,4 +111,4 @@ const RepositorySettingsCard: React.FC = () => {
   );
 };
 
-export default RepositorySettingsCard;
+export default GithubSettingsCard;
