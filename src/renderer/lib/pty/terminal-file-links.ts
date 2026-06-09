@@ -7,9 +7,10 @@ import { isTerminalLinkCellInRange, type TerminalLinkCellPosition } from './term
 
 const MAX_WRAPPED_LINE_LENGTH = 2048;
 // Characters that may not appear inside a file path segment (the negated set
-// below). Includes ASCII whitespace/quotes/shell metas plus CJK punctuation and
-// brackets so paths like `bar.txt。` or `foo.md（…）` terminate cleanly.
-const PATH_SEG_EXCLUDED = `\\s"'\`$<>|\\\\:：（）「」『』【】〈〉《》，。；！？`;
+// below). Includes ASCII whitespace/quotes/shell metas/parens plus CJK
+// punctuation and brackets so paths like `bar.txt。` or `foo.md(…)` /
+// `foo.md（…）` terminate cleanly instead of swallowing trailing prose.
+const PATH_SEG_EXCLUDED = `\\s"'\`$<>|\\\\:：()（）「」『』【】〈〉《》，。；！？`;
 const PATH_LEADING = `\\s"'([{<:：（「『【〈《`;
 const PATH_TRAILING = `\\s"')\\]}>,，。；;!?！？.(（）「」『』【】〈〉《》`;
 // File extension: 1–32 path chars after a dot, but the final char may not be a

@@ -60,6 +60,20 @@ describe('terminal file links', () => {
     expect(extractTerminalFileLinkCandidates(line)).toEqual([{ text: expected, index: 0 }]);
   });
 
+  it('terminates paths at an ASCII paren so trailing prose is not swallowed', () => {
+    const line =
+      'output/手工川-codex-vs-cc-问卷工具-2026-06-09-v0.1.md(含逐条 file:line 证据 + 置信度表)';
+    const expected = 'output/手工川-codex-vs-cc-问卷工具-2026-06-09-v0.1.md';
+    expect(extractTerminalFileLinkCandidates(line)).toEqual([{ text: expected, index: 0 }]);
+  });
+
+  it('strips ASCII parens wrapping a path', () => {
+    const line = '见 (src/foo.ts) 文件';
+    expect(extractTerminalFileLinkCandidates(line)).toEqual([
+      { text: 'src/foo.ts', index: line.indexOf('src/foo.ts') },
+    ]);
+  });
+
   it('keeps interior dots in multi-part extensions', () => {
     expect(extractTerminalFileLinkCandidates('看 output/foo.md.bak 后面')).toEqual([
       { text: 'output/foo.md.bak', index: '看 '.length },
