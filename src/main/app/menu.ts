@@ -10,6 +10,7 @@ import {
 import { YODA_DOCS_URL, YODA_RELEASES_URL } from '@shared/urls';
 import { resolveAppVersion } from '@main/core/app/utils';
 import { events } from '@main/lib/events';
+import { duplicateAppWindow } from './window';
 
 function restartApp(): void {
   if (import.meta.env.DEV) {
@@ -148,8 +149,25 @@ export async function setupApplicationMenu(): Promise<void> {
         { role: 'togglefullscreen' as const },
       ],
     },
-    // Window menu
-    { role: 'windowMenu' as const },
+    // Window menu (custom: default roles + Duplicate)
+    {
+      label: 'Window',
+      role: 'window' as const,
+      submenu: [
+        { role: 'minimize' as const },
+        { role: 'zoom' as const },
+        { type: 'separator' as const },
+        {
+          // Open another full-app window that operates independently.
+          label: 'Duplicate',
+          accelerator: 'Shift+CmdOrCtrl+D',
+          click: () => duplicateAppWindow(),
+        },
+        ...(isMac
+          ? [{ type: 'separator' as const }, { role: 'front' as const }]
+          : [{ role: 'close' as const }]),
+      ],
+    },
     // Help menu
     {
       label: 'Help',
