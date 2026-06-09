@@ -175,6 +175,12 @@ export class TaskManagerStore {
   private _disposeRepositoryReaction: (() => void) | null = null;
 
   tasks = observable.map<string, TaskStore>();
+  /**
+   * Tasks whose archive flow (pre-archive commands + conversation archives) is
+   * in flight. Rows observe this to render a loading state while the task is
+   * still visible in the sidebar.
+   */
+  archivingTaskIds = observable.set<string>();
 
   constructor(
     projectId: string,
@@ -186,7 +192,7 @@ export class TaskManagerStore {
     this._repository = repository;
     this._settingsStore = settingsStore;
     this._baseRef = baseRef;
-    makeObservable(this, { tasks: observable });
+    makeObservable(this, { tasks: observable, archivingTaskIds: observable });
 
     events.on(taskStatusUpdatedChannel, ({ taskId, projectId: evtProjectId, status }) => {
       if (evtProjectId !== this.projectId) return;
@@ -383,8 +389,13 @@ export class TaskManagerStore {
   }
 
   async provisionTask(taskId: string): Promise<void> {
+    const _t = (label: string) =>
+      console.log(`[boot-timing] provisionTask: ${label} @ ${Math.round(performance.now())}ms`);
+    _t('start');
     await getProjectManagerStore().mountProject(this.projectId);
+    _t('mountProject done');
     await this.loadTasks();
+    _t('loadTasks done');
 
     const inFlight = this._provisionPromises.get(taskId);
     if (inFlight) return inFlight;
@@ -397,19 +408,29 @@ export class TaskManagerStore {
     });
 
     const promise = Promise.all([
-      rpc.tasks.provisionTask(taskId),
+      rpc.tasks.provisionTask(taskId).then((r) => {
+        _t('rpc.provisionTask done');
+        return r;
+      }),
       viewStateCache.get(`task:${taskId}`),
       viewStateCache.get(TASK_SIDEBAR_VIEW_STATE_KEY),
-      rpc.conversations.getConversationsForTask(this.projectId, taskId).catch((err: unknown) => {
-        log.warn('TaskManagerStore: failed to pre-load conversations during provision', {
-          taskId,
-          error: err,
-        });
-        toast.error('Failed to load conversations');
-        return [] as Conversation[];
-      }),
+      rpc.conversations
+        .getConversationsForTask(this.projectId, taskId)
+        .then((c) => {
+          _t('getConversationsForTask done');
+          return c;
+        })
+        .catch((err: unknown) => {
+          log.warn('TaskManagerStore: failed to pre-load conversations during provision', {
+            taskId,
+            error: err,
+          });
+          toast.error('Failed to load conversations');
+          return [] as Conversation[];
+        }),
     ])
       .then(([result, savedSnapshot, sharedSidebarSnapshot, preloadedConversations]) => {
+        _t('Promise.all resolved, building ProvisionedTask');
         runInAction(() => {
           const current = this.tasks.get(taskId);
           if (current && isUnprovisioned(current)) {
@@ -427,6 +448,7 @@ export class TaskManagerStore {
             current.activate();
           }
         });
+        _t('transitionToProvisioned + activate done (now ready)');
       })
       .catch((err: unknown) => {
         runInAction(() => {
@@ -609,6 +631,16 @@ export class TaskManagerStore {
         }
       });
     };
+  }
+
+  setTaskArchiving(taskId: string, archiving: boolean): void {
+    runInAction(() => {
+      if (archiving) {
+        this.archivingTaskIds.add(taskId);
+      } else {
+        this.archivingTaskIds.delete(taskId);
+      }
+    });
   }
 
   async archiveTask(taskId: string, note?: string): Promise<void> {

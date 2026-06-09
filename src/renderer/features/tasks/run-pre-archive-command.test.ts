@@ -81,7 +81,7 @@ describe('runPreArchiveCommand', () => {
     });
     mocks.getCodexSessionContext.mockResolvedValue({ completedTurnCount: 0 });
     mocks.ensureConversation.mockResolvedValue(true);
-    mocks.sendInput.mockResolvedValue({ ok: true });
+    mocks.sendInput.mockResolvedValue({ success: true });
   });
 
   it('commits Codex compact commands with space before carriage-return submission', async () => {
@@ -89,7 +89,7 @@ describe('runPreArchiveCommand', () => {
     mockProvisionedConversation(conversation);
     mocks.sendInput.mockImplementation(async (_sessionId: string, data: string) => {
       if (data === '\r') conversation.status = 'completed';
-      return { ok: true };
+      return { success: true };
     });
 
     await runPreArchiveCommand(
@@ -107,12 +107,28 @@ describe('runPreArchiveCommand', () => {
     ]);
   });
 
+  it('bails out and clears working state when the session has no live PTY', async () => {
+    const conversation = makeConversation('claude');
+    mockProvisionedConversation(conversation);
+    mocks.sendInput.mockResolvedValue({ success: false, error: { type: 'not_found' } });
+
+    await runPreArchiveCommand(
+      'project-1',
+      'task-1',
+      'conversation-1',
+      'lovstudio-git-commit-with-context'
+    );
+
+    expect(mocks.sendInput).toHaveBeenCalledTimes(1);
+    expect(conversation.status).toBe('idle');
+  });
+
   it('keeps carriage-return submission for Claude commands', async () => {
     const conversation = makeConversation('claude');
     mockProvisionedConversation(conversation);
     mocks.sendInput.mockImplementation(async (_sessionId: string, data: string) => {
       if (data === '\r') conversation.status = 'completed';
-      return { ok: true };
+      return { success: true };
     });
 
     await runPreArchiveCommand(
@@ -134,7 +150,7 @@ describe('runPreArchiveCommand', () => {
     mockProvisionedConversation(conversation);
     mocks.sendInput.mockImplementation(async (_sessionId: string, data: string) => {
       if (data === '\r') abortController.abort();
-      return { ok: true };
+      return { success: true };
     });
 
     await runPreArchiveCommand(

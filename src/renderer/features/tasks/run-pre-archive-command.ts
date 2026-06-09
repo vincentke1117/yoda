@@ -73,7 +73,14 @@ export async function runPreArchiveCommand(
     if (options.signal?.aborted) return;
     target.setWorking();
     if (options.signal?.aborted) return;
-    await rpc.pty.sendInput(sessionId, payload);
+    const sendResult = await rpc.pty.sendInput(sessionId, payload);
+    // `not_found` means there is no live PTY for this conversation — nothing
+    // to run the command against, so bail instead of waiting on a completion
+    // that can never come.
+    if (!sendResult.success) {
+      target.clearWorking();
+      return;
+    }
     if (options.signal?.aborted) return;
     if (submitSuffix) {
       await rpc.pty.sendInput(sessionId, submitSuffix);

@@ -30,6 +30,8 @@ import { OVERVIEW_TAB_ID } from '@renderer/features/tasks/tabs/tab-manager-store
 import { rpc } from '@renderer/lib/ipc';
 import { useNavigate, useParams } from '@renderer/lib/layout/navigation-provider';
 import { useShowModal } from '@renderer/lib/modal/modal-provider';
+import { Badge } from '@renderer/lib/ui/badge';
+import { log } from '@renderer/utils/logger';
 import { cn } from '@renderer/utils/utils';
 import { PrBadge } from '../../lib/components/pr-badge';
 import { SidebarItemMiniButton, SidebarMenuRow } from './sidebar-primitives';
@@ -54,7 +56,6 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
   const { navigate } = useNavigate();
   const showRename = useShowModal('renameTaskModal');
   const showArchiveWithNote = useShowModal('archiveTaskWithNoteModal');
-  const showManageRunScripts = useShowModal('manageRunScriptsModal');
 
   const { params } = useParams('task');
   // The selected task stays highlighted even after navigating to a non-task view
@@ -72,7 +73,9 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
   const task = getTaskStore(projectId, taskId)!;
   const taskManager = getTaskManagerStore(projectId);
   const { archiveTask } = useArchiveTask(projectId);
-  const [isArchiving, setIsArchiving] = useState(false);
+  // Driven by the store so any archive entry point (sidebar, tabs, modal)
+  // shows the same loading state while the archive flow is in flight.
+  const isArchiving = taskManager?.archivingTaskIds.has(taskId) ?? false;
 
   const isBootstrapping =
     task.state === 'unregistered' ||
@@ -88,18 +91,13 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
     void taskManager?.provisionTask(taskId);
   };
 
-  // Archiving never runs the pre-archive skill by default; running it is an
-  // explicit opt-in via the context menu.
+  // Archiving a task archives all of its conversations first, running the
+  // pre-archive command against each live session by default.
   const handleArchive = (options?: { skipPreCommand?: boolean }) => {
     if (isArchiving) return;
-    void (async () => {
-      try {
-        setIsArchiving(true);
-        await archiveTask(taskId, { skipPreCommand: true, ...options });
-      } finally {
-        setIsArchiving(false);
-      }
-    })();
+    void archiveTask(taskId, options).catch((error: unknown) => {
+      log.warn('SidebarTaskItem: archive task failed', { projectId, taskId, error });
+    });
   };
 
   const handleArchiveWithNote = () => {
@@ -147,25 +145,6 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
         }
       : undefined;
 
-  const handleConfigureScripts = () => showManageRunScripts({ projectId, projectName });
-
-  const handleRunScript = () => {
-    if (!provisionedTask) {
-      navigate('task', { projectId, taskId });
-      return;
-    }
-    void rpc.terminals
-      .runLifecycleScript({
-        projectId,
-        workspaceId: provisionedTask.workspaceId,
-        type: 'run',
-      })
-      .catch(() => {});
-  };
-
-  const handleViewStatus = () => {
-    navigate('task', { projectId, taskId });
-  };
   const handleCopyYodaLink = () => {
     const link = buildTaskDeepLink({
       projectId,
@@ -229,15 +208,10 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
     onMarkNeedsReview: () => void task.setNeedsReview(true),
     onUnmarkNeedsReview: () => void task.setNeedsReview(false),
     onRename: handleRename,
-    onArchive: handleArchive,
-    onArchiveWithNote: handleArchiveWithNote,
+    onArchive: handleArchiveWithNote,
     onCopyYodaLink: handleCopyYodaLink,
     onReconnect: handleReconnect,
     onRestartSession: handleRestartSession,
-    onRunScript: handleRunScript,
-    canRunScript: Boolean(provisionedTask),
-    onConfigureScripts: handleConfigureScripts,
-    onViewStatus: handleViewStatus,
     // Projectless Drafts tasks belong directly to a workspace; project-bound
     // tasks follow their project's workspace, so the submenu only shows here.
     currentWorkspaceId:
@@ -295,55 +269,60 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
                 : 'hidden group-hover/row:flex'
           )}
         >
-          <TaskActionsMenu
-            {...menuActions}
-            open={isMenuOpen}
-            onOpenChange={(open) => {
-              if (open) setArchiveConfirming(false);
-              setMenuOpen(open);
-            }}
-            trigger={
+          {isArchiveConfirming ? (
+            <Badge
+              render={
+                <button
+                  type="button"
+                  aria-label={t('sidebar.confirmArchive')}
+                  disabled={isArchiving}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setArchiveConfirming(false);
+                    handleArchive();
+                  }}
+                />
+              }
+              className="h-6 cursor-pointer bg-destructive px-2.5 text-[11px] font-semibold uppercase tracking-wide text-destructive-foreground shadow-sm hover:bg-destructive/90"
+            >
+              {t('sidebar.confirmArchive')}
+            </Badge>
+          ) : (
+            <>
+              <TaskActionsMenu
+                {...menuActions}
+                open={isMenuOpen}
+                onOpenChange={(open) => {
+                  if (open) setArchiveConfirming(false);
+                  setMenuOpen(open);
+                }}
+                trigger={
+                  <SidebarItemMiniButton
+                    type="button"
+                    aria-label={t('sidebar.runScripts.menuLabel')}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <MoreHorizontal className="h-4 w-4" />
+                  </SidebarItemMiniButton>
+                }
+              />
               <SidebarItemMiniButton
                 type="button"
-                aria-label={t('sidebar.runScripts.menuLabel')}
-                onClick={(e) => e.stopPropagation()}
+                aria-label={t('sidebar.archiveTask')}
+                disabled={isArchiving}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setArchiveConfirming(true);
+                }}
               >
-                <MoreHorizontal className="h-4 w-4" />
+                {isArchiving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Archive className="h-4 w-4" />
+                )}
               </SidebarItemMiniButton>
-            }
-          />
-          {isArchiveConfirming ? (
-            <button
-              type="button"
-              aria-label={t('sidebar.confirmArchive')}
-              disabled={isArchiving}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={(e) => {
-                e.stopPropagation();
-                setArchiveConfirming(false);
-                handleArchive();
-              }}
-              className="flex h-6 items-center gap-1 rounded-md bg-destructive/10 px-1.5 text-[11px] font-medium text-destructive hover:bg-destructive/20"
-            >
-              <Archive className="h-3.5 w-3.5" />
-              {t('sidebar.confirmArchive')}
-            </button>
-          ) : (
-            <SidebarItemMiniButton
-              type="button"
-              aria-label={t('sidebar.archiveTask')}
-              disabled={isArchiving}
-              onClick={(e) => {
-                e.stopPropagation();
-                setArchiveConfirming(true);
-              }}
-            >
-              {isArchiving ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Archive className="h-4 w-4" />
-              )}
-            </SidebarItemMiniButton>
+            </>
           )}
         </div>
         <div

@@ -1,7 +1,8 @@
 import { observer } from 'mobx-react-lite';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { getTaskManagerStore } from '@renderer/features/tasks/stores/task-selectors';
+import { useArchiveTask } from '@renderer/features/tasks/archive-task';
+import { toast } from '@renderer/lib/hooks/use-toast';
 import { type BaseModalProps } from '@renderer/lib/modal/modal-provider';
 import { Button } from '@renderer/lib/ui/button';
 import { ConfirmButton } from '@renderer/lib/ui/confirm-button';
@@ -33,23 +34,22 @@ export const ArchiveTaskWithNoteModal = observer(function ArchiveTaskWithNoteMod
 }: Props) {
   const { t } = useTranslation();
   const [note, setNote] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  const taskManager = getTaskManagerStore(projectId);
+  const { archiveTask } = useArchiveTask(projectId);
 
-  const handleSubmit = useCallback(async () => {
-    if (!taskManager) return;
-    setIsSubmitting(true);
-    setError(null);
-    try {
-      await taskManager.archiveTask(taskId, note);
-      onSuccess();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : t('sidebar.archiveTask'));
-      setIsSubmitting(false);
-    }
-  }, [taskId, note, onSuccess, taskManager, t]);
+  const handleSubmit = useCallback(() => {
+    // The archive flow can run for minutes (pre-archive commands against every
+    // live conversation), so it continues in the background — progress shows as
+    // loading states on the task row and conversation tabs, not in this dialog.
+    void archiveTask(taskId, { note }).catch((e: unknown) => {
+      toast({
+        title: t('sidebar.archiveTask'),
+        description: e instanceof Error ? e.message : String(e),
+        variant: 'destructive',
+      });
+    });
+    onSuccess();
+  }, [archiveTask, taskId, note, onSuccess, t]);
 
   return (
     <>
@@ -62,20 +62,16 @@ export const ArchiveTaskWithNoteModal = observer(function ArchiveTaskWithNoteMod
             <FieldLabel>{t('tasks.archiveWithNote.label')}</FieldLabel>
             <Input
               value={note}
-              onChange={(e) => {
-                setNote(e.target.value);
-                setError(null);
-              }}
+              onChange={(e) => setNote(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.nativeEvent.isComposing && e.keyCode !== 229) {
-                  void handleSubmit();
+                  handleSubmit();
                 }
               }}
               placeholder={t('tasks.archiveWithNote.placeholder')}
               maxLength={MAX_ARCHIVE_NOTE_LENGTH}
               autoFocus
             />
-            {error && <p className="text-xs text-destructive mt-1">{error}</p>}
           </Field>
         </FieldGroup>
       </DialogContentArea>
@@ -83,9 +79,7 @@ export const ArchiveTaskWithNoteModal = observer(function ArchiveTaskWithNoteMod
         <Button variant="outline" onClick={onClose}>
           {t('common.cancel')}
         </Button>
-        <ConfirmButton onClick={() => void handleSubmit()} disabled={isSubmitting}>
-          {isSubmitting ? t('tasks.archiveWithNote.archiving') : t('tasks.archiveWithNote.submit')}
-        </ConfirmButton>
+        <ConfirmButton onClick={handleSubmit}>{t('tasks.archiveWithNote.submit')}</ConfirmButton>
       </DialogFooter>
     </>
   );

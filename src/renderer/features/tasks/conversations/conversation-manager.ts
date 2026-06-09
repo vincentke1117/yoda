@@ -28,6 +28,7 @@ export class ConversationManagerStore {
   private offSessionExited: (() => void) | null = null;
   private offConversationRenamed: (() => void) | null = null;
   private offConversationArchived: (() => void) | null = null;
+  private readonly pendingConversationTitles = new Map<string, string>();
   conversations = observable.map<string, ConversationStore>();
 
   constructor(
@@ -126,8 +127,12 @@ export class ConversationManagerStore {
     return events.on(conversationRenamedChannel, (event) => {
       if (event.projectId !== this.projectId || event.taskId !== this.taskId) return;
       const conversationStore = this.conversations.get(event.conversationId);
-      if (!conversationStore) return;
+      if (!conversationStore) {
+        this.pendingConversationTitles.set(event.conversationId, event.title);
+        return;
+      }
       runInAction(() => {
+        this.pendingConversationTitles.delete(event.conversationId);
         conversationStore.data.title = event.title;
       });
     });
@@ -150,7 +155,7 @@ export class ConversationManagerStore {
     let hasUnseenError = false;
     let hasUnseenCompleted = false;
     for (const conversation of this.conversations.values()) {
-      if (!conversation.seen && conversation.status === 'awaiting-input') return 'awaiting-input';
+      if (conversation.status === 'awaiting-input') return 'awaiting-input';
       if (conversation.status === 'working') hasWorking = true;
       if (!conversation.seen && conversation.status === 'error') hasUnseenError = true;
       if (!conversation.seen && conversation.status === 'completed') hasUnseenCompleted = true;
@@ -204,15 +209,24 @@ export class ConversationManagerStore {
 
   private mergeConversations(conversations: Conversation[]): void {
     for (const conversation of conversations) {
+      const nextConversation = this.consumePendingConversationTitle(conversation);
       const existing = this.conversations.get(conversation.id);
       if (existing) {
-        existing.data = conversation;
+        existing.data = nextConversation;
         continue;
       }
-      const store = new ConversationStore(conversation);
+      const store = new ConversationStore(nextConversation);
       this.conversations.set(conversation.id, store);
       void store.session.connect();
     }
+  }
+
+  private consumePendingConversationTitle(conversation: Conversation): Conversation {
+    const pendingTitle = this.pendingConversationTitles.get(conversation.id);
+    if (pendingTitle === undefined) return conversation;
+    this.pendingConversationTitles.delete(conversation.id);
+    if (conversation.title === pendingTitle) return conversation;
+    return { ...conversation, title: pendingTitle };
   }
 
   private async hydrateRuntimeStatuses(conversationIds: string[]): Promise<void> {
@@ -241,7 +255,9 @@ export class ConversationManagerStore {
   }
 
   async createConversation(params: CreateConversationParams): Promise<Conversation> {
-    const conversation = await rpc.conversations.createConversation(params);
+    const conversation = this.consumePendingConversationTitle(
+      await rpc.conversations.createConversation(params)
+    );
     runInAction(() => {
       const store = new ConversationStore(conversation);
       this.conversations.set(conversation.id, store);
@@ -410,6 +426,7 @@ export class ConversationManagerStore {
     this.offConversationRenamed = null;
     this.offConversationArchived?.();
     this.offConversationArchived = null;
+    this.pendingConversationTitles.clear();
     for (const conversation of this.conversations.values()) {
       conversation.dispose();
     }
@@ -430,6 +447,8 @@ export class ConversationStore {
   session: PtySession;
   status: AgentStatus = 'idle';
   seen = true;
+  /** True while the archive flow (pre-archive command + archive) is in flight. */
+  isArchiving = false;
   lastNotificationType: NotificationType | null = null;
   /** Human-readable "what is it waiting on" context for `awaiting-input`. */
   pendingActionDescription: string | null = null;
@@ -445,9 +464,11 @@ export class ConversationStore {
       session: observable,
       status: observable,
       seen: observable,
+      isArchiving: observable,
       lastNotificationType: observable,
       pendingActionDescription: observable,
       setStatus: action,
+      setArchiving: action,
       hydrateStatus: action,
       applyAuthoritativeStatus: action,
       setAwaitingInput: action,
@@ -465,8 +486,8 @@ export class ConversationStore {
 
   get indicatorStatus(): AgentStatus | null {
     if (this.status === 'working') return 'working';
-    if (this.seen) return null;
     if (this.status === 'awaiting-input') return 'awaiting-input';
+    if (this.seen) return null;
     if (this.status === 'error') return 'error';
     if (this.status === 'completed') return 'completed';
     return null;
@@ -545,6 +566,10 @@ export class ConversationStore {
 
   markSeen() {
     this.seen = true;
+  }
+
+  setArchiving(value: boolean) {
+    this.isArchiving = value;
   }
 
   dispose() {
