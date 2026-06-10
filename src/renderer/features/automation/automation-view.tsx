@@ -13,13 +13,9 @@ import {
 import { observer } from 'mobx-react-lite';
 import React, { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  AGENT_PROVIDERS,
-  isValidProviderId,
-  type AgentProviderId,
-} from '@shared/agent-provider-registry';
 import type { AutomationEntry } from '@shared/app-settings';
 import { INTERNAL_PROJECT_ID } from '@shared/projects';
+import { isValidRuntimeId, RUNTIMES, type RuntimeId } from '@shared/runtime-registry';
 import { ensureUniqueTaskSlug } from '@shared/task-name';
 import {
   asMounted,
@@ -27,7 +23,7 @@ import {
 } from '@renderer/features/projects/stores/project-selectors';
 import { useAppSettingsKey } from '@renderer/features/settings/use-app-settings-key';
 import { initialConversationTitle } from '@renderer/features/tasks/conversations/conversation-title-utils';
-import { useAgentAutoApproveDefaults } from '@renderer/features/tasks/hooks/useAgentAutoApproveDefaults';
+import { useRuntimeAutoApproveDefaults } from '@renderer/features/tasks/hooks/useRuntimeAutoApproveDefaults';
 import { Titlebar } from '@renderer/lib/components/titlebar/Titlebar';
 import { useToast } from '@renderer/lib/hooks/use-toast';
 import { useNavigate } from '@renderer/lib/layout/navigation-provider';
@@ -49,19 +45,19 @@ import { cn } from '@renderer/utils/utils';
 type AutomationDraft = {
   title: string;
   workspaceName: string;
-  provider: AgentProviderId;
+  runtime: RuntimeId;
   scheduleLabel: string;
   prompt: string;
   status: AutomationEntry['status'];
 };
 
-const DEFAULT_PROVIDER: AgentProviderId = 'codex';
+const DEFAULT_PROVIDER: RuntimeId = 'codex';
 
-function makeDraft(provider: AgentProviderId): AutomationDraft {
+function makeDraft(runtime: RuntimeId): AutomationDraft {
   return {
     title: '',
     workspaceName: 'Yoda',
-    provider,
+    runtime,
     scheduleLabel: '',
     prompt: '',
     status: 'active',
@@ -72,7 +68,7 @@ function draftFromEntry(entry: AutomationEntry): AutomationDraft {
   return {
     title: entry.title,
     workspaceName: entry.workspaceName,
-    provider: entry.provider,
+    runtime: entry.runtime,
     scheduleLabel: entry.scheduleLabel,
     prompt: entry.prompt,
     status: entry.status,
@@ -85,7 +81,7 @@ function entryFromDraft(draft: AutomationDraft, existing?: AutomationEntry): Aut
     id: existing?.id ?? crypto.randomUUID(),
     title: draft.title.trim(),
     workspaceName: draft.workspaceName.trim(),
-    provider: draft.provider,
+    runtime: draft.runtime,
     scheduleLabel: draft.scheduleLabel.trim(),
     prompt: draft.prompt.trim(),
     status: draft.status,
@@ -99,19 +95,23 @@ export function AutomationTitlebar() {
   return <Titlebar />;
 }
 
-export const AutomationMainPanel = observer(function AutomationMainPanel() {
+export const AutomationMainPanel = observer(function AutomationMainPanel({
+  embedded = false,
+}: {
+  embedded?: boolean;
+}) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { navigate } = useNavigate();
   const showConfirm = useShowModal('confirmActionModal');
-  const autoApproveDefaults = useAgentAutoApproveDefaults();
-  const { value: defaultAgent } = useAppSettingsKey('defaultAgent');
+  const autoApproveDefaults = useRuntimeAutoApproveDefaults();
+  const { value: defaultRuntime } = useAppSettingsKey('defaultRuntime');
   const { value: automations, update, isLoading } = useAppSettingsKey('automations');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<AutomationDraft>(() => makeDraft(DEFAULT_PROVIDER));
   const [runningId, setRunningId] = useState<string | null>(null);
 
-  const defaultProvider = isValidProviderId(defaultAgent) ? defaultAgent : DEFAULT_PROVIDER;
+  const defaultProvider = isValidRuntimeId(defaultRuntime) ? defaultRuntime : DEFAULT_PROVIDER;
   const items = useMemo(() => automations?.items ?? [], [automations?.items]);
   const currentItems = useMemo(() => items.filter((item) => item.status === 'active'), [items]);
   const pausedItems = useMemo(() => items.filter((item) => item.status === 'paused'), [items]);
@@ -206,10 +206,10 @@ export const AutomationMainPanel = observer(function AutomationMainPanel() {
           id: conversationId,
           projectId: INTERNAL_PROJECT_ID,
           taskId,
-          provider: entry.provider,
-          title: initialConversationTitle(entry.provider, entry.prompt, []),
+          runtime: entry.runtime,
+          title: initialConversationTitle(entry.runtime, entry.prompt, []),
           initialPrompt: entry.prompt,
-          autoApprove: autoApproveDefaults.getDefault(entry.provider),
+          autoApprove: autoApproveDefaults.getDefault(entry.runtime),
         },
       });
       updateEntry(entry, { lastRunAt: new Date().toISOString() });
@@ -227,17 +227,31 @@ export const AutomationMainPanel = observer(function AutomationMainPanel() {
 
   if (isLoading) {
     return (
-      <div className="flex h-full items-center justify-center bg-background text-foreground">
+      <div
+        className={cn(
+          'flex items-center justify-center bg-background text-foreground',
+          embedded ? 'h-48' : 'h-full'
+        )}
+      >
         <Loader2 className="size-6 animate-spin text-foreground-muted" />
       </div>
     );
   }
 
   return (
-    <div className="flex h-full min-h-0 overflow-y-auto bg-background text-foreground">
-      <div className="mx-auto flex w-full max-w-[1060px] flex-col px-10 py-12">
-        <div className="flex items-start justify-between gap-4">
-          <h1 className="text-4xl font-normal tracking-normal">{t('automation.title')}</h1>
+    <div
+      className={cn(
+        'flex bg-background text-foreground',
+        !embedded && 'h-full min-h-0 overflow-y-auto'
+      )}
+    >
+      <div
+        className={cn('flex w-full flex-col', !embedded && 'mx-auto max-w-[1060px] px-10 py-12')}
+      >
+        <div className={cn('flex items-start gap-4', embedded ? 'justify-end' : 'justify-between')}>
+          {!embedded && (
+            <h1 className="text-4xl font-normal tracking-normal">{t('automation.title')}</h1>
+          )}
           <Button type="button" variant="outline" size="sm" onClick={openCreate}>
             <Plus className="size-4" />
             {t('automation.new')}
@@ -255,7 +269,7 @@ export const AutomationMainPanel = observer(function AutomationMainPanel() {
           />
         )}
 
-        <div className="mt-16 space-y-16">
+        <div className={cn(embedded ? 'mt-8 space-y-10' : 'mt-16 space-y-16')}>
           <AutomationSection
             title={t('automation.current')}
             emptyLabel={t('automation.emptyCurrent')}
@@ -298,11 +312,8 @@ function AutomationEditor({
   onSave: (event: React.FormEvent) => void;
 }) {
   const { t } = useTranslation();
-  const providers = useMemo(
-    () => AGENT_PROVIDERS.filter((provider) => provider.detectable !== false),
-    []
-  );
-  const providerName = providers.find((provider) => provider.id === draft.provider)?.name;
+  const runtimes = useMemo(() => RUNTIMES.filter((runtime) => runtime.detectable !== false), []);
+  const runtimeName = runtimes.find((runtime) => runtime.id === draft.runtime)?.name;
 
   return (
     <form
@@ -343,19 +354,19 @@ function AutomationEditor({
         <label className="grid gap-1.5">
           <span className="text-xs text-foreground-muted">{t('automation.form.agent')}</span>
           <Select
-            value={draft.provider}
+            value={draft.runtime}
             onValueChange={(value) => {
-              if (!isValidProviderId(value)) return;
-              setDraft((current) => ({ ...current, provider: value }));
+              if (!isValidRuntimeId(value)) return;
+              setDraft((current) => ({ ...current, runtime: value }));
             }}
           >
             <SelectTrigger className="w-full">
-              <SelectValue>{providerName ?? draft.provider}</SelectValue>
+              <SelectValue>{runtimeName ?? draft.runtime}</SelectValue>
             </SelectTrigger>
             <SelectContent align="start" alignItemWithTrigger={false}>
-              {providers.map((provider) => (
-                <SelectItem key={provider.id} value={provider.id}>
-                  {provider.name}
+              {runtimes.map((runtime) => (
+                <SelectItem key={runtime.id} value={runtime.id}>
+                  {runtime.name}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -468,8 +479,8 @@ const AutomationRow = observer(function AutomationRow({
   onToggle: (entry: AutomationEntry) => void;
 }) {
   const { t } = useTranslation();
-  const provider = AGENT_PROVIDERS.find((item) => item.id === entry.provider);
-  const detected = appState.dependencies.agentStatuses[entry.provider]?.status === 'available';
+  const runtime = RUNTIMES.find((item) => item.id === entry.runtime);
+  const detected = appState.dependencies.agentStatuses[entry.runtime]?.status === 'available';
   const rightLabel =
     entry.status === 'active'
       ? entry.scheduleLabel || t('automation.scheduleManual')
@@ -499,7 +510,7 @@ const AutomationRow = observer(function AutomationRow({
             )}
           >
             <Bot className="size-3" />
-            {provider?.name ?? entry.provider}
+            {runtime?.name ?? entry.runtime}
           </span>
         </span>
       </button>

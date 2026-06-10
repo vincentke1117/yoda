@@ -13,12 +13,6 @@ import {
 } from '@renderer/features/tasks/stores/task';
 import type { WorkspaceStore } from '@renderer/features/workspaces/workspace-store';
 import type { Snapshottable } from '@renderer/lib/stores/snapshottable';
-import {
-  isSidebarNavItemKey,
-  SIDEBAR_NAV_ITEM_KEYS,
-  type SidebarNavItemKey,
-  type SidebarPrimaryItemKey,
-} from './nav-items';
 
 function parseSidebarTaskSortBy(value: unknown): SidebarTaskSortBy | undefined {
   return value === 'created-at' || value === 'updated-at' ? value : undefined;
@@ -166,13 +160,8 @@ export class SidebarStore implements Snapshottable<SidebarSnapshot> {
   private frozenNeedsReviewByTaskId: ReadonlyMap<string, boolean> | null = null;
   /** Active reflow-hold sources (pointer-in-list, open row menu, …). */
   private readonly reflowHoldReasons = new Set<string>();
-  /** Persisted order of the secondary nav items; missing keys fall back to default order. */
-  navItemOrder: SidebarNavItemKey[] = [...SIDEBAR_NAV_ITEM_KEYS];
-  hiddenNavItems = observable.set<SidebarNavItemKey>();
   /** Global show/hide for the entire secondary nav section. */
   navSectionHidden = false;
-  /** Hidden primary actions (New task, Search tasks); show/hide only, no order. */
-  hiddenPrimaryItems = observable.set<SidebarPrimaryItemKey>();
 
   constructor(
     private readonly projectManager: ProjectManagerStore,
@@ -181,11 +170,9 @@ export class SidebarStore implements Snapshottable<SidebarSnapshot> {
     makeAutoObservable(this, {
       expandedProjectIds: false,
       pinnedProjectIds: false,
-      hiddenNavItems: false,
       collapsedTaskIds: false,
       sidebarRows: computed,
       pinnedSidebarEntries: computed,
-      orderedNavItems: computed,
     });
 
     // Auto-expand a project when its task count goes from 0 to >0.
@@ -566,8 +553,6 @@ export class SidebarStore implements Snapshottable<SidebarSnapshot> {
       sortNeedsReviewLast: this.sortNeedsReviewLast,
       sortArchivingLast: this.sortArchivingLast,
       activeWorkspaceId: this.workspaceStore.activeWorkspaceId,
-      navItemOrder: [...this.navItemOrder],
-      hiddenNavItems: [...this.hiddenNavItems],
       navSectionHidden: this.navSectionHidden,
     };
   }
@@ -620,12 +605,6 @@ export class SidebarStore implements Snapshottable<SidebarSnapshot> {
     if (snapshot.activeWorkspaceId !== undefined) {
       this.workspaceStore.restoreActiveWorkspaceId(snapshot.activeWorkspaceId);
     }
-    if (snapshot.navItemOrder !== undefined) {
-      this.navItemOrder = snapshot.navItemOrder.filter(isSidebarNavItemKey);
-    }
-    if (snapshot.hiddenNavItems !== undefined) {
-      this.hiddenNavItems.replace(snapshot.hiddenNavItems.filter(isSidebarNavItemKey));
-    }
     if (snapshot.navSectionHidden !== undefined) {
       this.navSectionHidden = snapshot.navSectionHidden === true;
     }
@@ -669,52 +648,6 @@ export class SidebarStore implements Snapshottable<SidebarSnapshot> {
 
   setSortArchivingLast(enabled: boolean): void {
     this.sortArchivingLast = enabled;
-  }
-
-  /**
-   * The customizable secondary nav items in their persisted order. Any default
-   * key missing from `navItemOrder` (e.g. a newly added item) is appended in
-   * canonical order so new builds surface new items rather than hiding them.
-   */
-  get orderedNavItems(): SidebarNavItemKey[] {
-    const seen = new Set<SidebarNavItemKey>();
-    const result: SidebarNavItemKey[] = [];
-    for (const key of this.navItemOrder) {
-      if (isSidebarNavItemKey(key) && !seen.has(key)) {
-        result.push(key);
-        seen.add(key);
-      }
-    }
-    for (const key of SIDEBAR_NAV_ITEM_KEYS) {
-      if (!seen.has(key)) result.push(key);
-    }
-    return result;
-  }
-
-  isNavItemHidden(key: SidebarNavItemKey): boolean {
-    return this.hiddenNavItems.has(key);
-  }
-
-  setNavItemHidden(key: SidebarNavItemKey, hidden: boolean): void {
-    if (hidden) {
-      this.hiddenNavItems.add(key);
-    } else {
-      this.hiddenNavItems.delete(key);
-    }
-  }
-
-  toggleNavItemHidden(key: SidebarNavItemKey): void {
-    this.setNavItemHidden(key, !this.isNavItemHidden(key));
-  }
-
-  setNavItemOrder(order: SidebarNavItemKey[]): void {
-    this.navItemOrder = order.filter(isSidebarNavItemKey);
-  }
-
-  resetNavItems(): void {
-    this.navItemOrder = [...SIDEBAR_NAV_ITEM_KEYS];
-    this.hiddenNavItems.clear();
-    this.navSectionHidden = false;
   }
 
   setNavSectionHidden(hidden: boolean): void {

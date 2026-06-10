@@ -1,6 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { PRODUCT_NAME } from '@shared/app-identity';
+import { YODA_DOCS_URL } from '@shared/urls';
 import { useTelemetryConsent } from '@renderer/lib/hooks/useTelemetryConsent';
 import { rpc } from '@renderer/lib/ipc';
 import { Button } from '@renderer/lib/ui/button';
@@ -25,7 +26,7 @@ const TelemetryCard: React.FC = () => {
               variant="link"
               size="sm"
               className="group inline-flex h-auto items-center gap-1 px-0 text-sm font-normal text-muted-foreground hover:text-foreground hover:no-underline focus-visible:outline-none focus-visible:ring-0"
-              onClick={() => rpc.app.openExternal('https://lovstudio.ai/yoda/docs/telemetry')}
+              onClick={() => rpc.app.openExternal(`${YODA_DOCS_URL}/telemetry`)}
             >
               <span className="transition-colors group-hover:text-foreground">
                 {t('settings.telemetry.info')}

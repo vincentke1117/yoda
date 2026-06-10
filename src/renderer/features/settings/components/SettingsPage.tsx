@@ -1,23 +1,28 @@
-import { ExternalLink } from 'lucide-react';
-import React, { useCallback } from 'react';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { AgentManagerView } from '@renderer/features/agents-config/agent-manager-view';
+import { AgentsView } from '@renderer/features/agents/components/AgentsView';
+import { AutomationMainPanel } from '@renderer/features/automation/automation-view';
+import { MaasView } from '@renderer/features/maas/components/MaasView';
 import { McpView } from '@renderer/features/mcp/components/McpView';
+import { MobileView } from '@renderer/features/mobile/mobile-view';
+import SkillsView from '@renderer/features/skills/components/SkillsView';
 import { NamingConfigFields } from '@renderer/features/tasks/components/naming-config-fields';
-import { rpc } from '@renderer/lib/ipc';
+import { SummaryConfigFields } from '@renderer/features/tasks/components/summary-config-fields';
+import { UsageView } from '@renderer/features/usage/components/UsageView';
 import { Separator } from '@renderer/lib/ui/separator';
 import { cn } from '@renderer/utils/utils';
 import { AccountTab } from './AccountTab';
 import ArchivedProjectsCard from './ArchivedProjectsCard';
 import { CliAgentsList } from './CliAgentsList';
-import DefaultAgentSettingsCard from './DefaultAgentSettingsCard';
+import DefaultRuntimeSettingsCard from './DefaultRuntimeSettingsCard';
 import GithubSettingsCard from './GithubSettingsCard';
-import HiddenToolsSettingsCard from './HiddenToolsSettingsCard';
 import IntegrationsCard from './IntegrationsCard';
 import KeyboardSettingsCard from './KeyboardSettingsCard';
 import LanguageCard from './LanguageCard';
 import NotificationSettingsCard from './NotificationSettingsCard';
+import OpenInAppsSettingsCard from './OpenInAppsSettingsCard';
 import { ReviewPromptResetButton, ReviewPromptSettingsCard } from './ReviewPromptSettingsCard';
-import { SidebarNavSettingsCard } from './SidebarNavSettingsCard';
 import {
   AutoGenerateTaskNamesRow,
   AutoTrustWorktreesRow,
@@ -35,12 +40,17 @@ export type SettingsPageTab =
   | 'clis-models'
   | 'tasks'
   | 'integrations'
+  | 'open-in'
   | 'mcp'
+  | 'skills'
+  | 'agent-manager'
+  | 'maas'
+  | 'usage'
+  | 'automation'
+  | 'mobile'
   | 'repository'
-  | 'github'
   | 'interface'
-  | 'keyboard-shortcuts'
-  | 'docs';
+  | 'keyboard-shortcuts';
 
 interface SectionConfig {
   id: string;
@@ -57,26 +67,41 @@ export function SettingsPage({
   onTabChange: (tab: SettingsPageTab) => void;
 }) {
   const { t } = useTranslation();
-  const handleDocsClick = useCallback(() => {
-    void rpc.app.openExternal('https://lovstudio.ai/yoda/docs');
-  }, []);
 
-  const tabs: Array<{
-    id: SettingsPageTab;
-    label: string;
-    isExternal?: boolean;
-  }> = [
-    { id: 'general', label: t('settings.tabs.general') },
-    { id: 'account', label: t('settings.tabs.account') },
-    { id: 'clis-models', label: t('settings.tabs.agents') },
-    { id: 'tasks', label: t('settings.tabs.tasks') },
-    { id: 'integrations', label: t('settings.tabs.integrations') },
-    { id: 'mcp', label: t('settings.tabs.mcp') },
-    { id: 'repository', label: t('settings.tabs.repository') },
-    { id: 'github', label: t('settings.tabs.github') },
-    { id: 'interface', label: t('settings.tabs.interface') },
-    { id: 'keyboard-shortcuts', label: t('settings.tabs.keyboardShortcuts') },
-    { id: 'docs', label: t('settings.tabs.docs'), isExternal: true },
+  type TabEntry = { id: SettingsPageTab; label: string };
+  // Grouped tabs; groups are visually separated. Account leads the first group.
+  const tabGroups: TabEntry[][] = [
+    // Identity: account + its usage.
+    [
+      { id: 'account', label: t('settings.tabs.account') },
+      { id: 'usage', label: t('settings.tabs.usage') },
+    ],
+    // App-wide preferences.
+    [
+      { id: 'general', label: t('settings.tabs.general') },
+      { id: 'interface', label: t('settings.tabs.interface') },
+      { id: 'keyboard-shortcuts', label: t('settings.tabs.keyboardShortcuts') },
+    ],
+    // Projects and the tasks that run inside them.
+    [
+      { id: 'repository', label: t('settings.tabs.repository') },
+      { id: 'tasks', label: t('settings.tabs.tasks') },
+    ],
+    // Agent execution: runtimes and their capabilities.
+    [
+      { id: 'maas', label: t('settings.tabs.maas') },
+      { id: 'clis-models', label: t('settings.tabs.agents') },
+      { id: 'skills', label: t('settings.tabs.skills') },
+      { id: 'mcp', label: t('settings.tabs.mcp') },
+      { id: 'agent-manager', label: t('settings.tabs.agentManager') },
+    ],
+    // Product integrations and companion surfaces.
+    [
+      { id: 'integrations', label: t('settings.tabs.integrations') },
+      { id: 'open-in', label: t('settings.tabs.openIn') },
+      { id: 'automation', label: t('settings.tabs.automation') },
+      { id: 'mobile', label: t('settings.tabs.mobile') },
+    ],
   ];
 
   const tabContent: Record<
@@ -126,6 +151,18 @@ export function SettingsPage({
           ),
         },
         {
+          id: 'session-summary-config',
+          title: t('settings.tasks.summaryConfigTitle'),
+          component: (
+            <div className="flex flex-col gap-2">
+              <p className="text-xs text-foreground-passive">
+                {t('settings.tasks.summaryConfigDescription')}
+              </p>
+              <SummaryConfigFields />
+            </div>
+          ),
+        },
+        {
           id: 'auto-trust-worktrees',
           component: <AutoTrustWorktreesRow />,
         },
@@ -148,7 +185,7 @@ export function SettingsPage({
       title: t('settings.tabs.agents'),
       description: t('settings.agentsTab.description'),
       sections: [
-        { id: 'default-agent', component: <DefaultAgentSettingsCard /> },
+        { id: 'default-agent', component: <DefaultRuntimeSettingsCard /> },
         {
           id: 'review-prompt',
           title: t('settings.agentsTab.reviewPrompt'),
@@ -164,7 +201,42 @@ export function SettingsPage({
             </div>
           ),
         },
+        {
+          id: 'runtime-detail',
+          title: t('settings.agentsTab.runtimeDetail'),
+          component: <AgentsView embedded />,
+        },
       ],
+    },
+    skills: {
+      title: t('skills.title'),
+      description: t('skills.subtitle'),
+      sections: [{ id: 'skills', component: <SkillsView embedded /> }],
+    },
+    'agent-manager': {
+      title: t('agentManager.title'),
+      description: t('agentManager.subtitle'),
+      sections: [{ id: 'agent-manager', component: <AgentManagerView embedded /> }],
+    },
+    maas: {
+      title: t('maas.title'),
+      description: t('maas.subtitle'),
+      sections: [{ id: 'maas', component: <MaasView embedded /> }],
+    },
+    usage: {
+      title: t('usage.title'),
+      description: t('usage.subtitle'),
+      sections: [{ id: 'usage', component: <UsageView embedded /> }],
+    },
+    automation: {
+      title: t('automation.title'),
+      description: t('automation.subtitle'),
+      sections: [{ id: 'automation', component: <AutomationMainPanel embedded /> }],
+    },
+    mobile: {
+      title: t('sidebar.mobileConnection.title'),
+      description: t('sidebar.mobileConnection.description'),
+      sections: [{ id: 'mobile', component: <MobileView embedded /> }],
     },
     integrations: {
       title: t('settings.tabs.integrations'),
@@ -174,6 +246,16 @@ export function SettingsPage({
           id: 'integrations',
           title: t('settings.integrationsTab.title'),
           component: <IntegrationsCard />,
+        },
+      ],
+    },
+    'open-in': {
+      title: t('settings.tabs.openIn'),
+      description: t('settings.openInTab.description'),
+      sections: [
+        {
+          id: 'open-in-apps',
+          component: <OpenInAppsSettingsCard />,
         },
       ],
     },
@@ -187,20 +269,14 @@ export function SettingsPage({
       description: t('settings.repositoryTab.description'),
       sections: [
         {
+          id: 'github-settings',
+          title: t('settings.tabs.github'),
+          component: <GithubSettingsCard />,
+        },
+        {
           id: 'archived-projects',
           title: t('settings.archivedProjects.title'),
           component: <ArchivedProjectsCard />,
-        },
-      ],
-    },
-    github: {
-      title: t('settings.tabs.github'),
-      description: t('settings.githubTab.description'),
-      sections: [
-        {
-          id: 'github-settings',
-          title: t('settings.repositoryTab.branchPrefix'),
-          component: <GithubSettingsCard />,
         },
       ],
     },
@@ -210,16 +286,6 @@ export function SettingsPage({
       sections: [
         { id: 'theme', component: <ThemeCard /> },
         { id: 'terminal', component: <TerminalSettingsCard /> },
-        {
-          id: 'sidebar-nav',
-          title: t('settings.interfaceTab.sidebarNav'),
-          component: <SidebarNavSettingsCard />,
-        },
-        {
-          id: 'tools',
-          title: t('settings.interfaceTab.tools'),
-          component: <HiddenToolsSettingsCard />,
-        },
       ],
     },
     'keyboard-shortcuts': {
@@ -242,30 +308,28 @@ export function SettingsPage({
         <div className="grid min-h-0 flex-1 grid-cols-[13rem_minmax(0,1fr)] gap-8 overflow-hidden">
           <div className="py-10">
             <nav className="flex min-h-0 w-52 flex-col gap-0.5 overflow-y-auto">
-              {tabs.map((tab) => {
-                const isActive = tab.id === activeTab && !tab.isExternal;
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => {
-                      if (tab.isExternal) {
-                        handleDocsClick();
-                      } else {
-                        onTabChange(tab.id);
-                      }
-                    }}
-                    className={cn(
-                      'flex w-full items-center gap-2 hover:bg-background-1 text-foreground-muted hover:text-foreground rounded-md px-3 py-2 text-sm font-normal transition-colors',
-                      isActive &&
-                        'bg-background-2 text-foreground hover:bg-background-2 hover:text-foreground'
-                    )}
-                  >
-                    <span className="text-left">{tab.label}</span>
-                    {tab.isExternal && <ExternalLink className="h-4 w-4" />}
-                  </button>
-                );
-              })}
+              {tabGroups.map((group, groupIndex) => (
+                <React.Fragment key={group[0]?.id ?? groupIndex}>
+                  {groupIndex > 0 && <Separator className="my-2" />}
+                  {group.map((tab) => {
+                    const isActive = tab.id === activeTab;
+                    return (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => onTabChange(tab.id)}
+                        className={cn(
+                          'flex w-full items-center gap-2 hover:bg-background-1 text-foreground-muted hover:text-foreground rounded-md px-3 py-2 text-sm font-normal transition-colors',
+                          isActive &&
+                            'bg-background-2 text-foreground hover:bg-background-2 hover:text-foreground'
+                        )}
+                      >
+                        <span className="text-left">{tab.label}</span>
+                      </button>
+                    );
+                  })}
+                </React.Fragment>
+              ))}
             </nav>
           </div>
           {/* Content container */}

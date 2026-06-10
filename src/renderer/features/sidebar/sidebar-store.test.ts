@@ -143,7 +143,7 @@ describe('SidebarStore task recency ordering', () => {
 
     expect(restored.navSectionHidden).toBe(true);
 
-    restored.resetNavItems();
+    restored.setNavSectionHidden(false);
 
     expect(restored.navSectionHidden).toBe(false);
   });

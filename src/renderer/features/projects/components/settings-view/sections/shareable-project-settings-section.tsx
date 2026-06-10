@@ -3,6 +3,7 @@ import type {
   ProjectSettingsOverrideState,
   ShareableProjectSettingsWriteField,
 } from '@shared/project-settings';
+import { YODA_DOCS_URL } from '@shared/urls';
 import { rpc } from '@renderer/lib/ipc';
 import { Button } from '@renderer/lib/ui/button';
 import { Field, FieldDescription, FieldTitle } from '@renderer/lib/ui/field';
@@ -108,7 +109,7 @@ export function ShareableSettingsSection({
               variant="link"
               size="sm"
               className="group inline-flex h-auto cursor-pointer items-center gap-1 px-0 text-sm font-normal text-muted-foreground hover:text-foreground hover:no-underline focus-visible:outline-none focus-visible:ring-0"
-              onClick={() => rpc.app.openExternal('https://lovstudio.ai/yoda/docs/project-config')}
+              onClick={() => rpc.app.openExternal(`${YODA_DOCS_URL}/project-config`)}
             >
               <span className="font-mono text-xs transition-colors group-hover:text-foreground">
                 {t('projects.settings.docs')}

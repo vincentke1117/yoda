@@ -131,8 +131,6 @@ export type SidebarSnapshot = {
   /** Sort tasks with an archive in flight (archiveRequestedAt set) to the bottom of their group. */
   sortArchivingLast?: boolean;
   activeWorkspaceId?: string;
-  navItemOrder?: string[];
-  hiddenNavItems?: string[];
   /** Global show/hide for the entire secondary nav section at the sidebar bottom. */
   navSectionHidden?: boolean;
 };

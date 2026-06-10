@@ -90,18 +90,13 @@
   "sidebar": {
     "newTask": "New task",
     "searchTasks": "Search tasks",
-    "agentManager": "Agents",
-    "agents": "Runtime",
-    "maas": "MaaS",
-    "mcp": "MCP",
-    "usage": "Usage",
     "skills": "Skills",
     "skillIssues": "{{count}} skill issue(s)",
-    "openFirstSkillIssue": "Open first skill issue",
     "automation": "Automation",
     "mobile": "Mobile",
     "settings": "Settings",
     "roadmap": "Roadmap",
+    "docs": "Docs",
     "giveFeedback": "Give feedback",
     "account": {
       "openMenu": "Open account menu",
@@ -254,11 +249,16 @@
       "integrations": "Integrations",
       "openIn": "Open in",
       "mcp": "MCP",
+      "skills": "Skills",
+      "agentManager": "Agents",
+      "maas": "MaaS",
+      "usage": "Usage",
+      "automation": "Automation",
+      "mobile": "Mobile",
       "repository": "Project",
       "github": "GitHub",
       "interface": "Interface",
-      "keyboardShortcuts": "Keyboard shortcuts",
-      "docs": "Docs"
+      "keyboardShortcuts": "Keyboard shortcuts"
     },
     "general": {
       "description": "Manage your account, privacy settings, notifications, and app updates."
@@ -292,6 +292,7 @@
       "description": "Manage runtimes and model configurations.",
       "reviewPrompt": "Review Prompt",
       "cliAgents": "Runtimes",
+      "runtimeDetail": "Runtime details",
       "agentInstalled": "Runtime installed",
       "agentInstalledDescription": "{{name}} is ready.",
       "installFailed": "Install failed",
@@ -324,12 +325,8 @@
       "statusConnecting": "Connecting…",
       "statusNotConnected": "Not connected"
     },
-    "githubTab": {
-      "description": "Configure GitHub branch and push settings."
-    },
     "repositoryTab": {
       "description": "Configure project settings.",
-      "branchPrefix": "Branch prefix",
       "autoPush": "Auto-push on create",
       "autoPushAria": "Enable automatic push on create",
       "autoUpdateGitignore": "Auto-update .gitignore",
@@ -344,9 +341,7 @@
     },
     "interfaceTab": {
       "description": "Customize the appearance and behavior of the app.",
-      "keyboardShortcuts": "Keyboard shortcuts",
-      "sidebarNav": "Sidebar navigation",
-      "sidebarNavShowSection": "Show sidebar navigation"
+      "keyboardShortcuts": "Keyboard shortcuts"
     },
     "keyboardShortcutsTab": {
       "description": "Customize keyboard shortcuts for app actions."
@@ -775,6 +770,9 @@
     "toggleSidebar": "Toggle sidebar",
     "sessionInfo": {
       "title": "Session info",
+      "groupProject": "Project",
+      "groupTask": "Task",
+      "groupSession": "Session",
       "noSession": "No session",
       "noSessionDescription": "Create or open a session to inspect runtime details.",
       "sessionTitle": "Title",
@@ -797,6 +795,7 @@
       "summaryManualHint": "Saving a non-empty summary pins it until you clear it or regenerate.",
       "summaryManualFailed": "Failed to save manual summary",
       "summaryManualClear": "Clear override",
+      "overviewSummaryPlaceholder": "No summary yet — click to write one, or generate with AI.",
       "runtimeTitleUnavailable": "No runtime title resolved",
       "aiRename": "AI rename",
       "aiRenaming": "AI...",
@@ -858,7 +857,7 @@
         "waiting": "Waiting"
       },
       "createdAt": "Created",
-      "updatedAt": "Updated",
+      "updatedAt": "Record updated",
       "lastInteractedAt": "Last active",
       "archivedAt": "Archived",
       "resumeCommand": "Resume",
@@ -1152,6 +1151,8 @@
     "sessionPanel": {
       "title": "Session",
       "basic": "Basic",
+      "status": "Status",
+      "overview": "Overview",
       "conversation": "Conversation",
       "tasks": "Tasks",
       "summary": "Summary",
@@ -1268,6 +1269,7 @@
   },
   "automation": {
     "title": "Automation",
+    "subtitle": "Save recurring prompts as automations and run them in the internal workspace with one click.",
     "new": "New automation",
     "current": "Current",
     "paused": "Paused",

@@ -143,7 +143,7 @@ function formatDateRange(period: { startingAt: string; endingAt: string } | null
   return `${formatDate(period.startingAt)} - ${formatDate(period.endingAt)}`;
 }
 
-export const MaasView: React.FC = () => {
+export const MaasView: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const { t } = useTranslation();
   const { data: connections, isLoading } = useMaasConnections();
   const [selectedPlatformId, setSelectedPlatformId] = useState<MaasPlatformId>('zenmux');
@@ -169,15 +169,24 @@ export const MaasView: React.FC = () => {
           });
 
   return (
-    <div className="flex h-full min-h-0 bg-background text-foreground">
+    <div
+      className={cn(
+        'flex min-h-0 bg-background text-foreground',
+        embedded ? 'h-[560px] overflow-hidden rounded-xl border border-border' : 'h-full'
+      )}
+    >
       <aside className="flex w-72 shrink-0 flex-col border-r border-border bg-background-tertiary">
-        <div className="border-b border-border px-4 py-4">
-          <div className="flex items-center gap-2">
-            <Layers className="h-4 w-4 text-foreground-muted" />
-            <h1 className="text-sm font-semibold">{t('maas.title')}</h1>
+        {!embedded && (
+          <div className="border-b border-border px-4 py-4">
+            <div className="flex items-center gap-2">
+              <Layers className="h-4 w-4 text-foreground-muted" />
+              <h1 className="text-sm font-semibold">{t('maas.title')}</h1>
+            </div>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+              {t('maas.subtitle')}
+            </p>
           </div>
-          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{t('maas.subtitle')}</p>
-        </div>
+        )}
 
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <span className="text-xs font-medium text-muted-foreground">

@@ -1,8 +1,9 @@
 import { Copy, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { useMemo, useState, type PropsWithChildren } from 'react';
 import { useTranslation } from 'react-i18next';
-import { getProvider } from '@shared/agent-provider-registry';
 import type { Agent } from '@shared/agents';
+import { builtinAgentI18nKey } from '@shared/builtin-agents';
+import { getRuntime } from '@shared/runtime-registry';
 import { Titlebar } from '@renderer/lib/components/titlebar/Titlebar';
 import { useShowModal } from '@renderer/lib/modal/modal-provider';
 import { Button } from '@renderer/lib/ui/button';
@@ -21,10 +22,19 @@ function AgentCard({
   onDuplicate: () => void;
   onDelete: () => void;
 }) {
-  const { t } = useTranslation();
-  const runtime = agent.preferredRuntimeProvider
-    ? getProvider(agent.preferredRuntimeProvider)
-    : null;
+  const { t, i18n } = useTranslation();
+  const runtime = agent.preferredRuntime ? getRuntime(agent.preferredRuntime) : null;
+
+  // Built-in Agents are seeded with English name/description; show their
+  // localized copy when a translation exists. User-authored Agents (and any
+  // built-in the user has renamed away from the preset wording) fall through
+  // to the stored value, shown verbatim — user content is never translated.
+  const i18nKey = builtinAgentI18nKey(agent.slug);
+  const name = i18nKey && i18n.exists(`${i18nKey}.name`) ? t(`${i18nKey}.name`) : agent.name;
+  const description =
+    i18nKey && i18n.exists(`${i18nKey}.description`)
+      ? t(`${i18nKey}.description`)
+      : agent.description;
 
   return (
     <div className="group flex items-start gap-3 rounded-lg border border-border bg-background-1 p-3 transition-colors hover:border-primary/40">
@@ -33,7 +43,7 @@ function AgentCard({
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <div className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate text-sm font-semibold text-foreground">{agent.name}</span>
+          <span className="truncate text-sm font-semibold text-foreground">{name}</span>
           <span
             className={cn(
               'shrink-0 truncate rounded-sm px-1.5 py-0.5 text-[10px] font-medium',
@@ -52,7 +62,7 @@ function AgentCard({
           )}
         </div>
         <p className="line-clamp-1 text-xs text-foreground-muted">
-          {agent.description || t('agentManager.noDescription')}
+          {description || t('agentManager.noDescription')}
         </p>
       </div>
       <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
@@ -85,7 +95,7 @@ function AgentCard({
   );
 }
 
-function AgentManagerView() {
+export function AgentManagerView({ embedded = false }: { embedded?: boolean }) {
   const { t } = useTranslation();
   const { agents, isLoading, remove, duplicate } = useAgents();
   const showAgentModal = useShowModal('agentEditModal');
@@ -109,13 +119,22 @@ function AgentManagerView() {
     });
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-4xl flex-col px-6 pt-6 min-h-0">
+    <div
+      className={cn(
+        'flex w-full flex-col min-h-0',
+        !embedded && 'mx-auto h-full max-w-4xl px-6 pt-6'
+      )}
+    >
       <div className="flex shrink-0 flex-col gap-3 border-b border-border pb-4">
-        <div className="flex items-center justify-between gap-2">
-          <div>
-            <h1 className="text-lg font-semibold text-foreground">{t('agentManager.title')}</h1>
-            <p className="text-xs text-foreground-muted">{t('agentManager.subtitle')}</p>
-          </div>
+        <div
+          className={cn('flex items-center gap-2', embedded ? 'justify-end' : 'justify-between')}
+        >
+          {!embedded && (
+            <div>
+              <h1 className="text-lg font-semibold text-foreground">{t('agentManager.title')}</h1>
+              <p className="text-xs text-foreground-muted">{t('agentManager.subtitle')}</p>
+            </div>
+          )}
           <Button size="sm" onClick={() => showAgentModal({})}>
             <Plus className="size-4" />
             {t('agentManager.newAgent')}
@@ -132,7 +151,7 @@ function AgentManagerView() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto py-4">
+      <div className={cn('py-4', !embedded && 'flex-1 overflow-y-auto')}>
         {isLoading ? (
           <p className="text-sm text-foreground-muted">{t('common.loading')}</p>
         ) : filtered.length === 0 ? (

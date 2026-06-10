@@ -1,11 +1,10 @@
 import {
-  AlertTriangle,
-  Bot,
-  ChartColumn,
-  Cloud,
+  BookOpen,
   Download,
+  ExternalLink,
   FolderInput,
   MessageSquareShare,
+  Milestone,
   Puzzle,
   RefreshCw,
   Search,
@@ -13,18 +12,19 @@ import {
   Smartphone,
   SquarePen,
   Tag,
-  Terminal,
   Workflow,
 } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { PRODUCT_NAME } from '@shared/app-identity';
+import { YODA_DOCS_URL } from '@shared/urls';
 import {
   useSkillValidationIssues,
   type SkillValidationIssueEntry,
 } from '@renderer/features/skills/useSkillValidationIssues';
 import { WorkspaceSwitcher } from '@renderer/features/workspaces/workspace-switcher';
+import { rpc } from '@renderer/lib/ipc';
 import {
   isCurrentView,
   useNavigate,
@@ -35,7 +35,6 @@ import { useShowModal } from '@renderer/lib/modal/modal-provider';
 import { appState, sidebarStore } from '@renderer/lib/stores/app-state';
 import { ShortcutHint } from '@renderer/lib/ui/shortcut-hint';
 import { cn } from '@renderer/utils/utils';
-import { type SidebarNavItemKey } from './nav-items';
 import { SidebarPinnedTaskList } from './pinned-task-list';
 import { SidebarProjectlessTaskList } from './projectless-task-list';
 import { ProjectsGroupLabel, ProjectsSettingsMenu } from './projects-group-label';
@@ -48,7 +47,6 @@ import {
   SidebarGroupContent,
   SidebarMenu,
   SidebarMenuButton,
-  SidebarMenuRow,
 } from './sidebar-primitives';
 import { SidebarSpace } from './sidebar-space';
 import { SidebarVirtualList } from './sidebar-virtual-list';
@@ -97,111 +95,37 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
     navigate('home');
   }, [currentProjectId, navigate]);
 
-  const navItems: Record<SidebarNavItemKey, React.ReactNode> = {
-    maas: (
-      <SidebarMenuButton
-        key="maas"
-        isActive={isCurrentView(currentView, 'maas')}
-        onClick={() => navigate('maas')}
-        aria-label={t('sidebar.maas')}
-        className="w-full justify-start"
-      >
-        <Cloud className="h-5 w-5 sm:h-4 sm:w-4" />
-        {t('sidebar.maas')}
-      </SidebarMenuButton>
-    ),
-    usage: (
-      <SidebarMenuButton
-        key="usage"
-        isActive={isCurrentView(currentView, 'usage')}
-        onClick={() => navigate('usage')}
-        aria-label={t('sidebar.usage')}
-        className="w-full justify-start"
-      >
-        <ChartColumn className="h-5 w-5 sm:h-4 sm:w-4" />
-        {t('sidebar.usage')}
-      </SidebarMenuButton>
-    ),
-    agents: (
-      <SidebarMenuButton
-        key="agents"
-        isActive={isCurrentView(currentView, 'agents')}
-        onClick={() => navigate('agents')}
-        aria-label={t('sidebar.agents')}
-        className="w-full justify-start"
-      >
-        <Terminal className="h-5 w-5 sm:h-4 sm:w-4" />
-        {t('sidebar.agents')}
-      </SidebarMenuButton>
-    ),
-    agentManager: (
-      <SidebarMenuButton
-        key="agentManager"
-        isActive={isCurrentView(currentView, 'agentManager')}
-        onClick={() => navigate('agentManager')}
-        aria-label={t('sidebar.agentManager')}
-        className="w-full justify-start"
-      >
-        <Bot className="h-5 w-5 sm:h-4 sm:w-4" />
-        {t('sidebar.agentManager')}
-      </SidebarMenuButton>
-    ),
-    skills: (
-      <SidebarMenuRow
-        key="skills"
-        isActive={isCurrentView(currentView, 'skills')}
-        className="gap-1 px-1 py-1"
-      >
-        <button
-          type="button"
-          onClick={() => navigate('skills')}
-          onMouseDown={(event) => event.preventDefault()}
-          aria-label={t('sidebar.skills')}
-          className="flex min-w-0 flex-1 items-center gap-2 self-stretch rounded-md px-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <Puzzle className="h-5 w-5 shrink-0 sm:h-4 sm:w-4" />
-          <span className="truncate">{t('sidebar.skills')}</span>
-        </button>
-        {skillIssueCount > 0 && (
-          <button
-            type="button"
-            onClick={handleOpenFirstSkillIssue}
-            onMouseDown={(event) => event.preventDefault()}
-            aria-label={`${skillIssueLabel}: ${t('sidebar.openFirstSkillIssue')}`}
-            title={skillIssueTitle}
-            className="inline-flex h-7 min-w-7 shrink-0 items-center justify-center gap-1 rounded-lg border border-amber-500/40 bg-amber-500/10 px-1.5 text-[10px] font-medium text-amber-600 transition-colors hover:border-amber-500/70 hover:bg-amber-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-amber-400"
-          >
-            <AlertTriangle className="h-3 w-3" />
-            {formatIssueCount(skillIssueCount)}
-          </button>
-        )}
-      </SidebarMenuRow>
-    ),
-    automation: (
-      <SidebarMenuButton
-        key="automation"
-        isActive={isCurrentView(currentView, 'automation')}
-        onClick={() => navigate('automation')}
-        aria-label={t('sidebar.automation')}
-        className="w-full justify-start"
-      >
-        <Workflow className="h-5 w-5 sm:h-4 sm:w-4" />
-        {t('sidebar.automation')}
-      </SidebarMenuButton>
-    ),
-    mobile: (
-      <SidebarMenuButton
-        key="mobile"
-        isActive={isCurrentView(currentView, 'mobile')}
-        onClick={() => navigate('mobile')}
-        aria-label={t('sidebar.mobile')}
-        className="w-full justify-start"
-      >
-        <Smartphone className="h-5 w-5 sm:h-4 sm:w-4" />
-        {t('sidebar.mobile')}
-      </SidebarMenuButton>
-    ),
-  };
+  // Quick-access icons docked to the right of the account row. Each view is
+  // also reachable as an embedded settings tab.
+  const quickNavItems: {
+    key: 'skills' | 'automation' | 'mobile';
+    icon: React.ComponentType<{ className?: string }>;
+    label: string;
+    title?: string;
+    onClick: () => void;
+    showIssueDot?: boolean;
+  }[] = [
+    {
+      key: 'skills',
+      icon: Puzzle,
+      label: t('sidebar.skills'),
+      title: skillIssueTitle ?? t('sidebar.skills'),
+      onClick: skillIssueCount > 0 ? handleOpenFirstSkillIssue : () => navigate('skills'),
+      showIssueDot: skillIssueCount > 0,
+    },
+    {
+      key: 'automation',
+      icon: Workflow,
+      label: t('sidebar.automation'),
+      onClick: () => navigate('automation'),
+    },
+    {
+      key: 'mobile',
+      icon: Smartphone,
+      label: t('sidebar.mobile'),
+      onClick: () => navigate('mobile'),
+    },
+  ];
 
   return (
     <div
@@ -278,12 +202,11 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
           <SidebarProjectlessTaskList />
         </SidebarContent>
         <div className="flex flex-col">
+          {/* Single separator for the footer block: sits above the nav section
+              when expanded, and directly above the account row when collapsed. */}
+          <div className="mx-2 my-1 border-t border-border" />
           {!sidebarStore.navSectionHidden && (
-            <SidebarMenu className="px-2 pt-2">
-              {sidebarStore.orderedNavItems
-                .filter((key) => !sidebarStore.isNavItemHidden(key))
-                .map((key) => navItems[key])}
-              <div className="my-1 border-t border-border" />
+            <SidebarMenu className="px-2">
               <SidebarMenuButton
                 isActive={isCurrentView(currentView, 'settings')}
                 onClick={() => navigate('settings')}
@@ -292,6 +215,26 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
               >
                 <Settings className="h-5 w-5 sm:h-4 sm:w-4" />
                 {t('sidebar.settings')}
+              </SidebarMenuButton>
+              <SidebarMenuButton
+                isActive={isCurrentView(currentView, 'roadmap')}
+                onClick={() => navigate('roadmap')}
+                aria-label={t('sidebar.roadmap')}
+                className="w-full justify-start"
+              >
+                <Milestone className="h-5 w-5 sm:h-4 sm:w-4" />
+                {t('sidebar.roadmap')}
+              </SidebarMenuButton>
+              <SidebarMenuButton
+                onClick={() => void rpc.app.openExternal(YODA_DOCS_URL)}
+                aria-label={t('sidebar.docs')}
+                className="w-full justify-between"
+              >
+                <span className="flex items-center gap-2 min-w-0">
+                  <BookOpen className="h-5 w-5 sm:h-4 sm:w-4 shrink-0" />
+                  <span className="truncate">{t('sidebar.docs')}</span>
+                </span>
+                <ExternalLink className="ml-auto h-3 w-3 shrink-0 text-foreground-tertiary-passive" />
               </SidebarMenuButton>
               <SidebarMenuButton
                 onClick={() => showFeedbackModal({})}
@@ -341,19 +284,35 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
               )}
             </SidebarMenu>
           )}
-          <div>
-            <div className="mx-2 my-1 border-t border-border" />
-            <SidebarAccount />
+          <div className="flex items-center gap-0.5 pr-2">
+            <div className="min-w-0 flex-1">
+              <SidebarAccount />
+            </div>
+            {quickNavItems.map(({ key, icon: Icon, label, title, onClick, showIssueDot }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={onClick}
+                aria-label={label}
+                title={title ?? label}
+                className={cn(
+                  'relative flex size-7 shrink-0 items-center justify-center rounded-md text-foreground-tertiary-passive transition-colors hover:bg-background-tertiary-1 hover:text-foreground-tertiary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  isCurrentView(currentView, key) &&
+                    'bg-background-tertiary-1 text-foreground-tertiary'
+                )}
+              >
+                <Icon className="size-4" />
+                {showIssueDot && (
+                  <span className="absolute right-1 top-1 size-1.5 rounded-full bg-amber-500" />
+                )}
+              </button>
+            ))}
           </div>
         </div>
       </SidebarContainer>
     </div>
   );
 });
-
-function formatIssueCount(count: number): string {
-  return count > 99 ? '99+' : String(count);
-}
 
 function formatSkillIssueTitle(entry: SkillValidationIssueEntry): string {
   const location = entry.issue.path ? `${entry.issue.path}: ` : '';
