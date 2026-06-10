@@ -1,17 +1,23 @@
 import {
+  Archive,
   Bot,
+  ChartColumn,
+  Cloud,
   Cpu,
   FileText,
   GitCompare,
   House,
   LayoutDashboard,
   ListTodo,
+  Loader2,
   MessageSquare,
+  Milestone,
   Plus,
   Puzzle,
   Server,
   Settings,
   Smartphone,
+  Terminal,
   Workflow,
   X,
   type LucideIcon,
@@ -23,6 +29,7 @@ import type { TaskWindowTabTarget } from '@shared/task-window';
 import { AppTabContextMenu } from '@renderer/app/app-tab-context-menu';
 import { closeTaskTopTab } from '@renderer/app/open-task-target';
 import type { ViewId } from '@renderer/app/view-registry';
+import { archiveConversationFlow } from '@renderer/features/tasks/archive-task';
 import { formatConversationTitleForDisplay } from '@renderer/features/tasks/conversations/conversation-title-utils';
 import { asProvisioned, getTaskStore } from '@renderer/features/tasks/stores/task-selectors';
 import AgentLogo from '@renderer/lib/components/agent-logo';
@@ -36,18 +43,24 @@ import {
   type ProjectPageView,
 } from '@renderer/lib/stores/app-tabs-store';
 import { agentConfig } from '@renderer/utils/agentConfig';
+import { log } from '@renderer/utils/logger';
 import { cn } from '@renderer/utils/utils';
 
-/** Icons for global views (task/project/file tabs derive theirs in describeTab). */
+/**
+ * Icons for global views (task/project/file tabs derive theirs in describeTab).
+ * Keep in sync with the sidebar nav items in features/sidebar/left-sidebar.tsx.
+ */
 const VIEW_ICONS: Partial<Record<ViewId, LucideIcon>> = {
   settings: Settings,
   skills: Puzzle,
   mcp: Server,
   agentManager: Bot,
-  agents: Bot,
+  agents: Terminal,
   automation: Workflow,
   mobile: Smartphone,
-  maas: ListTodo,
+  maas: Cloud,
+  usage: ChartColumn,
+  roadmap: Milestone,
 };
 
 /**
@@ -95,18 +108,23 @@ export const AppTabStrip = observer(function AppTabStrip() {
 
   return (
     <div className="flex items-center gap-1 overflow-x-auto">
-      {visibleTabs.map((tab) => (
-        <AppTabContextMenu key={tab.id} tab={tab}>
-          <AppTab
-            tab={tab}
-            isActive={tab.id === activeTabId}
-            closeable={!isIndexTab(tab)}
-            closeLabel={t('appTabs.closeTab')}
-            onSelect={() => appState.appTabs.activateTab(tab.id)}
-            onClose={() => closeTaskTopTab(tab)}
-          />
-        </AppTabContextMenu>
-      ))}
+      {visibleTabs.map((tab) => {
+        const dismiss = describeDismiss(tab, t);
+        return (
+          <AppTabContextMenu key={tab.id} tab={tab}>
+            <AppTab
+              tab={tab}
+              isActive={tab.id === activeTabId}
+              closeable={!isIndexTab(tab)}
+              closeLabel={dismiss.label}
+              closeIcon={dismiss.icon}
+              closePending={dismiss.pending}
+              onSelect={() => appState.appTabs.activateTab(tab.id)}
+              onClose={dismiss.onDismiss}
+            />
+          </AppTabContextMenu>
+        );
+      })}
       <button
         type="button"
         aria-label={newSessionLabel}
@@ -121,11 +139,54 @@ export const AppTabStrip = observer(function AppTabStrip() {
   );
 });
 
+/**
+ * Per-tab dismiss behavior for the × slot. Session tabs dismiss by archiving
+ * (mirroring the task's archive button — the pre-archive command runs, and the
+ * session leaves the strip for good); every other tab plainly closes. The
+ * plain-close path for session tabs stays available via the context menu.
+ */
+function describeDismiss(
+  tab: AppTabEntry,
+  t: (key: string) => string
+): { label: string; icon?: ReactNode; pending: boolean; onDismiss: () => void } {
+  const { projectId, taskId } = tab.params as { projectId?: string; taskId?: string };
+  const target = tab.params.tab as TaskWindowTabTarget | undefined;
+  if (tab.viewId === 'task' && projectId && taskId && target?.kind === 'conversation') {
+    const { conversationId } = target;
+    const isArchiving =
+      asProvisioned(getTaskStore(projectId, taskId))?.conversations.conversations.get(
+        conversationId
+      )?.isArchiving ?? false;
+    return {
+      label: t('tasks.tabs.archiveConversation'),
+      icon: isArchiving ? (
+        <Loader2 className="size-3 animate-spin" />
+      ) : (
+        <Archive className="size-3" />
+      ),
+      pending: isArchiving,
+      onDismiss: () => {
+        void archiveConversationFlow(projectId, taskId, conversationId).catch((error: unknown) => {
+          log.warn('AppTabStrip: archive conversation failed', {
+            projectId,
+            taskId,
+            conversationId,
+            error,
+          });
+        });
+      },
+    };
+  }
+  return { label: t('appTabs.closeTab'), pending: false, onDismiss: () => closeTaskTopTab(tab) };
+}
+
 const AppTab = observer(function AppTab({
   tab,
   isActive,
   closeable,
   closeLabel,
+  closeIcon,
+  closePending = false,
   onSelect,
   onClose,
 }: {
@@ -133,6 +194,8 @@ const AppTab = observer(function AppTab({
   isActive: boolean;
   closeable: boolean;
   closeLabel: string;
+  closeIcon?: ReactNode;
+  closePending?: boolean;
   onSelect: () => void;
   onClose: () => void;
 }) {
@@ -162,20 +225,25 @@ const AppTab = observer(function AppTab({
       <span className="flex size-3.5 shrink-0 items-center justify-center">{icon}</span>
       <span className="min-w-0 truncate">{label}</span>
       {/* Constant-width close slot keeps every tab's structure identical;
-          the button itself only appears on hover. */}
+          the button appears on hover, or persistently while dismissal is
+          pending (e.g. a session archiving through its pre-archive command). */}
       <span className="flex size-4 shrink-0 items-center justify-center">
         {closeable ? (
           <button
             type="button"
             aria-label={closeLabel}
             title={closeLabel}
-            className="invisible flex size-4 items-center justify-center rounded-sm text-foreground-passive hover:bg-background-2 hover:text-foreground group-hover:visible"
+            disabled={closePending}
+            className={cn(
+              'flex size-4 items-center justify-center rounded-sm text-foreground-passive hover:bg-background-2 hover:text-foreground',
+              closePending ? 'visible' : 'invisible group-hover:visible'
+            )}
             onClick={(event) => {
               event.stopPropagation();
               onClose();
             }}
           >
-            <X className="size-3" />
+            {closeIcon ?? <X className="size-3" />}
           </button>
         ) : null}
       </span>
@@ -207,8 +275,10 @@ function describeTab(
       return { label: t('appTabs.file'), icon: lucideIcon(FileText) };
     }
     default:
+      // Global views reuse the sidebar nav labels so the tab always matches
+      // the nav item that opened it.
       return {
-        label: t(`appTabs.views.${tab.viewId}`),
+        label: t(`sidebar.${tab.viewId}`),
         icon: lucideIcon(VIEW_ICONS[tab.viewId] ?? FileText),
       };
   }

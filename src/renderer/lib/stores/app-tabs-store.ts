@@ -29,10 +29,6 @@ function createTabId(): string {
  * the same tab.
  */
 export function routeKey(viewId: ViewId | string, params: Record<string, unknown>): string {
-  // Home is a singleton — its params (e.g. projectId preselect) are transient
-  // and must not fork tab identity, otherwise navigate('home', {projectId})
-  // spawns a second uncloseable home tab next to the existing one.
-  if (viewId === 'home') return JSON.stringify(['home']);
   if (viewId === 'task') {
     const { projectId, taskId, tab } = params as {
       projectId?: string;
@@ -45,7 +41,13 @@ export function routeKey(viewId: ViewId | string, params: Record<string, unknown
     const { projectId, view } = params as { projectId?: string; view?: string };
     return JSON.stringify(['project', projectId, view ?? 'overview']);
   }
-  return JSON.stringify([viewId, params]);
+  if (viewId === 'file') return JSON.stringify(['file', params]);
+  // Global views (home, settings, skills, …) are singletons — their params
+  // (e.g. home's projectId preselect, settings' inner tab) are transient
+  // address-bar state and must not fork tab identity, otherwise
+  // navigate('settings', {tab}) spawns a second uncloseable settings tab
+  // next to the existing one.
+  return JSON.stringify([viewId]);
 }
 
 /**
