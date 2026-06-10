@@ -82,9 +82,9 @@ export function getTerminalFileLinkMatches(
   bufferLineNumber: number,
   options: TerminalFileLinkOptions
 ): TerminalFileLinkMatch[] {
-  const [lines, startLineIndex] = getWindowedLineStrings(bufferLineNumber - 1, terminal);
-  const line = lines.join('');
-  if (!line) return [];
+  const chunks = buildScanChunks(bufferLineNumber - 1, terminal);
+  if (chunks.length === 0) return [];
+  const line = chunks.map((chunk) => chunk.text).join('');
 
   const matches: TerminalFileLinkMatch[] = [];
   for (const candidate of extractTerminalFileLinkCandidates(line)) {
@@ -95,9 +95,9 @@ export function getTerminalFileLinkMatches(
     );
     if (!target) continue;
 
-    const range = mapStringRangeToViewportRange(
+    const range = mapScanRangeToBufferRange(
       terminal,
-      startLineIndex,
+      chunks,
       candidate.index,
       candidate.text.length
     );
@@ -107,6 +107,175 @@ export function getTerminalFileLinkMatches(
   }
 
   return matches;
+}
+
+// ---------------------------------------------------------------------------
+// Hard-wrap joining
+//
+// TUI programs (Claude Code's ink renderer in particular) wrap long lines by
+// writing real newlines, so a path split across rows has `isWrapped === false`
+// on the continuation row and is invisible to the soft-wrap window above. We
+// conservatively join such rows into one scan string: the upper row must be
+// physically full to the last column and end mid-path (a trailing path run
+// containing `/`), and the lower row must continue with path characters after
+// its indent. Each chunk remembers where its text starts in the buffer so
+// match positions map back to cells across the join.
+// ---------------------------------------------------------------------------
+
+const HARD_WRAP_JOIN_MAX = 4;
+const PATH_SEG_EXCLUDED_RE = new RegExp(`[${PATH_SEG_EXCLUDED}]`, 'u');
+const TRAILING_PATH_RUN_RE = new RegExp(`[^${PATH_SEG_EXCLUDED}]+$`, 'u');
+const COMPLETE_EXT_RE = /\.[A-Za-z0-9]{1,8}$/;
+
+interface ScanChunk {
+  /** Buffer row index of the chunk's first row. */
+  startLineIndex: number;
+  /** Cell offset of the chunk's first character (stripped continuation indent). */
+  startCellOffset: number;
+  /** Number of buffer rows covered by this chunk. */
+  rowCount: number;
+  /** Chunk text (soft-wrapped rows joined; leading indent stripped on continuations). */
+  text: string;
+  /** Offset of `text` within the joined scan string. */
+  charOffset: number;
+}
+
+function buildScanChunks(lineIndex: number, terminal: Terminal): ScanChunk[] {
+  const [lines, startLineIndex] = getWindowedLineStrings(lineIndex, terminal);
+  const text = lines.join('');
+  if (!text) return [];
+
+  const chunks: ScanChunk[] = [
+    { startLineIndex, startCellOffset: 0, rowCount: lines.length, text, charOffset: 0 },
+  ];
+  const buffer = terminal.buffer.active;
+
+  // Extend upward: the hovered row may be the continuation of a path that
+  // starts on the previous (hard-wrapped) logical line.
+  for (let i = 0; i < HARD_WRAP_JOIN_MAX; i++) {
+    const first = chunks[0];
+    if (first.startLineIndex === 0) break;
+    // Only a chunk anchored at a hard line start can have been hard-wrapped onto.
+    if (buffer.getLine(first.startLineIndex)?.isWrapped !== false) break;
+    const upperBottom = first.startLineIndex - 1;
+    const [upperLines, upperStart] = getWindowedLineStrings(upperBottom, terminal);
+    const upperText = upperLines.join('');
+    const stripped = first.text.replace(/^ +/, '');
+    if (!canHardJoin(terminal, upperBottom, upperText, stripped)) break;
+    first.startCellOffset += first.text.length - stripped.length;
+    first.text = stripped;
+    chunks.unshift({
+      startLineIndex: upperStart,
+      startCellOffset: 0,
+      rowCount: upperLines.length,
+      text: upperText,
+      charOffset: 0,
+    });
+  }
+
+  // Extend downward: a path starting in the hovered line may continue onto the
+  // next (hard-wrapped) logical line.
+  for (let i = 0; i < HARD_WRAP_JOIN_MAX; i++) {
+    const last = chunks[chunks.length - 1];
+    const lastBottom = last.startLineIndex + last.rowCount - 1;
+    const nextLine = buffer.getLine(lastBottom + 1);
+    if (!nextLine || nextLine.isWrapped) break;
+    const [nextLines, nextStart] = getWindowedLineStrings(lastBottom + 1, terminal);
+    const nextText = nextLines.join('');
+    const stripped = nextText.replace(/^ +/, '');
+    if (!canHardJoin(terminal, lastBottom, last.text, stripped)) break;
+    chunks.push({
+      startLineIndex: nextStart,
+      startCellOffset: nextText.length - stripped.length,
+      rowCount: nextLines.length,
+      text: stripped,
+      charOffset: 0,
+    });
+  }
+
+  let offset = 0;
+  for (const chunk of chunks) {
+    chunk.charOffset = offset;
+    offset += chunk.text.length;
+  }
+  return chunks;
+}
+
+function canHardJoin(
+  terminal: Terminal,
+  upperBottomRowIndex: number,
+  upperText: string,
+  lowerStripped: string
+): boolean {
+  if (!isRowFull(terminal, upperBottomRowIndex)) return false;
+  const tail = TRAILING_PATH_RUN_RE.exec(upperText)?.[0];
+  if (!tail || !tail.includes('/')) return false;
+  if (!lowerStripped || PATH_SEG_EXCLUDED_RE.test(lowerStripped[0])) return false;
+  // A complete-looking extension at the break usually IS the path end (the row
+  // just happens to be full) — only join when the continuation clearly extends
+  // it (`.gz` of a wrapped `archive.tar.gz`, or another path segment).
+  if (COMPLETE_EXT_RE.test(tail) && lowerStripped[0] !== '.' && lowerStripped[0] !== '/') {
+    return false;
+  }
+  return true;
+}
+
+/** True when the row's last column holds a character (hard-wrap break point). */
+function isRowFull(terminal: Terminal, rowIndex: number): boolean {
+  const line = terminal.buffer.active.getLine(rowIndex);
+  if (!line || line.length === 0) return false;
+  const cell = terminal.buffer.active.getNullCell();
+  line.getCell(line.length - 1, cell);
+  const chars = cell.getChars();
+  if (chars !== '' && chars !== ' ') return true;
+  // The last cell may be the empty spacer half of a width-2 (CJK) character.
+  if (chars === '' && line.length >= 2) {
+    line.getCell(line.length - 2, cell);
+    if (cell.getWidth() === 2) return true;
+  }
+  return false;
+}
+
+function mapScanRangeToBufferRange(
+  terminal: Terminal,
+  chunks: ScanChunk[],
+  scanIndex: number,
+  length: number
+): ILink['range'] | null {
+  const start = mapScanIndexToCell(terminal, chunks, scanIndex, false);
+  const end = mapScanIndexToCell(terminal, chunks, scanIndex + length, true);
+  if (!start || !end) return null;
+  if (start[0] === -1 || start[1] === -1 || end[0] === -1 || end[1] === -1) return null;
+
+  return {
+    start: { x: start[1] + 1, y: start[0] + 1 },
+    end: { x: end[1], y: end[0] + 1 },
+  };
+}
+
+function mapScanIndexToCell(
+  terminal: Terminal,
+  chunks: ScanChunk[],
+  scanIndex: number,
+  isEnd: boolean
+): [number, number] | null {
+  let chunk: ScanChunk | null = null;
+  for (const candidate of chunks) {
+    // An end index sitting exactly on a chunk boundary belongs to the previous
+    // chunk (one-past-last-char), a start index to the next chunk.
+    if (isEnd ? candidate.charOffset < scanIndex : candidate.charOffset <= scanIndex) {
+      chunk = candidate;
+    } else {
+      break;
+    }
+  }
+  if (!chunk) return null;
+  return mapStringIndexToBufferCell(
+    terminal,
+    chunk.startLineIndex,
+    chunk.startCellOffset,
+    scanIndex - chunk.charOffset
+  );
 }
 
 export function getTerminalFileLinkAtCell(
