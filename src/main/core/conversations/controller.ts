@@ -1,5 +1,6 @@
 import { createRPCController } from '@shared/ipc/rpc';
 import { archiveConversation } from './archiveConversation';
+import { getClaudeStatusline, setClaudeStatusline } from './claude-statusline';
 import { createConversation } from './createConversation';
 import { deleteConversation } from './deleteConversation';
 import {
@@ -44,6 +45,8 @@ export const conversationController = createRPCController({
   touchConversation,
   getClaudeSessionMetadata,
   getClaudeSessionContext,
+  getClaudeStatusline,
+  setClaudeStatusline,
   getCodexSessionContext,
   getConversationSessionInfo,
   getSessionSummary,

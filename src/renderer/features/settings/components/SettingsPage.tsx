@@ -23,6 +23,7 @@ import LanguageCard from './LanguageCard';
 import NotificationSettingsCard from './NotificationSettingsCard';
 import OpenInAppsSettingsCard from './OpenInAppsSettingsCard';
 import { ReviewPromptResetButton, ReviewPromptSettingsCard } from './ReviewPromptSettingsCard';
+import StatuslineSettingsCard from './StatuslineSettingsCard';
 import {
   AutoGenerateTaskNamesRow,
   AutoTrustWorktreesRow,
@@ -191,6 +192,11 @@ export function SettingsPage({
           title: t('settings.agentsTab.reviewPrompt'),
           action: <ReviewPromptResetButton />,
           component: <ReviewPromptSettingsCard />,
+        },
+        {
+          id: 'statusline-templates',
+          title: t('settings.statusline.title'),
+          component: <StatuslineSettingsCard />,
         },
         {
           id: 'cli-agents',

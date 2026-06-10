@@ -1186,6 +1186,7 @@
       "manageSections": "管理章节",
       "moveSectionUp": "上移",
       "moveSectionDown": "下移",
+      "resetSections": "恢复默认顺序",
       "conversation": "对话",
       "tasks": "子任务",
       "summary": "摘要",

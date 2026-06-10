@@ -362,6 +362,18 @@ export const openInSettingsSchema = z.object({
   hidden: z.array(openInAppIdSchema),
 });
 
+/** A candidate statusline command the user can switch to from the session panel. */
+export const statuslineTemplateSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  /** Shell command; receives the runtime's session JSON payload on stdin. */
+  command: z.string(),
+});
+
+export const statuslineSettingsSchema = z.object({
+  templates: z.array(statuslineTemplateSchema),
+});
+
 export const APP_SETTINGS_SCHEMA_MAP = {
   localProject: localProjectSettingsSchema,
   project: projectSettingsSchema,
@@ -381,6 +393,7 @@ export const APP_SETTINGS_SCHEMA_MAP = {
   customThemes: customThemesSettingsSchema,
   browserPreview: browserPreviewSettingsSchema,
   homeDraft: homeDraftSchema,
+  statusline: statuslineSettingsSchema,
 } as const;
 
 export const appSettingsSchema = z.object({
@@ -402,4 +415,5 @@ export const appSettingsSchema = z.object({
   customThemes: customThemesSettingsSchema,
   browserPreview: browserPreviewSettingsSchema,
   homeDraft: homeDraftSchema,
+  statusline: statuslineSettingsSchema,
 });

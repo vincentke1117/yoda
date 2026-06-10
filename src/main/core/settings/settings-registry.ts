@@ -114,6 +114,27 @@ export const SETTINGS_DEFAULTS = {
     preArchiveCommand: '',
     defaultQuickActions: [{ id: 'release', label: 'Release', command: '/release-via-cicd' }],
   },
+  statusline: {
+    templates: [
+      {
+        id: 'model-dir',
+        name: 'Model + Dir',
+        command:
+          'input=$(cat); echo "[$(echo "$input" | jq -r \'.model.display_name\')] $(basename "$(echo "$input" | jq -r \'.workspace.current_dir\')")"',
+      },
+      {
+        id: 'model-git',
+        name: 'Model + Git Branch',
+        command:
+          'input=$(cat); dir=$(echo "$input" | jq -r \'.workspace.current_dir\'); branch=$(git -C "$dir" branch --show-current 2>/dev/null); echo "[$(echo "$input" | jq -r \'.model.display_name\')] $(basename "$dir")${branch:+ ($branch)}"',
+      },
+      {
+        id: 'ccusage',
+        name: 'ccusage',
+        command: 'npx -y ccusage statusline',
+      },
+    ],
+  },
 } satisfies SettingsDefaultsMap;
 
 export function getDefaultForKey<K extends AppSettingsKey>(key: K): AppSettings[K] {

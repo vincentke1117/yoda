@@ -12,6 +12,8 @@ import {
   type runtimeAutoApproveDefaultsSchema,
   type runtimeCustomConfigEntrySchema,
   type runtimeModelCandidatesSettingsSchema,
+  type statuslineSettingsSchema,
+  type statuslineTemplateSchema,
   type taskSettingsSchema,
   type terminalSettingsSchema,
 } from '@main/core/settings/schema';
@@ -27,6 +29,8 @@ export type AutomationsSettings = z.infer<typeof automationsSettingsSchema>;
 export type MaasSettings = z.infer<typeof maasSettingsSchema>;
 export type RuntimeModelCandidatesSettings = z.infer<typeof runtimeModelCandidatesSettingsSchema>;
 export type TerminalSettings = z.infer<typeof terminalSettingsSchema>;
+export type StatuslineTemplate = z.infer<typeof statuslineTemplateSchema>;
+export type StatuslineSettings = z.infer<typeof statuslineSettingsSchema>;
 export type Theme = ThemeSelection;
 export type { CustomTheme, CustomThemesSettings };
 

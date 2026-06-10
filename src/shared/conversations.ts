@@ -99,6 +99,20 @@ export type ContextSkill = {
   path: string;
 };
 
+/**
+ * The effective Claude Code `statusLine` setting for a working directory.
+ * Resolved with the CLI's precedence: project settings.local.json > project
+ * settings.json > ~/.claude/settings.json.
+ */
+export type ClaudeStatuslineConfig = {
+  command: string | null;
+  /** When the command is a plain script invocation, the script's absolute path
+   *  (with `~` expanded) — preferred target for file actions. */
+  commandScriptPath: string | null;
+  sourceKind: 'local' | 'project' | 'user' | null;
+  sourcePath: string | null;
+};
+
 export type ClaudeSessionContext = {
   transcriptPath: string;
   memoryFiles: ClaudeMemoryFile[];

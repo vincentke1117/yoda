@@ -26,6 +26,7 @@ export type SessionPanelSection =
   | 'mcp-servers'
   | 'skills'
   | 'agents-available'
+  | 'statusline'
   | 'hooks';
 
 /**
@@ -43,6 +44,7 @@ export const SESSION_PANEL_UNITS = [
   'mcp-servers',
   'skills',
   'agents-available',
+  'statusline',
   'hooks',
   'overview',
 ] as const;
@@ -74,6 +76,8 @@ export function sessionPanelUnitLabelKey(unit: SessionPanelUnit): string {
       return 'tasks.panel.skills';
     case 'agents-available':
       return 'tasks.panel.agentsAvailable';
+    case 'statusline':
+      return 'tasks.panel.statusline';
     case 'hooks':
       return 'tasks.sessionPanel.hooks';
     case 'overview':

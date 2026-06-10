@@ -116,6 +116,7 @@ export const SessionPanel = observer(function SessionPanel() {
       case 'mcp-servers':
       case 'skills':
       case 'agents-available':
+      case 'statusline':
       case 'hooks':
         return <HarnessSection key={unit} id={unit} active={panelActive} />;
       case 'overview':
