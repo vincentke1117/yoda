@@ -117,8 +117,8 @@
       "signInHint": "连接你的 Yoda 账户",
       "showNav": "显示侧边栏导航",
       "hideNav": "隐藏侧边栏导航",
-      "noActivityToday": "今日暂无活动",
-      "todayTitle": "今日：完成 {{tasks}} 个任务 · +{{added}} -{{deleted}} 行 · {{tokens}} tokens"
+      "noStatsYet": "暂无统计数据",
+      "totalsTitle": "累计：归档 {{tasks}} 个任务 · +{{added}} -{{deleted}} 行 · {{tokens}} tokens"
     },
     "dropToAddProject": "拖入以添加项目",
     "projects": "项目",
@@ -747,6 +747,7 @@
     },
     "files": "文件",
     "toggleTerminal": "切换终端",
+    "toggleSidebar": "切换侧边栏",
     "sessionInfo": {
       "title": "会话信息",
       "noSession": "暂无会话",
