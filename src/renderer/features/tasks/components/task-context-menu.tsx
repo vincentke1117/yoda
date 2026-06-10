@@ -13,6 +13,8 @@ import {
   PinOff,
   RefreshCw,
   RotateCcw,
+  Settings2,
+  Sparkles,
 } from 'lucide-react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
@@ -28,6 +30,9 @@ import {
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from '@renderer/lib/ui/context-menu';
 import {
@@ -35,6 +40,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@renderer/lib/ui/dropdown-menu';
 import { buildTaskBasicInfo, type TaskBasicInfoFields } from './task-menu-basic-info';
@@ -72,11 +80,16 @@ interface TaskMenuActions extends TaskMenuInfoFields {
   onUnmarkNeedsReview: () => void;
   onRename: () => void;
   /**
-   * Archive the task. Opens a dialog for an optional note; confirming there
-   * performs the archive. The pre-archive skill is session-level only and never
-   * runs here.
+   * Archive the task directly (no pre-archive skill). Opens a dialog for an
+   * optional note; confirming there performs the archive.
    */
   onArchive: () => void;
+  /** Run the configured pre-archive skill against every live session, then archive. */
+  onArchiveWithSkill?: () => void;
+  /** Whether a pre-archive skill is configured; gates the "run skill" entry. */
+  hasArchiveSkill?: boolean;
+  /** Open the settings page where the pre-archive skill is configured. */
+  onConfigureArchiveSkill?: () => void;
   onCopyYodaLink?: () => void;
   onRestore?: () => void;
   onReconnect?: () => void;
@@ -88,12 +101,23 @@ interface TaskMenuActions extends TaskMenuInfoFields {
   onAssignWorkspace?: (workspaceId: string | null) => void;
 }
 
+interface MenuSubItemDescriptor {
+  key: string;
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  onSelect: () => void;
+  disabled?: boolean;
+}
+
 interface MenuItemDescriptor {
   key: string;
   group: number;
   icon: React.ComponentType<{ className?: string }>;
   label: string;
-  onSelect: () => void;
+  /** Leaf action. Ignored when `submenu` is set. */
+  onSelect?: () => void;
+  /** Renders the entry as a submenu trigger with these child items. */
+  submenu?: MenuSubItemDescriptor[];
   disabled?: boolean;
   variant?: 'default' | 'destructive';
 }
@@ -113,10 +137,9 @@ function useMenuItems(actions: TaskMenuActions): MenuItemDescriptor[] {
     });
   }
 
-  // group 1 — pin, archive / restore, mark-review. The default archive opens a
-  // dialog for an optional note; confirming there performs the archive. The
-  // pre-archive skill only makes sense at the session (conversation) level, so it
-  // is never offered here.
+  // group 1 — pin, archive / restore, mark-review. Archive is a submenu:
+  // direct archive (note dialog, no skill), run the pre-archive skill then
+  // archive, and a shortcut to configure the skill in settings.
   if (actions.canPin) {
     items.push(
       actions.isPinned
@@ -137,13 +160,48 @@ function useMenuItems(actions: TaskMenuActions): MenuItemDescriptor[] {
     );
   }
   if (!actions.isArchived) {
-    items.push({
-      key: 'archive',
-      group: 1,
-      icon: Archive,
-      label: t('tasks.context.archive'),
-      onSelect: actions.onArchive,
-    });
+    const archiveSubmenu: MenuSubItemDescriptor[] = [
+      {
+        key: 'archive-direct',
+        icon: Archive,
+        label: t('tasks.context.archiveDirect'),
+        onSelect: actions.onArchive,
+      },
+    ];
+    if (actions.onArchiveWithSkill) {
+      archiveSubmenu.push({
+        key: 'archive-with-skill',
+        icon: Sparkles,
+        label: t('tasks.context.archiveWithSkill'),
+        onSelect: actions.onArchiveWithSkill,
+        disabled: !actions.hasArchiveSkill,
+      });
+    }
+    if (actions.onConfigureArchiveSkill) {
+      archiveSubmenu.push({
+        key: 'configure-archive-skill',
+        icon: Settings2,
+        label: t('tasks.context.configureArchiveSkill'),
+        onSelect: actions.onConfigureArchiveSkill,
+      });
+    }
+    items.push(
+      archiveSubmenu.length > 1
+        ? {
+            key: 'archive',
+            group: 1,
+            icon: Archive,
+            label: t('tasks.context.archive'),
+            submenu: archiveSubmenu,
+          }
+        : {
+            key: 'archive',
+            group: 1,
+            icon: Archive,
+            label: t('tasks.context.archiveDirect'),
+            onSelect: actions.onArchive,
+          }
+    );
   }
   if (actions.isArchived && actions.onRestore) {
     items.push({
@@ -394,18 +452,46 @@ export function TaskContextMenu({ children, ...actions }: TaskContextMenuProps) 
           return (
             <React.Fragment key={item.key}>
               {showSeparator && <ContextMenuSeparator />}
-              <ContextMenuItem
-                disabled={item.disabled}
-                variant={item.variant}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  item.onSelect();
-                }}
-                className="whitespace-nowrap"
-              >
-                <Icon className="size-4" />
-                {item.label}
-              </ContextMenuItem>
+              {item.submenu ? (
+                <ContextMenuSub>
+                  <ContextMenuSubTrigger className="whitespace-nowrap" disabled={item.disabled}>
+                    <Icon className="size-4" />
+                    {item.label}
+                  </ContextMenuSubTrigger>
+                  <ContextMenuSubContent>
+                    {item.submenu.map((sub) => {
+                      const SubIcon = sub.icon;
+                      return (
+                        <ContextMenuItem
+                          key={sub.key}
+                          disabled={sub.disabled}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            sub.onSelect();
+                          }}
+                          className="whitespace-nowrap"
+                        >
+                          <SubIcon className="size-4" />
+                          {sub.label}
+                        </ContextMenuItem>
+                      );
+                    })}
+                  </ContextMenuSubContent>
+                </ContextMenuSub>
+              ) : (
+                <ContextMenuItem
+                  disabled={item.disabled}
+                  variant={item.variant}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    item.onSelect?.();
+                  }}
+                  className="whitespace-nowrap"
+                >
+                  <Icon className="size-4" />
+                  {item.label}
+                </ContextMenuItem>
+              )}
             </React.Fragment>
           );
         })}
@@ -446,18 +532,46 @@ export function TaskActionsMenu({
           return (
             <React.Fragment key={item.key}>
               {showSeparator && <DropdownMenuSeparator />}
-              <DropdownMenuItem
-                disabled={item.disabled}
-                variant={item.variant}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  item.onSelect();
-                }}
-                className="whitespace-nowrap"
-              >
-                <Icon className="size-4" />
-                {item.label}
-              </DropdownMenuItem>
+              {item.submenu ? (
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger className="whitespace-nowrap" disabled={item.disabled}>
+                    <Icon className="size-4" />
+                    {item.label}
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent>
+                    {item.submenu.map((sub) => {
+                      const SubIcon = sub.icon;
+                      return (
+                        <DropdownMenuItem
+                          key={sub.key}
+                          disabled={sub.disabled}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            sub.onSelect();
+                          }}
+                          className="whitespace-nowrap"
+                        >
+                          <SubIcon className="size-4" />
+                          {sub.label}
+                        </DropdownMenuItem>
+                      );
+                    })}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              ) : (
+                <DropdownMenuItem
+                  disabled={item.disabled}
+                  variant={item.variant}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    item.onSelect?.();
+                  }}
+                  className="whitespace-nowrap"
+                >
+                  <Icon className="size-4" />
+                  {item.label}
+                </DropdownMenuItem>
+              )}
             </React.Fragment>
           );
         })}

@@ -1,6 +1,6 @@
 import { FileText } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
-import { useState, type KeyboardEvent } from 'react';
+import { type KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { buildTaskDeepLink } from '@shared/deep-links';
 import { selectCurrentPr } from '@shared/pull-requests';
@@ -36,6 +36,7 @@ import { useNavigate } from '@renderer/lib/layout/navigation-provider';
 import { useShowModal } from '@renderer/lib/modal/modal-provider';
 import { Checkbox } from '@renderer/lib/ui/checkbox';
 import { RelativeTime } from '@renderer/lib/ui/relative-time';
+import { log } from '@renderer/utils/logger';
 import { cn } from '@renderer/utils/utils';
 
 export type ReadyTask = TaskStore & { data: Task };
@@ -56,27 +57,20 @@ export const TaskRow = observer(function TaskRow({
   const showRename = useShowModal('renameTaskModal');
   const showArchiveWithNote = useShowModal('archiveTaskWithNoteModal');
   const taskManager = getTaskManagerStore(task.data.projectId);
-  const { archiveTask } = useArchiveTask(task.data.projectId);
-  const [isArchiving, setIsArchiving] = useState(false);
+  const { archiveTask, hasPreArchiveCommand } = useArchiveTask(task.data.projectId);
 
-  // Archiving never runs the pre-archive skill by default; running it is an
-  // explicit opt-in via the context menu.
-  const handleArchive = (options?: { skipPreCommand?: boolean }) => {
-    if (isArchiving) return;
-    setIsArchiving(true);
-    void (async () => {
-      try {
-        await archiveTask(task.data.id, { skipPreCommand: true, ...options });
-      } finally {
-        setIsArchiving(false);
-      }
-    })();
-  };
-  const handleArchiveWithNote = () =>
+  // Direct archive: dialog for an optional note, no pre-archive skill.
+  const handleArchive = () =>
     showArchiveWithNote({
       projectId: task.data.projectId,
       taskId: task.data.id,
       taskName: task.data.name,
+      skipPreCommand: true,
+    });
+  // Run the configured pre-archive skill against every live session, then archive.
+  const handleArchiveWithSkill = () =>
+    void archiveTask(task.data.id).catch((error: unknown) => {
+      log.warn('TaskRow: archive task failed', { taskId: task.data.id, error });
     });
   const handleRestore = () => void taskManager?.restoreTask(task.data.id);
   const handleProvision = () => void taskManager?.provisionTask(task.data.id);
@@ -128,6 +122,18 @@ export const TaskRow = observer(function TaskRow({
     handleProvision();
     openPreferredConversationIfEmpty();
     navigate('task', { projectId: task.data.projectId, taskId: task.data.id });
+  };
+
+  // Double-clicking an archived row restores it and opens the task, so an
+  // archived task can be reactivated without going through the context menu.
+  const handleRestoreAndOpen = () => {
+    if (!isArchived) return;
+    void (async () => {
+      await taskManager?.restoreTask(task.data.id);
+      await taskManager?.provisionTask(task.data.id);
+      asProvisioned(task)?.taskView.tabManager.openPreferredConversation();
+      navigate('task', { projectId: task.data.projectId, taskId: task.data.id });
+    })();
   };
 
   // The context-menu "open details" entry enters the task and activates its
@@ -184,7 +190,9 @@ export const TaskRow = observer(function TaskRow({
       onUnmarkNeedsReview={() => void task.setNeedsReview(false)}
       onRename={handleRename}
       onArchive={handleArchive}
-      onArchiveWithNote={handleArchiveWithNote}
+      onArchiveWithSkill={handleArchiveWithSkill}
+      hasArchiveSkill={hasPreArchiveCommand}
+      onConfigureArchiveSkill={() => navigate('settings', { tab: 'tasks' })}
       onCopyYodaLink={handleCopyYodaLink}
       onRestore={handleRestore}
       onRestartSession={handleRestartSession}
@@ -193,6 +201,7 @@ export const TaskRow = observer(function TaskRow({
         role={isArchived ? undefined : 'button'}
         tabIndex={isArchived ? undefined : 0}
         onClick={handleOpenDetails}
+        onDoubleClick={isArchived ? handleRestoreAndOpen : undefined}
         onKeyDown={isArchived ? undefined : handleRowKeyDown}
         className={cn(
           'group flex items-center gap-2 rounded-lg p-3 hover:bg-background-1 transition-colors w-full outline-none focus-visible:ring-2 focus-visible:ring-ring/40',

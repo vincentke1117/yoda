@@ -72,7 +72,7 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
 
   const task = getTaskStore(projectId, taskId)!;
   const taskManager = getTaskManagerStore(projectId);
-  const { archiveTask } = useArchiveTask(projectId);
+  const { archiveTask, hasPreArchiveCommand } = useArchiveTask(projectId);
   // Driven by the store so any archive entry point (sidebar, tabs, modal)
   // shows the same loading state while the archive flow is in flight.
   const isArchiving = taskManager?.archivingTaskIds.has(taskId) ?? false;
@@ -100,11 +100,13 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
     });
   };
 
+  // Direct archive from the menu: note dialog, no pre-archive skill.
   const handleArchiveWithNote = () => {
     showArchiveWithNote({
       projectId,
       taskId,
       taskName,
+      skipPreCommand: true,
     });
   };
 
@@ -210,6 +212,9 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
     onUnmarkNeedsReview: () => void task.setNeedsReview(false),
     onRename: handleRename,
     onArchive: handleArchiveWithNote,
+    onArchiveWithSkill: () => handleArchive(),
+    hasArchiveSkill: hasPreArchiveCommand,
+    onConfigureArchiveSkill: () => navigate('settings', { tab: 'tasks' }),
     onCopyYodaLink: handleCopyYodaLink,
     onReconnect: handleReconnect,
     onRestartSession: handleRestartSession,
