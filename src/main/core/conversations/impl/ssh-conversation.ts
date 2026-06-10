@@ -5,6 +5,8 @@ import { makePtySessionId } from '@shared/ptySessionId';
 import { wireAgentClassifier } from '@main/core/agent-hooks/classifier-wiring';
 import { claudeTrustService } from '@main/core/agent-hooks/claude-trust-service';
 import { agentSessionRuntimeStore } from '@main/core/conversations/agent-session-runtime';
+import { agentSilenceReconciler } from '@main/core/conversations/agent-silence-reconciler';
+import { createClaudeInterruptSniffer } from '@main/core/conversations/claude-interrupt-sniffer';
 import type {
   ActiveConversationSession,
   ConversationProvider,
@@ -17,13 +19,18 @@ import { resolveSshCommand } from '@main/core/pty/spawn-utils';
 import { openSsh2Pty } from '@main/core/pty/ssh2-pty';
 import { resolveAvailableTmuxSessionName } from '@main/core/pty/tmux-availability';
 import { killTmuxSession, sendLiteralToTmuxSession } from '@main/core/pty/tmux-session-name';
-import { providerOverrideSettings } from '@main/core/settings/provider-settings-service';
+import { runtimeOverrideSettings } from '@main/core/settings/runtime-settings-service';
 import type { SshClientProxy } from '@main/core/ssh/ssh-client-proxy';
 import { events } from '@main/lib/events';
 import { log } from '@main/lib/logger';
 import { telemetryService } from '@main/lib/telemetry';
+import {
+  recordConversationAuthProvider,
+  snapshotTaskDiffOnSessionExit,
+} from '../session-stats-hooks';
 import { buildAgentCommand } from './agent-command';
-import { resolveProviderEnv, resolveProviderTmuxEnv } from './provider-env';
+import { appendImageMentions } from './image-attachments';
+import { resolveRuntimeEnv, resolveRuntimeTmuxEnv } from './runtime-env';
 
 const DEFAULT_COLS = 80;
 const DEFAULT_ROWS = 24;
@@ -80,7 +87,8 @@ export class SshConversationProvider implements ConversationProvider {
     initialSize: { cols: number; rows: number } = { cols: DEFAULT_COLS, rows: DEFAULT_ROWS },
     isResuming: boolean = false,
     initialPrompt?: string,
-    tmuxOverride?: boolean
+    tmuxOverride?: boolean,
+    imagePaths?: string[]
   ): Promise<void> {
     const sessionId = makePtySessionId(
       conversation.projectId,
@@ -92,38 +100,42 @@ export class SshConversationProvider implements ConversationProvider {
     if (this.sessions.has(sessionId)) return;
 
     await claudeTrustService.maybeAutoTrustSsh({
-      providerId: conversation.providerId,
+      runtimeId: conversation.runtimeId,
       cwd: this.taskPath,
       ctx: this.ctx,
       remoteFs: new SshFileSystem(this.proxy, '/'),
     });
 
-    const providerConfig = await providerOverrideSettings.getItem(conversation.providerId);
+    const providerConfig = await runtimeOverrideSettings.getItem(conversation.runtimeId);
+    recordConversationAuthProvider(conversation.id, providerConfig);
     const { command, args } = buildAgentCommand({
-      providerId: conversation.providerId,
+      runtimeId: conversation.runtimeId,
       providerConfig,
       autoApprove: conversation.autoApprove,
       sessionId: conversation.id,
       isResuming,
-      initialPrompt,
+      // Clipboard paste is local-only; remote sessions get @path mentions.
+      initialPrompt: isResuming
+        ? initialPrompt
+        : appendImageMentions(initialPrompt, imagePaths ?? []),
     });
 
     const tmuxSessionName = await this.resolveTmuxSessionName(sessionId, tmuxOverride);
-    const providerEnv = resolveProviderEnv(providerConfig, {
-      providerId: conversation.providerId,
+    const providerEnv = resolveRuntimeEnv(providerConfig, {
+      runtimeId: conversation.runtimeId,
       tmuxEnabled: Boolean(tmuxSessionName),
     });
 
     const cfg: AgentSessionConfig = {
       taskId: this.taskId,
       conversationId: conversation.id,
-      providerId: conversation.providerId,
+      runtimeId: conversation.runtimeId,
       command,
       args,
       cwd: this.taskPath,
       shellSetup: this.shellSetup,
       tmuxSessionName,
-      tmuxEnv: resolveProviderTmuxEnv(providerEnv),
+      tmuxEnv: resolveRuntimeTmuxEnv(providerEnv),
       autoApprove: conversation.autoApprove ?? false,
       resume: isResuming,
     };
@@ -156,14 +168,32 @@ export class SshConversationProvider implements ConversationProvider {
     // hooks not supported yet, rely on classifier for visual indicator
     wireAgentClassifier({
       pty,
-      providerId: conversation.providerId,
+      runtimeId: conversation.runtimeId,
       projectId: conversation.projectId,
       taskId: conversation.taskId,
       conversationId: conversation.id,
     });
 
+    const detachSilenceReconciler = agentSilenceReconciler.attach(sessionId, {
+      projectId: conversation.projectId,
+      taskId: conversation.taskId,
+      conversationId: conversation.id,
+    });
+    pty.onData(() => agentSilenceReconciler.noteOutput(sessionId));
+    if (conversation.runtimeId === 'claude') {
+      // Sub-second Esc-interrupt detection from the TUI's "Interrupted" line.
+      pty.onData(
+        createClaudeInterruptSniffer({
+          projectId: conversation.projectId,
+          taskId: conversation.taskId,
+          conversationId: conversation.id,
+        })
+      );
+    }
+
     pty.onExit(({ exitCode }) => {
       if (this.sessions.get(sessionId) !== pty) return;
+      detachSilenceReconciler();
       ptySessionRegistry.unregister(sessionId);
       this.sessions.delete(sessionId);
       this.sessionInfos.delete(sessionId);
@@ -173,7 +203,7 @@ export class SshConversationProvider implements ConversationProvider {
         conversationId: conversation.id,
       });
       telemetryService.capture('agent_run_finished', {
-        provider: conversation.providerId,
+        provider: conversation.runtimeId,
         exit_code: typeof exitCode === 'number' ? exitCode : -1,
         project_id: conversation.projectId,
         task_id: conversation.taskId,
@@ -186,6 +216,7 @@ export class SshConversationProvider implements ConversationProvider {
         taskId: conversation.taskId,
         exitCode,
       });
+      snapshotTaskDiffOnSessionExit(conversation.taskId);
     });
 
     ptySessionRegistry.register(sessionId, pty);
@@ -195,7 +226,7 @@ export class SshConversationProvider implements ConversationProvider {
       conversationId: conversation.id,
       projectId: conversation.projectId,
       taskId: conversation.taskId,
-      providerId: conversation.providerId,
+      runtimeId: conversation.runtimeId,
       title: conversation.title,
     });
     agentSessionRuntimeStore.setStatus(
@@ -208,7 +239,7 @@ export class SshConversationProvider implements ConversationProvider {
     );
     if (tmuxSessionName) this.tmuxSessionNames.set(sessionId, tmuxSessionName);
     telemetryService.capture('agent_run_started', {
-      provider: conversation.providerId,
+      provider: conversation.runtimeId,
       project_id: conversation.projectId,
       task_id: conversation.taskId,
       conversation_id: conversation.id,
@@ -272,7 +303,7 @@ export class SshConversationProvider implements ConversationProvider {
       try {
         pty.kill();
       } catch (e) {
-        log.warn('SshAgentProvider: error killing PTY', { sessionId, error: String(e) });
+        log.warn('SshConversation: error killing PTY', { sessionId, error: String(e) });
       }
       this.sessions.delete(sessionId);
       ptySessionRegistry.unregister(sessionId);

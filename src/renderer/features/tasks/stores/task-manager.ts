@@ -67,7 +67,8 @@ export async function markInitialConversationWorkingAfterProvision(
   task: TaskStore | undefined,
   initialConversation: CreateTaskParams['initialConversation']
 ): Promise<void> {
-  if (!initialConversation?.initialPrompt?.trim()) return;
+  if (!initialConversation?.initialPrompt?.trim() && !initialConversation?.imagePaths?.length)
+    return;
   if (!task || !isProvisioned(task)) return;
   try {
     await task.provisionedTask.conversations.markConversationWorking(initialConversation.id);
@@ -639,57 +640,6 @@ export class TaskManagerStore {
     return result;
   }
 
-  /**
-   * Flip the task — and all locally-known active descendants (archiving a
-   * parent cascades) — into the archived state without hitting the server.
-   * Removes the rows from the active sidebar immediately so a slow pre-archive
-   * step never traps them with a spinning icon. Returns a rollback that
-   * restores the previous state (call it if the eventual server archive fails).
-   */
-  markTaskArchivedOptimistic(taskId: string, note?: string): () => void {
-    const currentTask = this.tasks.get(taskId);
-    if (!currentTask || !isRegistered(currentTask)) return () => {};
-
-    const cascadeIds = this.getDescendantTaskIds(taskId).filter((id) => {
-      const store = this.tasks.get(id);
-      return store && isRegistered(store) && !store.data.archivedAt;
-    });
-    const rollbacks = [
-      this.markSingleTaskArchivedOptimistic(taskId, note),
-      ...cascadeIds.map((id) => this.markSingleTaskArchivedOptimistic(id)),
-    ];
-    return () => {
-      for (const rollback of rollbacks) rollback();
-    };
-  }
-
-  private markSingleTaskArchivedOptimistic(taskId: string, note?: string): () => void {
-    const currentTask = this.tasks.get(taskId);
-    if (!currentTask || !isRegistered(currentTask)) return () => {};
-    const previousArchivedAt = currentTask.data.archivedAt;
-    const previousArchiveNote = currentTask.data.archiveNote;
-    const trimmedNote = note?.trim();
-    const nextNote = trimmedNote && trimmedNote.length > 0 ? trimmedNote : undefined;
-
-    runInAction(() => {
-      const task = this.tasks.get(taskId);
-      if (task && isRegistered(task)) {
-        task.data.archivedAt = new Date().toISOString();
-        task.data.archiveNote = nextNote;
-      }
-    });
-
-    return () => {
-      runInAction(() => {
-        const task = this.tasks.get(taskId);
-        if (task && isRegistered(task)) {
-          task.data.archivedAt = previousArchivedAt;
-          task.data.archiveNote = previousArchiveNote;
-        }
-      });
-    };
-  }
-
   setTaskArchiving(taskId: string, archiving: boolean): void {
     runInAction(() => {
       if (archiving) {
@@ -709,11 +659,13 @@ export class TaskManagerStore {
     const trimmedNote = options.note?.trim();
     const nextNote = trimmedNote && trimmedNote.length > 0 ? trimmedNote : undefined;
 
-    // Cascade spinner over locally-known descendants while the server archives them.
+    // Cascade spinner over locally-known descendants while the server archives
+    // them. The rows stay visible (dimmed, spinning) until the main-process
+    // flow — pre-archive command included — finishes; only then do they leave
+    // the sidebar. Mirrors the reload-resume path in loadTasks.
     const cascadeIds = this.getDescendantTaskIds(taskId);
     for (const id of cascadeIds) this.setTaskArchiving(id, true);
 
-    const rollback = this.markTaskArchivedOptimistic(taskId, options.note);
     try {
       const { archivedTaskIds } = await rpc.tasks.archiveTask(this.projectId, taskId, nextNote, {
         skipPreCommand: options.skipPreCommand,
@@ -725,12 +677,10 @@ export class TaskManagerStore {
           const store = this.tasks.get(id);
           if (store && isRegistered(store) && !store.data.archivedAt) {
             store.data.archivedAt = new Date().toISOString();
+            if (id === taskId) store.data.archiveNote = nextNote;
           }
         }
       });
-    } catch (e) {
-      rollback();
-      throw e;
     } finally {
       for (const id of cascadeIds) this.setTaskArchiving(id, false);
     }

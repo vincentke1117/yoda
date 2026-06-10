@@ -29,7 +29,7 @@ export async function createConversation(params: CreateConversationParams): Prom
       projectId: params.projectId,
       taskId: params.taskId,
       title: params.title,
-      provider: params.provider,
+      runtime: params.runtime,
       config,
       isInitialConversation: params.isInitialConversation ?? false,
       createdAt: sql`CURRENT_TIMESTAMP`,
@@ -53,10 +53,12 @@ export async function createConversation(params: CreateConversationParams): Prom
     conversation,
     params.initialSize,
     false,
-    params.initialPrompt
+    params.initialPrompt,
+    undefined,
+    params.imagePaths
   );
   telemetryService.capture('conversation_created', {
-    provider: params.provider,
+    runtime: params.runtime,
     is_first_in_task: existingConversation === undefined,
     project_id: params.projectId,
     task_id: params.taskId,

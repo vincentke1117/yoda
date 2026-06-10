@@ -1,5 +1,6 @@
+import { randomUUID } from 'node:crypto';
 import { promises as nativeFs } from 'node:fs';
-import { homedir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import { planEventChannel } from '@shared/events/appEvents';
 import { fsWatchEventChannel } from '@shared/events/fsEvents';
@@ -31,6 +32,16 @@ const watcherLabeledPaths = new Map<string, Map<string, string[]>>();
 
 type PathCompletionOptions = ListOptions & {
   pathKind?: 'relative' | 'absolute';
+};
+
+// Clipboard images carry no filesystem path, so the renderer ships the bytes
+// over and we persist them to a temp file the agent CLIs can read by path.
+const CLIPBOARD_IMAGE_EXTENSIONS: Record<string, string> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/gif': 'gif',
+  'image/webp': 'webp',
+  'image/bmp': 'bmp',
 };
 
 function resolveLocalPathInsideBase(basePath: string, relPath: string): string {
@@ -393,6 +404,25 @@ export const filesController = createRPCController({
     try {
       const result = await env.fs.saveAttachment(srcPath, subdir);
       return ok(result);
+    } catch (e) {
+      return err({ type: 'fs_error' as const, message: String(e) });
+    }
+  },
+
+  // Persists a pasted clipboard image to a local temp file and returns its
+  // absolute path, so the composer can reference it as an @-mention.
+  saveClipboardImage: async (base64Data: string, mimeType: string) => {
+    const ext = CLIPBOARD_IMAGE_EXTENSIONS[mimeType];
+    if (!ext) {
+      return err({ type: 'fs_error' as const, message: `Unsupported image type: ${mimeType}` });
+    }
+
+    try {
+      const destDir = path.join(tmpdir(), 'yoda-attachments');
+      await nativeFs.mkdir(destDir, { recursive: true });
+      const absPath = path.join(destDir, `pasted-${randomUUID().slice(0, 8)}.${ext}`);
+      await nativeFs.writeFile(absPath, Buffer.from(base64Data, 'base64'));
+      return ok({ absPath });
     } catch (e) {
       return err({ type: 'fs_error' as const, message: String(e) });
     }

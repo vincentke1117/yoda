@@ -20,9 +20,11 @@ import {
   Mic,
   Monitor,
   Palette,
+  Paperclip,
   Plus,
   Repeat2,
   Server,
+  Settings2,
   ShieldCheck,
   Sparkles,
   Users,
@@ -36,6 +38,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ClipboardEvent,
   type ComponentType,
   type KeyboardEvent,
   type ReactNode,
@@ -98,6 +101,7 @@ import {
   DropdownMenuTrigger,
 } from '@renderer/lib/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@renderer/lib/ui/popover';
+import { Switch } from '@renderer/lib/ui/switch';
 import { Textarea } from '@renderer/lib/ui/textarea';
 import { isImeComposing } from '@renderer/utils/ime';
 import { cn } from '@renderer/utils/utils';
@@ -257,6 +261,27 @@ function getGreetingKey(hour: number): string {
   return 'home.greeting.lateNight';
 }
 
+type PromptAttachment = {
+  id: string;
+  kind: 'image' | 'file';
+  /** Absolute local path; ultimately what the agent receives (as a paste or @-mention). */
+  path: string;
+  name: string;
+  /** Object URL backing the image thumbnail; revoked when the attachment is removed. */
+  previewUrl?: string;
+};
+
+const IMAGE_ATTACHMENT_RE = /\.(png|jpe?g|gif|webp|bmp|svg)$/i;
+
+function readFileAsBase64(file: File): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(',', 2)[1] ?? '');
+    reader.onerror = () => reject(reader.error ?? new Error('Failed to read file'));
+    reader.readAsDataURL(file);
+  });
+}
+
 function insertPromptText(
   value: string,
   selection: { start: number; end: number },
@@ -305,10 +330,7 @@ function applyNativeTextareaEdit(
     if (!applied || textarea.value !== nextValue) {
       // Fallback: assign via the native setter so React's value tracker
       // still sees the change and onChange fires.
-      const setValue = Object.getOwnPropertyDescriptor(
-        HTMLTextAreaElement.prototype,
-        'value'
-      )?.set;
+      const setValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
       setValue?.call(textarea, nextValue);
       textarea.dispatchEvent(new Event('input', { bubbles: true }));
     }
@@ -803,7 +825,6 @@ export const HomeComposer = observer(function HomeComposer({
   onSubmitted?: () => void;
 }) {
   const { t } = useTranslation();
-  const showAddProjectModal = useShowModal('addProjectModal');
   const { navigate } = useNavigate();
 
   const projectManager = getProjectManagerStore();
@@ -1048,6 +1069,47 @@ export const HomeComposer = observer(function HomeComposer({
   const [promptFocused, setPromptFocused] = useState(false);
   const [promptSelection, setPromptSelection] = useState({ start: 0, end: 0 });
   const promptSelectionRef = useRef(promptSelection);
+  const [attachments, setAttachments] = useState<PromptAttachment[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const attachmentsRef = useRef(attachments);
+  attachmentsRef.current = attachments;
+  // Object URLs survive React state; release them when the composer unmounts.
+  useEffect(
+    () => () => {
+      for (const attachment of attachmentsRef.current) {
+        if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl);
+      }
+    },
+    []
+  );
+  const clearAttachments = useCallback(() => {
+    setAttachments((prev) => {
+      for (const attachment of prev) {
+        if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl);
+      }
+      return [];
+    });
+  }, []);
+  const removeAttachment = useCallback((id: string) => {
+    setAttachments((prev) => {
+      const target = prev.find((attachment) => attachment.id === id);
+      if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl);
+      return prev.filter((attachment) => attachment.id !== id);
+    });
+  }, []);
+  const addAttachment = useCallback(
+    (kind: PromptAttachment['kind'], path: string, name: string, previewUrl?: string) => {
+      setAttachments((prev) => [
+        ...prev,
+        { id: crypto.randomUUID(), kind, path, name, previewUrl },
+      ]);
+    },
+    []
+  );
+  // Preview = open with the OS default app (Quick Look-ish, works for any type).
+  const previewAttachment = useCallback((attachment: PromptAttachment) => {
+    void rpc.app.openIn({ app: 'finder', path: attachment.path }).catch(() => {});
+  }, []);
   const [pathCompletionItems, setPathCompletionItems] = useState<PathCompletionItem[]>([]);
   const [pathCompletionOpen, setPathCompletionOpen] = useState(false);
   const [pathCompletionLoading, setPathCompletionLoading] = useState(false);
@@ -1286,6 +1348,20 @@ export const HomeComposer = observer(function HomeComposer({
   const effectiveReviewStrategyKind: TaskStrategyKind = isUnborn
     ? 'no-worktree'
     : reviewStrategyKind;
+  const attachImagesAsPaths = draft?.attachImagesAsPaths ?? false;
+  const setAttachImagesAsPaths = useCallback(
+    (next: boolean) => {
+      updateDraft({ attachImagesAsPaths: next });
+    },
+    [updateDraft]
+  );
+  const attachInline = draft?.attachInline ?? false;
+  const setAttachInline = useCallback(
+    (next: boolean) => {
+      updateDraft({ attachInline: next });
+    },
+    [updateDraft]
+  );
   const modeCanRunWithoutProject = runMode === 'normal' || runMode === 'brainstorm';
   const modeRequiresWorktree =
     runMode === 'compare' ||
@@ -1321,6 +1397,33 @@ export const HomeComposer = observer(function HomeComposer({
       const goToTask = (projectId: string, taskId: string) => {
         navigate('task', { projectId, taskId });
         onSubmitted?.();
+      };
+      // Attachment transport: file attachments are always @path mentions in
+      // the prompt. Image attachments travel out-of-band (the main process
+      // pastes them natively into TUIs that support it) — unless the user
+      // prefers paths, which folds them into the mentions too.
+      const pathAttachments = attachImagesAsPaths
+        ? attachments
+        : attachments.filter((attachment) => attachment.kind === 'file');
+      const imageAttachments = attachImagesAsPaths
+        ? []
+        : attachments.filter((attachment) => attachment.kind === 'image');
+      const attachmentMentions = pathAttachments
+        .map((attachment) => `@${attachment.path}`)
+        .join('\n');
+      const requirement = attachmentMentions
+        ? trimmed
+          ? `${trimmed}\n\n${attachmentMentions}`
+          : attachmentMentions
+        : trimmed;
+      const imagePaths =
+        imageAttachments.length > 0
+          ? imageAttachments.map((attachment) => attachment.path)
+          : undefined;
+      const resetComposer = () => {
+        setPrompt('');
+        updateDraft({ prompt: '' });
+        clearAttachments();
       };
       const promptDisplayName = trimmed ? taskNameFromPrompt(trimmed) : '';
       const baseName =
@@ -1367,10 +1470,10 @@ export const HomeComposer = observer(function HomeComposer({
         const draftSystemPrompt = draftSlot.systemPrompt.trim();
         const initialPrompt =
           runMode === 'brainstorm'
-            ? buildSpecPrompt({ requirement: trimmed, systemPrompt: draftSlot.systemPrompt })
+            ? buildSpecPrompt({ requirement, systemPrompt: draftSlot.systemPrompt })
             : draftSystemPrompt
-              ? buildRequirementPrompt({ requirement: trimmed, systemPrompt: draftSystemPrompt })
-              : trimmed || undefined;
+              ? buildRequirementPrompt({ requirement, systemPrompt: draftSystemPrompt })
+              : requirement || undefined;
         void internalProject.taskManager
           .createTask({
             id: taskId,
@@ -1385,6 +1488,7 @@ export const HomeComposer = observer(function HomeComposer({
               runtime: draftRuntime,
               title: initialConversationTitle(draftRuntime, trimmed || undefined, []),
               initialPrompt,
+              imagePaths,
               autoApprove: autoApproveDefaults.getDefault(draftRuntime),
             },
           })
@@ -1392,8 +1496,7 @@ export const HomeComposer = observer(function HomeComposer({
             toast.error('Agent task failed to start.');
           });
         goToTask(INTERNAL_PROJECT_ID, taskId);
-        setPrompt('');
-        updateDraft({ prompt: '' });
+        resetComposer();
         return;
       }
 
@@ -1437,6 +1540,7 @@ export const HomeComposer = observer(function HomeComposer({
               []
             ),
             initialPrompt: args.initialPrompt,
+            imagePaths,
             autoApprove: autoApproveDefaults.getDefault(args.provider),
           },
         });
@@ -1450,7 +1554,7 @@ export const HomeComposer = observer(function HomeComposer({
           provider: slot.provider,
           nameSeed: `${baseName}-spec`,
           initialPrompt: buildSpecPrompt({
-            requirement: trimmed,
+            requirement,
             systemPrompt: slot.systemPrompt,
           }),
           titlePrompt: trimmed || undefined,
@@ -1460,8 +1564,7 @@ export const HomeComposer = observer(function HomeComposer({
         void task.promise.catch(() => {
           toast.error('Agent task failed to start.');
         });
-        setPrompt('');
-        updateDraft({ prompt: '' });
+        resetComposer();
         return;
       }
 
@@ -1474,7 +1577,7 @@ export const HomeComposer = observer(function HomeComposer({
               provider: slot.provider,
               nameSeed: `${baseName}-agent-${index + 1}-${slot.provider}`,
               initialPrompt: buildRequirementPrompt({
-                requirement: trimmed,
+                requirement,
                 systemPrompt: slot.systemPrompt,
               }),
               titlePrompt: trimmed || undefined,
@@ -1486,8 +1589,7 @@ export const HomeComposer = observer(function HomeComposer({
         const first = launches[0];
         if (first) goToTask(mounted.data.id, first.taskId);
         void Promise.allSettled(launches.map((launch) => launch.promise)).then(reportFailures);
-        setPrompt('');
-        updateDraft({ prompt: '' });
+        resetComposer();
         return;
       }
 
@@ -1499,7 +1601,7 @@ export const HomeComposer = observer(function HomeComposer({
           provider: implementerSlot.provider,
           nameSeed: `${baseName}-implement`,
           initialPrompt: buildRequirementPrompt({
-            requirement: trimmed,
+            requirement,
             systemPrompt: implementerSlot.systemPrompt,
           }),
           titlePrompt: trimmed || undefined,
@@ -1511,15 +1613,14 @@ export const HomeComposer = observer(function HomeComposer({
           taskId: implementation.taskId,
           implementationConversationId: implementation.conversationId,
           implementationReady: implementation.promise,
-          requirement: trimmed,
+          requirement,
           reviewerRuntime: reviewerSlot.provider,
           reviewerSystemPrompt: reviewerSlot.systemPrompt,
           getAutoApprove: autoApproveDefaults.getDefault,
         }).catch((error: unknown) => {
           toast.error(error instanceof Error ? error.message : 'Review mode orchestration failed.');
         });
-        setPrompt('');
-        updateDraft({ prompt: '' });
+        resetComposer();
         return;
       }
 
@@ -1532,7 +1633,7 @@ export const HomeComposer = observer(function HomeComposer({
           provider: ceoProvider,
           nameSeed: `${baseName}-${ceoRole.taskSuffix}`,
           initialPrompt: buildTeamCeoPrompt({
-            requirement: trimmed,
+            requirement,
             systemPrompt: ceoSlot.systemPrompt,
           }),
           titlePrompt: trimmed || undefined,
@@ -1554,7 +1655,7 @@ export const HomeComposer = observer(function HomeComposer({
                 provider: slot.provider,
                 nameSeed: `${baseName}-${role.taskSuffix}`,
                 initialPrompt: buildTeamRolePrompt({
-                  requirement: trimmed,
+                  requirement,
                   ceoPlan: ceoOutput || '(The CEO agent did not produce captured output.)',
                   systemPrompt: slot.systemPrompt,
                 }),
@@ -1567,8 +1668,7 @@ export const HomeComposer = observer(function HomeComposer({
         })().catch((error: unknown) => {
           toast.error(error instanceof Error ? error.message : 'Agent team orchestration failed.');
         });
-        setPrompt('');
-        updateDraft({ prompt: '' });
+        resetComposer();
         return;
       }
 
@@ -1579,8 +1679,8 @@ export const HomeComposer = observer(function HomeComposer({
         provider: normalSlot.provider,
         nameSeed: baseName,
         initialPrompt: normalSystemPrompt
-          ? buildRequirementPrompt({ requirement: trimmed, systemPrompt: normalSystemPrompt })
-          : trimmed || undefined,
+          ? buildRequirementPrompt({ requirement, systemPrompt: normalSystemPrompt })
+          : requirement || undefined,
         titlePrompt: trimmed || undefined,
         strategyKind: effectiveStandardStrategyKind,
       });
@@ -1588,8 +1688,7 @@ export const HomeComposer = observer(function HomeComposer({
       void task.promise.catch(() => {
         toast.error('Agent task failed to start.');
       });
-      setPrompt('');
-      updateDraft({ prompt: '' });
+      resetComposer();
     } finally {
       setSubmitting(false);
     }
@@ -1598,6 +1697,9 @@ export const HomeComposer = observer(function HomeComposer({
     mounted,
     runtimeId,
     defaultBranch,
+    attachments,
+    attachImagesAsPaths,
+    clearAttachments,
     effectiveReviewStrategyKind,
     effectiveStandardStrategyKind,
     trimmed,
@@ -1664,6 +1766,92 @@ export const HomeComposer = observer(function HomeComposer({
       setActiveSkillShortcutIndex(0);
     },
     [applyPromptEdit, prompt, promptSelection, skillIdByShortcutCommand]
+  );
+
+  // Inline attach mode: insert @path text at the caret instead of creating a
+  // chip. Reads the live textarea value (not the `prompt` closure) so async
+  // insertions (pasted screenshots after the temp-file roundtrip) and batched
+  // sequential inserts always land in the current text.
+  const insertAttachmentMentions = useCallback(
+    (filePaths: string[]) => {
+      if (filePaths.length === 0) return;
+      const textarea = promptTextareaRef.current;
+      const value = textarea ? textarea.value : prompt;
+      const selection = textarea
+        ? { start: textarea.selectionStart, end: textarea.selectionEnd }
+        : promptSelectionRef.current;
+      const next = insertPromptText(
+        value,
+        selection,
+        filePaths.map((filePath) => `@${filePath}`).join(' ')
+      );
+      applyPromptEdit(next.value, { start: next.caret, end: next.caret });
+    },
+    [applyPromptEdit, prompt]
+  );
+
+  // Picked attachments all become chips: images with a thumbnail, other files
+  // with an icon card. Serialization happens on submit (@-mentions / native
+  // image paste depending on runtime and preference). In inline mode they are
+  // inserted as @path text at the caret instead, preserving ordering.
+  const attachFiles = useCallback(
+    (files: File[]) => {
+      if (attachInline) {
+        insertAttachmentMentions(
+          files
+            .map((file) => window.electronAPI.getPathForFile(file).trim())
+            .filter((filePath) => filePath.length > 0)
+        );
+        return;
+      }
+      for (const file of files) {
+        const filePath = window.electronAPI.getPathForFile(file).trim();
+        if (!filePath) continue;
+        if (file.type.startsWith('image/') || IMAGE_ATTACHMENT_RE.test(filePath)) {
+          addAttachment('image', filePath, file.name, URL.createObjectURL(file));
+        } else {
+          addAttachment('file', filePath, file.name);
+        }
+      }
+    },
+    [addAttachment, attachInline, insertAttachmentMentions]
+  );
+
+  const handlePromptPaste = useCallback(
+    (e: ClipboardEvent<HTMLTextAreaElement>) => {
+      const imageFiles = Array.from(e.clipboardData.files).filter((file) =>
+        file.type.startsWith('image/')
+      );
+      if (imageFiles.length === 0) return;
+      e.preventDefault();
+      for (const file of imageFiles) {
+        // A file copied from the OS keeps its path; a raw screenshot doesn't,
+        // so its bytes get persisted to a temp file in the main process.
+        const existingPath = window.electronAPI.getPathForFile(file).trim();
+        if (existingPath) {
+          if (attachInline) insertAttachmentMentions([existingPath]);
+          else addAttachment('image', existingPath, file.name, URL.createObjectURL(file));
+          continue;
+        }
+        const previewUrl = attachInline ? null : URL.createObjectURL(file);
+        void (async () => {
+          try {
+            const base64 = await readFileAsBase64(file);
+            const result = await rpc.fs.saveClipboardImage(base64, file.type);
+            if (!result.success || !result.data) throw new Error('saveClipboardImage failed');
+            if (previewUrl === null) {
+              insertAttachmentMentions([result.data.absPath]);
+            } else {
+              addAttachment('image', result.data.absPath, file.name || 'pasted-image', previewUrl);
+            }
+          } catch {
+            if (previewUrl !== null) URL.revokeObjectURL(previewUrl);
+            toast.error(t('home.attachPasteFailedToast'));
+          }
+        })();
+      }
+    },
+    [addAttachment, attachInline, insertAttachmentMentions, t]
   );
 
   const applyPromptMarkdownEdit = useCallback(
@@ -1850,6 +2038,7 @@ export const HomeComposer = observer(function HomeComposer({
                 setPathCompletionOpen(false);
               }}
               onKeyDown={handlePromptKeyDown}
+              onPaste={handlePromptPaste}
               className={cn(
                 'min-h-28 resize-none border-0 bg-transparent px-5 py-4 text-base placeholder:text-foreground-muted focus-visible:border-0 focus-visible:ring-0',
                 isNonStandardRunMode && 'pt-10'
@@ -1886,15 +2075,69 @@ export const HomeComposer = observer(function HomeComposer({
               />
             )}
           </div>
+          {attachments.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 px-4 pb-1">
+              {attachments.map((attachment) => (
+                <div key={attachment.id} className="group relative" title={attachment.path}>
+                  {attachment.kind === 'image' && attachment.previewUrl ? (
+                    <button
+                      type="button"
+                      aria-label={t('home.previewAttachmentAria')}
+                      onClick={() => previewAttachment(attachment)}
+                      className="block overflow-hidden rounded-md border border-border transition-colors hover:border-border-1"
+                    >
+                      <img
+                        src={attachment.previewUrl}
+                        alt={attachment.name}
+                        className="size-14 object-cover"
+                      />
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      aria-label={t('home.previewAttachmentAria')}
+                      onClick={() => previewAttachment(attachment)}
+                      className="flex h-14 max-w-44 items-center gap-2 rounded-md border border-border bg-background-1 px-3 text-left transition-colors hover:bg-background-2"
+                    >
+                      <FileText className="size-4 shrink-0 text-foreground-muted" />
+                      <span className="truncate text-xs text-foreground">{attachment.name}</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    aria-label={t('home.removeAttachmentAria')}
+                    onClick={() => removeAttachment(attachment.id)}
+                    className="absolute -right-1.5 -top-1.5 hidden size-4 items-center justify-center rounded-full border border-border bg-background-1 text-foreground-muted shadow-sm hover:text-foreground group-hover:flex"
+                  >
+                    <X className="size-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="flex items-center justify-between gap-2 px-2.5 py-2">
             <div className="flex items-center gap-1">
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  attachFiles(Array.from(e.target.files ?? []));
+                  e.target.value = '';
+                }}
+              />
               <button
                 type="button"
-                aria-label={t('home.addAria')}
-                onClick={() => showAddProjectModal({ strategy: 'local', mode: 'pick' })}
-                className="flex size-8 shrink-0 items-center justify-center rounded-full text-foreground-muted transition-colors hover:bg-background-2 hover:text-foreground"
+                aria-label={t('home.attachAria')}
+                title={
+                  runHostKind === 'ssh' ? t('home.attachSshUnsupported') : t('home.attachAria')
+                }
+                disabled={runHostKind === 'ssh'}
+                onClick={() => fileInputRef.current?.click()}
+                className="flex size-8 shrink-0 items-center justify-center rounded-full text-foreground-muted transition-colors hover:bg-background-2 hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
               >
-                <Plus className="size-4" />
+                <Paperclip className="size-4" />
               </button>
             </div>
             <div className="flex items-center gap-1.5">
@@ -2010,6 +2253,48 @@ export const HomeComposer = observer(function HomeComposer({
                 />
               )}
             />
+            <Popover>
+              <PopoverTrigger
+                aria-label={t('home.composerSettingsAria')}
+                title={t('home.composerSettingsAria')}
+                className="ml-auto flex size-7 shrink-0 items-center justify-center rounded-md text-foreground-muted transition-colors hover:bg-background-2 hover:text-foreground"
+              >
+                <Settings2 className="size-3.5" />
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-80 p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-sm font-medium text-foreground">
+                      {t('home.attachImagesAsPathsLabel')}
+                    </span>
+                    <span className="text-xs text-foreground-muted">
+                      {t('home.attachImagesAsPathsDesc')}
+                    </span>
+                  </div>
+                  <Switch
+                    checked={attachImagesAsPaths}
+                    onCheckedChange={setAttachImagesAsPaths}
+                    disabled={attachInline}
+                    className="mt-0.5"
+                  />
+                </div>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-sm font-medium text-foreground">
+                      {t('home.attachInlineLabel')}
+                    </span>
+                    <span className="text-xs text-foreground-muted">
+                      {t('home.attachInlineDesc')}
+                    </span>
+                  </div>
+                  <Switch
+                    checked={attachInline}
+                    onCheckedChange={setAttachInline}
+                    className="mt-0.5"
+                  />
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
         </div>
       </div>

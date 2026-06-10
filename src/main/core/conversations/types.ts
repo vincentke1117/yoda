@@ -6,7 +6,7 @@ export type ActiveConversationSession = {
   projectId: string;
   taskId: string;
   taskTitle?: string;
-  providerId: Conversation['providerId'];
+  runtimeId: Conversation['runtimeId'];
   title: string;
   detachable: boolean;
 };
@@ -20,7 +20,9 @@ export interface ConversationProvider {
     isResuming?: boolean,
     initialPrompt?: string,
     /** Override the provider's default tmux behavior for this session only. */
-    tmuxOverride?: boolean
+    tmuxOverride?: boolean,
+    /** Absolute local paths of image attachments to deliver with the initial prompt. */
+    imagePaths?: string[]
   ): Promise<void>;
   stopSession(conversationId: string): Promise<void>;
   sendInput(conversationId: string, data: string): Promise<boolean>;

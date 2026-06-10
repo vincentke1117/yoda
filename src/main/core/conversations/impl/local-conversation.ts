@@ -1,9 +1,9 @@
 import { homedir } from 'node:os';
-import { getProvider } from '@shared/agent-provider-registry';
 import type { Conversation } from '@shared/conversations';
 import { agentSessionExitedChannel } from '@shared/events/agentEvents';
 import { makePtyId } from '@shared/ptyId';
 import { makePtySessionId } from '@shared/ptySessionId';
+import { getRuntime } from '@shared/runtime-registry';
 import { agentHookService } from '@main/core/agent-hooks/agent-hook-service';
 import { makeCodexNotifyCommand } from '@main/core/agent-hooks/agent-notify-command';
 import { wireAgentClassifier } from '@main/core/agent-hooks/classifier-wiring';
@@ -12,6 +12,8 @@ import { HookConfigWriter } from '@main/core/agent-hooks/hook-config';
 import { applyHookOverrides } from '@main/core/agent-hooks/inspect/hook-overrides-apply';
 import { hookOverridesStore } from '@main/core/agent-hooks/inspect/hook-overrides-store';
 import { agentSessionRuntimeStore } from '@main/core/conversations/agent-session-runtime';
+import { agentSilenceReconciler } from '@main/core/conversations/agent-silence-reconciler';
+import { createClaudeInterruptSniffer } from '@main/core/conversations/claude-interrupt-sniffer';
 import {
   watchClaudeRunState,
   type ClaudeRunStateWatcher,
@@ -34,15 +36,20 @@ import { logLocalPtySpawnWarnings, resolveLocalPtySpawn } from '@main/core/pty/p
 import { resolveAvailableTmuxSessionName } from '@main/core/pty/tmux-availability';
 import { killTmuxSession, sendLiteralToTmuxSession } from '@main/core/pty/tmux-session-name';
 import { sessionTitleManager } from '@main/core/session-title/session-title-manager';
-import { providerOverrideSettings } from '@main/core/settings/provider-settings-service';
+import { runtimeOverrideSettings } from '@main/core/settings/runtime-settings-service';
 import { appSettingsService } from '@main/core/settings/settings-service';
 import { events } from '@main/lib/events';
 import { log } from '@main/lib/logger';
 import { telemetryService } from '@main/lib/telemetry';
 import { resolveAgentResumeSessionId } from '../codex-session-id';
 import { ensureCodexThreadUnarchived } from '../codex-unarchive';
+import {
+  recordConversationAuthProvider,
+  snapshotTaskDiffOnSessionExit,
+} from '../session-stats-hooks';
 import { buildAgentCommand } from './agent-command';
-import { resolveProviderEnv, resolveProviderTmuxEnv } from './provider-env';
+import { appendImageMentions, injectClipboardImagesAndPrompt } from './image-attachments';
+import { resolveAgentApiEnvVars, resolveRuntimeEnv, resolveRuntimeTmuxEnv } from './runtime-env';
 
 const DEFAULT_COLS = 80;
 const DEFAULT_ROWS = 24;
@@ -98,7 +105,8 @@ export class LocalConversationProvider implements ConversationProvider {
     initialSize: { cols: number; rows: number } = { cols: DEFAULT_COLS, rows: DEFAULT_ROWS },
     isResuming: boolean = false,
     initialPrompt?: string,
-    tmuxOverride?: boolean
+    tmuxOverride?: boolean,
+    imagePaths?: string[]
   ): Promise<void> {
     const sessionId = makePtySessionId(
       conversation.projectId,
@@ -109,24 +117,25 @@ export class LocalConversationProvider implements ConversationProvider {
     if (this.sessions.has(sessionId)) return;
 
     await claudeTrustService.maybeAutoTrustLocal({
-      providerId: conversation.providerId,
+      runtimeId: conversation.runtimeId,
       cwd: this.taskPath,
       homedir: homedir(),
     });
-    await this.prepareHookConfig(conversation.providerId);
+    await this.prepareHookConfig(conversation.runtimeId);
     await applyHookOverrides(
       this.taskPath,
-      conversation.providerId,
+      conversation.runtimeId,
       await hookOverridesStore.get(conversation.taskId)
     );
 
-    const providerConfig = await providerOverrideSettings.getItem(conversation.providerId);
+    const providerConfig = await runtimeOverrideSettings.getItem(conversation.runtimeId);
+    recordConversationAuthProvider(conversation.id, providerConfig);
     const agentSessionId = isResuming
       ? resolveAgentResumeSessionId(conversation, this.taskPath)
       : conversation.id;
     if (isResuming) {
       await ensureCodexThreadUnarchived({
-        providerId: conversation.providerId,
+        runtimeId: conversation.runtimeId,
         providerConfig,
         threadId: agentSessionId,
         ctx: this.ctx,
@@ -134,20 +143,31 @@ export class LocalConversationProvider implements ConversationProvider {
     }
     const port = agentHookService.getPort();
     const token = agentHookService.getToken();
+    const providerDef = getRuntime(conversation.runtimeId);
+    // Image attachments: runtimes with clipboard paste get them injected as
+    // native pastes after the TUI boots (so the prompt must NOT go through the
+    // CLI arg, or the turn would start before the images land). Everyone else
+    // gets @path mentions appended to the prompt.
+    const pendingImagePaths = !isResuming && imagePaths?.length ? imagePaths : undefined;
+    const useClipboardImagePaste = Boolean(pendingImagePaths && providerDef?.clipboardImagePaste);
+    const effectiveInitialPrompt =
+      pendingImagePaths && !useClipboardImagePaste
+        ? appendImageMentions(initialPrompt, pendingImagePaths)
+        : initialPrompt;
     const { command, args: baseArgs } = buildAgentCommand({
-      providerId: conversation.providerId,
+      runtimeId: conversation.runtimeId,
       providerConfig,
       autoApprove: conversation.autoApprove,
       sessionId: agentSessionId,
       isResuming,
-      initialPrompt,
+      initialPrompt: useClipboardImagePaste ? undefined : effectiveInitialPrompt,
       workingDirectory: this.taskPath,
     });
-    const args = withCodexRuntimeNotifyArgs(conversation.providerId, baseArgs, port);
+    const args = withCodexRuntimeNotifyArgs(conversation.runtimeId, baseArgs, port);
 
     const tmuxSessionName = await this.resolveTmuxSessionName(sessionId, tmuxOverride);
-    const providerEnv = resolveProviderEnv(providerConfig, {
-      providerId: conversation.providerId,
+    const providerEnv = resolveRuntimeEnv(providerConfig, {
+      runtimeId: conversation.runtimeId,
       tmuxEnabled: Boolean(tmuxSessionName),
     });
 
@@ -161,7 +181,7 @@ export class LocalConversationProvider implements ConversationProvider {
         shellSetup: this.shellSetup,
         tmuxSessionName,
         tmuxSize: initialSize,
-        tmuxEnv: resolveProviderTmuxEnv(providerEnv),
+        tmuxEnv: resolveRuntimeTmuxEnv(providerEnv),
       },
     });
 
@@ -170,7 +190,7 @@ export class LocalConversationProvider implements ConversationProvider {
       sessionId,
     });
 
-    const ptyId = makePtyId(conversation.providerId, conversation.id);
+    const ptyId = makePtyId(conversation.runtimeId, conversation.id);
     const sessionStartedAtMs = Date.now();
     const pty = spawnLocalPty({
       id: sessionId,
@@ -179,6 +199,7 @@ export class LocalConversationProvider implements ConversationProvider {
       cwd: resolved.cwd,
       env: {
         ...buildAgentEnv({
+          agentApiVars: resolveAgentApiEnvVars(providerConfig, conversation.runtimeId),
           hook: port > 0 ? { port, ptyId, token } : undefined,
           providerVars: providerEnv,
         }),
@@ -189,21 +210,38 @@ export class LocalConversationProvider implements ConversationProvider {
     });
 
     const hookActive = port > 0;
-    const provider = getProvider(conversation.providerId);
-    const useHooksOnly = hookActive && provider?.supportsHooks;
+    const useHooksOnly = hookActive && providerDef?.supportsHooks;
 
     if (!useHooksOnly) {
       wireAgentClassifier({
         pty,
-        providerId: conversation.providerId,
+        runtimeId: conversation.runtimeId,
         projectId: conversation.projectId,
         taskId: conversation.taskId,
         conversationId: conversation.id,
       });
     }
 
+    const detachSilenceReconciler = agentSilenceReconciler.attach(sessionId, {
+      projectId: conversation.projectId,
+      taskId: conversation.taskId,
+      conversationId: conversation.id,
+    });
+    pty.onData(() => agentSilenceReconciler.noteOutput(sessionId));
+    if (conversation.runtimeId === 'claude') {
+      // Sub-second Esc-interrupt detection from the TUI's "Interrupted" line.
+      pty.onData(
+        createClaudeInterruptSniffer({
+          projectId: conversation.projectId,
+          taskId: conversation.taskId,
+          conversationId: conversation.id,
+        })
+      );
+    }
+
     pty.onExit(({ exitCode }) => {
       if (this.sessions.get(sessionId) !== pty) return;
+      detachSilenceReconciler();
       ptySessionRegistry.unregister(sessionId);
       this.sessions.delete(sessionId);
       this.sessionInfos.delete(sessionId);
@@ -214,7 +252,7 @@ export class LocalConversationProvider implements ConversationProvider {
         conversationId: conversation.id,
       });
       telemetryService.capture('agent_run_finished', {
-        provider: conversation.providerId,
+        provider: conversation.runtimeId,
         exit_code: typeof exitCode === 'number' ? exitCode : -1,
         project_id: conversation.projectId,
         task_id: conversation.taskId,
@@ -227,6 +265,7 @@ export class LocalConversationProvider implements ConversationProvider {
         taskId: conversation.taskId,
         exitCode,
       });
+      snapshotTaskDiffOnSessionExit(conversation.taskId);
     });
 
     ptySessionRegistry.register(sessionId, pty);
@@ -236,7 +275,7 @@ export class LocalConversationProvider implements ConversationProvider {
       conversationId: conversation.id,
       projectId: conversation.projectId,
       taskId: conversation.taskId,
-      providerId: conversation.providerId,
+      runtimeId: conversation.runtimeId,
       title: conversation.title,
     });
     agentSessionRuntimeStore.setStatus(
@@ -245,11 +284,24 @@ export class LocalConversationProvider implements ConversationProvider {
         taskId: conversation.taskId,
         conversationId: conversation.id,
       },
-      initialPrompt?.trim() ? 'working' : 'idle'
+      initialPrompt?.trim() || pendingImagePaths ? 'working' : 'idle'
     );
+    if (useClipboardImagePaste && pendingImagePaths) {
+      void injectClipboardImagesAndPrompt({
+        pty,
+        runtimeId: conversation.runtimeId,
+        imagePaths: pendingImagePaths,
+        prompt: initialPrompt,
+      }).catch((error) => {
+        log.warn('LocalConversationProvider: clipboard image injection failed', {
+          conversationId: conversation.id,
+          error: String(error),
+        });
+      });
+    }
     if (tmuxSessionName) this.tmuxSessionNames.set(sessionId, tmuxSessionName);
     sessionTitleManager.start({
-      providerId: conversation.providerId,
+      runtimeId: conversation.runtimeId,
       conversationId: conversation.id,
       projectId: conversation.projectId,
       taskId: conversation.taskId,
@@ -259,7 +311,7 @@ export class LocalConversationProvider implements ConversationProvider {
     });
     this.startRunStateWatcher(conversation, sessionStartedAtMs);
     telemetryService.capture('agent_run_started', {
-      provider: conversation.providerId,
+      provider: conversation.runtimeId,
       project_id: conversation.projectId,
       task_id: conversation.taskId,
       conversation_id: conversation.id,
@@ -280,7 +332,7 @@ export class LocalConversationProvider implements ConversationProvider {
       taskId: conversation.taskId,
       conversationId: conversation.id,
     };
-    if (conversation.providerId === 'codex') {
+    if (conversation.runtimeId === 'codex') {
       const watcher = watchCodexRunState(
         { conversationId: conversation.id, cwd: this.taskPath, startedAtMs },
         (event) => agentSessionRuntimeStore.dispatch(session, event, 'codex-rollout')
@@ -288,7 +340,7 @@ export class LocalConversationProvider implements ConversationProvider {
       this.runStateWatchers.set(conversation.id, watcher);
       return;
     }
-    if (conversation.providerId === 'claude') {
+    if (conversation.runtimeId === 'claude') {
       const watcher = watchClaudeRunState(
         { conversationId: conversation.id, cwd: this.taskPath },
         (event) => agentSessionRuntimeStore.dispatch(session, event, 'claude-transcript')
@@ -354,23 +406,23 @@ export class LocalConversationProvider implements ConversationProvider {
     return true;
   }
 
-  private async prepareHookConfig(providerId: Conversation['providerId']): Promise<void> {
+  private async prepareHookConfig(runtimeId: Conversation['runtimeId']): Promise<void> {
     try {
       const localProjectSettings = await appSettingsService.get('localProject');
       const writeGitIgnoreEntries = localProjectSettings.writeAgentConfigToGitIgnore ?? true;
-      const previousWriteGitIgnoreEntries = this.preparedHookProviders.get(providerId);
+      const previousWriteGitIgnoreEntries = this.preparedHookProviders.get(runtimeId);
       const shouldPrepareHookConfig =
         previousWriteGitIgnoreEntries === undefined ||
         (!previousWriteGitIgnoreEntries && writeGitIgnoreEntries);
       if (!shouldPrepareHookConfig) return;
 
-      await this.hookConfigWriter.writeForProvider(providerId, {
+      await this.hookConfigWriter.writeForProvider(runtimeId, {
         writeGitIgnoreEntries,
       });
-      this.preparedHookProviders.set(providerId, writeGitIgnoreEntries);
+      this.preparedHookProviders.set(runtimeId, writeGitIgnoreEntries);
     } catch (error) {
       log.warn('LocalConversationProvider: failed to prepare hook config', {
-        providerId,
+        runtimeId,
         taskPath: this.taskPath,
         error: String(error),
       });
@@ -387,7 +439,7 @@ export class LocalConversationProvider implements ConversationProvider {
       try {
         pty.kill();
       } catch (e) {
-        log.warn('LocalAgentProvider: error killing PTY', { sessionId, error: String(e) });
+        log.warn('LocalConversation: error killing PTY', { sessionId, error: String(e) });
       }
       this.sessions.delete(sessionId);
       ptySessionRegistry.unregister(sessionId);
@@ -439,11 +491,11 @@ export class LocalConversationProvider implements ConversationProvider {
 }
 
 function withCodexRuntimeNotifyArgs(
-  providerId: Conversation['providerId'],
+  runtimeId: Conversation['runtimeId'],
   args: string[],
   hookPort: number
 ): string[] {
-  if (providerId !== 'codex' || hookPort <= 0) return args;
+  if (runtimeId !== 'codex' || hookPort <= 0) return args;
   return ['-c', `notify=${tomlArray(makeCodexNotifyCommand())}`, ...args];
 }
 

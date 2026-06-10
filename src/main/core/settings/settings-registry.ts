@@ -4,6 +4,10 @@ import type { AppSettings, AppSettingsKey } from '@shared/app-settings';
 import { MAAS_PLATFORMS } from '@shared/maas';
 import type { OpenInAppId } from '@shared/openInApps';
 import {
+  DEFAULT_SUMMARY_CONTEXT_GLOBAL,
+  DEFAULT_SUMMARY_CONTEXT_RECENT,
+} from '@shared/session-summary';
+import {
   DEFAULT_TASK_NAMING_CONTEXT,
   DEFAULT_TASK_NAMING_MODEL,
   DEFAULT_TASK_NAMING_RECENT_TASK_LIMIT,
@@ -12,7 +16,7 @@ import {
 import { DEFAULT_TERMINAL_SCROLLBACK_LINES } from '@shared/terminal-settings';
 import { getDefaultLocalWorktreeDirectory } from './worktree-defaults';
 
-export const DEFAULT_AGENT_ID = 'claude';
+export const DEFAULT_RUNTIME_ID = 'claude';
 export const DEFAULT_REVIEW_PROMPT =
   'Review all changes in this worktree. Focus on correctness, regressions, edge cases, and missing tests. List concrete issues first, then note residual risks.';
 
@@ -34,6 +38,12 @@ export const SETTINGS_DEFAULTS = {
   }),
   tasks: {
     autoGenerateName: true,
+    namingAgentId: '',
+    summaryAgentId: '',
+    summaryLanguage: 'app' as const,
+    statusBarSource: 'summary' as const,
+    summaryContextRecent: DEFAULT_SUMMARY_CONTEXT_RECENT,
+    summaryContextGlobal: DEFAULT_SUMMARY_CONTEXT_GLOBAL,
     namingModel: DEFAULT_TASK_NAMING_MODEL,
     namingLanguage: 'app' as const,
     namingContext: DEFAULT_TASK_NAMING_CONTEXT,
@@ -41,7 +51,7 @@ export const SETTINGS_DEFAULTS = {
     namingRequestTimeoutMs: DEFAULT_TASK_NAMING_TIMEOUT_MS,
     autoTrustWorktrees: true,
   },
-  agentAutoApproveDefaults: {},
+  runtimeAutoApproveDefaults: {},
   automations: {
     items: [],
   },
@@ -49,8 +59,8 @@ export const SETTINGS_DEFAULTS = {
     selectedPlatformId: MAAS_PLATFORMS.zenmux.id,
     connections: [],
   },
-  agentModelCandidates: {
-    providers: {},
+  runtimeModelCandidates: {
+    runtimes: {},
   },
   notifications: {
     enabled: true,
@@ -66,7 +76,7 @@ export const SETTINGS_DEFAULTS = {
   customThemes: {
     items: [],
   },
-  defaultAgent: DEFAULT_AGENT_ID,
+  defaultRuntime: DEFAULT_RUNTIME_ID,
   reviewPrompt: DEFAULT_REVIEW_PROMPT,
   keyboard: {},
   openIn: {
@@ -85,11 +95,11 @@ export const SETTINGS_DEFAULTS = {
     selectedProjectId: null,
     strategyKind: 'new-branch' as const,
     reviewStrategyKind: 'no-worktree' as const,
-    providerOverride: null,
+    runtimeOverride: null,
     runMode: 'normal' as const,
-    compareProviders: ['claude', 'codex'],
-    reviewReviewerProvider: 'claude' as const,
-    teamProviders: {
+    compareRuntimes: ['claude', 'codex'],
+    reviewReviewerRuntime: 'claude' as const,
+    teamRuntimes: {
       ceo: 'claude' as const,
       product: 'claude' as const,
       engineering: 'codex' as const,
@@ -99,6 +109,8 @@ export const SETTINGS_DEFAULTS = {
     agentSystemPrompts: {},
     selectedAgentIds: {},
     expressMode: false,
+    attachImagesAsPaths: false,
+    attachInline: false,
     preArchiveCommand: '',
     defaultQuickActions: [{ id: 'release', label: 'Release', command: '/release-via-cicd' }],
   },

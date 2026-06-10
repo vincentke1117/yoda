@@ -1,13 +1,23 @@
 import z from 'zod';
-import { AGENT_MODEL_CANDIDATE_SOURCES } from '@shared/agent-model-candidates';
-import { AGENT_PROVIDER_IDS, AGENT_PROVIDERS } from '@shared/agent-provider-registry';
 import { customThemeSelectionSchema, customThemesSettingsSchema } from '@shared/custom-theme';
 import { MAAS_PLATFORM_IDS } from '@shared/maas';
 import { openInAppIdSchema } from '@shared/openInApps';
 import { quickActionSchema } from '@shared/project-settings';
+import { RUNTIME_MODEL_CANDIDATE_SOURCES } from '@shared/runtime-model-candidates';
+import { AGENT_ACCOUNT_PROVIDER_IDS, RUNTIME_IDS, RUNTIMES } from '@shared/runtime-registry';
+import {
+  DEFAULT_SESSION_STATUS_BAR_SOURCE,
+  SESSION_STATUS_BAR_SOURCE_IDS,
+} from '@shared/session-status-bar';
+import {
+  DEFAULT_SUMMARY_CONTEXT_GLOBAL,
+  DEFAULT_SUMMARY_CONTEXT_RECENT,
+  SUMMARY_CONTEXT_SOURCE_IDS,
+} from '@shared/session-summary';
 import {
   DEFAULT_TASK_NAMING_RECENT_TASK_LIMIT,
   DEFAULT_TASK_NAMING_TIMEOUT_MS,
+  normalizeTaskNamingTimeoutMs,
   TASK_NAMING_CONTEXT_SOURCE_IDS,
 } from '@shared/task-naming';
 import {
@@ -15,7 +25,7 @@ import {
   MAX_TERMINAL_SCROLLBACK_LINES,
   MIN_TERMINAL_SCROLLBACK_LINES,
 } from '@shared/terminal-settings';
-import { DEFAULT_AGENT_ID, DEFAULT_REVIEW_PROMPT } from './settings-registry';
+import { DEFAULT_REVIEW_PROMPT, DEFAULT_RUNTIME_ID } from './settings-registry';
 
 export const projectSettingsSchema = z.object({
   pushOnCreate: z.boolean(),
@@ -37,8 +47,27 @@ export const notificationSettingsSchema = z.object({
   soundFocusMode: z.enum(['always', 'unfocused']),
 });
 
+const summaryContextSchema = z.object(
+  Object.fromEntries(SUMMARY_CONTEXT_SOURCE_IDS.map((id) => [id, z.boolean()])) as Record<
+    (typeof SUMMARY_CONTEXT_SOURCE_IDS)[number],
+    z.ZodBoolean
+  >
+);
+
 export const taskSettingsSchema = z.object({
   autoGenerateName: z.boolean(),
+  /** Agent that drives task naming. Empty = use the built-in naming Agent. */
+  namingAgentId: z.string().catch(''),
+  /** Agent that drives session-summary generation. Empty = built-in summary Agent. */
+  summaryAgentId: z.string().catch(''),
+  /** Output language for generated session summaries. */
+  summaryLanguage: z.enum(['app', 'prompt', 'en', 'zh-CN']).catch('app'),
+  /** Which content source the session status bar (below the terminal) shows. */
+  statusBarSource: z.enum(SESSION_STATUS_BAR_SOURCE_IDS).catch(DEFAULT_SESSION_STATUS_BAR_SOURCE),
+  /** Which transcript parts feed the `recent` summary (defaults to user-only for speed). */
+  summaryContextRecent: summaryContextSchema.catch(DEFAULT_SUMMARY_CONTEXT_RECENT),
+  /** Which transcript parts feed the `global` summary (defaults to everything). */
+  summaryContextGlobal: summaryContextSchema.catch(DEFAULT_SUMMARY_CONTEXT_GLOBAL),
   namingModel: z.string(),
   namingLanguage: z.enum(['app', 'prompt', 'en', 'zh-CN']),
   namingContext: z.object(
@@ -56,14 +85,13 @@ export const taskSettingsSchema = z.object({
   namingRequestTimeoutMs: z
     .number()
     .int()
-    .min(3_000)
-    .max(60_000)
-    .catch(DEFAULT_TASK_NAMING_TIMEOUT_MS),
+    .catch(DEFAULT_TASK_NAMING_TIMEOUT_MS)
+    .transform((value) => normalizeTaskNamingTimeoutMs(value)),
   autoTrustWorktrees: z.boolean(),
 });
 
-export const agentAutoApproveDefaultsSchema = z
-  .partialRecord(z.enum(AGENT_PROVIDER_IDS), z.boolean())
+export const runtimeAutoApproveDefaultsSchema = z
+  .partialRecord(z.enum(RUNTIME_IDS), z.boolean())
   .default({});
 
 export const automationStatusSchema = z.enum(['active', 'paused']);
@@ -73,7 +101,7 @@ export const automationEntrySchema = z.object({
   title: z.string(),
   workspaceName: z.string(),
   prompt: z.string(),
-  provider: z.enum(AGENT_PROVIDER_IDS),
+  runtime: z.enum(RUNTIME_IDS),
   scheduleLabel: z.string(),
   status: automationStatusSchema,
   createdAt: z.string(),
@@ -82,7 +110,16 @@ export const automationEntrySchema = z.object({
 });
 
 export const automationsSettingsSchema = z.object({
-  items: z.array(automationEntrySchema),
+  items: z.array(
+    z.preprocess(
+      // provider→runtime terminology migration for persisted entries
+      (value) =>
+        value && typeof value === 'object' && 'provider' in value && !('runtime' in value)
+          ? { ...value, runtime: (value as { provider?: unknown }).provider }
+          : value,
+      automationEntrySchema
+    )
+  ),
 });
 
 export const maasPlatformIdSchema = z.enum(MAAS_PLATFORM_IDS);
@@ -101,27 +138,32 @@ export const maasSettingsSchema = z.object({
   connections: z.array(maasConnectionSchema),
 });
 
-export const agentModelCandidateCacheEntrySchema = z.object({
-  source: z.enum(AGENT_MODEL_CANDIDATE_SOURCES),
+export const runtimeModelCandidateCacheEntrySchema = z.object({
+  source: z.enum(RUNTIME_MODEL_CANDIDATE_SOURCES),
   models: z.array(z.string()),
   fetchedAt: z.string(),
   expiresAt: z.string(),
   error: z.string().optional(),
 });
 
-export const agentModelCandidateProviderSettingsSchema = z.preprocess(
+export const runtimeModelCandidateSettingsSchema = z.preprocess(
   (value) => (Array.isArray(value) ? { sources: value, hiddenModels: [] } : value),
   z.object({
-    sources: z.array(agentModelCandidateCacheEntrySchema).default([]),
+    sources: z.array(runtimeModelCandidateCacheEntrySchema).default([]),
     hiddenModels: z.array(z.string()).default([]),
   })
 );
 
-export const agentModelCandidatesSettingsSchema = z.object({
-  providers: z
-    .partialRecord(z.enum(AGENT_PROVIDER_IDS), agentModelCandidateProviderSettingsSchema)
-    .default({}),
-});
+export const runtimeModelCandidatesSettingsSchema = z.preprocess(
+  // providers→runtimes terminology migration for the persisted record
+  (value) =>
+    value && typeof value === 'object' && 'providers' in value && !('runtimes' in value)
+      ? { runtimes: (value as { providers?: unknown }).providers }
+      : value,
+  z.object({
+    runtimes: z.partialRecord(z.enum(RUNTIME_IDS), runtimeModelCandidateSettingsSchema).default({}),
+  })
+);
 
 export const terminalSettingsSchema = z.object({
   fontFamily: z.string().optional(),
@@ -147,7 +189,7 @@ export const themeSchema = z
   .optional()
   .default(null);
 
-export const defaultAgentSchema = z.optional(z.enum(AGENT_PROVIDER_IDS)).default(DEFAULT_AGENT_ID);
+export const defaultRuntimeSchema = z.optional(z.enum(RUNTIME_IDS)).default(DEFAULT_RUNTIME_ID);
 
 export const reviewPromptSchema = z.string().default(DEFAULT_REVIEW_PROMPT);
 
@@ -190,7 +232,8 @@ export const keyboardSettingsSchema = z
   )
   .default({});
 
-export const providerCustomConfigEntrySchema = z.object({
+export const runtimeCustomConfigEntrySchema = z.object({
+  authProvider: z.enum(AGENT_ACCOUNT_PROVIDER_IDS).optional(),
   cli: z.string().optional(),
   resumeFlag: z.string().optional(),
   resumeSessionIdArg: z.boolean().optional(),
@@ -205,8 +248,8 @@ export const providerCustomConfigEntrySchema = z.object({
   namingCommand: z.string().optional(),
 });
 
-export const providerConfigDefaults = Object.fromEntries(
-  AGENT_PROVIDERS.filter(
+export const runtimeConfigDefaults = Object.fromEntries(
+  RUNTIMES.filter(
     (p) =>
       p.cli ||
       p.resumeFlag ||
@@ -238,43 +281,73 @@ export const interfaceSettingsSchema = z.object({
 export const browserPreviewSettingsSchema = z.object({ enabled: z.boolean() });
 
 const homeRunModeSchema = z.enum(['normal', 'brainstorm', 'compare', 'review', 'team']);
-const teamProviderSelectionSchema = z.object({
-  ceo: z.enum(AGENT_PROVIDER_IDS),
-  product: z.enum(AGENT_PROVIDER_IDS),
-  engineering: z.enum(AGENT_PROVIDER_IDS),
-  uiux: z.enum(AGENT_PROVIDER_IDS),
-  operations: z.enum(AGENT_PROVIDER_IDS),
+const teamRuntimeSelectionSchema = z.object({
+  ceo: z.enum(RUNTIME_IDS),
+  product: z.enum(RUNTIME_IDS),
+  engineering: z.enum(RUNTIME_IDS),
+  uiux: z.enum(RUNTIME_IDS),
+  operations: z.enum(RUNTIME_IDS),
 });
 
-export const homeDraftSchema = z.object({
-  prompt: z.string(),
-  selectedProjectId: z.string().nullable(),
-  strategyKind: z.enum(['new-branch', 'no-worktree']),
-  reviewStrategyKind: z.enum(['new-branch', 'no-worktree']),
-  providerOverride: z.enum(AGENT_PROVIDER_IDS).nullable(),
-  runMode: homeRunModeSchema,
-  compareProviders: z.array(z.enum(AGENT_PROVIDER_IDS)),
-  reviewReviewerProvider: z.enum(AGENT_PROVIDER_IDS),
-  teamProviders: teamProviderSelectionSchema,
-  agentSystemPrompts: z.record(z.string(), z.string().nullable()),
-  /** Selected user-defined Agent ids per run mode. Keyed by HomeRunMode; the
-   *  value is an array (single-element for solo modes, multiple for team). An
-   *  empty/absent entry means "use the raw runtime", preserving native behavior. */
-  selectedAgentIds: z.record(z.string(), z.array(z.string())),
-  /** When true, the sidebar "+" button creates a task immediately using the
-   *  last home-draft agent runtime config instead of opening the home view. */
-  expressMode: z.boolean(),
-  /** When non-empty, archiving a task or session first sends this skill or
-   *  command to the target conversation and waits for the agent to finish
-   *  before performing the actual archive. Bare skill/command names are
-   *  prefixed for the target agent, e.g. "lovstudio-git-commit-with-context"
-   *  becomes "$lovstudio-git-commit-with-context" for Codex or
-   *  "/lovstudio-git-commit-with-context" for Claude. */
-  preArchiveCommand: z.string(),
-  /** Global default quick-action commands shown on each project's overview.
-   *  Projects can override via ShareableProjectSettings.quickActions. */
-  defaultQuickActions: z.array(quickActionSchema),
-});
+/** provider→runtime terminology migration for persisted home drafts. */
+const HOME_DRAFT_LEGACY_FIELDS: Record<string, string> = {
+  providerOverride: 'runtimeOverride',
+  compareProviders: 'compareRuntimes',
+  reviewReviewerProvider: 'reviewReviewerRuntime',
+  teamProviders: 'teamRuntimes',
+};
+
+export const homeDraftSchema = z.preprocess(
+  (value) => {
+    if (!value || typeof value !== 'object') return value;
+    const record = value as Record<string, unknown>;
+    let migrated: Record<string, unknown> | null = null;
+    for (const [oldKey, newKey] of Object.entries(HOME_DRAFT_LEGACY_FIELDS)) {
+      if (oldKey in record && !(newKey in record)) {
+        migrated ??= { ...record };
+        migrated[newKey] = record[oldKey];
+        delete migrated[oldKey];
+      }
+    }
+    return migrated ?? value;
+  },
+  z.object({
+    prompt: z.string(),
+    selectedProjectId: z.string().nullable(),
+    strategyKind: z.enum(['new-branch', 'no-worktree']),
+    reviewStrategyKind: z.enum(['new-branch', 'no-worktree']),
+    runtimeOverride: z.enum(RUNTIME_IDS).nullable(),
+    runMode: homeRunModeSchema,
+    compareRuntimes: z.array(z.enum(RUNTIME_IDS)),
+    reviewReviewerRuntime: z.enum(RUNTIME_IDS),
+    teamRuntimes: teamRuntimeSelectionSchema,
+    agentSystemPrompts: z.record(z.string(), z.string().nullable()),
+    /** Selected user-defined Agent ids per run mode. Keyed by HomeRunMode; the
+     *  value is an array (single-element for solo modes, multiple for team). An
+     *  empty/absent entry means "use the raw runtime", preserving native behavior. */
+    selectedAgentIds: z.record(z.string(), z.array(z.string())),
+    /** When true, the sidebar "+" button creates a task immediately using the
+     *  last home-draft agent runtime config instead of opening the home view. */
+    expressMode: z.boolean(),
+    /** When true, image attachments are sent as @path mentions instead of
+     *  being pasted natively (clipboard + Ctrl+V) into the agent TUI. */
+    attachImagesAsPaths: z.boolean(),
+    /** When true, attachments are inserted as @path text at the caret instead
+     *  of becoming attachment chips — everything travels as one string, so the
+     *  ordering relative to the typed text is preserved. */
+    attachInline: z.boolean(),
+    /** When non-empty, archiving a task or session first sends this skill or
+     *  command to the target conversation and waits for the agent to finish
+     *  before performing the actual archive. Bare skill/command names are
+     *  prefixed for the target agent, e.g. "lovstudio-git-commit-with-context"
+     *  becomes "$lovstudio-git-commit-with-context" for Codex or
+     *  "/lovstudio-git-commit-with-context" for Claude. */
+    preArchiveCommand: z.string(),
+    /** Global default quick-action commands shown on each project's overview.
+     *  Projects can override via ShareableProjectSettings.quickActions. */
+    defaultQuickActions: z.array(quickActionSchema),
+  })
+);
 
 export const openInSettingsSchema = z.object({
   default: openInAppIdSchema,
@@ -285,11 +358,11 @@ export const APP_SETTINGS_SCHEMA_MAP = {
   localProject: localProjectSettingsSchema,
   project: projectSettingsSchema,
   tasks: taskSettingsSchema,
-  agentAutoApproveDefaults: agentAutoApproveDefaultsSchema,
+  runtimeAutoApproveDefaults: runtimeAutoApproveDefaultsSchema,
   automations: automationsSettingsSchema,
   maas: maasSettingsSchema,
-  agentModelCandidates: agentModelCandidatesSettingsSchema,
-  defaultAgent: defaultAgentSchema,
+  runtimeModelCandidates: runtimeModelCandidatesSettingsSchema,
+  defaultRuntime: defaultRuntimeSchema,
   reviewPrompt: reviewPromptSchema,
   keyboard: keyboardSettingsSchema,
   notifications: notificationSettingsSchema,
@@ -306,11 +379,11 @@ export const appSettingsSchema = z.object({
   localProject: localProjectSettingsSchema,
   project: projectSettingsSchema,
   tasks: taskSettingsSchema,
-  agentAutoApproveDefaults: agentAutoApproveDefaultsSchema,
+  runtimeAutoApproveDefaults: runtimeAutoApproveDefaultsSchema,
   automations: automationsSettingsSchema,
   maas: maasSettingsSchema,
-  agentModelCandidates: agentModelCandidatesSettingsSchema,
-  defaultAgent: defaultAgentSchema,
+  runtimeModelCandidates: runtimeModelCandidatesSettingsSchema,
+  defaultRuntime: defaultRuntimeSchema,
   reviewPrompt: reviewPromptSchema,
   keyboard: keyboardSettingsSchema,
   notifications: notificationSettingsSchema,

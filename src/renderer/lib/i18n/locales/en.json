@@ -631,7 +631,13 @@
     "attachAria": "Attach files",
     "attachSshUnsupported": "Local attachments are not supported for SSH projects",
     "removeAttachmentAria": "Remove attachment",
+    "previewAttachmentAria": "Preview attachment",
     "attachPasteFailedToast": "Could not attach the pasted image",
+    "composerSettingsAria": "Input settings",
+    "attachImagesAsPathsLabel": "Send images as file paths",
+    "attachImagesAsPathsDesc": "Reference images as @path mentions instead of pasting them natively into the agent terminal.",
+    "attachInlineLabel": "Insert attachments inline",
+    "attachInlineDesc": "Insert @path at the cursor instead of adding attachment cards, preserving ordering relative to your text.",
     "voiceAria": "Trigger Typeless voice input",
     "voiceTooltip": "Trigger the Typeless hands-free voice shortcut",
     "voiceTriggeredToast": "Triggered Typeless voice input ({{shortcut}}).",
@@ -1116,7 +1122,8 @@
       "summaryFailed": "Couldn't generate a summary",
       "summaryFailedDescription": "Summary generation failed. It will retry after the next reply.",
       "summaryFromCompaction": "From the agent's compaction summary",
-      "summaryGenerated": "Generated from the conversation"
+      "summaryGenerated": "Generated from the conversation",
+      "transcript": "Transcript"
     },
     "sidePane": {
       "moveBack": "Move back to tab strip",
@@ -1136,6 +1143,11 @@
       "cycleDetected": "A task cannot be moved under its own subtask",
       "crossProject": "Parent task must be in the same project",
       "parentArchived": "Parent task is archived"
+    },
+    "transcript": {
+      "noSession": "No active session",
+      "loading": "Loading transcript…",
+      "empty": "No transcript yet"
     }
   },
   "commandPalette": {

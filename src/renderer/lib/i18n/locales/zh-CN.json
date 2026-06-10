@@ -631,7 +631,13 @@
     "attachAria": "添加附件",
     "attachSshUnsupported": "SSH 项目暂不支持本地附件",
     "removeAttachmentAria": "移除附件",
+    "previewAttachmentAria": "预览附件",
     "attachPasteFailedToast": "无法添加粘贴的图片",
+    "composerSettingsAria": "输入设置",
+    "attachImagesAsPathsLabel": "图片以文件路径发送",
+    "attachImagesAsPathsDesc": "以 @路径 形式引用图片，而不是把图片原生粘贴进 agent 终端。",
+    "attachInlineLabel": "附件内联插入文本",
+    "attachInlineDesc": "以 @路径 直接插入光标处而非生成附件卡片，可保证附件与文字的先后顺序。",
     "voiceAria": "触发 Typeless 语音输入",
     "voiceTooltip": "触发 Typeless 免持语音快捷键",
     "voiceTriggeredToast": "已触发 Typeless 语音输入（{{shortcut}}）。",
@@ -1116,7 +1122,8 @@
       "summaryFailed": "摘要生成失败",
       "summaryFailedDescription": "摘要生成失败，将在下一次回复后重试。",
       "summaryFromCompaction": "来自 agent 的压缩摘要",
-      "summaryGenerated": "根据对话生成"
+      "summaryGenerated": "根据对话生成",
+      "transcript": "实录"
     },
     "sidePane": {
       "moveBack": "移回主区域",
@@ -1136,6 +1143,11 @@
       "cycleDetected": "不能把任务移到它自己的子任务下",
       "crossProject": "父任务必须在同一项目中",
       "parentArchived": "父任务已归档"
+    },
+    "transcript": {
+      "noSession": "暂无活动会话",
+      "loading": "正在加载实录…",
+      "empty": "暂无实录内容"
     }
   },
   "commandPalette": {

@@ -1,10 +1,11 @@
-import type { AgentProviderId } from '@shared/agent-provider-registry';
+import type { RuntimeId } from '@shared/runtime-registry';
+import type { TaskNamingContextSnapshot, TaskNamingStatus } from '@shared/task-naming';
 
 export type Conversation = {
   id: string;
   projectId: string;
   taskId: string;
-  providerId: AgentProviderId;
+  runtimeId: RuntimeId;
   title: string;
   createdAt?: string;
   updatedAt?: string;
@@ -26,6 +27,26 @@ export type ConversationSessionInfo = {
 export type RenameConversationParams = {
   conversationId: string;
   newTitle: string;
+};
+
+export type ConversationNamingSnapshot = {
+  conversationId: string;
+  projectId: string;
+  taskId: string;
+  status: TaskNamingStatus;
+  model: string | null;
+  runtimeId: RuntimeId | null;
+  runtimeName: string | null;
+  context: TaskNamingContextSnapshot | null;
+  systemPrompt?: string;
+  systemPromptEstimatedTokens?: number;
+  prompt?: string;
+  promptChars?: number;
+  promptEstimatedTokens?: number;
+  generatedTitle?: string;
+  error?: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type ClaudeTodoStatus = 'pending' | 'in_progress' | 'completed';
@@ -82,6 +103,7 @@ export type ClaudeSessionContext = {
   skills: ContextSkill[];
   skillsListing: string | null;
   prompts: ClaudeSessionPrompt[];
+  messages: SessionTranscriptMessage[];
   /** Latest compaction summary the runtime wrote into the transcript, if any. */
   summary: SessionSummary | null;
 };
@@ -96,10 +118,17 @@ export type SessionSummary = {
   timestamp: string | null;
 };
 
+export type SessionTranscriptMessage = {
+  id: string;
+  role: 'user' | 'assistant';
+  text: string;
+  timestamp: string | null;
+};
+
 /**
  * Which slice of the session a summary covers.
  * - `global`: the whole session (prefers the runtime compaction summary)
- * - `recent`: only the last few user messages (short, refreshed each turn)
+ * - `recent`: only the last few transcript messages (short, refreshed each turn)
  */
 export type SessionSummaryScope = 'global' | 'recent';
 
@@ -160,6 +189,7 @@ export type CodexSessionContext = {
   skills: ContextSkill[];
   skillsListing: string | null;
   prompts: ClaudeSessionPrompt[];
+  messages: SessionTranscriptMessage[];
   turnContexts: CodexTurnContext[];
   completedTurnCount: number;
   /** Latest compaction summary the runtime wrote into the rollout, if any. */
@@ -170,10 +200,12 @@ export type CreateConversationParams = {
   id: string;
   projectId: string;
   taskId: string;
-  provider: AgentProviderId;
+  runtime: RuntimeId;
   title: string;
   autoApprove?: boolean;
   isInitialConversation?: boolean;
   initialSize?: { cols: number; rows: number };
   initialPrompt?: string;
+  /** Absolute local paths of image attachments to deliver with the initial prompt. */
+  imagePaths?: string[];
 };
