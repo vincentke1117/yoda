@@ -9,6 +9,8 @@ export interface PtyDimensions {
 }
 
 export interface Pty {
+  /** OS process id when the PTY is local and exposes one. */
+  readonly pid?: number;
   write(data: string): void;
   resize(cols: number, rows: number): void;
   kill(): void;

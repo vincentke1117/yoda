@@ -269,6 +269,7 @@ export class LocalConversationProvider implements ConversationProvider {
       conversationId: conversation.id,
       projectId: conversation.projectId,
       taskId: conversation.taskId,
+      ...(pty.pid === undefined ? {} : { pid: pty.pid }),
       runtimeId: conversation.runtimeId,
       title: conversation.title,
     });
@@ -303,7 +304,7 @@ export class LocalConversationProvider implements ConversationProvider {
       startedAtMs: sessionStartedAtMs,
       isResuming,
     });
-    this.startRunStateWatcher(conversation, sessionStartedAtMs);
+    this.startRunStateWatcher(conversation, sessionStartedAtMs, isResuming);
     telemetryService.capture('agent_run_started', {
       provider: conversation.runtimeId,
       project_id: conversation.projectId,
@@ -319,7 +320,11 @@ export class LocalConversationProvider implements ConversationProvider {
    * Claude tails its session transcript. No-op for other providers (they fall
    * back to the classifier).
    */
-  private startRunStateWatcher(conversation: Conversation, startedAtMs: number): void {
+  private startRunStateWatcher(
+    conversation: Conversation,
+    startedAtMs: number,
+    isResuming: boolean
+  ): void {
     this.stopRunStateWatcher(conversation.id);
     const session = {
       projectId: conversation.projectId,
@@ -328,23 +333,32 @@ export class LocalConversationProvider implements ConversationProvider {
     };
     if (conversation.runtimeId === 'codex') {
       const watcher = watchCodexRunState(
-        { conversationId: conversation.id, cwd: this.taskPath, startedAtMs },
+        { conversationId: conversation.id, cwd: this.taskPath, startedAtMs, isResuming },
         (event) => agentSessionRuntimeStore.dispatch(session, event, 'codex-rollout')
       );
       this.runStateWatchers.set(conversation.id, [watcher]);
       return;
     }
     if (conversation.runtimeId === 'claude') {
+      const processPid = this.getSessionProcessPid(conversation.id);
+      const activityContext =
+        processPid === undefined
+          ? { conversationId: conversation.id, cwd: this.taskPath }
+          : { conversationId: conversation.id, cwd: this.taskPath, processPid };
       this.runStateWatchers.set(conversation.id, [
         watchClaudeRunState({ conversationId: conversation.id, cwd: this.taskPath }, (event) =>
           agentSessionRuntimeStore.dispatch(session, event, 'claude-transcript')
         ),
-        watchClaudeSessionActivity(
-          { conversationId: conversation.id, cwd: this.taskPath },
-          (event) => agentSessionRuntimeStore.dispatch(session, event, 'claude-session-activity')
+        watchClaudeSessionActivity(activityContext, (event) =>
+          agentSessionRuntimeStore.dispatch(session, event, 'claude-session-activity')
         ),
       ]);
     }
+  }
+
+  private getSessionProcessPid(conversationId: string): number | undefined {
+    const sessionId = makePtySessionId(this.projectId, this.taskId, conversationId);
+    return this.sessions.get(sessionId)?.pid;
   }
 
   private stopRunStateWatcher(conversationId: string): void {

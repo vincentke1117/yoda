@@ -24,6 +24,15 @@ export function markInterrupted(conversationId: string, at = Date.now()): void {
 }
 
 /**
+ * Drop the marker on a confirmed new turn (`UserPromptSubmit` hook) so the
+ * stateless deriveStatus can't gate the fresh `working` during the short
+ * window before the prompt row lands in the transcript.
+ */
+export function clearInterruptMarker(conversationId: string): void {
+  markers.delete(conversationId);
+}
+
+/**
  * True when the conversation was interrupted after its last decisive prompt
  * row — i.e. a transcript-`working` verdict is stale and must read as idle.
  * Clears the marker once newer decisive activity shows up.

@@ -63,6 +63,8 @@ export interface ClaudeTurnVerdict {
   state: ClaudeTurnState;
   /** Epoch ms of the last non-interrupt user prompt row, if any. */
   lastUserAt: number | null;
+  /** True when the current/last turn ended via Claude's transcript interrupt sentinel. */
+  interrupted: boolean;
 }
 
 export async function readClaudeTurnState(
@@ -112,6 +114,7 @@ export function classifyClaudeTranscriptVerdict(raw: string): ClaudeTurnVerdict 
   let lastUserAt: number | null = null;
   let lastStopIdx = -1;
   let idx = -1;
+  let interrupted = false;
   const pendingInteractiveToolIds = new Set<string>();
   const resolvedToolIds = new Set<string>();
 
@@ -127,6 +130,7 @@ export function classifyClaudeTranscriptVerdict(raw: string): ClaudeTurnVerdict 
     }
     if (row.subtype === 'stop_hook_summary') {
       lastStopIdx = idx;
+      interrupted = false;
       continue;
     }
     const message = row.message;
@@ -160,10 +164,12 @@ export function classifyClaudeTranscriptVerdict(raw: string): ClaudeTurnVerdict 
         // An Esc interrupt is written as a user row but terminates the turn.
         if (isInterruptContent(content)) {
           lastStopIdx = idx;
+          interrupted = true;
         } else {
           lastUserIdx = idx;
           const at = typeof row.timestamp === 'string' ? Date.parse(row.timestamp) : NaN;
           lastUserAt = Number.isNaN(at) ? null : at;
+          interrupted = false;
         }
       }
     }
@@ -171,11 +177,11 @@ export function classifyClaudeTranscriptVerdict(raw: string): ClaudeTurnVerdict 
 
   // An interactive tool with no matching result = blocked on the user.
   for (const id of pendingInteractiveToolIds) {
-    if (!resolvedToolIds.has(id)) return { state: 'awaiting-input', lastUserAt };
+    if (!resolvedToolIds.has(id)) return { state: 'awaiting-input', lastUserAt, interrupted };
   }
 
-  if (lastUserIdx === -1) return { state: 'idle', lastUserAt };
-  return { state: lastUserIdx > lastStopIdx ? 'working' : 'idle', lastUserAt };
+  if (lastUserIdx === -1) return { state: 'idle', lastUserAt, interrupted };
+  return { state: lastUserIdx > lastStopIdx ? 'working' : 'idle', lastUserAt, interrupted };
 }
 
 // ── Live tailer ──────────────────────────────────────────────────────────────
@@ -220,7 +226,16 @@ class ClaudeTranscriptStateTailer implements ClaudeRunStateWatcher {
   private readyDeadline = Date.now() + READY_POLL_MAX_MS;
   private reading = false;
   private pendingRead = false;
-  private lastState: ClaudeTurnState | undefined;
+  /**
+   * Dedup key: state + timestamp of the decisive prompt row. State alone is
+   * not enough — a stale `working` that was force-cleared (interrupt with no
+   * sentinel) keeps classifying as `working` when the NEXT prompt arrives, and
+   * a state-only dedup would swallow that turn's `turn-started` forever. A new
+   * prompt row moves `lastUserAt`, so the fingerprint changes and the event is
+   * re-dispatched; the reducer is idempotent, so re-asserting `working` mid-turn
+   * is harmless (it also feeds the watchdog's `updatedAt`).
+   */
+  private lastFingerprint: string | undefined;
   private stopped = false;
 
   constructor(
@@ -307,21 +322,25 @@ class ClaudeTranscriptStateTailer implements ClaudeRunStateWatcher {
     // killed before its first assistant output — no sentinel, no stop row).
     // Without this gate, attaching to such a transcript would resurrect the
     // zombie `working` that the interrupt just cleared.
-    if (state === 'working' && isInterruptedSinceLastPrompt(this.conversationId, verdict.lastUserAt)) {
+    if (
+      state === 'working' &&
+      isInterruptedSinceLastPrompt(this.conversationId, verdict.lastUserAt)
+    ) {
       state = 'idle';
     }
-    const first = this.lastState === undefined;
-    if (state === this.lastState) return;
-    this.lastState = state;
+    const fingerprint = `${state}@${verdict.lastUserAt ?? ''}`;
+    const first = this.lastFingerprint === undefined;
+    if (fingerprint === this.lastFingerprint) return;
+    this.lastFingerprint = fingerprint;
     // On the very first read, only act if the session is actively running — a
     // first-read `idle` is the steady state and must not fire a spurious
     // `completed` (green dot) for a session that simply isn't running.
     if (first && state === 'idle') return;
-    this.dispatch(eventForClaudeState(state));
+    this.dispatch(eventForClaudeVerdict(state, verdict));
   }
 }
 
-function eventForClaudeState(state: ClaudeTurnState): RunStateEvent {
+function eventForClaudeVerdict(state: ClaudeTurnState, verdict: ClaudeTurnVerdict): RunStateEvent {
   switch (state) {
     case 'working':
       // NOT forced: the tailer only *observes* that a turn is in progress, so it
@@ -334,6 +353,6 @@ function eventForClaudeState(state: ClaudeTurnState): RunStateEvent {
         pendingAction: { notificationType: 'elicitation_dialog' },
       };
     case 'idle':
-      return { kind: 'turn-completed', at: Date.now() };
+      return { kind: verdict.interrupted ? 'turn-interrupted' : 'turn-completed', at: Date.now() };
   }
 }

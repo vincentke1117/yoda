@@ -13,6 +13,7 @@ import {
 } from '@shared/events/agentEvents';
 import { events } from '@main/lib/events';
 import { log } from '@main/lib/logger';
+import { clearInterruptMarker } from './interrupt-marker';
 
 type SessionKey = {
   projectId: string;
@@ -24,6 +25,14 @@ function keyFor({ projectId, taskId, conversationId }: SessionKey): string {
   return `${projectId}\0${taskId}\0${conversationId}`;
 }
 
+function samePendingAction(a: PendingAction | null, b: PendingAction | null): boolean {
+  return (
+    a?.notificationType === b?.notificationType &&
+    a?.toolName === b?.toolName &&
+    a?.actionDescription === b?.actionDescription
+  );
+}
+
 /**
  * Translate a legacy `AgentEvent` (hook / classifier) into a reducer event.
  * The classifier is a best-effort heuristic source; the app-server turn stream
@@ -32,6 +41,10 @@ function keyFor({ projectId, taskId, conversationId }: SessionKey): string {
 function eventFor(event: AgentEvent, at: number): RunStateEvent | null {
   if (event.type === 'stop') return { kind: 'turn-completed', at };
   if (event.type === 'error') return { kind: 'turn-failed', at };
+  if (event.type === 'prompt-submit') {
+    // UserPromptSubmit hook — the user confirmed a new turn.
+    return { kind: 'turn-started', at, force: true };
+  }
   if (event.type === 'awaiting-input-resolved') {
     // The interactive tool was answered — resume working.
     return { kind: 'turn-started', at, force: true };
@@ -142,14 +155,18 @@ class AgentSessionRuntimeStore {
     const prev = this.entries.get(key)?.state ?? initialRunState();
     const next = reduceRunState(prev, event);
     this.entries.set(key, { session, state: next });
-    if (prev.status !== next.status) {
-      log.debug('AgentRunState transition', {
-        conversationId: session.conversationId,
-        from: prev.status,
-        to: next.status,
-        event: event.kind,
-        source,
-      });
+    const statusChanged = prev.status !== next.status;
+    const pendingActionChanged = !samePendingAction(prev.pendingAction, next.pendingAction);
+    if (statusChanged || pendingActionChanged) {
+      if (statusChanged) {
+        log.debug('AgentRunState transition', {
+          conversationId: session.conversationId,
+          from: prev.status,
+          to: next.status,
+          event: event.kind,
+          source,
+        });
+      }
       // Broadcast deterministic transitions (e.g. from the codex rollout tailer)
       // to the renderer. Renderer-originated changes already update the renderer
       // store directly and are echoed here, so only forward changes that did NOT
@@ -160,6 +177,7 @@ class AgentSessionRuntimeStore {
           taskId: session.taskId,
           conversationId: session.conversationId,
           status: next.status,
+          pendingAction: next.pendingAction,
         });
       }
     }
@@ -179,6 +197,9 @@ class AgentSessionRuntimeStore {
   }
 
   setFromAgentEvent(event: AgentEvent): void {
+    // A confirmed new turn invalidates any pending interrupt marker, so the
+    // stateless deriveStatus can't gate the fresh `working` as stale.
+    if (event.type === 'prompt-submit') clearInterruptMarker(event.conversationId);
     const reducerEvent = eventFor(event, event.timestamp || Date.now());
     if (!reducerEvent) return;
     this.dispatch(event, reducerEvent, `${event.source ?? 'agent'}:${event.type}`);

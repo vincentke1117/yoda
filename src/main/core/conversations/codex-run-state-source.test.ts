@@ -1,5 +1,15 @@
-import { describe, expect, it } from 'vitest';
-import { parseTurnEvent } from './codex-run-state-source';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import Database from 'better-sqlite3';
+import { afterEach, describe, expect, it } from 'vitest';
+import {
+  classifyCodexRollout,
+  parseCodexRunStateEvent,
+  parseTurnEvent,
+  readCodexTurnVerdict,
+  resolveCodexRolloutPathForConversation,
+} from './codex-run-state-source';
 
 const ts = '2026-06-08T17:49:25.314Z';
 const at = Date.parse(ts);
@@ -59,3 +69,222 @@ describe('parseTurnEvent', () => {
     expect(typeof result?.at).toBe('number');
   });
 });
+
+describe('parseCodexRunStateEvent', () => {
+  it('maps request_user_input function call to awaiting-input and output to forced working', () => {
+    const pending = new Set<string>();
+    const request = JSON.stringify({
+      timestamp: ts,
+      type: 'response_item',
+      payload: {
+        type: 'function_call',
+        name: 'request_user_input',
+        arguments: JSON.stringify({
+          questions: [{ question: 'Which option should we use?' }],
+        }),
+        call_id: 'call_question',
+      },
+    });
+    const output = JSON.stringify({
+      timestamp: ts,
+      type: 'response_item',
+      payload: {
+        type: 'function_call_output',
+        call_id: 'call_question',
+        output: '{"answers":{}}',
+      },
+    });
+
+    expect(parseCodexRunStateEvent(request, pending)).toEqual({
+      kind: 'awaiting-input',
+      at,
+      pendingAction: {
+        notificationType: 'elicitation_dialog',
+        toolName: 'request_user_input',
+        actionDescription: 'Which option should we use?',
+      },
+    });
+    expect(pending.has('call_question')).toBe(true);
+    expect(parseCodexRunStateEvent(output, pending)).toEqual({
+      kind: 'turn-started',
+      at,
+      force: true,
+    });
+    expect(pending.has('call_question')).toBe(false);
+  });
+});
+
+describe('classifyCodexRollout', () => {
+  it('returns working with the last task_started timestamp', () => {
+    const nextTs = '2026-06-08T17:50:00.000Z';
+    const nextAt = Date.parse(nextTs);
+    const raw = [
+      line({ type: 'task_started', turn_id: 't1' }),
+      line({ type: 'task_complete', turn_id: 't1' }),
+      JSON.stringify({
+        timestamp: nextTs,
+        type: 'event_msg',
+        payload: { type: 'task_started', turn_id: 't2' },
+      }),
+    ].join('\n');
+
+    expect(classifyCodexRollout(raw)).toEqual({ state: 'working', lastStartedAt: nextAt });
+  });
+
+  it('returns idle after an interrupted turn', () => {
+    const raw = [
+      line({ type: 'task_started', turn_id: 't1' }),
+      line({ type: 'turn_aborted', turn_id: 't1', reason: 'interrupted' }),
+    ].join('\n');
+
+    expect(classifyCodexRollout(raw)).toEqual({ state: 'idle', lastStartedAt: at });
+  });
+
+  it('returns awaiting-input while request_user_input has no output', () => {
+    const raw = [
+      line({ type: 'task_started', turn_id: 't1' }),
+      JSON.stringify({
+        timestamp: ts,
+        type: 'response_item',
+        payload: {
+          type: 'function_call',
+          name: 'request_user_input',
+          arguments: JSON.stringify({ questions: [{ question: 'Pick a path?' }] }),
+          call_id: 'call_question',
+        },
+      }),
+    ].join('\n');
+
+    expect(classifyCodexRollout(raw)).toEqual({ state: 'awaiting-input', lastStartedAt: at });
+  });
+
+  it('returns working after request_user_input receives output and the turn continues', () => {
+    const raw = [
+      line({ type: 'task_started', turn_id: 't1' }),
+      JSON.stringify({
+        timestamp: ts,
+        type: 'response_item',
+        payload: {
+          type: 'function_call',
+          name: 'request_user_input',
+          arguments: JSON.stringify({ questions: [{ question: 'Pick a path?' }] }),
+          call_id: 'call_question',
+        },
+      }),
+      JSON.stringify({
+        timestamp: ts,
+        type: 'response_item',
+        payload: {
+          type: 'function_call_output',
+          call_id: 'call_question',
+          output: '{"answers":{}}',
+        },
+      }),
+    ].join('\n');
+
+    expect(classifyCodexRollout(raw)).toEqual({ state: 'working', lastStartedAt: at });
+  });
+});
+
+describe('resolveCodexRolloutPathForConversation', () => {
+  let dir: string | undefined;
+
+  afterEach(() => {
+    if (dir) rmSync(dir, { recursive: true, force: true });
+    dir = undefined;
+  });
+
+  it('resolves rollout_path by cwd and startedAt without relying on a title claim', async () => {
+    dir = mkdtempSync(join(tmpdir(), 'yoda-codex-run-state-'));
+    const statePath = join(dir, 'state_5.sqlite');
+    const rolloutPath = join(dir, 'rollout.jsonl');
+    const startedAtMs = Date.parse('2026-06-08T17:49:24.900Z');
+    createStateDb(statePath);
+    insertThread(statePath, {
+      id: 'codex-thread-1',
+      cwd: '/repo',
+      rolloutPath,
+      createdAtMs: Date.parse('2026-06-08T17:49:25.000Z'),
+      updatedAtMs: Date.parse('2026-06-08T17:49:26.000Z'),
+    });
+    writeFileSync(
+      rolloutPath,
+      `${line({ type: 'task_started', turn_id: 't1' })}\n${line({
+        type: 'turn_aborted',
+        turn_id: 't1',
+        reason: 'interrupted',
+      })}\n`
+    );
+
+    expect(
+      resolveCodexRolloutPathForConversation({
+        conversationId: 'yoda-conversation-1',
+        cwd: '/repo',
+        startedAtMs,
+        statePath,
+      })
+    ).toBe(rolloutPath);
+    await expect(
+      readCodexTurnVerdict('yoda-conversation-1', { cwd: '/repo', startedAtMs, statePath })
+    ).resolves.toEqual({ state: 'idle', lastStartedAt: at });
+  });
+});
+
+function createStateDb(statePath: string): void {
+  const db = new Database(statePath);
+  try {
+    db.exec(`
+      CREATE TABLE threads (
+        id TEXT PRIMARY KEY,
+        cwd TEXT NOT NULL,
+        rollout_path TEXT NOT NULL,
+        archived INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        created_at_ms INTEGER,
+        updated_at_ms INTEGER
+      );
+    `);
+  } finally {
+    db.close();
+  }
+}
+
+function insertThread(
+  statePath: string,
+  args: {
+    id: string;
+    cwd: string;
+    rolloutPath: string;
+    createdAtMs: number;
+    updatedAtMs: number;
+  }
+): void {
+  const db = new Database(statePath);
+  try {
+    db.prepare(
+      `
+        INSERT INTO threads (
+          id,
+          cwd,
+          rollout_path,
+          archived,
+          created_at,
+          updated_at,
+          created_at_ms,
+          updated_at_ms
+        ) VALUES (?, ?, ?, 0, ?, ?, ?, ?)
+      `
+    ).run(
+      args.id,
+      args.cwd,
+      args.rolloutPath,
+      Math.floor(args.createdAtMs / 1000),
+      Math.floor(args.updatedAtMs / 1000),
+      args.createdAtMs,
+      args.updatedAtMs
+    );
+  } finally {
+    db.close();
+  }
+}

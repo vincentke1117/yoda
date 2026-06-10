@@ -3,7 +3,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RunStateEvent } from '@shared/events/agent-run-state';
-import { classifyClaudeTranscript, watchClaudeRunState } from './claude-run-state-source';
+import {
+  classifyClaudeTranscript,
+  classifyClaudeTranscriptVerdict,
+  watchClaudeRunState,
+} from './claude-run-state-source';
 
 vi.mock('@main/core/session-title/claude-title-source', () => ({
   resolveClaudeTranscriptPath: (_cwd: string, sessionId: string) =>
@@ -82,6 +86,47 @@ describe('classifyClaudeTranscript', () => {
     expect(classifyClaudeTranscript(jsonl([stop, userMsg, askUse, answer]))).toBe('working');
   });
 
+  it('idle after an Esc interrupt (no stop_hook_summary is written on interrupt)', () => {
+    const interrupt = {
+      type: 'user',
+      message: {
+        role: 'user',
+        content: [{ type: 'text', text: '[Request interrupted by user]' }],
+      },
+    };
+    expect(classifyClaudeTranscript(jsonl([stop, userMsg, assistantMsg, interrupt]))).toBe('idle');
+    expect(
+      classifyClaudeTranscriptVerdict(jsonl([stop, userMsg, assistantMsg, interrupt])).interrupted
+    ).toBe(true);
+  });
+
+  it('idle after an Esc interrupt during tool use (cancelled tool gets an error tool_result)', () => {
+    const toolUse = {
+      type: 'assistant',
+      message: {
+        role: 'assistant',
+        content: [{ type: 'tool_use', name: 'AskUserQuestion', id: 'tu_1' }],
+      },
+    };
+    const cancelled = {
+      type: 'user',
+      message: {
+        role: 'user',
+        content: [{ type: 'tool_result', tool_use_id: 'tu_1', is_error: true }],
+      },
+    };
+    const interrupt = {
+      type: 'user',
+      message: {
+        role: 'user',
+        content: [{ type: 'text', text: '[Request interrupted by user for tool use]' }],
+      },
+    };
+    expect(classifyClaudeTranscript(jsonl([stop, userMsg, toolUse, cancelled, interrupt]))).toBe(
+      'idle'
+    );
+  });
+
   it('ExitPlanMode also counts as awaiting-input', () => {
     const plan = {
       type: 'assistant',
@@ -136,6 +181,27 @@ describe('watchClaudeRunState (live tailer)', () => {
     expect(events[0]?.kind).toBe('turn-started');
   });
 
+  it('re-dispatches turn-started when a new prompt arrives while classification stays working', async () => {
+    // Regression: a stale `working` (interrupt with no sentinel) was force-
+    // cleared; the NEXT prompt keeps the classification at `working`, so a
+    // state-only dedup would swallow its turn-started and the store would stay
+    // idle/completed for the whole turn.
+    const u1 = {
+      type: 'user',
+      message: { role: 'user', content: 'hi' },
+      timestamp: '2026-06-10T00:00:01.000Z',
+    };
+    const u2 = { ...u1, timestamp: '2026-06-10T00:00:05.000Z' };
+    writeTranscript('s5', [stop, u1]); // working
+    const events: RunStateEvent[] = [];
+    const w = watchClaudeRunState({ cwd: '/repo', conversationId: 's5' }, (e) => events.push(e));
+    await waitFor(() => events.length === 1);
+    writeTranscript('s5', [stop, u1, u2]); // still working, but a NEW decisive prompt row
+    await waitFor(() => events.length === 2);
+    w.stop();
+    expect(events.map((e) => e.kind)).toEqual(['turn-started', 'turn-started']);
+  });
+
   it('fires turn-completed when a working session later goes idle', async () => {
     writeTranscript('s3', [stop, userMsg]); // working
     const events: RunStateEvent[] = [];
@@ -145,5 +211,23 @@ describe('watchClaudeRunState (live tailer)', () => {
     await waitFor(() => events.some((e) => e.kind === 'turn-completed'));
     w.stop();
     expect(events.map((e) => e.kind)).toEqual(['turn-started', 'turn-completed']);
+  });
+
+  it('fires turn-interrupted when a working session later writes an interrupt sentinel', async () => {
+    const interrupt = {
+      type: 'user',
+      message: {
+        role: 'user',
+        content: [{ type: 'text', text: '[Request interrupted by user]' }],
+      },
+    };
+    writeTranscript('s4', [stop, userMsg, assistantMsg]); // working until sentinel lands
+    const events: RunStateEvent[] = [];
+    const w = watchClaudeRunState({ cwd: '/repo', conversationId: 's4' }, (e) => events.push(e));
+    await waitFor(() => events.some((e) => e.kind === 'turn-started'));
+    writeTranscript('s4', [stop, userMsg, assistantMsg, interrupt]);
+    await waitFor(() => events.some((e) => e.kind === 'turn-interrupted'));
+    w.stop();
+    expect(events.map((e) => e.kind)).toEqual(['turn-started', 'turn-interrupted']);
   });
 });

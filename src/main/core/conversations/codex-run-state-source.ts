@@ -6,13 +6,21 @@ import {
   type RunStateEvent,
 } from '@shared/events/agent-run-state';
 import {
+  findClosestCodexThreadRolloutByCreatedAt,
+  findRecentCodexThreadRollout,
   getClaimedCodexThreadId,
   readCodexThreadRolloutPath,
   resolveCodexStatePath,
 } from '@main/core/session-title/codex-title-source';
 import { log } from '@main/lib/logger';
+import { iterateLines } from '@main/utils/text-lines';
 
-export type CodexTurnState = 'working' | 'idle' | 'error';
+export type CodexTurnState = 'working' | 'awaiting-input' | 'idle' | 'error';
+
+export interface CodexTurnVerdict {
+  state: CodexTurnState;
+  lastStartedAt: number | null;
+}
 
 /**
  * Deterministic run-state source for Codex sessions.
@@ -36,11 +44,15 @@ export type CodexTurnState = 'working' | 'idle' | 'error';
 
 const BIND_POLL_INTERVAL_MS = 1_000;
 const BIND_POLL_MAX_MS = 5 * 60_000;
+const RESUME_START_GRACE_MS = 10_000;
+const NEW_SESSION_THREAD_CREATE_MAX_DISTANCE_MS = 60_000;
+const REQUEST_USER_INPUT_TOOL = 'request_user_input';
 
 export interface CodexRunStateContext {
   conversationId: string;
   cwd: string;
   startedAtMs: number;
+  isResuming?: boolean;
 }
 
 export type RunStateDispatch = (event: RunStateEvent) => void;
@@ -67,6 +79,7 @@ class CodexRolloutTailer implements CodexRunStateWatcher {
   private reading = false;
   private pendingRead = false;
   private stopped = false;
+  private readonly pendingRequestUserInputCallIds = new Set<string>();
 
   constructor(
     private readonly ctx: CodexRunStateContext,
@@ -92,9 +105,11 @@ class CodexRolloutTailer implements CodexRunStateWatcher {
   }
 
   /**
-   * The rollout path is not known until the rename poller has bound this
-   * conversation to a Codex thread (and Codex has flushed `rollout_path` into
-   * `state_5.sqlite`). Poll for it, then attach the file tailer.
+   * The rollout path is not available until Codex creates its thread row and
+   * flushes `rollout_path` into `state_5.sqlite`. Prefer the title poller's
+   * explicit claim when present, but do not depend on title generation: early
+   * interrupts still need the run-state tailer, so fall back to the thread row
+   * nearest this session's start time.
    */
   private scheduleBind(delayMs: number): void {
     if (this.stopped) return;
@@ -104,10 +119,10 @@ class CodexRolloutTailer implements CodexRunStateWatcher {
   private tryBind(): void {
     if (this.stopped) return;
     try {
-      const threadId = getClaimedCodexThreadId(this.ctx.conversationId);
-      const rolloutPath = threadId
-        ? readCodexThreadRolloutPath(this.statePath, threadId)
-        : undefined;
+      const rolloutPath = resolveCodexRolloutPathForConversation({
+        ...this.ctx,
+        statePath: this.statePath,
+      });
       if (rolloutPath) {
         this.rolloutPath = rolloutPath;
         this.attach();
@@ -193,10 +208,41 @@ class CodexRolloutTailer implements CodexRunStateWatcher {
 
   private handleLine(line: string): void {
     if (this.stopped) return;
-    const event = parseTurnEvent(line);
+    const event = parseCodexRunStateEvent(line, this.pendingRequestUserInputCallIds);
     if (!event) return;
     this.dispatch(event);
   }
+}
+
+export function resolveCodexRolloutPathForConversation({
+  conversationId,
+  cwd,
+  startedAtMs,
+  isResuming,
+  statePath = resolveCodexStatePath(),
+}: CodexRunStateContext & { statePath?: string }): string | undefined {
+  const claimedThreadId = getClaimedCodexThreadId(conversationId);
+  if (claimedThreadId) {
+    const claimed = readCodexThreadRolloutPath(statePath, claimedThreadId);
+    if (claimed) return claimed;
+  }
+
+  const direct = readCodexThreadRolloutPath(statePath, conversationId);
+  if (direct) return direct;
+
+  const row = isResuming
+    ? findRecentCodexThreadRollout({
+        statePath,
+        cwd,
+        minUpdatedAtMs: startedAtMs - RESUME_START_GRACE_MS,
+      })
+    : findClosestCodexThreadRolloutByCreatedAt({
+        statePath,
+        cwd,
+        targetCreatedAtMs: startedAtMs,
+        maxDistanceMs: NEW_SESSION_THREAD_CREATE_MAX_DISTANCE_MS,
+      });
+  return row?.rolloutPath;
 }
 
 /**
@@ -232,6 +278,71 @@ export function parseTurnEvent(line: string): RunStateEvent | null {
   }
 }
 
+/**
+ * Parse any rollout line that can change live run-state. Turn-boundary events
+ * are persisted as `event_msg` rows. Codex request_user_input pending is not:
+ * the app-server request is deliberately excluded from rollout, so the closest
+ * durable signal is the Response API `function_call` plus its later output.
+ */
+export function parseCodexRunStateEvent(
+  line: string,
+  pendingRequestUserInputCallIds = new Set<string>()
+): RunStateEvent | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(line);
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== 'object' || parsed === null) return null;
+  const row = parsed as Record<string, unknown>;
+  const at = parseTimestampMs(row.timestamp) ?? Date.now();
+
+  if (row.type === 'event_msg') {
+    const event = parseTurnEvent(line);
+    if (
+      event?.kind === 'turn-completed' ||
+      event?.kind === 'turn-interrupted' ||
+      event?.kind === 'turn-failed'
+    ) {
+      pendingRequestUserInputCallIds.clear();
+    }
+    return event;
+  }
+
+  if (row.type !== 'response_item') return null;
+  const payload = row.payload;
+  if (typeof payload !== 'object' || payload === null) return null;
+  const p = payload as Record<string, unknown>;
+
+  if (
+    p.type === 'function_call' &&
+    p.name === REQUEST_USER_INPUT_TOOL &&
+    typeof p.call_id === 'string'
+  ) {
+    pendingRequestUserInputCallIds.add(p.call_id);
+    return {
+      kind: 'awaiting-input',
+      at,
+      pendingAction: {
+        notificationType: 'elicitation_dialog',
+        toolName: REQUEST_USER_INPUT_TOOL,
+        actionDescription: summarizeRequestUserInputArguments(p.arguments),
+      },
+    };
+  }
+
+  if (
+    p.type === 'function_call_output' &&
+    typeof p.call_id === 'string' &&
+    pendingRequestUserInputCallIds.delete(p.call_id)
+  ) {
+    return { kind: 'turn-started', at, force: true };
+  }
+
+  return null;
+}
+
 function parseTimestampMs(value: unknown): number | undefined {
   if (typeof value !== 'string') return undefined;
   const ms = Date.parse(value);
@@ -246,23 +357,74 @@ function parseTimestampMs(value: unknown): number | undefined {
  */
 export async function readCodexTurnState(
   conversationId: string,
-  options: { statePath?: string } = {}
+  options: Partial<Omit<CodexRunStateContext, 'conversationId'>> & { statePath?: string } = {}
 ): Promise<CodexTurnState | null> {
+  return (await readCodexTurnVerdict(conversationId, options))?.state ?? null;
+}
+
+export async function readCodexTurnVerdict(
+  conversationId: string,
+  options: Partial<Omit<CodexRunStateContext, 'conversationId'>> & { statePath?: string } = {}
+): Promise<CodexTurnVerdict | null> {
   const statePath = options.statePath ?? resolveCodexStatePath();
-  const threadId = getClaimedCodexThreadId(conversationId) ?? conversationId;
-  const rolloutPath = readCodexThreadRolloutPath(statePath, threadId);
+  const rolloutPath =
+    options.cwd && options.startedAtMs !== undefined
+      ? resolveCodexRolloutPathForConversation({
+          conversationId,
+          cwd: options.cwd,
+          startedAtMs: options.startedAtMs,
+          isResuming: options.isResuming,
+          statePath,
+        })
+      : readCodexThreadRolloutPath(
+          statePath,
+          getClaimedCodexThreadId(conversationId) ?? conversationId
+        );
   if (!rolloutPath) return null;
   const raw = await readFile(rolloutPath, 'utf8').catch(() => undefined);
   if (raw === undefined) return null;
+  return classifyCodexRollout(raw);
+}
 
+export function classifyCodexRollout(raw: string): CodexTurnVerdict {
   let state = initialRunState();
-  for (const line of raw.split('\n')) {
+  let lastStartedAt: number | null = null;
+  const pendingRequestUserInputCallIds = new Set<string>();
+  for (const line of iterateLines(raw)) {
     const trimmed = line.trim();
     if (!trimmed) continue;
-    const event = parseTurnEvent(trimmed);
-    if (event) state = reduceRunState(state, event);
+    const event = parseCodexRunStateEvent(trimmed, pendingRequestUserInputCallIds);
+    if (event) {
+      if (event.kind === 'turn-started') lastStartedAt = event.at;
+      state = reduceRunState(state, event);
+    }
   }
-  if (state.status === 'working' || state.status === 'awaiting-input') return 'working';
-  if (state.status === 'error') return 'error';
-  return 'idle';
+  if (state.status === 'awaiting-input') return { state: 'awaiting-input', lastStartedAt };
+  if (state.status === 'working') return { state: 'working', lastStartedAt };
+  if (state.status === 'error') return { state: 'error', lastStartedAt };
+  return { state: 'idle', lastStartedAt };
+}
+
+function summarizeRequestUserInputArguments(value: unknown): string | undefined {
+  if (typeof value !== 'string') return REQUEST_USER_INPUT_TOOL;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    return REQUEST_USER_INPUT_TOOL;
+  }
+  if (typeof parsed !== 'object' || parsed === null) return REQUEST_USER_INPUT_TOOL;
+  const questions = (parsed as Record<string, unknown>).questions;
+  if (!Array.isArray(questions) || questions.length === 0) return REQUEST_USER_INPUT_TOOL;
+  const first = questions[0];
+  const question =
+    typeof first === 'object' && first !== null
+      ? (first as Record<string, unknown>).question
+      : undefined;
+  if (typeof question === 'string' && question.trim()) {
+    return questions.length === 1
+      ? question.trim()
+      : `${question.trim()} (+${questions.length - 1} more)`;
+  }
+  return questions.length === 1 ? 'Question requested' : `${questions.length} questions requested`;
 }

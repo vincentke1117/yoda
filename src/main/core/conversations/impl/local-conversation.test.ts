@@ -23,12 +23,14 @@ const mocks = vi.hoisted(() => ({
   resolveAvailableTmuxSessionName: vi.fn(),
   resolveAgentResumeSessionId: vi.fn(),
   resolveLocalPtySpawn: vi.fn(),
+  dispatchRuntimeStatus: vi.fn(),
   removeRuntimeStatus: vi.fn(),
   sendLiteralToTmuxSession: vi.fn(),
   setRuntimeStatus: vi.fn(),
   spawnLocalPty: vi.fn(),
   startTitle: vi.fn(),
   stopTitle: vi.fn(),
+  watchClaudeSessionActivity: vi.fn(() => ({ stop: vi.fn() })),
   wireAgentClassifier: vi.fn(),
 }));
 
@@ -67,9 +69,20 @@ vi.mock('@main/core/agent-hooks/inspect/hook-overrides-store', () => ({
 
 vi.mock('@main/core/conversations/agent-session-runtime', () => ({
   agentSessionRuntimeStore: {
+    dispatch: mocks.dispatchRuntimeStatus,
     remove: mocks.removeRuntimeStatus,
     setStatus: mocks.setRuntimeStatus,
   },
+}));
+
+vi.mock('@main/core/conversations/claude-session-activity-source', () => ({
+  watchClaudeSessionActivity: mocks.watchClaudeSessionActivity,
+}));
+
+// Pulls in the DB client transitively; unit tests have no Electron app.
+vi.mock('@main/core/conversations/session-stats-hooks', () => ({
+  recordConversationAuthProvider: vi.fn(),
+  snapshotTaskDiffOnSessionExit: vi.fn(),
 }));
 
 vi.mock('@main/core/fs/impl/local-fs', () => ({
@@ -114,8 +127,8 @@ vi.mock('../codex-unarchive', () => ({
   ensureCodexThreadUnarchived: mocks.ensureCodexThreadUnarchived,
 }));
 
-vi.mock('@main/core/settings/provider-settings-service', () => ({
-  providerOverrideSettings: {
+vi.mock('@main/core/settings/runtime-settings-service', () => ({
+  runtimeOverrideSettings: {
     getItem: mocks.getProviderConfig,
   },
 }));
@@ -158,6 +171,7 @@ type SpawnOptions = {
 
 class FakePty implements Pty {
   private readonly exitHandlers: Array<(info: PtyExitInfo) => void> = [];
+  readonly pid = 4321;
   readonly writes: string[] = [];
 
   write(data: string): void {
@@ -185,7 +199,7 @@ const conversation: Conversation = {
   id: 'conv-1',
   projectId: 'project-1',
   taskId: 'task-1',
-  providerId: 'claude',
+  runtimeId: 'claude',
   title: 'Claude',
   lastInteractedAt: null,
   autoApprove: false,
@@ -289,7 +303,7 @@ describe('LocalConversationProvider', () => {
     });
     const codexConversation: Conversation = {
       ...conversation,
-      providerId: 'codex',
+      runtimeId: 'codex',
       createdAt: '2026-06-04 06:45:36',
     };
     const provider = createProvider();
@@ -302,7 +316,7 @@ describe('LocalConversationProvider', () => {
 
     expect(mocks.resolveAgentResumeSessionId).toHaveBeenCalledWith(codexConversation, '/workspace');
     expect(mocks.ensureCodexThreadUnarchived).toHaveBeenCalledWith({
-      providerId: 'codex',
+      runtimeId: 'codex',
       providerConfig: {
         cli: 'codex',
         resumeFlag: 'resume',
@@ -326,7 +340,7 @@ describe('LocalConversationProvider', () => {
     });
     const codexConversation: Conversation = {
       ...conversation,
-      providerId: 'codex',
+      runtimeId: 'codex',
     };
     const provider = createProvider();
 
@@ -379,7 +393,8 @@ describe('LocalConversationProvider', () => {
         conversationId: conversation.id,
         projectId: conversation.projectId,
         taskId: conversation.taskId,
-        providerId: conversation.providerId,
+        pid: 4321,
+        runtimeId: conversation.runtimeId,
         title: conversation.title,
         detachable: true,
       },
@@ -434,9 +449,22 @@ describe('LocalConversationProvider', () => {
       },
       'working'
     );
+    expect(mocks.watchClaudeSessionActivity).toHaveBeenCalledWith(
+      { conversationId: conversation.id, cwd: '/workspace', processPid: 4321 },
+      expect.any(Function)
+    );
 
     spawned[0].pty.emitExit({ exitCode: 0 });
 
+    expect(mocks.dispatchRuntimeStatus).toHaveBeenCalledWith(
+      {
+        projectId: conversation.projectId,
+        taskId: conversation.taskId,
+        conversationId: conversation.id,
+      },
+      expect.objectContaining({ kind: 'process-exited', at: expect.any(Number) }),
+      'process-exited'
+    );
     expect(mocks.removeRuntimeStatus).toHaveBeenCalledWith({
       projectId: conversation.projectId,
       taskId: conversation.taskId,

@@ -1,4 +1,5 @@
 import {
+  Copy,
   Loader2,
   Maximize2,
   MoreHorizontal,
@@ -71,9 +72,11 @@ export const SessionInfoPanel = observer(function SessionInfoPanel({
   // Observe the live PTY session status so the panel re-fetches session info
   // (e.g. tmux enabled/disabled) whenever the session restarts — from this
   // panel's button or from a context-menu "restart with/without tmux".
-  const sessionStatus = conversation
-    ? provisionedTask.conversations.conversations.get(conversation.id)?.session.status
+  const conversationStore = conversation
+    ? provisionedTask.conversations.conversations.get(conversation.id)
     : undefined;
+  const sessionStatus = conversationStore?.session.status;
+  const agentRuntimeStatus = conversationStore?.status;
   const [isLoading, setIsLoading] = useState(false);
   const [resolvedFields, setResolvedFields] = useState<TaskMenuSessionFields | undefined>();
 
@@ -106,7 +109,7 @@ export const SessionInfoPanel = observer(function SessionInfoPanel({
     return () => {
       cancelled = true;
     };
-  }, [active, conversation, provisionedTask.path, sessionStatus]);
+  }, [active, agentRuntimeStatus, conversation, provisionedTask.path, sessionStatus]);
 
   const runningStatus =
     fields?.running === undefined
@@ -122,6 +125,40 @@ export const SessionInfoPanel = observer(function SessionInfoPanel({
         : fields.tmuxEnabled
           ? t('tasks.sessionInfo.enabled')
           : t('tasks.sessionInfo.disabled');
+  const processStatus = fields?.process?.status
+    ? t(`tasks.sessionInfo.processStatus.${fields.process.status}`)
+    : undefined;
+  const agentStatus = agentRuntimeStatus
+    ? t(`tasks.sessionInfo.agentStatus.${agentRuntimeStatus}`)
+    : undefined;
+  const ptyStatus = sessionStatus ? t(`tasks.sessionInfo.ptyStatus.${sessionStatus}`) : undefined;
+  const titleSource =
+    fields?.sessionTitleSource === 'runtime'
+      ? t('tasks.sessionInfo.titleSourceRuntime')
+      : fields?.sessionTitleSource === 'yoda'
+        ? t('tasks.sessionInfo.titleSourceYoda')
+        : undefined;
+  const branchName = provisionedTask.workspace.git.branchName ?? provisionedTask.taskBranch;
+  const yesNo = (value: boolean | null | undefined): string | undefined => {
+    if (value == null) return undefined;
+    return value ? t('common.yes') : t('common.no');
+  };
+  const resumeCommand = fields?.resumeCommand;
+  const copyResumeCommand = useCallback(async () => {
+    if (!resumeCommand) return;
+
+    try {
+      const result = await rpc.app.clipboardWriteText(resumeCommand);
+      if (!result?.success) throw new Error(result?.error ?? t('common.copyFailed'));
+      toast({ title: t('common.copied') });
+    } catch {
+      toast({
+        title: t('common.copyFailed'),
+        description: t('tasks.panel.copyFailed'),
+        variant: 'destructive',
+      });
+    }
+  }, [resumeCommand, t]);
 
   return (
     <div
@@ -158,17 +195,105 @@ export const SessionInfoPanel = observer(function SessionInfoPanel({
                 value={conversation.title}
                 conversation={conversation}
               />
+              <SessionInfoValue label={t('tasks.sessionInfo.titleSource')} value={titleSource} />
               <SessionInfoValue
                 label={t('tasks.context.taskInfo.provider')}
                 value={fields.runtimeName}
               />
               <SessionInfoValue
-                label={t('tasks.context.taskInfo.sessionId')}
+                label={t('tasks.sessionInfo.runtimeId')}
+                value={fields.runtimeId}
+                mono
+              />
+              <SessionInfoValue
+                label={t('tasks.sessionInfo.yodaConversationId')}
+                value={conversation.id}
+                mono
+              />
+              <SessionInfoValue
+                label={t('tasks.sessionInfo.runtimeSessionId')}
                 value={fields.sessionId}
                 mono
               />
-              <SessionInfoValue label={t('tasks.sessionInfo.status')} value={runningStatus} />
+              <SessionInfoValue
+                label={t('tasks.sessionInfo.agentStatusLabel')}
+                value={agentStatus}
+              />
+              <SessionInfoValue
+                label={t('tasks.sessionInfo.runtimeRunning')}
+                value={runningStatus}
+              />
               <SessionInfoValue label={t('tasks.sessionInfo.tmux')} value={tmuxStatus} />
+              <SessionInfoValue label={t('tasks.sessionInfo.ptyStatusLabel')} value={ptyStatus} />
+              <SessionInfoValue
+                label={t('tasks.sessionInfo.ptySessionId')}
+                value={conversationStore?.session.sessionId}
+                mono
+              />
+              {fields.process?.pid !== undefined ? (
+                <SessionInfoValue
+                  label={t('tasks.sessionInfo.processPid')}
+                  value={String(fields.process.pid)}
+                  mono
+                />
+              ) : null}
+              {processStatus ? (
+                <SessionInfoValue
+                  label={t('tasks.sessionInfo.processStatusLabel')}
+                  value={processStatus}
+                />
+              ) : null}
+              <SessionInfoTimeValue
+                label={t('tasks.sessionInfo.processUpdatedAt')}
+                value={fields.process?.updatedAt}
+              />
+              <SessionInfoDivider />
+              <SessionInfoValue
+                label={t('tasks.sessionInfo.workingDirectory')}
+                value={fields.workingDirectory}
+                mono
+              />
+              <SessionInfoValue label={t('tasks.sessionInfo.branch')} value={branchName} mono />
+              <SessionInfoValue
+                label={t('tasks.sessionInfo.projectId')}
+                value={conversation.projectId}
+                mono
+              />
+              <SessionInfoValue
+                label={t('tasks.sessionInfo.taskId')}
+                value={conversation.taskId}
+                mono
+              />
+              <SessionInfoValue
+                label={t('tasks.sessionInfo.contentSource')}
+                value={fields.contentSourcePath}
+                mono
+              />
+              <SessionInfoDivider />
+              <SessionInfoValue
+                label={t('tasks.sessionInfo.initialConversation')}
+                value={yesNo(conversation.isInitialConversation)}
+              />
+              <SessionInfoValue
+                label={t('tasks.sessionInfo.resumeSession')}
+                value={yesNo(conversation.resume)}
+              />
+              <SessionInfoValue
+                label={t('tasks.sessionInfo.autoApprove')}
+                value={yesNo(conversation.autoApprove)}
+              />
+              <SessionInfoValue
+                label={t('tasks.sessionInfo.seen')}
+                value={yesNo(conversationStore?.seen)}
+              />
+              <SessionInfoValue
+                label={t('tasks.sessionInfo.sessionExited')}
+                value={yesNo(conversationStore?.sessionExited)}
+              />
+              <SessionInfoValue
+                label={t('tasks.sessionInfo.archived')}
+                value={yesNo(Boolean(conversation.archivedAt))}
+              />
               {hasSessionTimestamps ? (
                 <>
                   <SessionInfoDivider />
@@ -195,6 +320,24 @@ export const SessionInfoPanel = observer(function SessionInfoPanel({
                 label={t('tasks.sessionInfo.resumeCommand')}
                 value={fields.resumeCommand}
                 mono
+                action={
+                  fields.resumeCommand ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="size-5 text-foreground-passive hover:text-foreground"
+                      title={t('common.copy')}
+                      aria-label={t('common.copy')}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        void copyResumeCommand();
+                      }}
+                    >
+                      <Copy className="size-3" aria-hidden="true" />
+                    </Button>
+                  ) : undefined
+                }
               />
             </section>
           </div>

@@ -1,5 +1,8 @@
 import { eq, inArray } from 'drizzle-orm';
-import type { AgentSessionRuntimeStatus } from '@shared/events/agentEvents';
+import {
+  isAgentSessionRunningStatus,
+  type AgentSessionRuntimeStatus,
+} from '@shared/events/agentEvents';
 import { makePtySessionId } from '@shared/ptySessionId';
 import { ptySessionRegistry } from '@main/core/pty/pty-session-registry';
 import { resolveClaudeTranscriptPath } from '@main/core/session-title/claude-title-source';
@@ -9,7 +12,7 @@ import { resolveTask } from '../projects/utils';
 import { agentSessionRuntimeStore } from './agent-session-runtime';
 import { readClaudeTurnVerdictFile } from './claude-run-state-source';
 import { findClaudeTranscriptPathBySessionId } from './claude-transcript-locator';
-import { readCodexTurnState } from './codex-run-state-source';
+import { readCodexTurnVerdict } from './codex-run-state-source';
 import { isInterruptedSinceLastPrompt } from './interrupt-marker';
 
 /**
@@ -33,15 +36,17 @@ export async function getConversationRuntimeStatuses(
   const statuses: Record<string, AgentSessionRuntimeStatus> = {};
   if (conversationIds.length === 0) return statuses;
 
-  const providerById = await loadProviders(conversationIds);
+  const conversationById = await loadConversationRows(conversationIds);
   const cwd = resolveTask(projectId, taskId)?.conversations.taskPath;
 
   for (const conversationId of conversationIds) {
+    const row = conversationById.get(conversationId);
     statuses[conversationId] = await deriveStatus({
       projectId,
       taskId,
       conversationId,
-      provider: providerById.get(conversationId),
+      provider: row?.runtime ?? undefined,
+      createdAt: row?.createdAt,
       cwd,
     });
   }
@@ -60,6 +65,7 @@ export async function getConversationRunStatus(args: {
   conversationId: string;
   provider: string;
   cwd: string;
+  createdAt?: string | null;
 }): Promise<AgentSessionRuntimeStatus> {
   return deriveStatus(args);
 }
@@ -69,9 +75,11 @@ async function deriveStatus(args: {
   taskId: string;
   conversationId: string;
   provider: string | undefined;
+  createdAt?: string | null;
   cwd: string | undefined;
 }): Promise<AgentSessionRuntimeStatus> {
-  const { projectId, taskId, conversationId, provider, cwd } = args;
+  const { projectId, taskId, conversationId, provider, createdAt, cwd } = args;
+  const mountedTask = resolveTask(projectId, taskId);
 
   // Live in-memory state (set this session via hooks/tailers). Used as the base
   // and as the fallback for providers without a file truth source.
@@ -104,25 +112,40 @@ async function deriveStatus(args: {
       }
     }
   } else if (provider === 'codex') {
-    const t = await readCodexTurnState(conversationId).catch(() => null);
-    if (t === 'working') truth = 'working';
-    else if (t === 'error') truth = 'error';
-    else if (t === 'idle') truth = 'idle';
+    const startedAtMs = parseTimestampMs(createdAt);
+    const verdict = await readCodexTurnVerdict(
+      conversationId,
+      cwd && startedAtMs !== undefined ? { cwd, startedAtMs } : {}
+    ).catch(() => null);
+    if (verdict?.state === 'working' || verdict?.state === 'awaiting-input') truth = verdict.state;
+    else if (verdict?.state === 'error') truth = 'error';
+    else if (verdict?.state === 'idle') truth = 'idle';
   }
 
-  // The transcript truth source is authoritative: a turn is mid-flight iff the
-  // CLI is genuinely processing (working) or blocked on the user (awaiting-input).
-  // This is what makes the result survive a main-process restart / HMR and a
-  // missed Stop hook — we never trust a persisted verdict, we re-derive it.
+  // The transcript truth source is the primary authority: a turn is mid-flight
+  // iff the CLI is processing or blocked on the user. This survives a main-
+  // process restart / HMR and missed hooks because we re-derive it from the
+  // file source of truth.
   //
-  // When there is NO truth source (provider has none, or transcript unreadable)
-  // we fall back to the in-memory cache, but a running fallback is only credible
-  // while a PTY is actually connected — otherwise a stale `working` from before a
-  // restart would survive. Truth-source verdicts are NOT gated this way (tmux
-  // backends keep running without a connected PTY).
+  // There is one local-UI caveat: for a mounted task, if there is neither a
+  // connected PTY nor an active provider session, a transcript-only `working`
+  // verdict is stale (e.g. Esc killed the turn before Claude wrote an interrupt
+  // sentinel). Cold-load/unmounted tasks stay transcript-authoritative so tmux
+  // sessions can still be shown as running without a connected PTY.
   let derived = truth ?? memory;
-  if (truth === undefined && (derived === 'working' || derived === 'awaiting-input')) {
-    if (!hasLivePty(projectId, taskId, conversationId)) derived = 'idle';
+  if (isAgentSessionRunningStatus(derived)) {
+    const livePty = hasLivePty(projectId, taskId, conversationId);
+    if (truth === undefined) {
+      if (!livePty) derived = 'idle';
+    } else if (
+      mountedTask &&
+      !livePty &&
+      !mountedTask.conversations
+        .getActiveSessions()
+        .some((session) => session.conversationId === conversationId)
+    ) {
+      derived = 'idle';
+    }
   }
 
   // Self-heal the in-memory cache so other readers and the next cold load agree.
@@ -137,14 +160,29 @@ function hasLivePty(projectId: string, taskId: string, conversationId: string): 
   return ptySessionRegistry.get(sessionId) !== undefined;
 }
 
-async function loadProviders(conversationIds: string[]): Promise<Map<string, string>> {
+function parseTimestampMs(value: string | null | undefined): number | undefined {
+  if (!value) return undefined;
+  const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value)
+    ? `${value.replace(' ', 'T')}Z`
+    : value;
+  const ms = Date.parse(normalized);
+  return Number.isNaN(ms) ? undefined : ms;
+}
+
+async function loadConversationRows(
+  conversationIds: string[]
+): Promise<Map<string, { runtime: string | null; createdAt: string | null }>> {
   const rows = await db
-    .select({ id: conversations.id, runtime: conversations.runtime })
+    .select({
+      id: conversations.id,
+      runtime: conversations.runtime,
+      createdAt: conversations.createdAt,
+    })
     .from(conversations)
     .where(
       conversationIds.length === 1
         ? eq(conversations.id, conversationIds[0])
         : inArray(conversations.id, conversationIds)
     );
-  return new Map(rows.flatMap((r) => (r.runtime ? [[r.id, r.runtime] as const] : [])));
+  return new Map(rows.map((r) => [r.id, { runtime: r.runtime, createdAt: r.createdAt }]));
 }

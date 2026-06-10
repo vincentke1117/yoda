@@ -22,6 +22,11 @@ export type ConversationSessionInfo = {
   resumeCommand?: string;
   running?: boolean;
   tmuxEnabled?: boolean;
+  process?: {
+    pid?: number;
+    status?: 'busy' | 'idle' | 'waiting';
+    updatedAt?: string;
+  };
 };
 
 export type RenameConversationParams = {

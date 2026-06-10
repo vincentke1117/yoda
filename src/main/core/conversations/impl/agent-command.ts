@@ -1,5 +1,5 @@
-import { getProvider, type AgentProviderId } from '@shared/agent-provider-registry';
-import type { ProviderCustomConfig } from '@shared/app-settings';
+import type { RuntimeCustomConfig } from '@shared/app-settings';
+import { getRuntime, type RuntimeId } from '@shared/runtime-registry';
 
 export type AgentCommand = {
   command: string;
@@ -77,14 +77,14 @@ function parseArgField(value: string | undefined): string[] {
   return parsed.words;
 }
 
-function parseCliPrefix(value: string | undefined, providerId: AgentProviderId): string[] {
+function parseCliPrefix(value: string | undefined, runtimeId: RuntimeId): string[] {
   const cli = value?.trim();
-  if (!cli) throw new Error(`Missing CLI command for provider: ${providerId}`);
+  if (!cli) throw new Error(`Missing CLI command for provider: ${runtimeId}`);
 
   const parsed = parseShellWords(cli, { rejectShellSyntax: true });
   if (!parsed.ok) throw new Error(parsed.reason);
   const [command] = parsed.words;
-  if (!command) throw new Error(`Missing CLI command for provider: ${providerId}`);
+  if (!command) throw new Error(`Missing CLI command for provider: ${runtimeId}`);
   if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(command)) throw new Error(SHELL_SYNTAX_ERROR);
   if (SHELL_BUILTINS.has(command)) throw new Error(SHELL_SYNTAX_ERROR);
 
@@ -92,7 +92,7 @@ function parseCliPrefix(value: string | undefined, providerId: AgentProviderId):
 }
 
 export function buildAgentCommand({
-  providerId,
+  runtimeId,
   providerConfig,
   autoApprove,
   initialPrompt,
@@ -100,16 +100,16 @@ export function buildAgentCommand({
   isResuming,
   workingDirectory,
 }: {
-  providerId: AgentProviderId;
-  providerConfig: ProviderCustomConfig | undefined;
+  runtimeId: RuntimeId;
+  providerConfig: RuntimeCustomConfig | undefined;
   autoApprove?: boolean;
   initialPrompt?: string;
   sessionId: string;
   isResuming?: boolean;
   workingDirectory?: string;
 }): AgentCommand {
-  const providerDef = getProvider(providerId);
-  const [command, ...args] = parseCliPrefix(providerConfig?.cli, providerId);
+  const providerDef = getRuntime(runtimeId);
+  const [command, ...args] = parseCliPrefix(providerConfig?.cli, runtimeId);
 
   args.push(...(providerConfig?.defaultArgs ?? []));
 
@@ -121,7 +121,7 @@ export function buildAgentCommand({
 
   if (isResuming && providerConfig?.resumeFlag) {
     args.push(...parseArgField(providerConfig.resumeFlag));
-    if (providerId === 'codex' && workingDirectory?.trim()) {
+    if (runtimeId === 'codex' && workingDirectory?.trim()) {
       args.push('--cd', workingDirectory);
     }
     if (shouldAppendResumeSessionId) {
@@ -147,17 +147,17 @@ export function buildAgentCommand({
 }
 
 export function buildAgentSubcommand({
-  providerId,
+  runtimeId,
   providerConfig,
   subcommand,
   subcommandArgs = [],
 }: {
-  providerId: AgentProviderId;
-  providerConfig: ProviderCustomConfig | undefined;
+  runtimeId: RuntimeId;
+  providerConfig: RuntimeCustomConfig | undefined;
   subcommand: string;
   subcommandArgs?: string[];
 }): AgentCommand {
-  const [command, ...args] = parseCliPrefix(providerConfig?.cli, providerId);
+  const [command, ...args] = parseCliPrefix(providerConfig?.cli, runtimeId);
   args.push(...(providerConfig?.defaultArgs ?? []), subcommand, ...subcommandArgs);
   return { command, args };
 }

@@ -1,14 +1,15 @@
 import { and, eq } from 'drizzle-orm';
-import type { AgentProviderId } from '@shared/agent-provider-registry';
 import type { ConversationSessionInfo } from '@shared/conversations';
+import type { RuntimeId } from '@shared/runtime-registry';
 import {
   readCodexThreadArchiveStatus,
   resolveCodexStatePath,
 } from '@main/core/session-title/codex-title-source';
-import { providerOverrideSettings } from '@main/core/settings/provider-settings-service';
+import { runtimeOverrideSettings } from '@main/core/settings/runtime-settings-service';
 import { db } from '@main/db/client';
 import { conversations, projects } from '@main/db/schema';
 import { resolveTask } from '../projects/utils';
+import { getClaudeSessionActivity } from './claude-session-activity-source';
 import { resolveAgentResumeSession } from './codex-session-id';
 import { buildAgentCommand, buildAgentSubcommand } from './impl/agent-command';
 import { mapConversationRowToConversation } from './utils';
@@ -20,7 +21,11 @@ export async function getConversationSessionInfo(
   cwd?: string
 ): Promise<ConversationSessionInfo> {
   const [row] = await db
-    .select({ conversation: conversations, projectPath: projects.path })
+    .select({
+      conversation: conversations,
+      projectPath: projects.path,
+      workspaceProvider: projects.workspaceProvider,
+    })
     .from(conversations)
     .innerJoin(projects, eq(conversations.projectId, projects.id))
     .where(
@@ -42,40 +47,60 @@ export async function getConversationSessionInfo(
   const activeSession = resolveTask(projectId, taskId)
     ?.conversations.getActiveSessions()
     .find((item) => item.conversationId === conversationId);
+  const process =
+    conversation.runtimeId === 'claude' && row.workspaceProvider !== 'ssh'
+      ? await getClaudeSessionActivity({
+          cwd: workingDirectory,
+          conversationId,
+          processPid: activeSession?.pid,
+        }).then((activity) =>
+          activity
+            ? {
+                pid: activity.pid ?? undefined,
+                status: activity.status,
+                updatedAt:
+                  activity.updatedAt === null
+                    ? undefined
+                    : new Date(activity.updatedAt).toISOString(),
+              }
+            : undefined
+        )
+      : undefined;
 
   return {
     sessionId: session.sessionId,
     sessionTitle: session.sessionTitle,
     running: activeSession !== undefined,
     tmuxEnabled: activeSession?.detachable ?? false,
+    process,
     resumeCommand: await buildResumeCommand({
-      providerId: conversation.providerId,
+      runtimeId: conversation.runtimeId,
       sessionId: session.sessionId,
       cwd: workingDirectory,
       includeUnarchive:
-        conversation.providerId === 'codex' &&
+        conversation.runtimeId === 'codex' &&
         readCodexThreadArchiveStatus(resolveCodexStatePath(), session.sessionId) === true,
     }),
   };
 }
 
 async function buildResumeCommand({
-  providerId,
+  runtimeId,
   sessionId,
   cwd,
   includeUnarchive,
 }: {
-  providerId: AgentProviderId;
+  runtimeId: RuntimeId;
   sessionId: string;
   cwd?: string;
   includeUnarchive?: boolean;
 }): Promise<string | undefined> {
-  const providerConfig = await providerOverrideSettings.getItem(providerId);
+  const providerConfig = await runtimeOverrideSettings.getItem(runtimeId);
   if (!providerConfig?.cli) return undefined;
   if (!providerConfig.resumeFlag && !providerConfig.sessionIdFlag) return undefined;
 
   const { command, args } = buildAgentCommand({
-    providerId,
+    runtimeId,
     providerConfig,
     sessionId,
     isResuming: true,
@@ -84,7 +109,7 @@ async function buildResumeCommand({
   const commands: string[] = [];
   if (includeUnarchive) {
     const unarchive = buildAgentSubcommand({
-      providerId,
+      runtimeId,
       providerConfig,
       subcommand: 'unarchive',
       subcommandArgs: [sessionId],

@@ -54,6 +54,10 @@ export class LocalPtySession implements Pty {
     this.id = id;
   }
 
+  get pid(): number {
+    return this.proc.pid;
+  }
+
   write(data: string): void {
     this.proc.write(data);
   }

@@ -180,7 +180,7 @@ describe('CodexSessionTitleSource helpers', () => {
     const newTitles: string[] = [];
     const oldWatcher = source.watch(
       {
-        providerId: 'codex',
+        runtimeId: 'codex',
         conversationId: 'old-conversation',
         projectId: 'project',
         taskId: 'old-task',
@@ -192,7 +192,7 @@ describe('CodexSessionTitleSource helpers', () => {
     );
     const newWatcher = source.watch(
       {
-        providerId: 'codex',
+        runtimeId: 'codex',
         conversationId: 'new-conversation',
         projectId: 'project',
         taskId: 'new-task',

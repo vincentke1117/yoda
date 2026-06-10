@@ -1,5 +1,6 @@
 import { action, computed, makeObservable, observable, onBecomeObserved, runInAction } from 'mobx';
 import { type Conversation, type CreateConversationParams } from '@shared/conversations';
+import type { PendingAction } from '@shared/events/agent-run-state';
 import {
   agentEventChannel,
   agentSessionExitedChannel,
@@ -117,7 +118,7 @@ export class ConversationManagerStore {
       if (event.projectId !== this.projectId || event.taskId !== this.taskId) return;
       const conversationStore = this.conversations.get(event.conversationId);
       if (!conversationStore) return;
-      conversationStore.applyAuthoritativeStatus(event.status);
+      conversationStore.applyAuthoritativeStatus(event.status, event.pendingAction);
     });
   }
 
@@ -564,7 +565,13 @@ export class ConversationStore {
    * Codex rollout tailer). Overrides optimistic local predictions. Does not
    * re-emit, since the main process is already the source.
    */
-  applyAuthoritativeStatus(status: AgentStatus) {
+  applyAuthoritativeStatus(status: AgentStatus, pendingAction?: PendingAction | null) {
+    if (status === 'awaiting-input') {
+      this.lastNotificationType = pendingAction?.notificationType ?? 'elicitation_dialog';
+      this.pendingActionDescription = pendingAction?.actionDescription?.trim() || null;
+      this.setStatus(status, { emit: false });
+      return;
+    }
     if (status === 'working') {
       // Refresh the post-submit grace anchor so a classifier echo right after a
       // real turn-start doesn't immediately flip back to awaiting-input.

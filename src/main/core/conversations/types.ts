@@ -5,6 +5,7 @@ export type ActiveConversationSession = {
   conversationId: string;
   projectId: string;
   taskId: string;
+  pid?: number;
   taskTitle?: string;
   runtimeId: Conversation['runtimeId'];
   title: string;

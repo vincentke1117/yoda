@@ -20,6 +20,14 @@ export type CodexThreadTitle = {
   updatedAtMs: number;
 };
 
+export type CodexThreadRollout = {
+  id: string;
+  cwd: string;
+  rolloutPath: string;
+  createdAtMs: number;
+  updatedAtMs: number;
+};
+
 const READY_POLL_INTERVAL_MS = 1_000;
 const READY_POLL_MAX_MS = 5 * 60_000;
 const RESUME_START_GRACE_MS = 10_000;
@@ -35,7 +43,7 @@ export function getClaimedCodexThreadId(conversationId: string): string | undefi
 }
 
 export class CodexSessionTitleSource implements SessionTitleSource {
-  readonly providerId = 'codex' as const;
+  readonly runtimeId = 'codex' as const;
 
   watch(ctx: SessionTitleContext, onTitle: TitleListener): SessionTitleWatcher {
     const startedAtMs = ctx.startedAtMs ?? Date.now();
@@ -189,6 +197,77 @@ export function findClosestCodexThreadTitleByCreatedAt(params: {
         params.targetCreatedAtMs
       );
     return parseCodexThreadTitle(row);
+  });
+}
+
+export function findClosestCodexThreadRolloutByCreatedAt(params: {
+  statePath: string;
+  cwd: string;
+  targetCreatedAtMs: number;
+  maxDistanceMs: number;
+  includeArchived?: boolean;
+}): CodexThreadRollout | undefined {
+  const minCreatedAtMs = params.targetCreatedAtMs - params.maxDistanceMs;
+  const maxCreatedAtMs = params.targetCreatedAtMs + params.maxDistanceMs;
+  return withCodexState(params.statePath, (db) => {
+    const row = db
+      .prepare(
+        `
+          SELECT
+            id,
+            cwd,
+            NULLIF(rollout_path, '') AS rolloutPath,
+            COALESCE(created_at_ms, created_at * 1000) AS createdAtMs,
+            COALESCE(updated_at_ms, updated_at * 1000) AS updatedAtMs
+          FROM threads
+          WHERE cwd = ?
+            AND (? = 1 OR archived = 0)
+            AND NULLIF(rollout_path, '') IS NOT NULL
+            AND COALESCE(created_at_ms, created_at * 1000) >= ?
+            AND COALESCE(created_at_ms, created_at * 1000) <= ?
+          ORDER BY ABS(COALESCE(created_at_ms, created_at * 1000) - ?) ASC,
+            COALESCE(created_at_ms, created_at * 1000) ASC,
+            id ASC
+          LIMIT 1
+        `
+      )
+      .get(
+        params.cwd,
+        params.includeArchived ? 1 : 0,
+        minCreatedAtMs,
+        maxCreatedAtMs,
+        params.targetCreatedAtMs
+      );
+    return parseCodexThreadRollout(row);
+  });
+}
+
+export function findRecentCodexThreadRollout(params: {
+  statePath: string;
+  cwd: string;
+  minUpdatedAtMs: number;
+}): CodexThreadRollout | undefined {
+  return withCodexState(params.statePath, (db) => {
+    const row = db
+      .prepare(
+        `
+          SELECT
+            id,
+            cwd,
+            NULLIF(rollout_path, '') AS rolloutPath,
+            COALESCE(created_at_ms, created_at * 1000) AS createdAtMs,
+            COALESCE(updated_at_ms, updated_at * 1000) AS updatedAtMs
+          FROM threads
+          WHERE cwd = ?
+            AND archived = 0
+            AND NULLIF(rollout_path, '') IS NOT NULL
+            AND COALESCE(updated_at_ms, updated_at * 1000) >= ?
+          ORDER BY COALESCE(updated_at_ms, updated_at * 1000) DESC, id DESC
+          LIMIT 1
+        `
+      )
+      .get(params.cwd, params.minUpdatedAtMs);
+    return parseCodexThreadRollout(row);
   });
 }
 
@@ -471,6 +550,23 @@ function parseCodexThreadTitle(row: unknown): CodexThreadTitle | undefined {
     cwd: rec.cwd,
     title,
     firstUserMessage,
+    createdAtMs: rec.createdAtMs,
+    updatedAtMs: rec.updatedAtMs,
+  };
+}
+
+function parseCodexThreadRollout(row: unknown): CodexThreadRollout | undefined {
+  if (typeof row !== 'object' || row === null) return undefined;
+  const rec = row as Record<string, unknown>;
+  if (typeof rec.id !== 'string') return undefined;
+  if (typeof rec.cwd !== 'string') return undefined;
+  if (typeof rec.rolloutPath !== 'string' || rec.rolloutPath.length === 0) return undefined;
+  if (typeof rec.createdAtMs !== 'number') return undefined;
+  if (typeof rec.updatedAtMs !== 'number') return undefined;
+  return {
+    id: rec.id,
+    cwd: rec.cwd,
+    rolloutPath: rec.rolloutPath,
     createdAtMs: rec.createdAtMs,
     updatedAtMs: rec.updatedAtMs,
   };

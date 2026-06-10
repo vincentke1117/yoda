@@ -163,6 +163,35 @@ describe('ConversationManagerStore', () => {
     expect(store.taskStatus).toBe('awaiting-input');
   });
 
+  it('applies authoritative awaiting-input status with pending action context', () => {
+    const store = new ConversationManagerStore('project-1', 'task-1', [conversation]);
+    const listener = mocks.listeners.get(agentSessionStatusChangedChannel.name);
+
+    listener?.({
+      projectId: 'project-1',
+      taskId: 'task-1',
+      conversationId: 'conversation-1',
+      status: 'awaiting-input',
+      pendingAction: {
+        notificationType: 'elicitation_dialog',
+        toolName: 'AskUserQuestion',
+        actionDescription: 'Pick an option',
+      },
+    });
+
+    const item = store.conversations.get('conversation-1');
+    expect(item?.status).toBe('awaiting-input');
+    expect(item?.lastNotificationType).toBe('elicitation_dialog');
+    expect(item?.pendingActionDescription).toBe('Pick an option');
+    expect(store.taskStatus).toBe('awaiting-input');
+    expect(mocks.eventEmitMock).not.toHaveBeenCalledWith(agentSessionStatusChangedChannel, {
+      projectId: 'project-1',
+      taskId: 'task-1',
+      conversationId: 'conversation-1',
+      status: 'awaiting-input',
+    });
+  });
+
   it('passes current terminal size when resuming and reapplies it after spawn', async () => {
     const store = new ConversationManagerStore('project-1', 'task-1', [conversation]);
 

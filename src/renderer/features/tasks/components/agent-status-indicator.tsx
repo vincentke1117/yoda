@@ -1,4 +1,4 @@
-import { Loader2, Square } from 'lucide-react';
+import { Loader2, MessageCircleQuestionMark, Square } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { AgentStatus } from '@renderer/features/tasks/conversations/conversation-manager';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@renderer/lib/ui/tooltip';
@@ -66,10 +66,9 @@ export function AgentStatusIndicator({
         return <Loader2 className={cn('size-3.5 animate-spin text-primary', className)} />;
       case 'awaiting-input':
         return (
-          <span
-            className={cn('rounded-full bg-primary border size-2 border-primary', className)}
+          <MessageCircleQuestionMark
+            className={cn('size-4 animate-pulse text-amber-500 dark:text-amber-300', className)}
             aria-label={statusLabel}
-            title={statusLabel}
           />
         );
       case 'error':

@@ -1,17 +1,25 @@
-import { getProvider, type AgentProviderId } from '@shared/agent-provider-registry';
 import type { Conversation } from '@shared/conversations';
+import { getRuntime, type RuntimeId } from '@shared/runtime-registry';
 import type { ProvisionedTask } from '@renderer/features/tasks/stores/task';
 import { rpc } from '@renderer/lib/ipc';
 import { agentConfig } from '@renderer/utils/agentConfig';
 
 export type TaskMenuSessionFields = {
-  providerId?: AgentProviderId;
+  runtimeId?: RuntimeId;
   sessionId?: string;
   sessionTitle?: string;
-  providerName?: string;
+  sessionTitleSource?: 'runtime' | 'yoda';
+  runtimeName?: string;
+  workingDirectory?: string;
+  contentSourcePath?: string;
   resumeCommand?: string;
   running?: boolean;
   tmuxEnabled?: boolean;
+  process?: {
+    pid?: number;
+    status?: 'busy' | 'idle' | 'waiting';
+    updatedAt?: string;
+  };
 };
 
 const SQLITE_TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
@@ -66,12 +74,14 @@ export function buildTaskMenuSessionFields(
   cwd?: string
 ): TaskMenuSessionFields {
   return {
-    providerId: conversation.providerId,
+    runtimeId: conversation.runtimeId,
     sessionId: conversation.id,
     sessionTitle: conversation.title,
-    providerName: agentConfig[conversation.providerId].name,
+    sessionTitleSource: 'yoda',
+    runtimeName: agentConfig[conversation.runtimeId].name,
+    workingDirectory: cwd,
     resumeCommand: buildResumeCommand({
-      providerId: conversation.providerId,
+      runtimeId: conversation.runtimeId,
       sessionId: conversation.id,
       cwd,
     }),
@@ -90,17 +100,53 @@ export async function resolveTaskMenuSessionFields(
       conversation.id,
       cwd
     );
-    return {
+    const hasResolvedSessionTitle =
+      typeof resolved.sessionTitle === 'string' && resolved.sessionTitle.trim().length > 0;
+    const fields: TaskMenuSessionFields = {
       ...fallback,
       sessionId: resolved.sessionId || fallback.sessionId,
-      sessionTitle: resolved.sessionTitle ?? fallback.sessionTitle,
+      sessionTitle: hasResolvedSessionTitle ? resolved.sessionTitle : fallback.sessionTitle,
+      sessionTitleSource: hasResolvedSessionTitle ? 'runtime' : fallback.sessionTitleSource,
+      workingDirectory: cwd,
       resumeCommand: resolved.resumeCommand ?? fallback.resumeCommand,
       running: resolved.running,
       tmuxEnabled: resolved.tmuxEnabled,
+      process: resolved.process,
+    };
+    return {
+      ...fields,
+      contentSourcePath: await resolveTaskMenuSessionContentSourcePath(fields),
     };
   } catch {
     return fallback;
   }
+}
+
+async function resolveTaskMenuSessionContentSourcePath(
+  fields: TaskMenuSessionFields
+): Promise<string | undefined> {
+  const cwd = fields.workingDirectory?.trim();
+  const sessionId = fields.sessionId?.trim();
+  if (!cwd || !sessionId) return undefined;
+
+  try {
+    if (fields.runtimeId === 'claude') {
+      const context = await rpc.conversations.getClaudeSessionContext(cwd, sessionId);
+      return context?.transcriptPath;
+    }
+    if (fields.runtimeId === 'codex') {
+      const context = await rpc.conversations.getCodexSessionContext(
+        cwd,
+        sessionId,
+        fields.sessionTitle
+      );
+      return context?.rolloutPath ?? undefined;
+    }
+  } catch {
+    return undefined;
+  }
+
+  return undefined;
 }
 
 function shellQuote(value: string): string {
@@ -109,17 +155,17 @@ function shellQuote(value: string): string {
 }
 
 function buildResumeCommand(input: {
-  providerId: AgentProviderId;
+  runtimeId: RuntimeId;
   sessionId: string;
   cwd?: string;
 }): string | undefined {
-  const provider = getProvider(input.providerId);
+  const provider = getRuntime(input.runtimeId);
   if (!provider?.cli) return undefined;
   const parts: string[] = [provider.cli];
   parts.push(...(provider.defaultArgs ?? []));
   if (provider.resumeFlag) {
     parts.push(...provider.resumeFlag.split(/\s+/).filter(Boolean));
-    if (input.providerId === 'codex' && input.cwd?.trim()) {
+    if (input.runtimeId === 'codex' && input.cwd?.trim()) {
       parts.push('--cd', input.cwd);
     }
     if (provider.sessionIdFlag || provider.resumeSessionIdArg) parts.push(input.sessionId);
