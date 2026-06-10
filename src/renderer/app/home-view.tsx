@@ -49,14 +49,10 @@ import {
   buildPromptInjectionPayload,
   getAgentCommandSubmitDelayMs,
 } from '@shared/agent-command-prefix';
-import {
-  AGENT_PROVIDER_IDS,
-  getProvider,
-  type AgentProviderId,
-} from '@shared/agent-provider-registry';
 import type { Agent } from '@shared/agents';
 import { BUILTIN_AGENT_KEYS } from '@shared/builtin-agents';
 import { INTERNAL_PROJECT_ID } from '@shared/projects';
+import { getRuntime, RUNTIME_IDS, type RuntimeId } from '@shared/runtime-registry';
 import type { CatalogIndex } from '@shared/skills/types';
 import { ensureUniqueTaskDisplayName, taskNameFromPrompt } from '@shared/task-name';
 import { useAgents } from '@renderer/features/agents-config/use-agents';
@@ -69,13 +65,12 @@ import { useAppSettingsKey } from '@renderer/features/settings/use-app-settings-
 import { recordSkillInvocation } from '@renderer/features/skills/skill-usage-stats';
 import type { ConversationStore } from '@renderer/features/tasks/conversations/conversation-manager';
 import { initialConversationTitle } from '@renderer/features/tasks/conversations/conversation-title-utils';
-import { useEffectiveProvider } from '@renderer/features/tasks/conversations/use-effective-provider';
+import { useEffectiveRuntime } from '@renderer/features/tasks/conversations/use-effective-runtime';
 import { ProjectSelector } from '@renderer/features/tasks/create-task-modal/project-selector';
-import { useAgentAutoApproveDefaults } from '@renderer/features/tasks/hooks/useAgentAutoApproveDefaults';
+import { useRuntimeAutoApproveDefaults } from '@renderer/features/tasks/hooks/useRuntimeAutoApproveDefaults';
 import { asProvisioned, getTaskStore } from '@renderer/features/tasks/stores/task-selectors';
 import { AgentSelector } from '@renderer/lib/components/agent-selector/agent-selector';
 import { AgentSlotSelector } from '@renderer/lib/components/agent-slot/agent-slot-selector';
-import { Titlebar } from '@renderer/lib/components/titlebar/Titlebar';
 import { toast } from '@renderer/lib/hooks/use-toast';
 import { useAccountSession } from '@renderer/lib/hooks/useAccount';
 import { useTheme } from '@renderer/lib/hooks/useTheme';
@@ -124,7 +119,7 @@ type HomeRunMode = 'normal' | 'brainstorm' | 'compare' | 'review' | 'team';
 type RunHostKind = 'local' | 'ssh';
 type SkillShortcutPrefix = '/' | '$';
 type TeamRoleId = 'ceo' | 'product' | 'engineering' | 'uiux' | 'operations';
-type TeamProviderSelection = Record<TeamRoleId, AgentProviderId>;
+type TeamRuntimeSelection = Record<TeamRoleId, RuntimeId>;
 
 /**
  * Humanize a model id for the run-mode chip, e.g. `claude-opus-4-8` → `Opus 4.8`.
@@ -156,9 +151,9 @@ const MIN_COMPARE_AGENTS = 2;
 const MAX_COMPARE_AGENTS = 6;
 const REVIEW_MAX_ROUNDS = 3;
 const CONVERSATION_TURN_TIMEOUT_MS = 30 * 60_000;
-const DEFAULT_COMPARE_PROVIDERS: AgentProviderId[] = ['claude', 'codex'];
-const DEFAULT_REVIEWER_PROVIDER: AgentProviderId = 'claude';
-const DEFAULT_TEAM_PROVIDERS: TeamProviderSelection = {
+const DEFAULT_COMPARE_RUNTIMES: RuntimeId[] = ['claude', 'codex'];
+const DEFAULT_REVIEWER_RUNTIME: RuntimeId = 'claude';
+const DEFAULT_TEAM_PROVIDERS: TeamRuntimeSelection = {
   ceo: 'claude',
   product: 'claude',
   engineering: 'codex',
@@ -350,29 +345,29 @@ function skillShortcutOptionScore(item: SkillShortcutOption, query: string): num
   return scores.length > 0 ? Math.max(...scores) : null;
 }
 
-function uniqueProviders(providers: AgentProviderId[]): AgentProviderId[] {
+function uniqueRuntimes(providers: RuntimeId[]): RuntimeId[] {
   return Array.from(new Set(providers));
 }
 
 function normalizeCompareProviders(
-  saved: AgentProviderId[] | undefined,
-  primary: AgentProviderId | null
-): AgentProviderId[] {
-  const providers = uniqueProviders([
+  saved: RuntimeId[] | undefined,
+  primary: RuntimeId | null
+): RuntimeId[] {
+  const providers = uniqueRuntimes([
     ...(primary ? [primary] : []),
-    ...(saved && saved.length > 0 ? saved : DEFAULT_COMPARE_PROVIDERS),
+    ...(saved && saved.length > 0 ? saved : DEFAULT_COMPARE_RUNTIMES),
   ]);
   if (providers.length >= MIN_COMPARE_AGENTS) return providers.slice(0, MAX_COMPARE_AGENTS);
 
-  for (const id of AGENT_PROVIDER_IDS) {
+  for (const id of RUNTIME_IDS) {
     if (!providers.includes(id)) providers.push(id);
     if (providers.length >= MIN_COMPARE_AGENTS) break;
   }
   return providers.slice(0, MAX_COMPARE_AGENTS);
 }
 
-function nextAvailableProvider(existing: AgentProviderId[]): AgentProviderId {
-  return AGENT_PROVIDER_IDS.find((id) => !existing.includes(id)) ?? existing[0] ?? 'claude';
+function nextAvailableProvider(existing: RuntimeId[]): RuntimeId {
+  return RUNTIME_IDS.find((id) => !existing.includes(id)) ?? existing[0] ?? 'claude';
 }
 
 function getRunModeInputChrome(mode: HomeRunMode): RunModeInputChrome {
@@ -435,14 +430,14 @@ function teamPromptKey(roleId: TeamRoleId): string {
 function resolveAgentSlot(args: {
   selectedAgentId: string | null;
   agents: Agent[];
-  runtimeOverride: AgentProviderId | null;
-}): { provider: AgentProviderId | null; systemPrompt: string; agent: Agent | null } {
+  runtimeOverride: RuntimeId | null;
+}): { provider: RuntimeId | null; systemPrompt: string; agent: Agent | null } {
   const agent = args.selectedAgentId
     ? (args.agents.find((a) => a.id === args.selectedAgentId) ?? null)
     : null;
   if (!agent) return { provider: null, systemPrompt: '', agent: null };
   return {
-    provider: args.runtimeOverride ?? agent.preferredRuntimeProvider,
+    provider: args.runtimeOverride ?? agent.preferredRuntime,
     systemPrompt: agent.systemPrompt,
     agent,
   };
@@ -576,7 +571,7 @@ async function sendPromptToConversation(
   text: string
 ): Promise<void> {
   const payload = buildPromptInjectionPayload({
-    providerId: conversation.data.providerId,
+    runtimeId: conversation.data.runtimeId,
     text,
   });
   if (!payload) return;
@@ -585,7 +580,7 @@ async function sendPromptToConversation(
   const first = await rpc.pty.sendInput(conversation.session.sessionId, payload);
   if (!first.success) throw new Error('Could not send prompt to agent session.');
 
-  await sleep(getAgentCommandSubmitDelayMs(conversation.data.providerId));
+  await sleep(getAgentCommandSubmitDelayMs(conversation.data.runtimeId));
   const submit = await rpc.pty.sendInput(conversation.session.sessionId, '\r');
   if (!submit.success) throw new Error('Could not submit prompt to agent session.');
 }
@@ -657,9 +652,9 @@ async function runReviewOrchestration(args: {
   implementationConversationId: string;
   implementationReady: Promise<unknown>;
   requirement: string;
-  reviewerProvider: AgentProviderId;
+  reviewerRuntime: RuntimeId;
   reviewerSystemPrompt: string;
-  getAutoApprove: (providerId: AgentProviderId) => boolean;
+  getAutoApprove: (runtimeId: RuntimeId) => boolean;
 }): Promise<void> {
   await args.implementationReady;
   const implementation = await getConversationStore(
@@ -678,14 +673,14 @@ async function runReviewOrchestration(args: {
       id: reviewerId,
       projectId: args.projectId,
       taskId: args.taskId,
-      provider: args.reviewerProvider,
-      title: initialConversationTitle(args.reviewerProvider, args.requirement, []),
+      runtime: args.reviewerRuntime,
+      title: initialConversationTitle(args.reviewerRuntime, args.requirement, []),
       initialPrompt: buildReviewPrompt({
         requirement: args.requirement,
         round,
         systemPrompt: args.reviewerSystemPrompt,
       }),
-      autoApprove: args.getAutoApprove(args.reviewerProvider),
+      autoApprove: args.getAutoApprove(args.reviewerRuntime),
     });
     const reviewerStore = provisioned.conversations.conversations.get(reviewer.id);
     if (!reviewerStore) throw new Error('Reviewer conversation was not found.');
@@ -705,8 +700,9 @@ async function runReviewOrchestration(args: {
   }
 }
 
+/** Home renders no titlebar row — the view owns its full height. */
 export function HomeTitlebar() {
-  return <Titlebar />;
+  return null;
 }
 
 interface HomeViewWrapperProps {
@@ -797,16 +793,16 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
     [branchLabel, t]
   );
 
-  const providerOverrideValue = draft?.providerOverride ?? null;
-  const setProviderOverridePersisted = useCallback(
-    (id: AgentProviderId | null) => {
-      updateDraft({ providerOverride: id });
+  const providerOverrideValue = draft?.runtimeOverride ?? null;
+  const setRuntimeOverridePersisted = useCallback(
+    (id: RuntimeId | null) => {
+      updateDraft({ runtimeOverride: id });
     },
     [updateDraft]
   );
-  const { providerId, setProviderOverride } = useEffectiveProvider(connectionId, {
+  const { runtimeId, setRuntimeOverride } = useEffectiveRuntime(connectionId, {
     value: providerOverrideValue,
-    set: setProviderOverridePersisted,
+    set: setRuntimeOverridePersisted,
   });
   const persistedRunMode: HomeRunMode = draft?.runMode ?? 'normal';
   const [runMode, setRunModeState] = useState<HomeRunMode>('normal');
@@ -823,49 +819,49 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
     },
     [updateDraft]
   );
-  const compareProviders = useMemo(
-    () => normalizeCompareProviders(draft?.compareProviders, providerId),
-    [draft?.compareProviders, providerId]
+  const compareRuntimes = useMemo(
+    () => normalizeCompareProviders(draft?.compareRuntimes, runtimeId),
+    [draft?.compareRuntimes, runtimeId]
   );
   const setCompareProvider = useCallback(
-    (index: number, next: AgentProviderId) => {
-      const providers = [...compareProviders];
+    (index: number, next: RuntimeId) => {
+      const providers = [...compareRuntimes];
       providers[index] = next;
-      updateDraft({ compareProviders: uniqueProviders(providers).slice(0, MAX_COMPARE_AGENTS) });
+      updateDraft({ compareRuntimes: uniqueRuntimes(providers).slice(0, MAX_COMPARE_AGENTS) });
     },
-    [compareProviders, updateDraft]
+    [compareRuntimes, updateDraft]
   );
   const addCompareProvider = useCallback(() => {
     updateDraft({
-      compareProviders: [...compareProviders, nextAvailableProvider(compareProviders)].slice(
+      compareRuntimes: [...compareRuntimes, nextAvailableProvider(compareRuntimes)].slice(
         0,
         MAX_COMPARE_AGENTS
       ),
     });
-  }, [compareProviders, updateDraft]);
+  }, [compareRuntimes, updateDraft]);
   const removeCompareProvider = useCallback(
     (index: number) => {
-      if (compareProviders.length <= MIN_COMPARE_AGENTS) return;
-      updateDraft({ compareProviders: compareProviders.filter((_, i) => i !== index) });
+      if (compareRuntimes.length <= MIN_COMPARE_AGENTS) return;
+      updateDraft({ compareRuntimes: compareRuntimes.filter((_, i) => i !== index) });
     },
-    [compareProviders, updateDraft]
+    [compareRuntimes, updateDraft]
   );
-  const reviewerProvider = draft?.reviewReviewerProvider ?? DEFAULT_REVIEWER_PROVIDER;
+  const reviewerRuntime = draft?.reviewReviewerRuntime ?? DEFAULT_REVIEWER_RUNTIME;
   const setReviewerProvider = useCallback(
-    (next: AgentProviderId) => {
-      updateDraft({ reviewReviewerProvider: next });
+    (next: RuntimeId) => {
+      updateDraft({ reviewReviewerRuntime: next });
     },
     [updateDraft]
   );
-  const teamProviders = useMemo<TeamProviderSelection>(
-    () => draft?.teamProviders ?? DEFAULT_TEAM_PROVIDERS,
-    [draft?.teamProviders]
+  const teamRuntimes = useMemo<TeamRuntimeSelection>(
+    () => draft?.teamRuntimes ?? DEFAULT_TEAM_PROVIDERS,
+    [draft?.teamRuntimes]
   );
   const setTeamProvider = useCallback(
-    (roleId: TeamRoleId, next: AgentProviderId) => {
-      updateDraft({ teamProviders: { ...teamProviders, [roleId]: next } });
+    (roleId: TeamRoleId, next: RuntimeId) => {
+      updateDraft({ teamRuntimes: { ...teamRuntimes, [roleId]: next } });
     },
-    [teamProviders, updateDraft]
+    [teamRuntimes, updateDraft]
   );
   const { agents: userAgents } = useAgents();
   const selectedAgentIdsByMode = useMemo<Record<string, string[]>>(
@@ -892,18 +888,17 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
     },
     [selectedAgentIdsByMode, updateDraft]
   );
-  const autoApproveDefaults = useAgentAutoApproveDefaults();
+  const autoApproveDefaults = useRuntimeAutoApproveDefaults();
   const runModeSummary = useMemo(() => {
-    const providerName = (id: AgentProviderId | null) =>
-      id ? (getProvider(id)?.name ?? id) : null;
+    const runtimeName = (id: RuntimeId | null) => (id ? (getRuntime(id)?.name ?? id) : null);
     const modelLabel = (model: string | null) =>
       model ? formatModelLabel(model) : t('home.modelDefault');
 
     if (runMode === 'compare') {
-      return t('home.modeSummaryAgentCount', { count: compareProviders.length });
+      return t('home.modeSummaryAgentCount', { count: compareRuntimes.length });
     }
     if (runMode === 'team') {
-      const roleCount = Object.keys(teamProviders).length;
+      const roleCount = Object.keys(teamRuntimes).length;
       return t('home.modeSummaryAgentCount', { count: roleCount });
     }
 
@@ -918,13 +913,13 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
     const resolved = resolveAgentSlot({
       selectedAgentId: slotAgentId(slotKey),
       agents: userAgents,
-      runtimeOverride: providerId,
+      runtimeOverride: runtimeId,
     });
 
-    const name = providerName(resolved.provider);
+    const name = runtimeName(resolved.provider);
     if (!name) return null;
     return `${name} · ${modelLabel(resolved.agent?.model ?? null)}`;
-  }, [runMode, providerId, compareProviders.length, teamProviders, slotAgentId, userAgents, t]);
+  }, [runMode, runtimeId, compareRuntimes.length, teamRuntimes, slotAgentId, userAgents, t]);
   // Local project root, so the skill picker can surface project-local skills
   // alongside the global ones. SSH projects have no local path to scan.
   const skillProjectPath = projectData?.type === 'local' ? projectData.path : undefined;
@@ -951,9 +946,9 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
       value: skill.id,
       label: skill.displayName,
       description: skill.description,
-      command: providerId ? applyAgentCommandPrefix(providerId, skill.id) : skill.id,
+      command: runtimeId ? applyAgentCommandPrefix(runtimeId, skill.id) : skill.id,
     }));
-  }, [providerId, skillCatalog?.skills]);
+  }, [runtimeId, skillCatalog?.skills]);
   const skillIdByShortcutCommand = useMemo(
     () => new Map(skillShortcutOptions.map((skill) => [skill.command, skill.value])),
     [skillShortcutOptions]
@@ -1008,7 +1003,7 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
       : Math.min(activeSkillShortcutIndex, filteredSkillShortcutOptions.length - 1);
   const skillShortcutMenuOpen =
     promptFocused &&
-    !!providerId &&
+    !!runtimeId &&
     !!activeSkillShortcut &&
     activeSkillShortcutKey !== dismissedSkillShortcutKey &&
     !skillsError &&
@@ -1214,8 +1209,8 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
   const hasSlotAgent = (slotKey: string) => !!slotAgentId(slotKey);
   const modeHasAgents =
     runMode === 'compare'
-      ? compareProviders.length >= MIN_COMPARE_AGENTS &&
-        compareProviders.every((_, index) => hasSlotAgent(comparePromptKey(index)))
+      ? compareRuntimes.length >= MIN_COMPARE_AGENTS &&
+        compareRuntimes.every((_, index) => hasSlotAgent(comparePromptKey(index)))
       : runMode === 'review'
         ? hasSlotAgent(REVIEW_IMPLEMENTER_PROMPT_KEY) && hasSlotAgent(REVIEW_REVIEWER_PROMPT_KEY)
         : runMode === 'team'
@@ -1249,7 +1244,7 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
       };
       // Resolve a slot to its Agent's prompt + runtime (per-slot runtime
       // override wins over the Agent's preferred runtime).
-      const resolveSlot = (slotKey: string, runtimeOverride: AgentProviderId | null) =>
+      const resolveSlot = (slotKey: string, runtimeOverride: RuntimeId | null) =>
         resolveAgentSlot({
           selectedAgentId: slotAgentId(slotKey),
           agents: userAgents,
@@ -1259,10 +1254,10 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
       if (!mounted) {
         const draftSlot = resolveSlot(
           runMode === 'brainstorm' ? SPEC_PROMPT_KEY : NORMAL_PROMPT_KEY,
-          providerId
+          runtimeId
         );
-        const draftProvider = draftSlot.provider;
-        if (!draftProvider) return;
+        const draftRuntime = draftSlot.provider;
+        if (!draftRuntime) return;
         await projectManager.mountProject(INTERNAL_PROJECT_ID).catch(() => {});
         const internalProject = asMounted(projectManager.projects.get(INTERNAL_PROJECT_ID));
         if (!internalProject) {
@@ -1294,10 +1289,10 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
               id: conversationId,
               projectId: INTERNAL_PROJECT_ID,
               taskId,
-              provider: draftProvider,
-              title: initialConversationTitle(draftProvider, trimmed || undefined, []),
+              runtime: draftRuntime,
+              title: initialConversationTitle(draftRuntime, trimmed || undefined, []),
               initialPrompt,
-              autoApprove: autoApproveDefaults.getDefault(draftProvider),
+              autoApprove: autoApproveDefaults.getDefault(draftRuntime),
             },
           })
           .catch(() => {
@@ -1319,7 +1314,7 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
         return taskName;
       };
       const createProjectTask = (args: {
-        provider: AgentProviderId;
+        provider: RuntimeId;
         nameSeed: string;
         initialPrompt: string | undefined;
         titlePrompt?: string;
@@ -1342,7 +1337,7 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
             id: conversationId,
             projectId: mounted.data.id,
             taskId,
-            provider: args.provider,
+            runtime: args.provider,
             title: initialConversationTitle(
               args.provider,
               args.titlePrompt ?? args.initialPrompt,
@@ -1352,11 +1347,11 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
             autoApprove: autoApproveDefaults.getDefault(args.provider),
           },
         });
-        return { taskId, taskName, conversationId, provider: args.provider, promise };
+        return { taskId, taskName, conversationId, runtime: args.provider, promise };
       };
 
       if (runMode === 'brainstorm') {
-        const slot = resolveSlot(SPEC_PROMPT_KEY, providerId);
+        const slot = resolveSlot(SPEC_PROMPT_KEY, runtimeId);
         if (!slot.provider) return;
         const task = createProjectTask({
           provider: slot.provider,
@@ -1378,7 +1373,7 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
       }
 
       if (runMode === 'compare') {
-        const launches = compareProviders.flatMap((provider, index) => {
+        const launches = compareRuntimes.flatMap((provider, index) => {
           const slot = resolveSlot(comparePromptKey(index), provider);
           if (!slot.provider) return [];
           return [
@@ -1404,8 +1399,8 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
       }
 
       if (runMode === 'review') {
-        const implementerSlot = resolveSlot(REVIEW_IMPLEMENTER_PROMPT_KEY, providerId);
-        const reviewerSlot = resolveSlot(REVIEW_REVIEWER_PROMPT_KEY, reviewerProvider);
+        const implementerSlot = resolveSlot(REVIEW_IMPLEMENTER_PROMPT_KEY, runtimeId);
+        const reviewerSlot = resolveSlot(REVIEW_REVIEWER_PROMPT_KEY, reviewerRuntime);
         if (!implementerSlot.provider || !reviewerSlot.provider) return;
         const implementation = createProjectTask({
           provider: implementerSlot.provider,
@@ -1424,7 +1419,7 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
           implementationConversationId: implementation.conversationId,
           implementationReady: implementation.promise,
           requirement: trimmed,
-          reviewerProvider: reviewerSlot.provider,
+          reviewerRuntime: reviewerSlot.provider,
           reviewerSystemPrompt: reviewerSlot.systemPrompt,
           getAutoApprove: autoApproveDefaults.getDefault,
         }).catch((error: unknown) => {
@@ -1437,7 +1432,7 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
 
       if (runMode === 'team') {
         const ceoRole = TEAM_ROLES[0];
-        const ceoSlot = resolveSlot(teamPromptKey(ceoRole.id), teamProviders.ceo);
+        const ceoSlot = resolveSlot(teamPromptKey(ceoRole.id), teamRuntimes.ceo);
         if (!ceoSlot.provider) return;
         const ceoProvider = ceoSlot.provider;
         const ceo = createProjectTask({
@@ -1459,7 +1454,7 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
             ceo.conversationId
           );
           const workerLaunches = TEAM_ROLES.filter((role) => role.id !== 'ceo').flatMap((role) => {
-            const slot = resolveSlot(teamPromptKey(role.id), teamProviders[role.id]);
+            const slot = resolveSlot(teamPromptKey(role.id), teamRuntimes[role.id]);
             if (!slot.provider) return [];
             return [
               createProjectTask({
@@ -1484,7 +1479,7 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
         return;
       }
 
-      const normalSlot = resolveSlot(NORMAL_PROMPT_KEY, providerId);
+      const normalSlot = resolveSlot(NORMAL_PROMPT_KEY, runtimeId);
       if (!normalSlot.provider) return;
       const normalSystemPrompt = normalSlot.systemPrompt.trim();
       const task = createProjectTask({
@@ -1508,16 +1503,16 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
   }, [
     canSubmit,
     mounted,
-    providerId,
+    runtimeId,
     defaultBranch,
     effectiveReviewStrategyKind,
     effectiveStandardStrategyKind,
     trimmed,
     submitting,
     runMode,
-    compareProviders,
-    reviewerProvider,
-    teamProviders,
+    compareRuntimes,
+    reviewerRuntime,
+    teamRuntimes,
     userAgents,
     slotAgentId,
     autoApproveDefaults,
@@ -1830,7 +1825,7 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
                   </div>
                   <div className="flex items-center gap-1.5">
                     <SkillShortcutSelector
-                      providerId={providerId}
+                      runtimeId={runtimeId}
                       options={skillShortcutOptions}
                       isLoading={skillsLoading}
                       isError={skillsError}
@@ -1895,7 +1890,7 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
                   )}
                   {mounted && runMode === 'compare' && (
                     <Chip icon={GitFork}>
-                      {t('home.compareBranchPolicy', { count: compareProviders.length })}
+                      {t('home.compareBranchPolicy', { count: compareRuntimes.length })}
                     </Chip>
                   )}
                   {mounted && runMode === 'team' && (
@@ -1927,15 +1922,15 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
                     renderConfiguration={(configurationMode) => (
                       <ModeConfigurationPanel
                         mode={configurationMode}
-                        providerId={providerId}
-                        onProviderChange={setProviderOverride}
-                        compareProviders={compareProviders}
+                        runtimeId={runtimeId}
+                        onRuntimeChange={setRuntimeOverride}
+                        compareRuntimes={compareRuntimes}
                         onCompareProviderChange={setCompareProvider}
-                        onAddCompareProvider={addCompareProvider}
-                        onRemoveCompareProvider={removeCompareProvider}
-                        reviewerProvider={reviewerProvider}
+                        onAddCompareRuntime={addCompareProvider}
+                        onRemoveCompareRuntime={removeCompareProvider}
+                        reviewerRuntime={reviewerRuntime}
                         onReviewerProviderChange={setReviewerProvider}
-                        teamProviders={teamProviders}
+                        teamRuntimes={teamRuntimes}
                         onTeamProviderChange={setTeamProvider}
                         agents={userAgents}
                         slotAgentId={slotAgentId}
@@ -2124,7 +2119,7 @@ function SkillShortcutMenu({
 }
 
 interface SkillShortcutSelectorProps {
-  providerId: AgentProviderId | null;
+  runtimeId: RuntimeId | null;
   options: SkillShortcutOption[];
   isLoading: boolean;
   isError: boolean;
@@ -2139,7 +2134,7 @@ interface SkillShortcutGroup {
 }
 
 function SkillShortcutSelector({
-  providerId,
+  runtimeId,
   options,
   isLoading,
   isError,
@@ -2152,7 +2147,7 @@ function SkillShortcutSelector({
     () => [{ value: 'installed', label: t('skills.installed'), items: options }],
     [options, t]
   );
-  const disabled = !providerId || isLoading || isError || options.length === 0;
+  const disabled = !runtimeId || isLoading || isError || options.length === 0;
 
   const handleValueChange = useCallback(
     (item: SkillShortcutOption | null) => {
@@ -2367,16 +2362,16 @@ interface StrategyChipLabels {
 
 interface ModeConfigurationPanelProps {
   mode: HomeRunMode;
-  providerId: AgentProviderId | null;
-  onProviderChange: (agent: AgentProviderId) => void;
-  compareProviders: AgentProviderId[];
-  onCompareProviderChange: (index: number, provider: AgentProviderId) => void;
-  onAddCompareProvider: () => void;
-  onRemoveCompareProvider: (index: number) => void;
-  reviewerProvider: AgentProviderId;
-  onReviewerProviderChange: (provider: AgentProviderId) => void;
-  teamProviders: TeamProviderSelection;
-  onTeamProviderChange: (roleId: TeamRoleId, provider: AgentProviderId) => void;
+  runtimeId: RuntimeId | null;
+  onRuntimeChange: (agent: RuntimeId) => void;
+  compareRuntimes: RuntimeId[];
+  onCompareProviderChange: (index: number, provider: RuntimeId) => void;
+  onAddCompareRuntime: () => void;
+  onRemoveCompareRuntime: (index: number) => void;
+  reviewerRuntime: RuntimeId;
+  onReviewerProviderChange: (provider: RuntimeId) => void;
+  teamRuntimes: TeamRuntimeSelection;
+  onTeamProviderChange: (roleId: TeamRoleId, provider: RuntimeId) => void;
   agents: Agent[];
   slotAgentId: (slotKey: string) => string | null;
   onSlotAgentChange: (slotKey: string, agentId: string) => void;
@@ -2386,15 +2381,15 @@ interface ModeConfigurationPanelProps {
 
 function ModeConfigurationPanel({
   mode,
-  providerId,
-  onProviderChange,
-  compareProviders,
+  runtimeId,
+  onRuntimeChange,
+  compareRuntimes,
   onCompareProviderChange,
-  onAddCompareProvider,
-  onRemoveCompareProvider,
-  reviewerProvider,
+  onAddCompareRuntime,
+  onRemoveCompareRuntime,
+  reviewerRuntime,
   onReviewerProviderChange,
-  teamProviders,
+  teamRuntimes,
   onTeamProviderChange,
   agents,
   slotAgentId,
@@ -2419,8 +2414,8 @@ function ModeConfigurationPanel({
           <Agent
             icon={Bot}
             label={t('home.agentLabel')}
-            value={providerId}
-            onChange={onProviderChange}
+            value={runtimeId}
+            onChange={onRuntimeChange}
             connectionId={connectionId}
             {...slotProps(NORMAL_PROMPT_KEY)}
           />
@@ -2432,8 +2427,8 @@ function ModeConfigurationPanel({
           <Agent
             icon={Lightbulb}
             label={t('home.brainstormAgent')}
-            value={providerId}
-            onChange={onProviderChange}
+            value={runtimeId}
+            onChange={onRuntimeChange}
             connectionId={connectionId}
             {...slotProps(SPEC_PROMPT_KEY)}
           />
@@ -2442,7 +2437,7 @@ function ModeConfigurationPanel({
 
       {mode === 'compare' && (
         <div className="grid gap-2 sm:grid-cols-2">
-          {compareProviders.map((agent, index) => (
+          {compareRuntimes.map((agent, index) => (
             <Agent
               key={`${agent}-${index}`}
               icon={GitCompare}
@@ -2455,8 +2450,8 @@ function ModeConfigurationPanel({
                 <button
                   type="button"
                   aria-label={t('home.removeCompareAgent')}
-                  disabled={compareProviders.length <= MIN_COMPARE_AGENTS}
-                  onClick={() => onRemoveCompareProvider(index)}
+                  disabled={compareRuntimes.length <= MIN_COMPARE_AGENTS}
+                  onClick={() => onRemoveCompareRuntime(index)}
                   className="flex size-8 shrink-0 items-center justify-center rounded-md text-foreground-muted transition-colors hover:bg-background-2 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <X className="size-3.5" />
@@ -2464,10 +2459,10 @@ function ModeConfigurationPanel({
               }
             />
           ))}
-          {compareProviders.length < MAX_COMPARE_AGENTS && (
+          {compareRuntimes.length < MAX_COMPARE_AGENTS && (
             <button
               type="button"
-              onClick={onAddCompareProvider}
+              onClick={onAddCompareRuntime}
               className="flex min-h-24 items-center justify-center gap-2 rounded-md border border-dashed border-border bg-background-1 text-sm text-foreground-muted transition-colors hover:bg-background-2 hover:text-foreground"
             >
               <Plus className="size-4" />
@@ -2482,15 +2477,15 @@ function ModeConfigurationPanel({
           <Agent
             icon={Bot}
             label={t('home.reviewImplementer')}
-            value={providerId}
-            onChange={onProviderChange}
+            value={runtimeId}
+            onChange={onRuntimeChange}
             connectionId={connectionId}
             {...slotProps(REVIEW_IMPLEMENTER_PROMPT_KEY)}
           />
           <Agent
             icon={ShieldCheck}
             label={t('home.reviewReviewer')}
-            value={reviewerProvider}
+            value={reviewerRuntime}
             onChange={onReviewerProviderChange}
             connectionId={connectionId}
             {...slotProps(REVIEW_REVIEWER_PROMPT_KEY)}
@@ -2508,7 +2503,7 @@ function ModeConfigurationPanel({
               key={role.id}
               icon={role.icon}
               label={t(role.labelKey)}
-              value={teamProviders[role.id]}
+              value={teamRuntimes[role.id]}
               onChange={(provider) => onTeamProviderChange(role.id, provider)}
               connectionId={connectionId}
               {...slotProps(teamPromptKey(role.id))}
@@ -2524,8 +2519,8 @@ interface AgentProps {
   icon: ComponentType<{ className?: string }>;
   label: string;
   /** Per-slot runtime override. Loosely coupled to the Agent's preferred runtime. */
-  value: AgentProviderId | null;
-  onChange: (provider: AgentProviderId) => void;
+  value: RuntimeId | null;
+  onChange: (provider: RuntimeId) => void;
   connectionId?: string;
   action?: ReactNode;
   /** User Agents this slot can pick from. */
@@ -2555,7 +2550,7 @@ function Agent({
   // Runtime shown on the card: the per-slot override wins, else the Agent's
   // preferred runtime. Editing it here sets the per-slot override (loose
   // coupling — it does not mutate the Agent).
-  const runtime = value ?? selectedAgent?.preferredRuntimeProvider ?? null;
+  const runtime = value ?? selectedAgent?.preferredRuntime ?? null;
 
   return (
     <div className="flex min-w-0 flex-col gap-2 rounded-lg border border-border/70 bg-background-1 p-2.5">

@@ -28,6 +28,10 @@ function createTabId(): string {
  * the same tab.
  */
 export function routeKey(viewId: ViewId | string, params: Record<string, unknown>): string {
+  // Home is a singleton — its params (e.g. projectId preselect) are transient
+  // and must not fork tab identity, otherwise navigate('home', {projectId})
+  // spawns a second uncloseable home tab next to the existing one.
+  if (viewId === 'home') return JSON.stringify(['home']);
   if (viewId === 'task') {
     const { projectId, taskId, tab } = params as {
       projectId?: string;
