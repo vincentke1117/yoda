@@ -1,28 +1,27 @@
 import * as AccordionPrimitive from '@radix-ui/react-accordion';
 import {
   ChevronRight,
+  FileText,
   Info,
   ListChecks,
   MessageSquareText,
   ScrollText,
-  Sparkles,
 } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { SessionSummaryScope } from '@shared/conversations';
 import { useProvisionedTask } from '@renderer/features/tasks/task-view-context';
 import { HarnessSections } from '../context-panel';
 import {
   SessionInfoPanel,
+  SessionOverviewAIButton,
+  SessionOverviewPanel,
   SessionPromptsContent,
   SessionPromptsCount,
   SessionPromptsViewAllButton,
-  SessionSummaryContent,
-  SessionSummaryCount,
   useSessionPrompts,
-  useSessionSummary,
 } from '../session-info-panel';
+import { taskSidebarPreferenceStore } from '../stores/task-sidebar-preferences';
 import { TaskPanel, TaskTodosCount, useTaskTodos } from '../task-panel';
 import {
   TranscriptContent,
@@ -30,7 +29,12 @@ import {
   TranscriptFileActions,
   useConversationTranscript,
 } from '../transcript-panel';
-import { isSessionFamilyTab, sessionSectionForTab, type SessionPanelSection } from '../types';
+import {
+  isSessionFamilyTab,
+  sessionSectionForTab,
+  type SessionPanelSection,
+  type SessionPanelUnit,
+} from '../types';
 
 /**
  * Merged "Session" sidebar surface — the 百叶窗 (window-blind) accordion that
@@ -63,6 +67,70 @@ export const SessionPanel = observer(function SessionPanel() {
     if (section) taskView.setSessionPanelOpenSectionIds([section]);
   }, [activeTab, taskView]);
 
+  // User-managed composition (session chip context menu → 管理章节): units
+  // render in the persisted order, hidden ones are skipped entirely.
+  const visibleUnits = taskSidebarPreferenceStore.sessionPanelUnitOrder.filter(
+    (unit) => !taskSidebarPreferenceStore.sessionPanelHiddenUnits.includes(unit)
+  );
+
+  const renderUnit = (unit: SessionPanelUnit): React.ReactNode => {
+    switch (unit) {
+      case 'basic':
+        return (
+          <Blind
+            key={unit}
+            id="basic"
+            icon={<Info className="size-3.5" />}
+            title={t('tasks.sessionPanel.basic')}
+            open={openSection === 'basic'}
+          >
+            {(active) => <SessionInfoPanel active={active} chromeless />}
+          </Blind>
+        );
+      case 'conversation':
+        return (
+          <ConversationBlind
+            key={unit}
+            open={openSection === 'conversation'}
+            title={t('tasks.sessionPanel.conversation')}
+          />
+        );
+      case 'transcript':
+        return (
+          <TranscriptBlind
+            key={unit}
+            open={openSection === 'transcript'}
+            title={t('tasks.sessionPanel.transcript')}
+          />
+        );
+      case 'tasks':
+        return (
+          <TasksBlind
+            key={unit}
+            open={openSection === 'tasks'}
+            title={t('tasks.sessionPanel.tasks')}
+          />
+        );
+      case 'harness':
+        return <HarnessSections key={unit} active={panelActive} />;
+      case 'overview':
+        // 概要 (title + summary) defaults LAST so it can stay open and hang at
+        // the bottom edge while the user works through any conversation.
+        return (
+          <Blind
+            key={unit}
+            id="overview"
+            icon={<FileText className="size-3.5" />}
+            title={t('tasks.sessionPanel.overview')}
+            open={openSection === 'overview'}
+            actions={<SessionOverviewAIButton />}
+          >
+            {(active) => <SessionOverviewPanel active={active} />}
+          </Blind>
+        );
+    }
+  };
+
   return (
     <div className="flex h-full w-full flex-col overflow-hidden bg-background">
       <AccordionPrimitive.Root
@@ -74,35 +142,7 @@ export const SessionPanel = observer(function SessionPanel() {
         }
         className="min-h-0 flex-1 overflow-y-auto"
       >
-        <Blind
-          id="basic"
-          icon={<Info className="size-3.5" />}
-          title={t('tasks.sessionPanel.basic')}
-          open={openSection === 'basic'}
-        >
-          {(active) => <SessionInfoPanel active={active} chromeless />}
-        </Blind>
-
-        <ConversationBlind
-          open={openSection === 'conversation'}
-          title={t('tasks.sessionPanel.conversation')}
-        />
-
-        <TranscriptBlind
-          open={openSection === 'transcript'}
-          title={t('tasks.sessionPanel.transcript')}
-        />
-
-        <TasksBlind open={openSection === 'tasks'} title={t('tasks.sessionPanel.tasks')} />
-
-        <SummaryBlind
-          id="summary-global"
-          scope="global"
-          open={openSection === 'summary-global'}
-          title={t('tasks.sessionPanel.summaryGlobal')}
-        />
-
-        <HarnessSections active={panelActive} />
+        {visibleUnits.map(renderUnit)}
       </AccordionPrimitive.Root>
     </div>
   );
@@ -179,8 +219,8 @@ const ConversationBlind = observer(function ConversationBlind({
 
 /**
  * The Transcript blind: a live mirror of the conversation's on-disk transcript
- * (Claude session JSONL / Codex rollout). Only subscribes to the main-process
- * file watch while open.
+ * (Claude session JSONL / Codex rollout). Subscribes regardless of open state
+ * so the header's line count is always live.
  */
 const TranscriptBlind = observer(function TranscriptBlind({
   open,
@@ -189,7 +229,7 @@ const TranscriptBlind = observer(function TranscriptBlind({
   open: boolean;
   title: string;
 }) {
-  const feed = useConversationTranscript(open);
+  const feed = useConversationTranscript(true);
   return (
     <Blind
       id="transcript"
@@ -219,39 +259,6 @@ const TasksBlind = observer(function TasksBlind({ open, title }: { open: boolean
       count={<TaskTodosCount todos={todos} />}
     >
       {() => <TaskPanel chromeless todos={todos} />}
-    </Blind>
-  );
-});
-
-/**
- * The whole-session summary blind. It prefers the runtime's zero-cost
- * compaction summary, so it can keep its header count live without spawning a
- * summarization CLI in the background.
- */
-const SummaryBlind = observer(function SummaryBlind({
-  id,
-  scope,
-  open,
-  title,
-}: {
-  id: SessionPanelSection;
-  scope: SessionSummaryScope;
-  open: boolean;
-  title: string;
-}) {
-  // recent: auto-refresh every idle turn while open. global: trigger-only —
-  // opening it must not spawn a summarization CLI; it generates only when the
-  // user clicks regenerate.
-  const summary = useSessionSummary(open, scope, { autoGenerate: scope === 'recent' });
-  return (
-    <Blind
-      id={id}
-      icon={<Sparkles className="size-3.5" />}
-      title={title}
-      open={open}
-      count={<SessionSummaryCount summary={summary} />}
-    >
-      {() => <SessionSummaryContent summary={summary} />}
     </Blind>
   );
 });
