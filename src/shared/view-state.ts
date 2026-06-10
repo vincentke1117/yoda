@@ -85,6 +85,10 @@ export type TaskSidebarViewSnapshot = {
   /** Feature cards (session/changes/files) added to the sidebar strip. */
   openSidebarGroups?: string[];
   sessionPanelOpenSectionIds?: string[];
+  /** Display order of the Session panel units; missing units append in default order. */
+  sessionPanelUnitOrder?: string[];
+  /** Session panel units the user has hidden. */
+  sessionPanelHiddenUnits?: string[];
   /** Open ids for ad-hoc disclosures (`<details>`, group toggles) across panels. */
   disclosureOpenIds?: string[];
 };

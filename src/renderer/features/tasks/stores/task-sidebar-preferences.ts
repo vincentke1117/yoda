@@ -114,13 +114,27 @@ function resolveDisclosureOpenIds(sharedSnapshot: TaskSidebarViewSnapshot | null
 
 /**
  * Normalizes a persisted unit order: drop unknown ids and duplicates, then
- * append any units missing from the snapshot (new units added in later app
- * versions surface in their default position at the end of the known ones).
+ * insert any units missing from the snapshot at their DEFAULT position
+ * relative to the units the user has ordered. Appending them at the end would
+ * push e.g. 概要 (persisted, last by default) in front of sections added in a
+ * later app version.
  */
 function normalizeUnitOrder(value: unknown): SessionPanelUnit[] {
-  const order = (isStringArray(value) ? value : []).filter(isSessionPanelUnit);
+  const persisted = (isStringArray(value) ? value : []).filter(isSessionPanelUnit);
+  const order = [...new Set(persisted)];
   const seen = new Set(order);
-  return [...new Set(order), ...SESSION_PANEL_UNITS.filter((unit) => !seen.has(unit))];
+  for (const unit of SESSION_PANEL_UNITS) {
+    if (seen.has(unit)) continue;
+    const defaultIndex = SESSION_PANEL_UNITS.indexOf(unit);
+    // Right after the last known unit that precedes it in the default order.
+    let insertAt = 0;
+    for (let index = 0; index < order.length; index += 1) {
+      if (SESSION_PANEL_UNITS.indexOf(order[index]) < defaultIndex) insertAt = index + 1;
+    }
+    order.splice(insertAt, 0, unit);
+    seen.add(unit);
+  }
+  return order;
 }
 
 function resolveSessionPanelUnitOrder(
@@ -225,6 +239,13 @@ export class TaskSidebarPreferenceStore {
     this.sessionPanelHiddenUnits = hidden
       ? [...this.sessionPanelHiddenUnits, unit]
       : this.sessionPanelHiddenUnits.filter((u) => u !== unit);
+    this.persist();
+  }
+
+  /** Restores the default unit order and visibility. */
+  resetSessionPanelUnits(): void {
+    this.sessionPanelUnitOrder = [...SESSION_PANEL_UNITS];
+    this.sessionPanelHiddenUnits = [];
     this.persist();
   }
 

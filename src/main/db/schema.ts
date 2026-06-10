@@ -391,9 +391,13 @@ export const conversations = sqliteTable(
     createdAt: text('created_at')
       .notNull()
       .default(sql`CURRENT_TIMESTAMP`),
+    // Bumped on EVERY update to the row (rename, archive, interaction touch,
+    // auth-provider snapshot, …) so it genuinely means "record last changed".
+    // Runtime-only ($onUpdate), no migration involved.
     updatedAt: text('updated_at')
       .notNull()
-      .default(sql`CURRENT_TIMESTAMP`),
+      .default(sql`CURRENT_TIMESTAMP`)
+      .$onUpdate(() => new Date().toISOString()),
     lastInteractedAt: text('last_interacted_at'),
     isInitialConversation: integer('is_initial_conversation', { mode: 'boolean' }),
     archivedAt: text('archived_at'),

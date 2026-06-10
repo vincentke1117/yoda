@@ -156,6 +156,7 @@ export type SessionSummaryScope = 'global' | 'recent';
  * summary so the UI can show a meaningful message instead of a blank state.
  * - `compaction`: surfaced the runtime's own compaction summary
  * - `generated`: summarized the conversation on demand
+ * - `manual`: a user-written summary overrides compaction and generation
  * - `running`: session is mid-turn; will summarize once idle
  * - `empty`: no user prompts to summarize yet
  * - `failed`: generation was attempted but produced nothing
@@ -164,6 +165,7 @@ export type SessionSummaryScope = 'global' | 'recent';
 export type SessionSummaryStatus =
   | 'compaction'
   | 'generated'
+  | 'manual'
   | 'running'
   | 'empty'
   | 'failed'
@@ -172,6 +174,34 @@ export type SessionSummaryStatus =
 export type SessionSummaryResult = {
   summary: SessionSummary | null;
   status: SessionSummaryStatus;
+};
+
+/**
+ * Live debug snapshot of whole-session (`global` scope) summary generation.
+ * Mirrors `ConversationNamingSnapshot` field-for-field so the renderer reuses
+ * the naming debug panel (basics / configuration / prompts / context sources).
+ * Ephemeral — kept in memory per conversation, not persisted.
+ */
+export type SessionSummarySnapshot = {
+  conversationId: string;
+  projectId: string;
+  taskId: string;
+  status: TaskNamingStatus;
+  model: string | null;
+  runtimeId: RuntimeId | null;
+  runtimeName: string | null;
+  /** Configured output language for the summary ('app' | 'prompt' | 'en' | 'zh-CN'). */
+  language: string | null;
+  context: TaskNamingContextSnapshot | null;
+  systemPrompt?: string;
+  systemPromptEstimatedTokens?: number;
+  prompt?: string;
+  promptChars?: number;
+  promptEstimatedTokens?: number;
+  generatedSummary?: string;
+  error?: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type CodexDynamicTool = {

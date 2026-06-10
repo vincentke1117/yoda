@@ -1,6 +1,8 @@
 import {
   AppWindow,
   ArrowLeftToLine,
+  ChevronDown,
+  ChevronUp,
   Folder,
   GitCompare,
   Maximize2,
@@ -9,6 +11,8 @@ import {
   PanelBottom,
   PanelRight,
   Plus,
+  RotateCcw,
+  SlidersHorizontal,
   X,
 } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
@@ -24,11 +28,15 @@ import {
 } from '@renderer/features/tasks/tabs/tab-meta';
 import { useProvisionedTask, useTaskViewContext } from '@renderer/features/tasks/task-view-context';
 import { FilePathMenuItems } from '@renderer/lib/components/file-path-actions';
+import { Checkbox } from '@renderer/lib/ui/checkbox';
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from '@renderer/lib/ui/context-menu';
 import {
@@ -40,7 +48,9 @@ import {
 import { cn } from '@renderer/utils/utils';
 import { ChangesPanel } from '../diff-view/changes-panel/changes-panel';
 import { EditorFileTree } from '../editor/editor-file-tree';
+import { taskSidebarPreferenceStore } from '../stores/task-sidebar-preferences';
 import {
+  sessionPanelUnitLabelKey,
   SIDEBAR_TAB_GROUPS,
   sidebarGroupForTab,
   sidebarTabForGroup,
@@ -165,16 +175,16 @@ export const TaskSidebar = observer(function TaskSidebar() {
     );
 
     if (tab.kind === 'conversation') {
-      // Same ordering as the top strip: session actions first, placement
-      // second, the lifecycle section (reload / archive) at the bottom.
-      const [actions, lifecycle] = buildConversationSections(
+      // Same ordering as the top strip: management first, copy second, open
+      // modes third, maintenance (reload) at the bottom.
+      const [management, copy, maintenance] = buildConversationSections(
         provisioned,
         projectId,
         taskId,
         tab.conversationId,
         t
       );
-      return [actions ?? [], placement, lifecycle ?? []];
+      return [management ?? [], copy ?? [], placement, maintenance ?? []];
     }
 
     if (tab.kind === 'file' || tab.kind === 'diff') {
@@ -218,6 +228,21 @@ export const TaskSidebar = observer(function TaskSidebar() {
               <ChipContextMenu
                 key={group}
                 sections={[
+                  // Session card: manage which panel sections show, and in
+                  // what order.
+                  group === 'session'
+                    ? [
+                        <ContextMenuSub key="sections">
+                          <ContextMenuSubTrigger className="whitespace-nowrap">
+                            <SlidersHorizontal className="size-4" />
+                            {t('tasks.sessionPanel.manageSections')}
+                          </ContextMenuSubTrigger>
+                          <ContextMenuSubContent className="w-48">
+                            <SessionPanelSectionManager />
+                          </ContextMenuSubContent>
+                        </ContextMenuSub>,
+                      ]
+                    : [],
                   [
                     <ContextMenuItem
                       key="remove"
@@ -409,6 +434,81 @@ function ChipContextMenu({
     </ContextMenu>
   );
 }
+
+/**
+ * Visibility + order manager for the Session panel units, hosted in the 会话
+ * chip's context menu. Plain rows (not menu items) so toggling and reordering
+ * never closes the menu — the user can compose the panel in one pass.
+ */
+const SessionPanelSectionManager = observer(function SessionPanelSectionManager() {
+  const { t } = useTranslation();
+  const order = taskSidebarPreferenceStore.sessionPanelUnitOrder;
+  const hidden = taskSidebarPreferenceStore.sessionPanelHiddenUnits;
+
+  return (
+    <div className="flex flex-col">
+      {order.map((unit, index) => {
+        const visible = !hidden.includes(unit);
+        return (
+          <div
+            key={unit}
+            className="group/row flex items-center gap-2 rounded-sm px-2 py-1 text-sm hover:bg-background-2"
+          >
+            <Checkbox
+              checked={visible}
+              aria-label={t(sessionPanelUnitLabelKey(unit))}
+              onCheckedChange={(checked) =>
+                taskSidebarPreferenceStore.setSessionPanelUnitHidden(unit, checked !== true)
+              }
+            />
+            <button
+              type="button"
+              className={cn(
+                'min-w-0 flex-1 truncate text-left',
+                !visible && 'text-foreground-passive'
+              )}
+              onClick={() => taskSidebarPreferenceStore.setSessionPanelUnitHidden(unit, visible)}
+            >
+              {t(sessionPanelUnitLabelKey(unit))}
+            </button>
+            <span className="flex shrink-0 items-center opacity-0 transition-opacity group-hover/row:opacity-100">
+              <button
+                type="button"
+                aria-label={t('tasks.sessionPanel.moveSectionUp')}
+                title={t('tasks.sessionPanel.moveSectionUp')}
+                disabled={index === 0}
+                className="flex size-5 items-center justify-center rounded-sm text-foreground-passive hover:bg-background-1 hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent"
+                onClick={() => taskSidebarPreferenceStore.moveSessionPanelUnit(unit, -1)}
+              >
+                <ChevronUp className="size-3.5" />
+              </button>
+              <button
+                type="button"
+                aria-label={t('tasks.sessionPanel.moveSectionDown')}
+                title={t('tasks.sessionPanel.moveSectionDown')}
+                disabled={index === order.length - 1}
+                className="flex size-5 items-center justify-center rounded-sm text-foreground-passive hover:bg-background-1 hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent"
+                onClick={() => taskSidebarPreferenceStore.moveSessionPanelUnit(unit, 1)}
+              >
+                <ChevronDown className="size-3.5" />
+              </button>
+            </span>
+          </div>
+        );
+      })}
+      <div className="mt-0.5 border-t border-border/70 pt-0.5">
+        <button
+          type="button"
+          className="flex w-full items-center gap-2 rounded-sm px-2 py-1 text-sm text-foreground-muted hover:bg-background-2 hover:text-foreground"
+          onClick={() => taskSidebarPreferenceStore.resetSessionPanelUnits()}
+        >
+          <RotateCcw className="size-3.5" />
+          {t('tasks.sessionPanel.resetSections')}
+        </button>
+      </div>
+    </div>
+  );
+});
 
 /** A chip in the sidebar strip — same visual language as the titlebar's AppTab. */
 function SidebarChip({
