@@ -1,6 +1,6 @@
 import { Archive, ChevronRight, Loader2, MoreHorizontal } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { buildTaskDeepLink } from '@shared/deep-links';
 import { INTERNAL_PROJECT_ID } from '@shared/projects';
@@ -100,7 +100,6 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
   const isAgentWorking = taskAgentStatus(task) === 'working';
 
   const taskName = task.data.name;
-  const taskIndentClass = rowVariant === 'underProject' ? 'pl-8' : 'pl-2';
   const treeDepth = rowVariant === 'underProject' ? Math.min(depth, TASK_TREE_MAX_VISUAL_DEPTH) : 0;
   // One guide slot per (visually capped) tree level. Without trail data (drag
   // ghost previewing a projected depth) fall back to a bare elbow.
@@ -110,6 +109,12 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
       : [];
   const hasChildren = rowVariant === 'underProject' && childCount > 0;
   const isCollapsed = hasChildren && sidebarStore.collapsedTaskIds.has(taskId);
+  // Root-level parents swap pl-8 for a project-style mini-button slot (same 32px
+  // name offset), so the hover-only chevron aligns with the project row's chevron
+  // column instead of pushing the name right.
+  const hasRootToggle = hasChildren && treeDepth === 0;
+  const taskIndentClass =
+    rowVariant === 'underProject' ? (hasRootToggle ? undefined : 'pl-8') : 'pl-2';
 
   const handleProvision = () => {
     if (task.state !== 'unprovisioned' || task.phase !== 'idle') return;
@@ -290,33 +295,61 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
         }}
       >
         <div className="flex min-w-0 flex-1 items-center gap-1 self-stretch overflow-hidden">
-          {guideTrail.length > 0 && (
-            <span className="flex shrink-0 self-stretch" aria-hidden>
-              {guideTrail.map((continues, index) => (
-                <TreeGuideSlot
-                  key={index}
-                  continues={continues}
-                  isElbow={index === guideTrail.length - 1}
-                />
-              ))}
-            </span>
-          )}
-          {hasChildren && (
-            <button
+          {hasRootToggle && (
+            <SidebarItemMiniButton
               type="button"
               aria-label={t('sidebar.toggleSubtasks')}
               aria-expanded={!isCollapsed}
-              className="flex h-4 w-4 shrink-0 items-center justify-center rounded-sm text-foreground-tertiary hover:bg-background-tertiary-2 hover:text-foreground"
-              onPointerDown={(e) => e.stopPropagation()}
+              className="shrink-0 transition-opacity duration-150 opacity-0 group-hover/row:opacity-100"
               onClick={(e) => {
                 e.stopPropagation();
                 sidebarStore.toggleTaskCollapsed(taskId);
               }}
             >
               <ChevronRight
-                className={cn('h-3.5 w-3.5 transition-transform', !isCollapsed && 'rotate-90')}
+                className={cn('h-4 w-4 transition-transform', !isCollapsed && 'rotate-90')}
               />
-            </button>
+            </SidebarItemMiniButton>
+          )}
+          {guideTrail.length > 0 && (
+            <span className="flex shrink-0 self-stretch">
+              {guideTrail.map((continues, index) => {
+                const isElbow = index === guideTrail.length - 1;
+                // Nested parents toggle via the elbow slot itself: guide lines
+                // fade out on row hover and a chevron fades in, so the name
+                // stays aligned with leaf siblings.
+                const isToggleSlot = isElbow && hasChildren;
+                return (
+                  <TreeGuideSlot
+                    key={index}
+                    continues={continues}
+                    isElbow={isElbow}
+                    fadeOnRowHover={isToggleSlot}
+                  >
+                    {isToggleSlot && (
+                      <button
+                        type="button"
+                        aria-label={t('sidebar.toggleSubtasks')}
+                        aria-expanded={!isCollapsed}
+                        className="absolute inset-0 flex items-center justify-center rounded-sm text-foreground-tertiary opacity-0 transition-opacity duration-150 hover:bg-background-tertiary-2 hover:text-foreground group-hover/row:opacity-100"
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          sidebarStore.toggleTaskCollapsed(taskId);
+                        }}
+                      >
+                        <ChevronRight
+                          className={cn(
+                            'h-3.5 w-3.5 transition-transform',
+                            !isCollapsed && 'rotate-90'
+                          )}
+                        />
+                      </button>
+                    )}
+                  </TreeGuideSlot>
+                );
+              })}
+            </span>
           )}
           <span
             className={cn(
@@ -433,18 +466,38 @@ const RenderPrBadge = observer(function RenderPrBadge({ task }: { task: TaskStor
  * (│); the elbow slot draws the connector to this row (├ when `continues`,
  * └ when it is the last sibling).
  */
-function TreeGuideSlot({ continues, isElbow }: { continues: boolean; isElbow: boolean }) {
+function TreeGuideSlot({
+  continues,
+  isElbow,
+  fadeOnRowHover,
+  children,
+}: {
+  continues: boolean;
+  isElbow: boolean;
+  /** Fade the guide lines out on row hover (slot doubles as a collapse toggle). */
+  fadeOnRowHover?: boolean;
+  children?: ReactNode;
+}) {
   return (
     <span className="relative h-full shrink-0" style={{ width: TASK_TREE_INDENT_PX }}>
-      {isElbow ? (
-        <>
-          <span className="absolute left-[5px] top-0 h-1/2 w-px bg-border" />
-          <span className="absolute left-[5px] top-1/2 h-px w-1.5 bg-border" />
-          {continues && <span className="absolute bottom-0 left-[5px] top-1/2 w-px bg-border" />}
-        </>
-      ) : (
-        continues && <span className="absolute bottom-0 left-[5px] top-0 w-px bg-border" />
-      )}
+      <span
+        aria-hidden
+        className={cn(
+          'absolute inset-0 transition-opacity duration-150',
+          fadeOnRowHover && 'group-hover/row:opacity-0'
+        )}
+      >
+        {isElbow ? (
+          <>
+            <span className="absolute left-[5px] top-0 h-1/2 w-px bg-border" />
+            <span className="absolute left-[5px] top-1/2 h-px w-1.5 bg-border" />
+            {continues && <span className="absolute bottom-0 left-[5px] top-1/2 w-px bg-border" />}
+          </>
+        ) : (
+          continues && <span className="absolute bottom-0 left-[5px] top-0 w-px bg-border" />
+        )}
+      </span>
+      {children}
     </span>
   );
 }
