@@ -99,6 +99,7 @@ import {
 } from '@renderer/lib/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@renderer/lib/ui/popover';
 import { Textarea } from '@renderer/lib/ui/textarea';
+import { isImeComposing } from '@renderer/utils/ime';
 import { cn } from '@renderer/utils/utils';
 import {
   applyMarkdownEnterEdit,
@@ -1684,7 +1685,7 @@ export const HomeComposer = observer(function HomeComposer({
           );
           return;
         }
-        if (e.key === 'Enter' || e.key === 'Tab') {
+        if ((e.key === 'Enter' && !isImeComposing(e)) || e.key === 'Tab') {
           const item = filteredSkillShortcutOptions[effectiveSkillShortcutIndex];
           if (!item && e.key === 'Tab') {
             e.preventDefault();
@@ -1715,7 +1716,10 @@ export const HomeComposer = observer(function HomeComposer({
           );
           return;
         }
-        if ((e.key === 'Enter' || e.key === 'Tab') && pathCompletionItems.length > 0) {
+        if (
+          ((e.key === 'Enter' && !isImeComposing(e)) || e.key === 'Tab') &&
+          pathCompletionItems.length > 0
+        ) {
           e.preventDefault();
           commitPathCompletion(pathCompletionItems[activePathCompletionIndex]);
           return;
@@ -1733,7 +1737,7 @@ export const HomeComposer = observer(function HomeComposer({
         return;
       }
 
-      if (e.key === 'Enter' && !e.nativeEvent.isComposing && e.keyCode !== 229) {
+      if (e.key === 'Enter' && !isImeComposing(e)) {
         if (applyPromptEnterEdit(e.currentTarget)) {
           e.preventDefault();
           return;

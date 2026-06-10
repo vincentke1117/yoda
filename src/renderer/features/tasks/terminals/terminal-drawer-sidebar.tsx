@@ -7,6 +7,7 @@ import { type TerminalTabViewStore } from '@renderer/features/tasks/terminals/te
 import { useNavigate } from '@renderer/lib/layout/navigation-provider';
 import { MicroLabel } from '@renderer/lib/ui/label';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@renderer/lib/ui/tooltip';
+import { isImeComposing } from '@renderer/utils/ime';
 import { cn } from '@renderer/utils/utils';
 import { scriptIcon } from './terminal-tabs';
 
@@ -248,7 +249,7 @@ function InlineRenameInput({
       onChange={(e) => setValue(e.target.value)}
       onBlur={() => onConfirm(value)}
       onKeyDown={(e) => {
-        if (e.key === 'Enter') onConfirm(value);
+        if (e.key === 'Enter' && !isImeComposing(e)) onConfirm(value);
         if (e.key === 'Escape') onCancel();
         e.stopPropagation();
       }}

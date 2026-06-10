@@ -3,6 +3,7 @@ import React, { type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@renderer/lib/ui/button';
 import { Input } from '@renderer/lib/ui/input';
+import { isImeComposing } from '@renderer/utils/ime';
 import { cn } from '@renderer/utils/utils';
 import type { TerminalSearchStatus } from './use-terminal-search';
 
@@ -44,7 +45,7 @@ export function TerminalSearchOverlay({
           value={searchQuery}
           onChange={(event) => onQueryChange(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === 'Enter') {
+            if (event.key === 'Enter' && !isImeComposing(event)) {
               event.preventDefault();
               onStep(event.shiftKey ? 'prev' : 'next');
               return;

@@ -14,6 +14,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@renderer/lib/ui/dropdown-menu';
+import { isImeComposing } from '@renderer/utils/ime';
 import { cn } from '@renderer/utils/utils';
 import { workspaceTaskCounts, type WorkspaceTaskCounts } from './workspace-task-counts';
 
@@ -98,7 +99,7 @@ export const WorkspaceSwitcher = observer(function WorkspaceSwitcher() {
       >
         <FolderInput className="h-4 w-4 shrink-0" />
         <span className="truncate">{currentName}</span>
-        <WorkspaceCounts counts={activeCounts} className="ml-auto pr-1" />
+        <WorkspaceCounts counts={activeCounts} />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" sideOffset={6} className="w-(--anchor-width) min-w-56">
         <DropdownMenuGroup>
@@ -168,8 +169,8 @@ const WorkspaceChoice = observer(function WorkspaceChoice({
 });
 
 /**
- * Compact `(ToRead / Running / Total)` badge. A terracotta dot precedes the
- * numbers when there are unread tasks.
+ * Compact unread badge in `(N)` form, shown next to the workspace label.
+ * Renders nothing when there are no unread tasks.
  */
 function WorkspaceCounts({
   counts,
@@ -179,21 +180,15 @@ function WorkspaceCounts({
   className?: string;
 }) {
   const { t } = useTranslation();
+  if (counts.toRead <= 0) return null;
   return (
     <span
-      className={cn('flex items-center gap-1 text-xs text-foreground-passive font-mono', className)}
+      className={cn('text-xs text-foreground-passive font-mono', className)}
       aria-label={t('workspaces.countsAria', {
         toRead: counts.toRead,
-        running: counts.running,
-        total: counts.total,
       })}
     >
-      {counts.toRead > 0 && (
-        <span className="size-1.5 rounded-full bg-primary" aria-hidden="true" />
-      )}
-      <span>
-        ({counts.toRead} / {counts.running} / {counts.total})
-      </span>
+      ({counts.toRead})
     </span>
   );
 }
@@ -222,7 +217,7 @@ function WorkspaceNameInput({
       onChange={(e) => setValue(e.target.value)}
       onBlur={() => onSubmit(value)}
       onKeyDown={(e) => {
-        if (e.key === 'Enter') onSubmit(value);
+        if (e.key === 'Enter' && !isImeComposing(e)) onSubmit(value);
         else if (e.key === 'Escape') onCancel();
       }}
       className="h-8 min-w-0 flex-1 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"

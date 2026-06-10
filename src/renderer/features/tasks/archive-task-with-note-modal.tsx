@@ -14,11 +14,14 @@ import {
 } from '@renderer/lib/ui/dialog';
 import { Field, FieldGroup, FieldLabel } from '@renderer/lib/ui/field';
 import { Input } from '@renderer/lib/ui/input';
+import { isImeComposing } from '@renderer/utils/ime';
 
 type ArchiveTaskWithNoteModalArgs = {
   projectId: string;
   taskId: string;
   taskName: string;
+  /** Skip the configured pre-archive skill and archive immediately. */
+  skipPreCommand?: boolean;
 };
 
 type Props = BaseModalProps<void> & ArchiveTaskWithNoteModalArgs;
@@ -29,6 +32,7 @@ export const ArchiveTaskWithNoteModal = observer(function ArchiveTaskWithNoteMod
   projectId,
   taskId,
   taskName,
+  skipPreCommand,
   onSuccess,
   onClose,
 }: Props) {
@@ -41,7 +45,7 @@ export const ArchiveTaskWithNoteModal = observer(function ArchiveTaskWithNoteMod
     // The archive flow can run for minutes (pre-archive commands against every
     // live conversation), so it continues in the background — progress shows as
     // loading states on the task row and conversation tabs, not in this dialog.
-    void archiveTask(taskId, { note }).catch((e: unknown) => {
+    void archiveTask(taskId, { note, skipPreCommand }).catch((e: unknown) => {
       toast({
         title: t('sidebar.archiveTask'),
         description: e instanceof Error ? e.message : String(e),
@@ -49,7 +53,7 @@ export const ArchiveTaskWithNoteModal = observer(function ArchiveTaskWithNoteMod
       });
     });
     onSuccess();
-  }, [archiveTask, taskId, note, onSuccess, t]);
+  }, [archiveTask, taskId, note, skipPreCommand, onSuccess, t]);
 
   return (
     <>
@@ -64,7 +68,7 @@ export const ArchiveTaskWithNoteModal = observer(function ArchiveTaskWithNoteMod
               value={note}
               onChange={(e) => setNote(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.nativeEvent.isComposing && e.keyCode !== 229) {
+                if (e.key === 'Enter' && !isImeComposing(e)) {
                   handleSubmit();
                 }
               }}

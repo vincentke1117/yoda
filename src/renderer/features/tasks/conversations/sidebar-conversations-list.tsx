@@ -18,6 +18,7 @@ import {
 import { MicroLabel } from '@renderer/lib/ui/label';
 import { RelativeTime } from '@renderer/lib/ui/relative-time';
 import { agentConfig } from '@renderer/utils/agentConfig';
+import { isImeComposing } from '@renderer/utils/ime';
 import { cn } from '@renderer/utils/utils';
 import { AgentStatusIndicator } from '../components/agent-status-indicator';
 
@@ -38,9 +39,9 @@ const ConversationRow = observer(function ConversationRow({
   if (!conversation) return null;
 
   const isActive = tabManager.activeConversationId === conversationId;
-  const config = agentConfig[conversation.data.providerId];
+  const config = agentConfig[conversation.data.runtimeId];
   const displayTitle = formatConversationTitleForDisplay(
-    conversation.data.providerId,
+    conversation.data.runtimeId,
     conversation.data.title
   );
   const rawTitle = conversation.data.title ?? '';
@@ -78,7 +79,7 @@ const ConversationRow = observer(function ConversationRow({
             }
           }}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') {
+            if (e.key === 'Enter' && !isImeComposing(e)) {
               const value = e.currentTarget.value.trim();
               if (value && value !== rawTitle) {
                 handleRenameSubmit(value);

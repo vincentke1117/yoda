@@ -13,6 +13,7 @@ import {
 } from '@renderer/lib/ui/dialog';
 import { Field, FieldGroup, FieldLabel } from '@renderer/lib/ui/field';
 import { Input } from '@renderer/lib/ui/input';
+import { isImeComposing } from '@renderer/utils/ime';
 
 type Props = BaseModalProps<Workspace>;
 
@@ -55,7 +56,7 @@ export function CreateWorkspaceModal({ onSuccess, onClose }: Props) {
                 setError(null);
               }}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.nativeEvent.isComposing && e.keyCode !== 229) {
+                if (e.key === 'Enter' && !isImeComposing(e)) {
                   void handleSubmit();
                 }
               }}

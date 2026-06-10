@@ -10,6 +10,7 @@ import { Button } from '@renderer/lib/ui/button';
 import { Input } from '@renderer/lib/ui/input';
 import { Switch } from '@renderer/lib/ui/switch';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@renderer/lib/ui/tooltip';
+import { isImeComposing } from '@renderer/utils/ime';
 import { ResetToDefaultButton } from './ResetToDefaultButton';
 import { SettingRow } from './SettingRow';
 
@@ -134,7 +135,7 @@ export const PreArchiveCommandRow: React.FC = () => {
               if (next !== command) update({ preArchiveCommand: next });
             }}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') {
+              if (e.key === 'Enter' && !isImeComposing(e)) {
                 e.currentTarget.blur();
               }
             }}

@@ -19,6 +19,7 @@ import {
 } from '@renderer/lib/ui/dialog';
 import { Field, FieldGroup, FieldLabel } from '@renderer/lib/ui/field';
 import { Input } from '@renderer/lib/ui/input';
+import { isImeComposing } from '@renderer/utils/ime';
 
 type RenameTaskModalArgs = {
   projectId: string;
@@ -96,11 +97,7 @@ export const RenameTaskModal = observer(function RenameTaskModal({
               value={name}
               onChange={(e) => handleNameChange(e.target.value)}
               onKeyDown={(e) => {
-                // Skip while IME composition is active (e.g. Chinese pinyin
-                // candidate selection) — the first Enter confirms the candidate,
-                // not the form. `isComposing` covers all IMEs; keyCode 229 is
-                // the legacy Safari/Webkit fallback.
-                if (e.key === 'Enter' && !e.nativeEvent.isComposing && e.keyCode !== 229) {
+                if (e.key === 'Enter' && !isImeComposing(e)) {
                   void handleSubmit();
                 }
               }}

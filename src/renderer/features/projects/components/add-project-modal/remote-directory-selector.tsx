@@ -6,6 +6,7 @@ import { rpc } from '@renderer/lib/ipc';
 import { Button } from '@renderer/lib/ui/button';
 import { Input } from '@renderer/lib/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@renderer/lib/ui/popover';
+import { isImeComposing } from '@renderer/utils/ime';
 import { cn } from '@renderer/utils/utils';
 
 interface RemoteDirectorySelectorProps {
@@ -89,7 +90,7 @@ export function RemoteDirectorySelector({
                 }
               }}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') {
+                if (e.key === 'Enter' && !isImeComposing(e)) {
                   e.preventDefault();
                   void loadDirectory(currentPath || '/');
                 }

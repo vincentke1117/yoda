@@ -2,6 +2,7 @@ import { X } from 'lucide-react';
 import { observer, Observer } from 'mobx-react-lite';
 import { useEffect, useRef, useState } from 'react';
 import { ReorderList } from '@renderer/lib/components/reorder-list';
+import { isImeComposing } from '@renderer/utils/ime';
 import { cn } from '@renderer/utils/utils';
 import { Separator } from './separator';
 
@@ -30,7 +31,7 @@ function InlineEditInput({
       onChange={(e) => setValue(e.target.value)}
       onBlur={() => onConfirm(value)}
       onKeyDown={(e) => {
-        if (e.key === 'Enter') onConfirm(value);
+        if (e.key === 'Enter' && !isImeComposing(e)) onConfirm(value);
         if (e.key === 'Escape') onCancel();
         e.stopPropagation();
       }}

@@ -17,6 +17,7 @@ import { ShortcutHint } from '@renderer/lib/ui/shortcut-hint';
 import { Toggle } from '@renderer/lib/ui/toggle';
 import { ToggleGroup, ToggleGroupItem } from '@renderer/lib/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@renderer/lib/ui/tooltip';
+import { isImeComposing } from '@renderer/utils/ime';
 import { cn } from '@renderer/utils/utils';
 import type { TaskIssueLinkingState } from '../issues-view/task-issue-links';
 import { TaskRow, type ReadyTask } from './task-row';
@@ -244,7 +245,7 @@ export const TaskList = observer(function TaskList() {
               value={taskView.searchQuery}
               onChange={(e) => taskView.setSearchQuery(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') {
+                if (e.key === 'Enter' && !isImeComposing(e)) {
                   e.preventDefault();
                   showCommandPalette({
                     projectId,
