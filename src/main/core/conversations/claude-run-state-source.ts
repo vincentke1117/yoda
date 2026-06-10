@@ -3,6 +3,8 @@ import { readFile, stat } from 'node:fs/promises';
 import type { RunStateEvent } from '@shared/events/agent-run-state';
 import { resolveClaudeTranscriptPath } from '@main/core/session-title/claude-title-source';
 import { log } from '@main/lib/logger';
+import { iterateLines } from '@main/utils/text-lines';
+import { isInterruptedSinceLastPrompt } from './interrupt-marker';
 
 /**
  * Deterministic "is this Claude session mid-turn?" check, read straight from the
@@ -30,18 +32,62 @@ export type ClaudeTurnState = 'working' | 'awaiting-input' | 'idle';
 /** Tools that block the turn waiting for a user decision (no Notification hook). */
 const INTERACTIVE_TOOLS = new Set(['AskUserQuestion', 'ExitPlanMode']);
 
+/**
+ * Sentinel rows Claude Code appends when the user presses Esc mid-turn. They
+ * arrive as `type: "user"` messages, but they END the turn: no Stop hook fires
+ * and no `stop_hook_summary` is written on interrupt, so without special-casing
+ * them the classifier would pin the session at `working` forever.
+ */
+const INTERRUPT_SENTINELS = new Set([
+  '[Request interrupted by user]',
+  '[Request interrupted by user for tool use]',
+]);
+
+function isInterruptContent(content: unknown): boolean {
+  if (!Array.isArray(content)) return false;
+  return content.some(
+    (item) =>
+      typeof item === 'object' &&
+      item !== null &&
+      (item as Record<string, unknown>).type === 'text' &&
+      INTERRUPT_SENTINELS.has((item as Record<string, unknown>).text as string)
+  );
+}
+
+/**
+ * A turn-state verdict plus the timestamp of the decisive prompt row it hangs
+ * on, so callers can tell a fresh `working` from one frozen since before a
+ * user interrupt (see interrupt-marker.ts).
+ */
+export interface ClaudeTurnVerdict {
+  state: ClaudeTurnState;
+  /** Epoch ms of the last non-interrupt user prompt row, if any. */
+  lastUserAt: number | null;
+}
+
 export async function readClaudeTurnState(
   cwd: string,
   sessionId: string
 ): Promise<ClaudeTurnState | null> {
-  const filePath = resolveClaudeTranscriptPath(cwd, sessionId);
+  return readClaudeTurnStateFile(resolveClaudeTranscriptPath(cwd, sessionId));
+}
+
+/** Same as {@link readClaudeTurnState} for callers that already know the transcript path. */
+export async function readClaudeTurnStateFile(filePath: string): Promise<ClaudeTurnState | null> {
+  return (await readClaudeTurnVerdictFile(filePath))?.state ?? null;
+}
+
+/** Full verdict variant of {@link readClaudeTurnStateFile}. */
+export async function readClaudeTurnVerdictFile(
+  filePath: string
+): Promise<ClaudeTurnVerdict | null> {
   let raw: string;
   try {
     raw = await readFile(filePath, 'utf8');
   } catch {
     return null;
   }
-  return classifyClaudeTranscript(raw);
+  return classifyClaudeTranscriptVerdict(raw);
 }
 
 /**
@@ -57,13 +103,19 @@ export async function readClaudeTurnState(
  *  - `idle` otherwise (turn finished / nothing running).
  */
 export function classifyClaudeTranscript(raw: string): ClaudeTurnState {
+  return classifyClaudeTranscriptVerdict(raw).state;
+}
+
+/** Verdict variant of {@link classifyClaudeTranscript} (adds `lastUserAt`). */
+export function classifyClaudeTranscriptVerdict(raw: string): ClaudeTurnVerdict {
   let lastUserIdx = -1;
+  let lastUserAt: number | null = null;
   let lastStopIdx = -1;
   let idx = -1;
   const pendingInteractiveToolIds = new Set<string>();
   const resolvedToolIds = new Set<string>();
 
-  for (const line of raw.split('\n')) {
+  for (const line of iterateLines(raw)) {
     const trimmed = line.trim();
     if (!trimmed) continue;
     idx += 1;
@@ -105,18 +157,25 @@ export function classifyClaudeTranscript(raw: string): ClaudeTurnState {
         message !== null &&
         (message as Record<string, unknown>).role === 'user'
       ) {
-        lastUserIdx = idx;
+        // An Esc interrupt is written as a user row but terminates the turn.
+        if (isInterruptContent(content)) {
+          lastStopIdx = idx;
+        } else {
+          lastUserIdx = idx;
+          const at = typeof row.timestamp === 'string' ? Date.parse(row.timestamp) : NaN;
+          lastUserAt = Number.isNaN(at) ? null : at;
+        }
       }
     }
   }
 
   // An interactive tool with no matching result = blocked on the user.
   for (const id of pendingInteractiveToolIds) {
-    if (!resolvedToolIds.has(id)) return 'awaiting-input';
+    if (!resolvedToolIds.has(id)) return { state: 'awaiting-input', lastUserAt };
   }
 
-  if (lastUserIdx === -1) return 'idle';
-  return lastUserIdx > lastStopIdx ? 'working' : 'idle';
+  if (lastUserIdx === -1) return { state: 'idle', lastUserAt };
+  return { state: lastUserIdx > lastStopIdx ? 'working' : 'idle', lastUserAt };
 }
 
 // ── Live tailer ──────────────────────────────────────────────────────────────
@@ -150,6 +209,7 @@ export function watchClaudeRunState(
 ): ClaudeRunStateWatcher {
   return new ClaudeTranscriptStateTailer(
     resolveClaudeTranscriptPath(ctx.cwd, ctx.conversationId),
+    ctx.conversationId,
     dispatch
   );
 }
@@ -165,6 +225,7 @@ class ClaudeTranscriptStateTailer implements ClaudeRunStateWatcher {
 
   constructor(
     private readonly filePath: string,
+    private readonly conversationId: string,
     private readonly dispatch: RunStateDispatch
   ) {
     this.waitForFile();
@@ -240,7 +301,15 @@ class ClaudeTranscriptStateTailer implements ClaudeRunStateWatcher {
   private async reclassify(): Promise<void> {
     const raw = await readFile(this.filePath, 'utf8').catch(() => undefined);
     if (raw === undefined || this.stopped) return;
-    const state = classifyClaudeTranscript(raw);
+    const verdict = classifyClaudeTranscriptVerdict(raw);
+    let state = verdict.state;
+    // A `working` verdict frozen since before a user interrupt is stale (turn
+    // killed before its first assistant output — no sentinel, no stop row).
+    // Without this gate, attaching to such a transcript would resurrect the
+    // zombie `working` that the interrupt just cleared.
+    if (state === 'working' && isInterruptedSinceLastPrompt(this.conversationId, verdict.lastUserAt)) {
+      state = 'idle';
+    }
     const first = this.lastState === undefined;
     if (state === this.lastState) return;
     this.lastState = state;

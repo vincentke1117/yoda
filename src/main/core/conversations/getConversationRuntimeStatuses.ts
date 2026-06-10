@@ -2,12 +2,15 @@ import { eq, inArray } from 'drizzle-orm';
 import type { AgentSessionRuntimeStatus } from '@shared/events/agentEvents';
 import { makePtySessionId } from '@shared/ptySessionId';
 import { ptySessionRegistry } from '@main/core/pty/pty-session-registry';
+import { resolveClaudeTranscriptPath } from '@main/core/session-title/claude-title-source';
 import { db } from '@main/db/client';
 import { conversations } from '@main/db/schema';
 import { resolveTask } from '../projects/utils';
 import { agentSessionRuntimeStore } from './agent-session-runtime';
-import { readClaudeTurnState } from './claude-run-state-source';
+import { readClaudeTurnVerdictFile } from './claude-run-state-source';
+import { findClaudeTranscriptPathBySessionId } from './claude-transcript-locator';
 import { readCodexTurnState } from './codex-run-state-source';
+import { isInterruptedSinceLastPrompt } from './interrupt-marker';
 
 /**
  * Stateless run-state for a task's conversations.
@@ -33,17 +36,15 @@ export async function getConversationRuntimeStatuses(
   const providerById = await loadProviders(conversationIds);
   const cwd = resolveTask(projectId, taskId)?.conversations.taskPath;
 
-  await Promise.all(
-    conversationIds.map(async (conversationId) => {
-      statuses[conversationId] = await deriveStatus({
-        projectId,
-        taskId,
-        conversationId,
-        provider: providerById.get(conversationId),
-        cwd,
-      });
-    })
-  );
+  for (const conversationId of conversationIds) {
+    statuses[conversationId] = await deriveStatus({
+      projectId,
+      taskId,
+      conversationId,
+      provider: providerById.get(conversationId),
+      cwd,
+    });
+  }
 
   return statuses;
 }
@@ -78,9 +79,30 @@ async function deriveStatus(args: {
 
   // Truth source — overrides memory when available.
   let truth: AgentSessionRuntimeStatus | undefined;
-  if (provider === 'claude' && cwd) {
-    const t = await readClaudeTurnState(cwd, conversationId).catch(() => null);
-    if (t) truth = t; // 'working' | 'awaiting-input' | 'idle'
+  if (provider === 'claude') {
+    // Without a cwd (task not provisioned — e.g. cold load right after an app
+    // restart while the agent keeps running in tmux), locate the transcript by
+    // session id instead so the status still derives from the truth source.
+    const filePath = cwd
+      ? resolveClaudeTranscriptPath(cwd, conversationId)
+      : await findClaudeTranscriptPathBySessionId(conversationId);
+    if (filePath) {
+      const verdict = await readClaudeTurnVerdictFile(filePath).catch(() => null);
+      if (verdict) {
+        truth = verdict.state; // 'working' | 'awaiting-input' | 'idle'
+        // A `working` verdict frozen since before a user interrupt is stale: a
+        // turn killed before its first assistant output leaves no interrupt
+        // sentinel and no stop row, so the transcript alone can never leave
+        // `working`. The marker (set by the stop button / a typed Esc) breaks
+        // the tie; a newer prompt row invalidates it automatically.
+        if (
+          truth === 'working' &&
+          isInterruptedSinceLastPrompt(conversationId, verdict.lastUserAt)
+        ) {
+          truth = 'idle';
+        }
+      }
+    }
   } else if (provider === 'codex') {
     const t = await readCodexTurnState(conversationId).catch(() => null);
     if (t === 'working') truth = 'working';
@@ -117,12 +139,12 @@ function hasLivePty(projectId: string, taskId: string, conversationId: string): 
 
 async function loadProviders(conversationIds: string[]): Promise<Map<string, string>> {
   const rows = await db
-    .select({ id: conversations.id, provider: conversations.provider })
+    .select({ id: conversations.id, runtime: conversations.runtime })
     .from(conversations)
     .where(
       conversationIds.length === 1
         ? eq(conversations.id, conversationIds[0])
         : inArray(conversations.id, conversationIds)
     );
-  return new Map(rows.flatMap((r) => (r.provider ? [[r.id, r.provider] as const] : [])));
+  return new Map(rows.flatMap((r) => (r.runtime ? [[r.id, r.runtime] as const] : [])));
 }
