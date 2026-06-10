@@ -1,18 +1,51 @@
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
+import type { ArchiveTaskResult } from '@shared/tasks';
 import { ensureCodexThreadArchived } from '@main/core/conversations/codex-archive';
 import { resolveAgentResumeSessionId } from '@main/core/conversations/codex-session-id';
 import { mapConversationRowToConversation } from '@main/core/conversations/utils';
 import { projectManager } from '@main/core/projects/project-manager';
 import type { ProjectProvider } from '@main/core/projects/project-provider';
-import { providerOverrideSettings } from '@main/core/settings/provider-settings-service';
+import { runtimeOverrideSettings } from '@main/core/settings/runtime-settings-service';
+import { snapshotTaskDiffTotals } from '@main/core/stats/task-diff-snapshot';
 import { taskEvents } from '@main/core/tasks/task-events';
 import { taskManager } from '@main/core/tasks/task-manager';
 import { db } from '@main/db/client';
 import { conversations, projects, tasks, type TaskRow } from '@main/db/schema';
 import { log } from '@main/lib/logger';
 import { telemetryService } from '@main/lib/telemetry';
+import { getDescendantTaskIds } from './task-hierarchy';
 
-export async function archiveTask(projectId: string, taskId: string, note?: string): Promise<void> {
+export async function archiveTask(
+  projectId: string,
+  taskId: string,
+  note?: string
+): Promise<ArchiveTaskResult> {
+  // Cascade: archive all non-archived descendants bottom-up (children before
+  // parents) so worktree/teardown work happens sequentially per task and the
+  // tree never has an archived parent with live children mid-flight.
+  const descendantIds = await getDescendantTaskIds(taskId);
+  const archivedTaskIds: string[] = [];
+
+  if (descendantIds.length > 0) {
+    const activeDescendants = await db
+      .select({ id: tasks.id })
+      .from(tasks)
+      .where(and(inArray(tasks.id, descendantIds), isNull(tasks.archivedAt)));
+    const activeIds = new Set(activeDescendants.map((d) => d.id));
+    // descendantIds is parents-before-children; reverse for bottom-up order.
+    for (const descendantId of [...descendantIds].reverse()) {
+      if (!activeIds.has(descendantId)) continue;
+      await archiveSingleTask(projectId, descendantId);
+      archivedTaskIds.push(descendantId);
+    }
+  }
+
+  await archiveSingleTask(projectId, taskId, note);
+  archivedTaskIds.push(taskId);
+  return { archivedTaskIds };
+}
+
+async function archiveSingleTask(projectId: string, taskId: string, note?: string): Promise<void> {
   const [row] = await db
     .select({
       task: tasks,
@@ -26,6 +59,12 @@ export async function archiveTask(projectId: string, taskId: string, note?: stri
 
   const task = row.task;
   const project = projectManager.getProject(projectId);
+
+  // Snapshot diff totals while the worktree still exists — teardown below
+  // removes it and the live diff with it.
+  await snapshotTaskDiffTotals(taskId).catch((e: unknown) => {
+    log.warn('archiveTask: diff snapshot failed', { taskId, error: String(e) });
+  });
 
   const trimmedNote = note?.trim();
   await db
@@ -111,20 +150,20 @@ async function archiveCodexTaskConversations({
       and(
         eq(conversations.projectId, projectId),
         eq(conversations.taskId, task.id),
-        eq(conversations.provider, 'codex')
+        eq(conversations.runtime, 'codex')
       )
     );
 
   if (codexConversations.length === 0) return;
 
   const cwd = await resolveTaskCwd({ task, project, projectPath });
-  const providerConfig = await providerOverrideSettings.getItem('codex');
+  const providerConfig = await runtimeOverrideSettings.getItem('codex');
   await Promise.all(
     codexConversations.map((row) => {
       const conversation = mapConversationRowToConversation(row, true);
       const threadId = resolveAgentResumeSessionId(conversation, cwd);
       return ensureCodexThreadArchived({
-        providerId: conversation.providerId,
+        runtimeId: conversation.runtimeId,
         providerConfig,
         threadId,
         ctx: project.ctx,

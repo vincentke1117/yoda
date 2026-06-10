@@ -341,6 +341,39 @@ export class TaskStore {
     }
   }
 
+  /**
+   * Re-parent this task in the subtask tree. Optimistic; rolls back when the
+   * main process rejects (cycle, cross-project, archived parent). Returns the
+   * RPC result so callers can surface the rejection reason.
+   */
+  async setParentTask(
+    parentTaskId: string | null
+  ): Promise<Awaited<ReturnType<typeof rpc.tasks.setTaskParent>> | undefined> {
+    if (this.state === 'unregistered') return undefined;
+    const task = registeredTaskData(this);
+    if (!task) return undefined;
+    if ((task.parentTaskId ?? null) === parentTaskId) return undefined;
+    const previous = task.parentTaskId;
+    runInAction(() => {
+      task.parentTaskId = parentTaskId ?? undefined;
+    });
+    try {
+      const result = await rpc.tasks.setTaskParent(task.projectId, task.id, parentTaskId);
+      if (!result.success) {
+        runInAction(() => {
+          task.parentTaskId = previous;
+        });
+      }
+      return result;
+    } catch (e) {
+      runInAction(() => {
+        task.parentTaskId = previous;
+      });
+      log.error(e);
+      throw e;
+    }
+  }
+
   async setNeedsReview(needsReview: boolean): Promise<void> {
     if (this.state === 'unregistered') return;
     const task = registeredTaskData(this);

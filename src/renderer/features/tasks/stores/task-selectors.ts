@@ -4,6 +4,7 @@ import { getProjectManagerStore } from '@renderer/features/projects/stores/proje
 import type { AgentStatus } from '@renderer/features/tasks/conversations/conversation-manager';
 import type { DiffViewStore } from '@renderer/features/tasks/diff-view/stores/diff-view-store';
 import type { FileModelLifecycleStore } from '@renderer/features/tasks/editor/stores/file-model-lifecycle-store';
+import { appState } from '@renderer/lib/stores/app-state';
 import {
   isUnprovisioned,
   isUnregistered,
@@ -54,7 +55,63 @@ export function getTaskGitStore(projectId: string, taskId: string) {
   return asProvisioned(getTaskStore(projectId, taskId))?.workspace.git;
 }
 
+/** Direct children of a task in the subtask tree. Call only inside MobX reactions. */
+export function taskChildren(projectId: string, taskId: string): TaskStore[] {
+  const manager = getTaskManagerStore(projectId);
+  if (!manager) return [];
+  const children: TaskStore[] = [];
+  for (const store of manager.tasks.values()) {
+    const data = registeredTaskData(store);
+    if (data?.parentTaskId === taskId) children.push(store);
+  }
+  return children;
+}
+
+/**
+ * Ancestor chain of a task, nearest parent first. Bounded by the number of
+ * known tasks so dirty-data cycles can't hang the renderer.
+ */
+export function taskAncestors(projectId: string, taskId: string): TaskStore[] {
+  const manager = getTaskManagerStore(projectId);
+  if (!manager) return [];
+  const ancestors: TaskStore[] = [];
+  const start = manager.tasks.get(taskId);
+  let currentId = start ? registeredTaskData(start)?.parentTaskId : undefined;
+  for (let steps = 0; steps <= manager.tasks.size && currentId; steps++) {
+    const parent = manager.tasks.get(currentId);
+    if (!parent) break;
+    ancestors.push(parent);
+    currentId = registeredTaskData(parent)?.parentTaskId;
+  }
+  return ancestors;
+}
+
+/** Whether `candidateId` is inside the subtree rooted at `ancestorId`. */
+export function isTaskDescendantOf(
+  projectId: string,
+  candidateId: string,
+  ancestorId: string
+): boolean {
+  return taskAncestors(projectId, candidateId).some((store) => {
+    const data = registeredTaskData(store);
+    return data?.id === ancestorId;
+  });
+}
+
 export function taskAgentStatus(store: TaskStore): AgentStatus | null {
+  const task = registeredTaskData(store);
+  if (task) {
+    const runtimeStatus = appState.agentRuntime.taskStatus(task.projectId, task.id);
+    if (runtimeStatus === 'working' || runtimeStatus === 'awaiting-input') {
+      return runtimeStatus;
+    }
+    if (
+      (runtimeStatus === 'error' || runtimeStatus === 'completed') &&
+      appState.agentRuntime.isTaskUnread(task.projectId, task.id)
+    ) {
+      return runtimeStatus;
+    }
+  }
   return asProvisioned(store)?.conversations.taskStatus ?? null;
 }
 

@@ -1,4 +1,4 @@
-import { Archive, Loader2, MoreHorizontal } from 'lucide-react';
+import { Archive, ChevronRight, Loader2, MoreHorizontal } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -30,6 +30,7 @@ import { OVERVIEW_TAB_ID } from '@renderer/features/tasks/tabs/tab-manager-store
 import { rpc } from '@renderer/lib/ipc';
 import { useNavigate, useParams } from '@renderer/lib/layout/navigation-provider';
 import { useShowModal } from '@renderer/lib/modal/modal-provider';
+import { sidebarStore } from '@renderer/lib/stores/app-state';
 import { Badge } from '@renderer/lib/ui/badge';
 import { log } from '@renderer/utils/logger';
 import { cn } from '@renderer/utils/utils';
@@ -45,17 +46,32 @@ interface SidebarTaskItemProps {
    * - `flat`: top-level row in the no-grouping / type / activity views; shows the project tag.
    */
   rowVariant?: 'underProject' | 'pinned' | 'flat';
+  /** Subtask tree depth (0 = root); only meaningful for `underProject`. */
+  depth?: number;
+  /** Direct subtask count; > 0 renders the collapse chevron. */
+  childCount?: number;
+  /** Terminal-tree guide state per indent slot — see SidebarRow.treeTrail. */
+  treeTrail?: boolean[];
 }
+
+/** Indent per subtask level; depth is visually capped so deep trees stay readable. */
+const TASK_TREE_INDENT_PX = 14;
+const TASK_TREE_MAX_VISUAL_DEPTH = 5;
 
 export const SidebarTaskItem = observer(function SidebarTaskItem({
   taskId,
   projectId,
   rowVariant = 'underProject',
+  depth = 0,
+  childCount = 0,
+  treeTrail,
 }: SidebarTaskItemProps) {
   const { t } = useTranslation();
   const { navigate } = useNavigate();
   const showRename = useShowModal('renameTaskModal');
   const showArchiveWithNote = useShowModal('archiveTaskWithNoteModal');
+  const showCreateTask = useShowModal('taskModal');
+  const showSetParent = useShowModal('setParentTaskModal');
 
   const { params } = useParams('task');
   // The selected task stays highlighted even after navigating to a non-task view
@@ -85,6 +101,15 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
 
   const taskName = task.data.name;
   const taskIndentClass = rowVariant === 'underProject' ? 'pl-8' : 'pl-2';
+  const treeDepth = rowVariant === 'underProject' ? Math.min(depth, TASK_TREE_MAX_VISUAL_DEPTH) : 0;
+  // One guide slot per (visually capped) tree level. Without trail data (drag
+  // ghost previewing a projected depth) fall back to a bare elbow.
+  const guideTrail =
+    treeDepth > 0
+      ? (treeTrail?.slice(-treeDepth) ?? Array.from({ length: treeDepth }, () => false))
+      : [];
+  const hasChildren = rowVariant === 'underProject' && childCount > 0;
+  const isCollapsed = hasChildren && sidebarStore.collapsedTaskIds.has(taskId);
 
   const handleProvision = () => {
     if (task.state !== 'unprovisioned' || task.phase !== 'idle') return;
@@ -229,6 +254,20 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
     onAssignWorkspace: canAssignWorkspace
       ? (workspaceId: string | null) => void task.setSidebarWorkspaceId(workspaceId)
       : undefined,
+    // Subtask tree entries — projectless Drafts tasks stay flat for now.
+    onCreateSubtask:
+      projectId !== INTERNAL_PROJECT_ID && task.state !== 'unregistered'
+        ? () =>
+            showCreateTask({
+              projectId,
+              parentTaskId: taskId,
+              initialBranch: branchName ? { type: 'local', branch: branchName } : undefined,
+            })
+        : undefined,
+    onSetParent:
+      projectId !== INTERNAL_PROJECT_ID && task.state !== 'unregistered'
+        ? () => showSetParent({ projectId, taskId })
+        : undefined,
   };
 
   return (
@@ -251,6 +290,34 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
         }}
       >
         <div className="flex min-w-0 flex-1 items-center gap-1 self-stretch overflow-hidden">
+          {guideTrail.length > 0 && (
+            <span className="flex shrink-0 self-stretch" aria-hidden>
+              {guideTrail.map((continues, index) => (
+                <TreeGuideSlot
+                  key={index}
+                  continues={continues}
+                  isElbow={index === guideTrail.length - 1}
+                />
+              ))}
+            </span>
+          )}
+          {hasChildren && (
+            <button
+              type="button"
+              aria-label={t('sidebar.toggleSubtasks')}
+              aria-expanded={!isCollapsed}
+              className="flex h-4 w-4 shrink-0 items-center justify-center rounded-sm text-foreground-tertiary hover:bg-background-tertiary-2 hover:text-foreground"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                sidebarStore.toggleTaskCollapsed(taskId);
+              }}
+            >
+              <ChevronRight
+                className={cn('h-3.5 w-3.5 transition-transform', !isCollapsed && 'rotate-90')}
+              />
+            </button>
+          )}
           <span
             className={cn(
               'min-w-0 truncate text-left transition-colors',
@@ -259,6 +326,11 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
           >
             {taskName}
           </span>
+          {isCollapsed && (
+            <span className="shrink-0 rounded-sm bg-background-tertiary-2 px-1 text-[10px] tabular-nums text-foreground-tertiary">
+              {childCount}
+            </span>
+          )}
           {rowVariant === 'flat' && (
             <span className="shrink-0 truncate max-w-[8rem] rounded-sm bg-background-tertiary-2 px-1 text-[10px] uppercase tracking-wide text-foreground-tertiary">
               {projectName}
@@ -354,3 +426,25 @@ const RenderPrBadge = observer(function RenderPrBadge({ task }: { task: TaskStor
   const pr = selectCurrentPr(task.data.prs);
   return pr ? <PrBadge variant="compact" pr={pr} /> : null;
 });
+
+/**
+ * One indent slot of the terminal-style tree guide. Non-elbow slots draw a
+ * full-height vertical line while that ancestor still has siblings below
+ * (│); the elbow slot draws the connector to this row (├ when `continues`,
+ * └ when it is the last sibling).
+ */
+function TreeGuideSlot({ continues, isElbow }: { continues: boolean; isElbow: boolean }) {
+  return (
+    <span className="relative h-full shrink-0" style={{ width: TASK_TREE_INDENT_PX }}>
+      {isElbow ? (
+        <>
+          <span className="absolute left-[5px] top-0 h-1/2 w-px bg-border" />
+          <span className="absolute left-[5px] top-1/2 h-px w-1.5 bg-border" />
+          {continues && <span className="absolute bottom-0 left-[5px] top-1/2 w-px bg-border" />}
+        </>
+      ) : (
+        continues && <span className="absolute bottom-0 left-[5px] top-0 w-px bg-border" />
+      )}
+    </span>
+  );
+}

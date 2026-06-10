@@ -362,6 +362,20 @@ export async function createTask(
     },
   });
 
+  // Subtask parent: validate it exists in the same project; degrade to a top-level
+  // task instead of failing creation when the parent is gone or mismatched.
+  let parentTaskId: string | null = null;
+  if (params.parentTaskId) {
+    const [parent] = await db
+      .select({ id: tasks.id, projectId: tasks.projectId, archivedAt: tasks.archivedAt })
+      .from(tasks)
+      .where(eq(tasks.id, params.parentTaskId))
+      .limit(1);
+    if (parent && parent.projectId === params.projectId && !parent.archivedAt) {
+      parentTaskId = parent.id;
+    }
+  }
+
   const [taskRow] = await db
     .insert(tasks)
     .values({
@@ -373,6 +387,7 @@ export async function createTask(
       linkedIssue: params.linkedIssue ? JSON.stringify(params.linkedIssue) : null,
       workspaceProvider: params.workspaceProvider ?? null,
       sidebarWorkspaceId: params.sidebarWorkspaceId ?? null,
+      parentTaskId,
       setupStatus: 'pending',
       setupData,
       updatedAt: sql`CURRENT_TIMESTAMP`,

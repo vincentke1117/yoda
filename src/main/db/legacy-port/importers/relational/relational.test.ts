@@ -71,7 +71,11 @@ function createAppDb(): {
       workspace_provider TEXT,
       workspace_id TEXT,
       workspace_provider_data TEXT,
-      sidebar_workspace_id TEXT
+      sidebar_workspace_id TEXT,
+      diff_additions INTEGER,
+      diff_deletions INTEGER,
+      diff_captured_at TEXT,
+      parent_task_id TEXT REFERENCES tasks(id) ON DELETE SET NULL
     );
 
     CREATE TABLE conversations (
@@ -79,7 +83,9 @@ function createAppDb(): {
       project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
       task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
       title TEXT NOT NULL,
+      title_source TEXT,
       provider TEXT,
+      auth_provider TEXT,
       config TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,

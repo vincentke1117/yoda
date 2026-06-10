@@ -597,12 +597,55 @@ export class TaskManagerStore {
   }
 
   /**
-   * Flip the task into the archived state locally without hitting the server.
-   * Removes the row from the active sidebar immediately so a slow pre-archive
-   * step never traps the row with a spinning icon. Returns a rollback that
+   * All locally-known descendant task ids of `taskId` (children first, then
+   * grandchildren, ...). Built from the in-memory parentTaskId adjacency.
+   */
+  getDescendantTaskIds(taskId: string): string[] {
+    const childrenByParent = new Map<string, string[]>();
+    for (const store of this.tasks.values()) {
+      if (!isRegistered(store)) continue;
+      const parentId = store.data.parentTaskId;
+      if (!parentId) continue;
+      const siblings = childrenByParent.get(parentId) ?? [];
+      siblings.push(store.data.id);
+      childrenByParent.set(parentId, siblings);
+    }
+    const result: string[] = [];
+    const queue = [...(childrenByParent.get(taskId) ?? [])];
+    while (queue.length > 0) {
+      const id = queue.shift()!;
+      if (result.includes(id)) continue; // dirty-data cycle guard
+      result.push(id);
+      queue.push(...(childrenByParent.get(id) ?? []));
+    }
+    return result;
+  }
+
+  /**
+   * Flip the task — and all locally-known active descendants (archiving a
+   * parent cascades) — into the archived state without hitting the server.
+   * Removes the rows from the active sidebar immediately so a slow pre-archive
+   * step never traps them with a spinning icon. Returns a rollback that
    * restores the previous state (call it if the eventual server archive fails).
    */
   markTaskArchivedOptimistic(taskId: string, note?: string): () => void {
+    const currentTask = this.tasks.get(taskId);
+    if (!currentTask || !isRegistered(currentTask)) return () => {};
+
+    const cascadeIds = this.getDescendantTaskIds(taskId).filter((id) => {
+      const store = this.tasks.get(id);
+      return store && isRegistered(store) && !store.data.archivedAt;
+    });
+    const rollbacks = [
+      this.markSingleTaskArchivedOptimistic(taskId, note),
+      ...cascadeIds.map((id) => this.markSingleTaskArchivedOptimistic(id)),
+    ];
+    return () => {
+      for (const rollback of rollbacks) rollback();
+    };
+  }
+
+  private markSingleTaskArchivedOptimistic(taskId: string, note?: string): () => void {
     const currentTask = this.tasks.get(taskId);
     if (!currentTask || !isRegistered(currentTask)) return () => {};
     const previousArchivedAt = currentTask.data.archivedAt;
@@ -645,12 +688,28 @@ export class TaskManagerStore {
     const trimmedNote = note?.trim();
     const nextNote = trimmedNote && trimmedNote.length > 0 ? trimmedNote : undefined;
 
+    // Cascade spinner over locally-known descendants while the server archives them.
+    const cascadeIds = this.getDescendantTaskIds(taskId);
+    for (const id of cascadeIds) this.setTaskArchiving(id, true);
+
     const rollback = this.markTaskArchivedOptimistic(taskId, note);
     try {
-      await rpc.tasks.archiveTask(this.projectId, taskId, nextNote);
+      const { archivedTaskIds } = await rpc.tasks.archiveTask(this.projectId, taskId, nextNote);
+      // Reconcile: the server is authoritative on the cascaded set (it may know
+      // descendants this renderer hasn't loaded or had stale parents for).
+      runInAction(() => {
+        for (const id of archivedTaskIds) {
+          const store = this.tasks.get(id);
+          if (store && isRegistered(store) && !store.data.archivedAt) {
+            store.data.archivedAt = new Date().toISOString();
+          }
+        }
+      });
     } catch (e) {
       rollback();
       throw e;
+    } finally {
+      for (const id of cascadeIds) this.setTaskArchiving(id, false);
     }
   }
 
@@ -668,11 +727,14 @@ export class TaskManagerStore {
     const archivedAt = task.data.archivedAt;
 
     try {
-      await rpc.tasks.restoreTask(taskId);
+      const { restoredTaskIds } = await rpc.tasks.restoreTask(taskId);
+      // Restore cascades over archived descendants on the server — mirror it.
       runInAction(() => {
-        const current = this.tasks.get(taskId);
-        if (current && isRegistered(current)) {
-          current.data.archivedAt = undefined;
+        for (const id of restoredTaskIds) {
+          const current = this.tasks.get(id);
+          if (current && isRegistered(current)) {
+            current.data.archivedAt = undefined;
+          }
         }
       });
     } catch (e) {
@@ -690,7 +752,14 @@ export class TaskManagerStore {
     const task = this.tasks.get(taskId);
     if (!task) return;
 
+    // Mirror the server: children are reparented to the grandparent, not deleted.
+    const grandparentId = isRegistered(task) ? task.data.parentTaskId : undefined;
     runInAction(() => {
+      for (const store of this.tasks.values()) {
+        if (isRegistered(store) && store.data.parentTaskId === taskId) {
+          store.data.parentTaskId = grandparentId;
+        }
+      }
       this.tasks.delete(taskId);
     });
 

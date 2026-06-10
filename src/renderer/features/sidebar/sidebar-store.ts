@@ -87,7 +87,23 @@ export type SidebarGroupKey =
 
 export type SidebarRow =
   | { kind: 'project'; projectId: string }
-  | { kind: 'task'; projectId: string; taskId: string; showProjectTag?: boolean }
+  | {
+      kind: 'task';
+      projectId: string;
+      taskId: string;
+      showProjectTag?: boolean;
+      /** Subtask tree depth (0 = root). Only set in project grouping mode. */
+      depth?: number;
+      /** Direct visible children count; > 0 renders the collapse chevron. */
+      childCount?: number;
+      /**
+       * Terminal-tree guide info, one entry per indent slot (length === depth).
+       * Slots before the last draw a full vertical line when true (that
+       * ancestor has more siblings below). The last slot draws the elbow; true
+       * means the line continues below (├), false means it ends here (└).
+       */
+      treeTrail?: boolean[];
+    }
   | { kind: 'group'; group: SidebarGroupKey };
 
 export type PinnedSidebarEntry =
@@ -110,6 +126,10 @@ function isRegisteredProject(project: ProjectStore): project is RegisteredProjec
 export class SidebarStore implements Snapshottable<SidebarSnapshot> {
   projectOrder: string[] = [];
   taskOrderByProject: Record<string, string[]> = {};
+  /** Manual order of subtasks per parent task id; root tasks use taskOrderByProject. */
+  taskOrderByParent: Record<string, string[]> = {};
+  /** Tasks whose subtask subtree is collapsed (default expanded). */
+  collapsedTaskIds = observable.set<string>();
   /**
    * Monotonic per-project "last activity" stamp used to order projects in
    * `updated-at` mode. It only ever moves forward: a new task or a newer task
@@ -142,6 +162,7 @@ export class SidebarStore implements Snapshottable<SidebarSnapshot> {
       expandedProjectIds: false,
       pinnedProjectIds: false,
       hiddenNavItems: false,
+      collapsedTaskIds: false,
       sidebarRows: computed,
       pinnedSidebarEntries: computed,
       orderedNavItems: computed,
@@ -262,17 +283,93 @@ export class SidebarStore implements Snapshottable<SidebarSnapshot> {
         const tasks = Array.from(project.mountedProject.taskManager.tasks.values()).filter(
           isActiveSidebarTask
         );
-        const manualOrder = this.taskOrderByProject[projectId];
-        const ordered = manualOrder?.length
-          ? this.mergeTaskOrder(projectId, tasks)
-          : this.sortTasksForSidebar(tasks);
-        for (const task of ordered) {
-          if (task.data.isPinned) continue;
-          rows.push({ kind: 'task', projectId, taskId: task.data.id });
-        }
+        rows.push(...this.buildTaskTreeRows(projectId, tasks));
       }
     }
     return rows;
+  }
+
+  /**
+   * Flatten the project's tasks into depth-annotated rows (parents before
+   * children, DFS order). Tasks whose parent is not visible in this list
+   * (archived, pinned away, unknown) are promoted to root at display time —
+   * the DB relationship is left untouched.
+   */
+  buildTaskTreeRows(projectId: string, tasks: TaskStore[]): SidebarRow[] {
+    const visible = tasks.filter((task) => !task.data.isPinned);
+    const visibleIds = new Set(visible.map((task) => task.data.id));
+
+    const roots: TaskStore[] = [];
+    const childrenByParent = new Map<string, TaskStore[]>();
+    for (const task of visible) {
+      const parentId = registeredTaskData(task)?.parentTaskId;
+      if (parentId && visibleIds.has(parentId)) {
+        const siblings = childrenByParent.get(parentId) ?? [];
+        siblings.push(task);
+        childrenByParent.set(parentId, siblings);
+      } else {
+        roots.push(task);
+      }
+    }
+
+    const rows: SidebarRow[] = [];
+    const visited = new Set<string>();
+    // `hidden` subtrees (under a collapsed ancestor) still get visited so the
+    // dirty-cycle fallback below doesn't resurface them at root.
+    // `trail` carries the terminal-tree guide state (see SidebarRow.treeTrail).
+    const emitSubtree = (
+      task: TaskStore,
+      depth: number,
+      hidden: boolean,
+      trail: boolean[]
+    ): void => {
+      const taskId = task.data.id;
+      if (visited.has(taskId)) return; // dirty-data cycle guard
+      visited.add(taskId);
+      const children = childrenByParent.get(taskId) ?? [];
+      if (!hidden) {
+        rows.push({
+          kind: 'task',
+          projectId,
+          taskId,
+          depth,
+          childCount: children.length,
+          treeTrail: trail.length > 0 ? trail : undefined,
+        });
+      }
+      const childHidden = hidden || this.collapsedTaskIds.has(taskId);
+      const ordered = this.orderSiblings(projectId, taskId, children);
+      ordered.forEach((child, index) => {
+        emitSubtree(child, depth + 1, childHidden, [...trail, index < ordered.length - 1]);
+      });
+    };
+
+    for (const root of this.orderSiblings(projectId, null, roots)) {
+      emitSubtree(root, 0, false, []);
+    }
+    // Dirty-data cycles (A→B→A) have no root and would otherwise vanish —
+    // surface any unvisited task at the root level instead of losing it.
+    for (const task of visible) {
+      if (!visited.has(task.data.id)) emitSubtree(task, 0, false, []);
+    }
+    return rows;
+  }
+
+  /**
+   * Order a sibling group: root tasks use the per-project manual order, child
+   * tasks the per-parent one; without a manual order fall back to date sort.
+   */
+  private orderSiblings(
+    projectId: string,
+    parentTaskId: string | null,
+    siblings: TaskStore[]
+  ): TaskStore[] {
+    const stored =
+      parentTaskId === null
+        ? this.taskOrderByProject[projectId]
+        : this.taskOrderByParent[parentTaskId];
+    if (stored?.length) return this.mergeOrderedTasks(stored, siblings);
+    return this.sortTasksForSidebar(siblings);
   }
 
   /** Flat list of all non-pinned, active tasks across all visible projects. */
@@ -437,6 +534,8 @@ export class SidebarStore implements Snapshottable<SidebarSnapshot> {
       expandedProjectIds: [...this.expandedProjectIds],
       projectOrder: [...this.projectOrder],
       taskOrderByProject: { ...this.taskOrderByProject },
+      taskOrderByParent: { ...this.taskOrderByParent },
+      collapsedTaskIds: [...this.collapsedTaskIds],
       projectActivityById: { ...this.projectActivityById },
       taskSortBy: this.taskSortBy,
       taskGroupBy: this.taskGroupBy,
@@ -460,6 +559,12 @@ export class SidebarStore implements Snapshottable<SidebarSnapshot> {
     }
     if (snapshot.taskOrderByProject !== undefined) {
       this.taskOrderByProject = { ...snapshot.taskOrderByProject };
+    }
+    if (snapshot.taskOrderByParent !== undefined) {
+      this.taskOrderByParent = { ...snapshot.taskOrderByParent };
+    }
+    if (snapshot.collapsedTaskIds !== undefined) {
+      this.collapsedTaskIds.replace(snapshot.collapsedTaskIds);
     }
     if (snapshot.projectActivityById !== undefined) {
       this.projectActivityById = { ...snapshot.projectActivityById };
@@ -600,6 +705,23 @@ export class SidebarStore implements Snapshottable<SidebarSnapshot> {
 
   clearManualTaskOrder(): void {
     this.taskOrderByProject = {};
+    this.taskOrderByParent = {};
+  }
+
+  toggleTaskCollapsed(taskId: string): void {
+    if (this.collapsedTaskIds.has(taskId)) {
+      this.collapsedTaskIds.delete(taskId);
+    } else {
+      this.collapsedTaskIds.add(taskId);
+    }
+  }
+
+  ensureTaskExpanded(taskId: string): void {
+    this.collapsedTaskIds.delete(taskId);
+  }
+
+  setChildTaskOrder(parentTaskId: string, orderedIds: string[]): void {
+    this.taskOrderByParent = { ...this.taskOrderByParent, [parentTaskId]: orderedIds };
   }
 
   toggleProjectExpanded(projectId: string): void {
@@ -622,6 +744,7 @@ export class SidebarStore implements Snapshottable<SidebarSnapshot> {
   applySort(sortBy: SidebarTaskSortBy): void {
     this.taskSortBy = sortBy;
     this.taskOrderByProject = {};
+    this.taskOrderByParent = {};
   }
 
   /** Switching grouping mode also clears manual task order — it no longer applies. */
@@ -630,6 +753,7 @@ export class SidebarStore implements Snapshottable<SidebarSnapshot> {
     this.taskGroupBy = groupBy;
     if (groupBy !== 'project') {
       this.taskOrderByProject = {};
+      this.taskOrderByParent = {};
     }
   }
 
@@ -643,7 +767,10 @@ export class SidebarStore implements Snapshottable<SidebarSnapshot> {
   }
 
   mergeTaskOrder(projectId: string, tasks: TaskStore[]): TaskStore[] {
-    const stored = this.taskOrderByProject[projectId] ?? [];
+    return this.mergeOrderedTasks(this.taskOrderByProject[projectId] ?? [], tasks);
+  }
+
+  private mergeOrderedTasks(stored: string[], tasks: TaskStore[]): TaskStore[] {
     const byId = new Map(tasks.map((t) => [t.data.id, t] as const));
     const seen = new Set<string>();
     const result: TaskStore[] = [];

@@ -51,6 +51,8 @@ export type Task = {
   workspaceProviderData?: string; // JSON, BYOI only
   /** Sidebar workspace (grouping tab). Distinct from the agent-runtime `workspaceId`. */
   sidebarWorkspaceId?: string;
+  /** Parent task id for subtask trees (same project only). */
+  parentTaskId?: string;
 };
 
 export type TaskBootstrapStatus =
@@ -100,6 +102,25 @@ export type CreateTaskParams = {
    * tasks in a real project inherit the project's workspace in the sidebar).
    */
   sidebarWorkspaceId?: string;
+  /** Create the task as a subtask of this parent (must be in the same project). */
+  parentTaskId?: string;
+};
+
+export type SetTaskParentError =
+  | { type: 'task-not-found' }
+  | { type: 'parent-not-found' }
+  | { type: 'cross-project' }
+  | { type: 'parent-archived' }
+  | { type: 'cycle-detected' };
+
+export type ArchiveTaskResult = {
+  /** The requested task plus all cascaded descendants, in archive order. */
+  archivedTaskIds: string[];
+};
+
+export type RestoreTaskResult = {
+  /** The requested task plus all cascaded descendants, in restore order. */
+  restoredTaskIds: string[];
 };
 
 export type CreateTaskError =

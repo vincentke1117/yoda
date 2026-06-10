@@ -57,5 +57,6 @@ export function mapTaskRowToTask(
     workspaceId: row.workspaceId ?? undefined,
     workspaceProviderData: row.workspaceProviderData ?? undefined,
     sidebarWorkspaceId: row.sidebarWorkspaceId ?? undefined,
+    parentTaskId: row.parentTaskId ?? undefined,
   };
 }

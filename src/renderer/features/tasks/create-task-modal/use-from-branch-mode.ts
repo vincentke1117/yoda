@@ -12,13 +12,15 @@ export function useFromBranchMode(
   defaultBranch: Branch | undefined,
   isUnborn: boolean,
   currentBranchName: string | null | undefined,
-  initialPrompt: string
+  initialPrompt: string,
+  initialBranch?: Branch
 ) {
   const branchSelection = useBranchSelection(
     selectedProjectId,
     defaultBranch,
     isUnborn,
-    currentBranchName
+    currentBranchName,
+    initialBranch
   );
 
   // Random fallback slug, generated once per modal mount. Used when the user

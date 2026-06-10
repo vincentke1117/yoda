@@ -6,7 +6,9 @@ import {
   sqliteTable,
   text,
   uniqueIndex,
+  type AnySQLiteColumn,
 } from 'drizzle-orm/sqlite-core';
+import type { AgentAccountProviderId } from '@shared/runtime-registry';
 import type { TaskNamingContextSnapshot, TaskNamingStatus } from '@shared/task-naming';
 import type { StoredBranch } from '@main/core/tasks/stored-branch';
 
@@ -166,10 +168,16 @@ export const tasks = sqliteTable(
     sidebarWorkspaceId: text('sidebar_workspace_id').references(() => workspaces.id, {
       onDelete: 'set null',
     }),
+    // Parent task for subtask trees. `set null` is only a DB-level safety net —
+    // deleteTask reparents children to the grandparent before deleting.
+    parentTaskId: text('parent_task_id').references((): AnySQLiteColumn => tasks.id, {
+      onDelete: 'set null',
+    }),
   },
   (table) => ({
     projectIdIdx: index('idx_tasks_project_id').on(table.projectId),
     sidebarWorkspaceIdIdx: index('idx_tasks_sidebar_workspace_id').on(table.sidebarWorkspaceId),
+    parentTaskIdIdx: index('idx_tasks_parent_task_id').on(table.parentTaskId),
   })
 );
 
@@ -371,7 +379,7 @@ export const conversations = sqliteTable(
     // naming), 'agent' (provider CLI's own session title). Null = still the
     // initial title. Priority when writing: user > yoda > agent.
     titleSource: text('title_source').$type<'user' | 'yoda' | 'agent'>(),
-    provider: text('provider'),
+    runtime: text('provider'),
     // Effective account mode at the last agent spawn — how this session's
     // tokens were paid for ('official-subscription' | 'official-api' | 'yoda-maas').
     authProvider: text('auth_provider').$type<AgentAccountProviderId>(),
@@ -468,7 +476,7 @@ export const agents = sqliteTable(
       .notNull()
       .$type<string[]>()
       .default(sql`'[]'`),
-    preferredRuntimeProvider: text('preferred_runtime_provider'), // AgentProviderId | null
+    preferredRuntime: text('preferred_runtime_provider'), // RuntimeId | null
     model: text('model'),
     source: text('source').notNull().default('local'), // 'local' | 'imported'
     createdAt: text('created_at')

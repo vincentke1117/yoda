@@ -26,6 +26,12 @@ export async function deleteTask(projectId: string, taskId: string): Promise<voi
     }
   }
 
+  // Reparent children to the grandparent (or top level) — deleting a parent
+  // must not destroy or orphan its subtasks.
+  await db
+    .update(tasks)
+    .set({ parentTaskId: task.parentTaskId ?? null })
+    .where(eq(tasks.parentTaskId, taskId));
   await db.delete(tasks).where(eq(tasks.id, taskId));
   void viewStateService.del(`task:${taskId}`);
   taskEvents._emit('task:deleted', taskId, projectId);

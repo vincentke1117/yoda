@@ -7,6 +7,7 @@ import {
   useSensors,
   type CollisionDetection,
   type DragEndEvent,
+  type DragMoveEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
 import {
@@ -21,16 +22,28 @@ import { observer } from 'mobx-react-lite';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type SidebarGroupKey, type SidebarRow } from '@renderer/features/sidebar/sidebar-store';
-import { getTaskStore } from '@renderer/features/tasks/stores/task-selectors';
+import {
+  getRegisteredTaskData,
+  getTaskStore,
+} from '@renderer/features/tasks/stores/task-selectors';
+import { toast } from '@renderer/lib/hooks/use-toast';
 import { useParams, useWorkspaceSlots } from '@renderer/lib/layout/navigation-provider';
 import { sidebarStore } from '@renderer/lib/stores/app-state';
 import { cn } from '@renderer/utils/utils';
 import { SidebarProjectItem } from './project-item';
+import {
+  getTreeProjection,
+  projectedSiblingOrder,
+  withParents,
+  type TreeFlatRow,
+  type TreeProjection,
+} from './sidebar-tree-projection';
 import { SidebarTaskItem } from './task-item';
 
 const TASK_GROUP_VISIBLE_LIMIT = 5;
 
 export const SidebarVirtualList = observer(function SidebarVirtualList() {
+  const { t } = useTranslation();
   const rows = sidebarStore.sidebarRows;
   const { currentView } = useWorkspaceSlots();
   const { params: taskParams } = useParams('task');
@@ -39,6 +52,7 @@ export const SidebarVirtualList = observer(function SidebarVirtualList() {
   const containerRef = useRef<HTMLDivElement>(null);
   const autoExpandedActiveIdRef = useRef<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [taskProjection, setTaskProjection] = useState<TreeProjection | null>(null);
   const [expandedTaskGroupIds, setExpandedTaskGroupIds] = useState<Set<string>>(() => new Set());
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
@@ -46,9 +60,29 @@ export const SidebarVirtualList = observer(function SidebarVirtualList() {
   // During a project drag, collapse its task children so the list is compact
   // and project rows are adjacent — making cross-project reorder easier.
   const draggingProjectId = activeId?.startsWith('proj::') ? activeId.slice(6) : null;
+  // During a task drag, hide the task's descendant subtree — it travels with
+  // the task, and excluding it makes a drop inside the own subtree impossible
+  // (renderer-side cycle prevention; the main process re-validates anyway).
+  const draggingTask = activeId?.startsWith('task::')
+    ? { projectId: activeId.split('::')[1], taskId: activeId.split('::')[2] }
+    : null;
   const displayRows = draggingProjectId
     ? rows.filter((r) => !(r.kind === 'task' && r.projectId === draggingProjectId))
-    : rows;
+    : draggingTask
+      ? filterTaskDescendantRows(rows, draggingTask.projectId, draggingTask.taskId)
+      : rows;
+  // Flat depth-annotated task rows of the dragged task's project, parents
+  // derived from the flatten order — the input to the drop projection.
+  const dragTreeRows: TreeFlatRow[] | null = draggingTask
+    ? withParents(
+        displayRows
+          .filter(
+            (r): r is Extract<SidebarRow, { kind: 'task' }> =>
+              r.kind === 'task' && r.projectId === draggingTask.projectId && !r.showProjectTag
+          )
+          .map((r) => ({ taskId: r.taskId, depth: r.depth ?? 0 }))
+      )
+    : null;
   const renderRows = useMemo(
     () => limitTaskGroupRows(displayRows, expandedTaskGroupIds),
     [displayRows, expandedTaskGroupIds]
@@ -144,16 +178,32 @@ export const SidebarVirtualList = observer(function SidebarVirtualList() {
 
   function handleDragStart(event: DragStartEvent) {
     setActiveId(String(event.active.id));
+    setTaskProjection(null);
+  }
+
+  function handleDragMove(event: DragMoveEvent) {
+    if (!draggingTask || !dragTreeRows) return;
+    const o = event.over ? String(event.over.id) : null;
+    if (!o || !o.startsWith(`task::${draggingTask.projectId}::`)) {
+      setTaskProjection(null);
+      return;
+    }
+    const overTaskId = o.split('::')[2];
+    setTaskProjection(
+      getTreeProjection(dragTreeRows, draggingTask.taskId, overTaskId, event.delta.x)
+    );
   }
 
   function handleDragEnd(event: DragEndEvent) {
     setActiveId(null);
+    setTaskProjection(null);
     const { active, over } = event;
-    if (!over || active.id === over.id) return;
+    if (!over) return;
     const a = String(active.id);
     const o = String(over.id);
 
     if (a.startsWith('proj::') && o.startsWith('proj::')) {
+      if (a === o) return;
       const ids = sidebarStore.orderedProjects
         .map((p) => (p.state === 'unregistered' ? p.id : (p.data?.id ?? '')))
         .filter(Boolean);
@@ -163,16 +213,36 @@ export const SidebarVirtualList = observer(function SidebarVirtualList() {
         sidebarStore.setProjectOrder(arrayMove(ids, oldIdx, newIdx));
       }
     } else if (a.startsWith('task::') && o.startsWith('task::')) {
+      // Dropping on itself is NOT a no-op here: a pure horizontal move changes
+      // the projected depth (indent in = nest under the row above, out = unnest).
       const [, aProjId, aTaskId] = a.split('::');
       const [, oProjId, oTaskId] = o.split('::');
-      if (aProjId !== oProjId) return;
-      const taskIds = sidebarStore.sidebarRows
-        .filter((r) => r.kind === 'task' && r.projectId === aProjId)
-        .map((r) => (r as { taskId: string }).taskId);
-      const oldIdx = taskIds.indexOf(aTaskId);
-      const newIdx = taskIds.indexOf(oTaskId);
-      if (oldIdx !== -1 && newIdx !== -1) {
-        sidebarStore.setTaskOrder(aProjId, arrayMove(taskIds, oldIdx, newIdx));
+      if (aProjId !== oProjId || !dragTreeRows) return;
+
+      const projection = getTreeProjection(dragTreeRows, aTaskId, oTaskId, event.delta.x);
+      if (!projection) return;
+      const newParentId = projection.parentTaskId;
+      const order = projectedSiblingOrder(dragTreeRows, aTaskId, oTaskId, newParentId);
+
+      const currentParentId = getRegisteredTaskData(aProjId, aTaskId)?.parentTaskId ?? null;
+      if (newParentId !== currentParentId) {
+        const taskStore = getTaskStore(aProjId, aTaskId);
+        void taskStore
+          ?.setParentTask(newParentId)
+          .then((result) => {
+            if (result && !result.success) {
+              toast({ title: t('sidebar.setParentFailed'), variant: 'destructive' });
+            }
+          })
+          .catch(() => {
+            toast({ title: t('sidebar.setParentFailed'), variant: 'destructive' });
+          });
+      }
+      if (newParentId) {
+        sidebarStore.ensureTaskExpanded(newParentId);
+        sidebarStore.setChildTaskOrder(newParentId, order);
+      } else {
+        sidebarStore.setTaskOrder(aProjId, order);
       }
     }
   }
@@ -193,6 +263,7 @@ export const SidebarVirtualList = observer(function SidebarVirtualList() {
       sensors={sensors}
       collisionDetection={typeRestrictedCollision}
       onDragStart={handleDragStart}
+      onDragMove={handleDragMove}
       onDragEnd={handleDragEnd}
     >
       <SortableContext items={allDndIds} strategy={verticalListSortingStrategy}>
@@ -229,22 +300,22 @@ export const SidebarVirtualList = observer(function SidebarVirtualList() {
                 );
               }
               return (
-                <div
-                  key={row.projectId}
-                  data-sidebar-row={dndId}
-                  className="min-w-0 overflow-hidden"
-                >
-                  <SortableRow dndId={dndId}>
-                    <SidebarProjectItem projectId={row.projectId} />
-                  </SortableRow>
-                </div>
+                <SortableRow key={row.projectId} dndId={dndId}>
+                  <SidebarProjectItem projectId={row.projectId} />
+                </SortableRow>
               );
             }
+            // While dragging, the in-list ghost row previews the projected
+            // depth so the user sees where the task would nest on drop.
+            const isDragGhost = activeId === dndId && taskProjection !== null;
             const taskNode = (
               <SidebarTaskItem
                 projectId={row.projectId}
                 taskId={row.taskId}
                 rowVariant={row.showProjectTag ? 'flat' : 'underProject'}
+                depth={isDragGhost ? taskProjection.depth : row.depth}
+                childCount={row.childCount}
+                treeTrail={isDragGhost ? undefined : row.treeTrail}
               />
             );
             if (!dndEnabled) {
@@ -259,13 +330,9 @@ export const SidebarVirtualList = observer(function SidebarVirtualList() {
               );
             }
             return (
-              <div
-                key={`${row.projectId}:${row.taskId}`}
-                data-sidebar-row={dndId}
-                className="min-w-0 overflow-hidden"
-              >
-                <SortableRow dndId={dndId}>{taskNode}</SortableRow>
-              </div>
+              <SortableRow key={`${row.projectId}:${row.taskId}`} dndId={dndId}>
+                {taskNode}
+              </SortableRow>
             );
           })}
         </div>
@@ -302,6 +369,31 @@ const toDirectTaskGroupId = (group: SidebarGroupKey) => `direct-tasks::${toGroup
 
 function isSidebarRow(row: SidebarRenderableRow): row is SidebarRow {
   return row.kind !== 'task-group-toggle';
+}
+
+/**
+ * Drop the descendant subtree of the dragged task (rows immediately following
+ * it with a greater depth) — it travels with the task and must not be a drop
+ * target.
+ */
+function filterTaskDescendantRows(
+  rows: SidebarRow[],
+  projectId: string,
+  taskId: string
+): SidebarRow[] {
+  const result: SidebarRow[] = [];
+  let skipDeeperThan: number | null = null;
+  for (const row of rows) {
+    if (row.kind === 'task' && row.projectId === projectId) {
+      const depth = row.depth ?? 0;
+      if (skipDeeperThan !== null && depth > skipDeeperThan) continue;
+      skipDeeperThan = row.taskId === taskId ? depth : null;
+    } else {
+      skipDeeperThan = null;
+    }
+    result.push(row);
+  }
+  return result;
 }
 
 function rowToDndId(row: SidebarRow): string {
@@ -519,6 +611,12 @@ interface SortableRowProps {
   children: React.ReactNode;
 }
 
+/**
+ * The sortable transform must live on the OUTERMOST row element: nesting it
+ * inside an `overflow-hidden` wrapper clips the row away as soon as dnd-kit
+ * translates it (make-way animation), making passed-over rows invisible. This
+ * row therefore carries `data-sidebar-row` itself — no extra wrapper.
+ */
 function SortableRow({ dndId, children }: SortableRowProps) {
   const { setNodeRef, transform, transition, isDragging, listeners, attributes } = useSortable({
     id: dndId,
@@ -535,6 +633,7 @@ function SortableRow({ dndId, children }: SortableRowProps) {
     <div
       ref={setNodeRef}
       style={dndStyle}
+      data-sidebar-row={dndId}
       className="min-w-0 overflow-hidden"
       {...attributes}
       {...listeners}

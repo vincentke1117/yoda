@@ -8,6 +8,8 @@ import {
   Copy,
   Info,
   Link2,
+  ListPlus,
+  ListTree,
   Pencil,
   Pin,
   PinOff,
@@ -99,6 +101,10 @@ interface TaskMenuActions extends TaskMenuInfoFields {
   currentWorkspaceId?: string | null;
   /** Assign this task to a sidebar workspace, or null for the default. */
   onAssignWorkspace?: (workspaceId: string | null) => void;
+  /** Create a new task nested under this one. */
+  onCreateSubtask?: () => void;
+  /** Open the parent-task picker for this task. */
+  onSetParent?: () => void;
 }
 
 interface MenuSubItemDescriptor {
@@ -232,7 +238,7 @@ function useMenuItems(actions: TaskMenuActions): MenuItemDescriptor[] {
     );
   }
 
-  // group 2 — rename
+  // group 2 — rename, subtask tree
   items.push({
     key: 'rename',
     group: 2,
@@ -240,6 +246,24 @@ function useMenuItems(actions: TaskMenuActions): MenuItemDescriptor[] {
     label: t('common.rename'),
     onSelect: actions.onRename,
   });
+  if (!actions.isArchived && actions.onCreateSubtask) {
+    items.push({
+      key: 'create-subtask',
+      group: 2,
+      icon: ListPlus,
+      label: t('tasks.context.createSubtask'),
+      onSelect: actions.onCreateSubtask,
+    });
+  }
+  if (!actions.isArchived && actions.onSetParent) {
+    items.push({
+      key: 'set-parent',
+      group: 2,
+      icon: ListTree,
+      label: t('tasks.context.setParent'),
+      onSelect: actions.onSetParent,
+    });
+  }
 
   // group 3 — copy (ID first)
   if (actions.taskId) {
