@@ -105,6 +105,7 @@ import {
   applyMarkdownEnterEdit,
   applyMarkdownTabEdit,
   type MarkdownTextareaEdit,
+  type TextSelection,
 } from './markdown-textarea-editing';
 import {
   applyPathCompletion,
@@ -272,6 +273,47 @@ function insertPromptText(
     value: `${before}${insertion}${after}`,
     caret: before.length + insertion.length,
   };
+}
+
+// Applies a programmatic edit through the native editing pipeline
+// (execCommand) so the browser undo stack (Ctrl/Cmd+Z) keeps working.
+// Direct value assignment on a controlled textarea would wipe it.
+function applyNativeTextareaEdit(
+  textarea: HTMLTextAreaElement,
+  nextValue: string,
+  selection: TextSelection
+): void {
+  const current = textarea.value;
+  if (current !== nextValue) {
+    let prefix = 0;
+    const maxShared = Math.min(current.length, nextValue.length);
+    while (prefix < maxShared && current[prefix] === nextValue[prefix]) prefix += 1;
+    let suffix = 0;
+    while (
+      suffix < maxShared - prefix &&
+      current[current.length - 1 - suffix] === nextValue[nextValue.length - 1 - suffix]
+    ) {
+      suffix += 1;
+    }
+    const inserted = nextValue.slice(prefix, nextValue.length - suffix);
+    textarea.focus();
+    textarea.setSelectionRange(prefix, current.length - suffix);
+    const applied =
+      inserted.length > 0
+        ? document.execCommand('insertText', false, inserted)
+        : document.execCommand('delete');
+    if (!applied || textarea.value !== nextValue) {
+      // Fallback: assign via the native setter so React's value tracker
+      // still sees the change and onChange fires.
+      const setValue = Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        'value'
+      )?.set;
+      setValue?.call(textarea, nextValue);
+      textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  }
+  textarea.setSelectionRange(selection.start, selection.end);
 }
 
 function findActiveSkillShortcut(value: string, caret: number): ActiveSkillShortcut | null {
@@ -1576,21 +1618,33 @@ export const HomeComposer = observer(function HomeComposer({
     updateDraft,
   ]);
 
+  const applyPromptEdit = useCallback(
+    (value: string, selection: TextSelection) => {
+      const textarea = promptTextareaRef.current;
+      // Native pipeline first so Ctrl/Cmd+Z can undo programmatic edits;
+      // its input event syncs React state through onChange.
+      if (textarea) applyNativeTextareaEdit(textarea, value, selection);
+      setPrompt(value);
+      setPromptSelection(selection);
+      requestAnimationFrame(() => {
+        const target = promptTextareaRef.current;
+        if (!target) return;
+        target.focus();
+        target.setSelectionRange(selection.start, selection.end);
+        updatePromptSelection(target);
+      });
+    },
+    [updatePromptSelection]
+  );
+
   const commitPathCompletion = useCallback(
     (item: PathCompletionItem, mention: ActivePathMention | null = activePathMention) => {
       if (!mention) return;
       const next = applyPathCompletion(prompt, mention, item.insertText);
-      setPrompt(next.value);
-      setPromptSelection({ start: next.caret, end: next.caret });
+      applyPromptEdit(next.value, { start: next.caret, end: next.caret });
       setPathCompletionOpen(item.type === 'dir');
-      requestAnimationFrame(() => {
-        const textarea = promptTextareaRef.current;
-        if (!textarea) return;
-        textarea.focus();
-        textarea.setSelectionRange(next.caret, next.caret);
-      });
     },
-    [activePathMention, prompt]
+    [activePathMention, applyPromptEdit, prompt]
   );
 
   const commitSkillShortcut = useCallback(
@@ -1600,8 +1654,7 @@ export const HomeComposer = observer(function HomeComposer({
         : insertPromptText(prompt, promptSelection, command);
       const skillId = skillIdByShortcutCommand.get(command);
       if (skillId) recordSkillInvocation(skillId);
-      setPrompt(next.value);
-      setPromptSelection({ start: next.caret, end: next.caret });
+      applyPromptEdit(next.value, { start: next.caret, end: next.caret });
       // Selecting an item must close the menu. If the inserted command still
       // parses as an active shortcut at the new caret (e.g. no trailing space
       // was added), dismiss that key so the menu doesn't immediately reopen.
@@ -1612,29 +1665,15 @@ export const HomeComposer = observer(function HomeComposer({
           : null
       );
       setActiveSkillShortcutIndex(0);
-      requestAnimationFrame(() => {
-        const textarea = promptTextareaRef.current;
-        if (!textarea) return;
-        textarea.focus();
-        textarea.setSelectionRange(next.caret, next.caret);
-      });
     },
-    [prompt, promptSelection, skillIdByShortcutCommand]
+    [applyPromptEdit, prompt, promptSelection, skillIdByShortcutCommand]
   );
 
   const applyPromptMarkdownEdit = useCallback(
     (next: MarkdownTextareaEdit) => {
-      setPrompt(next.value);
-      setPromptSelection(next.selection);
-      requestAnimationFrame(() => {
-        const textarea = promptTextareaRef.current;
-        if (!textarea) return;
-        textarea.focus();
-        textarea.setSelectionRange(next.selection.start, next.selection.end);
-        updatePromptSelection(textarea);
-      });
+      applyPromptEdit(next.value, next.selection);
     },
-    [updatePromptSelection]
+    [applyPromptEdit]
   );
 
   const applyPromptTabEdit = useCallback(
