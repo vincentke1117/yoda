@@ -1,6 +1,5 @@
 import { useCallback } from 'react';
 import { useAppSettingsKey } from '@renderer/features/settings/use-app-settings-key';
-import { runPreArchiveCommand } from '@renderer/features/tasks/run-pre-archive-command';
 import {
   asProvisioned,
   getTaskManagerStore,
@@ -12,12 +11,7 @@ type ArchiveTaskOptions = {
   skipPreCommand?: boolean;
 };
 
-type ArchiveTaskWithPreCommandOptions = ArchiveTaskOptions & {
-  preArchiveCommand: string;
-};
-
 type ArchiveConversationOptions = {
-  preArchiveCommand: string;
   skipPreCommand?: boolean;
 };
 
@@ -26,31 +20,28 @@ export function useArchiveTask(projectId: string): {
   hasPreArchiveCommand: boolean;
 } {
   const { value: homeDraft } = useAppSettingsKey('homeDraft');
-  const preArchiveCommand = homeDraft?.preArchiveCommand ?? '';
-  const hasPreArchiveCommand = preArchiveCommand.trim().length > 0;
+  const hasPreArchiveCommand = (homeDraft?.preArchiveCommand ?? '').trim().length > 0;
 
   const archiveTask = useCallback(
     (taskId: string, options: ArchiveTaskOptions = {}) =>
-      archiveTaskWithPreCommand(projectId, taskId, {
-        ...options,
-        preArchiveCommand,
-      }),
-    [preArchiveCommand, projectId]
+      archiveTaskOnServer(projectId, taskId, options),
+    [projectId]
   );
 
   return { archiveTask, hasPreArchiveCommand };
 }
 
 /**
- * Run the pre-archive command against the conversation (unless skipped) and
- * archive it. The conversation store is flagged `isArchiving` for the whole
- * flow so its tab renders a loading state.
+ * Archive the conversation. The main process owns the whole flow — including
+ * running the configured pre-archive command against the live session and
+ * waiting for it — so it survives renderer reloads. The conversation store is
+ * flagged `isArchiving` for the duration so its tab renders a loading state.
  */
 export async function archiveConversationWithPreCommand(
   projectId: string,
   taskId: string,
   conversationId: string,
-  options: ArchiveConversationOptions
+  options: ArchiveConversationOptions = {}
 ): Promise<void> {
   const provisioned = asProvisioned(getTaskStore(projectId, taskId));
   if (!provisioned) return;
@@ -58,10 +49,9 @@ export async function archiveConversationWithPreCommand(
   const target = provisioned.conversations.conversations.get(conversationId);
   target?.setArchiving(true);
   try {
-    if (!options.skipPreCommand && options.preArchiveCommand.trim().length > 0) {
-      await runPreArchiveCommand(projectId, taskId, conversationId, options.preArchiveCommand);
-    }
-    await provisioned.conversations.archiveConversation(conversationId);
+    await provisioned.conversations.archiveConversation(conversationId, {
+      runPreArchiveCommand: !options.skipPreCommand,
+    });
   } finally {
     target?.setArchiving(false);
   }
@@ -79,49 +69,25 @@ export async function archiveTaskIfNoConversationsLeft(
   const provisioned = asProvisioned(getTaskStore(projectId, taskId));
   if (!provisioned || provisioned.conversations.conversations.size > 0) return;
 
-  const taskManager = getTaskManagerStore(projectId);
-  if (!taskManager) return;
-
-  taskManager.setTaskArchiving(taskId, true);
-  try {
-    await taskManager.archiveTask(taskId);
-  } finally {
-    taskManager.setTaskArchiving(taskId, false);
-  }
+  await archiveTaskOnServer(projectId, taskId, { skipPreCommand: true });
 }
 
 /**
- * Archive every conversation of the task first — running the pre-archive
- * command against each live session unless skipped — and only archive the
- * task itself once all conversation archives have completed. The task row
- * stays in the sidebar with an `archivingTaskIds` loading state for the whole
- * flow; each conversation shows its own `isArchiving` state meanwhile.
+ * Archive the task via the main-process orchestration (pre-archive command →
+ * conversation archives → task archive). The task row keeps an
+ * `archivingTaskIds` loading state in the sidebar for the whole flow.
  */
-export async function archiveTaskWithPreCommand(
+export async function archiveTaskOnServer(
   projectId: string,
   taskId: string,
-  options: ArchiveTaskWithPreCommandOptions
+  options: ArchiveTaskOptions = {}
 ): Promise<void> {
   const taskManager = getTaskManagerStore(projectId);
   if (!taskManager) return;
 
   taskManager.setTaskArchiving(taskId, true);
   try {
-    const provisioned = asProvisioned(getTaskStore(projectId, taskId));
-    if (provisioned) {
-      await provisioned.conversations.load();
-      const conversationIds = Array.from(provisioned.conversations.conversations.keys());
-      await Promise.all(
-        conversationIds.map((conversationId) =>
-          archiveConversationWithPreCommand(projectId, taskId, conversationId, {
-            preArchiveCommand: options.preArchiveCommand,
-            skipPreCommand: options.skipPreCommand,
-          })
-        )
-      );
-    }
-
-    await taskManager.archiveTask(taskId, options.note);
+    await taskManager.archiveTask(taskId, options);
   } finally {
     taskManager.setTaskArchiving(taskId, false);
   }

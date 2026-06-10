@@ -2,6 +2,7 @@ import { makeObservable, observable, reaction, runInAction, toJS } from 'mobx';
 import type { Conversation } from '@shared/conversations';
 import { prSyncProgressChannel, prUpdatedChannel } from '@shared/events/prEvents';
 import {
+  taskArchivedChannel,
   taskProvisionProgressChannel,
   taskRenamedChannel,
   taskStatusUpdatedChannel,
@@ -206,6 +207,19 @@ export class TaskManagerStore {
       }
     });
 
+    // Archives complete in the main process and may outlive the renderer that
+    // initiated them (reload mid-archive) — reconcile from the event too.
+    events.on(taskArchivedChannel, ({ taskId, projectId: evtProjectId }) => {
+      if (evtProjectId !== this.projectId) return;
+      this.setTaskArchiving(taskId, false);
+      const store = this.tasks.get(taskId);
+      if (store && isRegistered(store) && !store.data.archivedAt) {
+        runInAction(() => {
+          store.data.archivedAt = new Date().toISOString();
+        });
+      }
+    });
+
     events.on(taskRenamedChannel, ({ taskId, projectId: evtProjectId, name, isUserNamed }) => {
       if (evtProjectId !== this.projectId) return;
       const store = this.tasks.get(taskId);
@@ -293,6 +307,10 @@ export class TaskManagerStore {
           runInAction(() => {
             for (const t of tasks) {
               this.tasks.set(t.id, createUnprovisionedTask(t));
+              // An archive in flight in the main process (requested but not
+              // finished, e.g. across a renderer reload) — show the spinner;
+              // the task:archived event completes it.
+              if (t.archiveRequestedAt && !t.archivedAt) this.archivingTaskIds.add(t.id);
             }
           });
           const reloadPromises = tasks.flatMap((t) => {
@@ -682,19 +700,24 @@ export class TaskManagerStore {
     });
   }
 
-  async archiveTask(taskId: string, note?: string): Promise<void> {
+  async archiveTask(
+    taskId: string,
+    options: { note?: string; skipPreCommand?: boolean } = {}
+  ): Promise<void> {
     const currentTask = this.tasks.get(taskId);
     if (!currentTask || !isRegistered(currentTask)) return;
-    const trimmedNote = note?.trim();
+    const trimmedNote = options.note?.trim();
     const nextNote = trimmedNote && trimmedNote.length > 0 ? trimmedNote : undefined;
 
     // Cascade spinner over locally-known descendants while the server archives them.
     const cascadeIds = this.getDescendantTaskIds(taskId);
     for (const id of cascadeIds) this.setTaskArchiving(id, true);
 
-    const rollback = this.markTaskArchivedOptimistic(taskId, note);
+    const rollback = this.markTaskArchivedOptimistic(taskId, options.note);
     try {
-      const { archivedTaskIds } = await rpc.tasks.archiveTask(this.projectId, taskId, nextNote);
+      const { archivedTaskIds } = await rpc.tasks.archiveTask(this.projectId, taskId, nextNote, {
+        skipPreCommand: options.skipPreCommand,
+      });
       // Reconcile: the server is authoritative on the cascaded set (it may know
       // descendants this renderer hasn't loaded or had stale parents for).
       runInAction(() => {

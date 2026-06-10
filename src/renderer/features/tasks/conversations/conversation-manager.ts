@@ -335,23 +335,18 @@ export class ConversationManagerStore {
     }
   }
 
-  async archiveConversation(conversationId: string): Promise<void> {
-    const snapshot = this.conversations.get(conversationId);
-    if (!snapshot) return;
+  async archiveConversation(
+    conversationId: string,
+    options: { runPreArchiveCommand?: boolean } = {}
+  ): Promise<void> {
+    if (!this.conversations.has(conversationId)) return;
 
-    runInAction(() => {
-      this.conversations.delete(conversationId);
+    // No optimistic removal: the archive may run a pre-archive command in the
+    // main process first (potentially minutes). The conversationArchivedChannel
+    // event removes the store once the archive actually lands.
+    await rpc.conversations.archiveConversation(this.projectId, this.taskId, conversationId, {
+      runPreArchiveCommand: options.runPreArchiveCommand,
     });
-
-    try {
-      await rpc.conversations.archiveConversation(this.projectId, this.taskId, conversationId);
-      snapshot.dispose();
-    } catch (err) {
-      runInAction(() => {
-        this.conversations.set(conversationId, snapshot);
-      });
-      throw err;
-    }
   }
 
   async renameConversation(conversationId: string, name: string): Promise<void> {

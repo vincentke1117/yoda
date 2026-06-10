@@ -24,6 +24,7 @@ import { prSyncScheduler } from './core/pull-requests/pr-sync-scheduler';
 import { searchService } from './core/search/search-service';
 import { providerModelCandidatesService } from './core/settings/provider-model-candidates-service';
 import { appSettingsService } from './core/settings/settings-service';
+import { resumePendingTaskArchives } from './core/tasks/operations/archiveTask';
 import { taskManager } from './core/tasks/task-manager';
 import { updateService } from './core/updates/update-service';
 import { viewStateService } from './core/view-state/view-state-service';
@@ -176,6 +177,12 @@ void app.whenReady().then(async () => {
 
   agentHookService.initialize().catch((e) => {
     log.error('Failed to start agent event service:', e);
+  });
+
+  // Finish archives that were requested but interrupted mid-flight (renderer
+  // reload, app crash/quit before the archive completed).
+  resumePendingTaskArchives().catch((e) => {
+    log.warn('Failed to resume pending task archives:', e);
   });
 
   mobileGatewayService.initialize().catch((e) => {

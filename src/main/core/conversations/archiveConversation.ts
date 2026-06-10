@@ -1,9 +1,11 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { conversationArchivedChannel } from '@shared/events/conversationEvents';
+import type { RuntimeId } from '@shared/runtime-registry';
 import { projectManager } from '@main/core/projects/project-manager';
 import type { ProjectProvider } from '@main/core/projects/project-provider';
 import { resolveTask } from '@main/core/projects/utils';
-import { providerOverrideSettings } from '@main/core/settings/provider-settings-service';
+import { runtimeOverrideSettings } from '@main/core/settings/runtime-settings-service';
+import { appSettingsService } from '@main/core/settings/settings-service';
 import { db } from '@main/db/client';
 import {
   conversations,
@@ -18,12 +20,21 @@ import { telemetryService } from '@main/lib/telemetry';
 import { ensureCodexThreadArchived } from './codex-archive';
 import { resolveAgentResumeSessionId } from './codex-session-id';
 import { conversationEvents } from './conversation-events';
+import { runPreArchiveCommand } from './pre-archive-command';
 import { mapConversationRowToConversation } from './utils';
+
+export type ArchiveConversationOptions = {
+  /** Inject the configured pre-archive command into the live session and wait
+   *  for it to finish before archiving. Runs in the main process so the wait
+   *  survives renderer reloads. */
+  runPreArchiveCommand?: boolean;
+};
 
 export async function archiveConversation(
   projectId: string,
   taskId: string,
-  conversationId: string
+  conversationId: string,
+  options: ArchiveConversationOptions = {}
 ): Promise<void> {
   const [row] = await db
     .select({
@@ -43,6 +54,21 @@ export async function archiveConversation(
     )
     .limit(1);
   if (!row) return;
+
+  if (options.runPreArchiveCommand) {
+    const command = (await appSettingsService.get('homeDraft')).preArchiveCommand;
+    if (command.trim().length > 0) {
+      await runPreArchiveCommand(
+        {
+          projectId,
+          taskId,
+          conversationId,
+          runtimeId: row.conversation.runtime as RuntimeId,
+        },
+        command
+      );
+    }
+  }
 
   await db
     .update(conversations)
@@ -93,14 +119,14 @@ async function archiveCodexConversation({
   project: ProjectProvider | undefined;
   projectPath: string;
 }): Promise<void> {
-  if (!project || conversation.provider !== 'codex') return;
+  if (!project || conversation.runtime !== 'codex') return;
 
   const cwd = await resolveTaskCwd({ task, project, projectPath });
-  const providerConfig = await providerOverrideSettings.getItem('codex');
+  const providerConfig = await runtimeOverrideSettings.getItem('codex');
   const mappedConversation = mapConversationRowToConversation(conversation, true);
   const threadId = resolveAgentResumeSessionId(mappedConversation, cwd);
   await ensureCodexThreadArchived({
-    providerId: mappedConversation.providerId,
+    runtimeId: mappedConversation.runtimeId,
     providerConfig,
     threadId,
     ctx: project.ctx,

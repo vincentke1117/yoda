@@ -8,6 +8,13 @@ export const taskStatusUpdatedChannel = defineEvent<{
   status: string;
 }>('task:status-updated');
 
+/** Emitted by the main process when a task finishes archiving — including
+ *  archives that complete after the initiating renderer reloaded. */
+export const taskArchivedChannel = defineEvent<{
+  taskId: string;
+  projectId: string;
+}>('task:archived');
+
 export const taskRenamedChannel = defineEvent<{
   taskId: string;
   projectId: string;

@@ -10,7 +10,6 @@ import {
   openProvisionedTaskTab,
 } from '@renderer/app/open-task-target';
 import { getProjectStore } from '@renderer/features/projects/stores/project-selectors';
-import { useAppSettingsKey } from '@renderer/features/settings/use-app-settings-key';
 import {
   archiveConversationWithPreCommand,
   archiveTaskIfNoConversationsLeft,
@@ -49,12 +48,7 @@ export const AppTabContextMenu = observer(function AppTabContextMenu({
   children: ReactNode;
 }) {
   const { t } = useTranslation();
-  const { value: homeDraft } = useAppSettingsKey('homeDraft');
-  const preArchiveCommand = homeDraft?.preArchiveCommand ?? '';
-
-  const sections = buildTabSections(tab, preArchiveCommand, t).filter(
-    (section) => section.length > 0
-  );
+  const sections = buildTabSections(tab, t).filter((section) => section.length > 0);
 
   if (sections.length === 0) return <>{children}</>;
 
@@ -76,12 +70,8 @@ export const AppTabContextMenu = observer(function AppTabContextMenu({
 
 type Translate = Parameters<typeof copyTaskLink>[1];
 
-function buildTabSections(
-  tab: AppTabEntry,
-  preArchiveCommand: string,
-  t: Translate
-): ReactNode[][] {
-  if (tab.viewId === 'task') return buildTaskSections(tab, preArchiveCommand, t);
+function buildTabSections(tab: AppTabEntry, t: Translate): ReactNode[][] {
+  if (tab.viewId === 'task') return buildTaskSections(tab, t);
   if (tab.viewId === 'file') return [buildProjectFileSection(tab)];
   return [];
 }
@@ -90,11 +80,7 @@ function buildTabSections(
 // Task tabs (sessions, worktree files, diffs)
 // ---------------------------------------------------------------------------
 
-function buildTaskSections(
-  tab: AppTabEntry,
-  preArchiveCommand: string,
-  t: Translate
-): ReactNode[][] {
+function buildTaskSections(tab: AppTabEntry, t: Translate): ReactNode[][] {
   const { projectId, taskId } = tab.params as { projectId?: string; taskId?: string };
   const target = (tab.params.tab as TaskWindowTabTarget | undefined) ?? { kind: 'overview' };
   if (!projectId || !taskId || target.kind === 'overview') return [];
@@ -166,9 +152,7 @@ function buildTaskSections(
         if (provisioned.conversations.conversations.get(conversationId)?.isArchiving) return;
         void (async () => {
           try {
-            await archiveConversationWithPreCommand(projectId, taskId, conversationId, {
-              preArchiveCommand,
-            });
+            await archiveConversationWithPreCommand(projectId, taskId, conversationId);
             await archiveTaskIfNoConversationsLeft(projectId, taskId);
           } catch (error) {
             log.warn('AppTabContextMenu: archive conversation failed', {

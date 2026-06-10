@@ -138,6 +138,10 @@ export const tasks = sqliteTable(
     linkedIssue: text('linked_issue'),
     archivedAt: text('archived_at'), // null = active, timestamp = archived
     archiveNote: text('archive_note'),
+    // Persisted archive intent: set when an archive is requested, before the
+    // pre-archive command / conversation teardown runs. A task with this set
+    // but archivedAt null is a crashed/interrupted archive — resumed at startup.
+    archiveRequestedAt: text('archive_requested_at'),
     createdAt: text('created_at')
       .notNull()
       .default(sql`CURRENT_TIMESTAMP`),

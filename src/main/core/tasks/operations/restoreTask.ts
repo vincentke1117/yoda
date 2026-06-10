@@ -35,6 +35,7 @@ async function restoreSingleTask(id: string, restoredTaskIds: string[]): Promise
     .update(tasks)
     .set({
       archivedAt: null,
+      archiveRequestedAt: null,
       status: 'in_progress',
       updatedAt: sql`CURRENT_TIMESTAMP`,
       statusChangedAt: sql`CURRENT_TIMESTAMP`,

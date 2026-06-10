@@ -33,6 +33,8 @@ export type Task = {
   statusChangedAt: string;
   archivedAt?: string;
   archiveNote?: string;
+  /** Set when an archive was requested. Set + archivedAt unset = archive in flight. */
+  archiveRequestedAt?: string;
   lastInteractedAt?: string;
   /** All issues linked to this task. New code should prefer this over linkedIssue. */
   linkedIssues?: Issue[];

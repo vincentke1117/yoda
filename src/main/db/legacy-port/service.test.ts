@@ -54,6 +54,7 @@ function createAppDb(): Database.Database {
       linked_issue TEXT,
       archived_at TEXT,
       archive_note TEXT,
+      archive_requested_at TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       last_interacted_at TEXT,

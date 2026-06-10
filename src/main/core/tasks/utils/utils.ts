@@ -41,6 +41,7 @@ export function mapTaskRowToTask(
     linkedIssue: issues[0],
     archivedAt: row.archivedAt ?? undefined,
     archiveNote: row.archiveNote ?? undefined,
+    archiveRequestedAt: row.archiveRequestedAt ?? undefined,
     lastInteractedAt: row.lastInteractedAt ?? undefined,
     createdAt: row.createdAt,
     prs,

@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   ptyReconnectMock: vi.fn(),
   ptyResizeMock: vi.fn(),
   archiveConversationMock: vi.fn(),
+  createConversationMock: vi.fn(),
   getConversationRuntimeStatusesMock: vi.fn(),
   getConversationsForTaskMock: vi.fn(),
   listeners: new Map<string, (data: unknown) => void>(),
@@ -32,6 +33,7 @@ vi.mock('@renderer/lib/ipc', () => ({
   rpc: {
     conversations: {
       archiveConversation: mocks.archiveConversationMock,
+      createConversation: mocks.createConversationMock,
       getConversationRuntimeStatuses: mocks.getConversationRuntimeStatusesMock,
       getConversationsForTask: mocks.getConversationsForTaskMock,
       resumeConversation: mocks.resumeConversationMock,
@@ -67,7 +69,7 @@ const conversation: Conversation = {
   id: 'conversation-1',
   projectId: 'project-1',
   taskId: 'task-1',
-  providerId: 'claude',
+  runtimeId: 'claude',
   title: 'Claude',
   lastInteractedAt: '2026-05-01T00:00:00.000Z',
   isInitialConversation: true,
@@ -89,6 +91,7 @@ describe('ConversationManagerStore', () => {
     mocks.resumeConversationMock.mockResolvedValue(undefined);
     mocks.restartConversationMock.mockResolvedValue(undefined);
     mocks.archiveConversationMock.mockResolvedValue(undefined);
+    mocks.createConversationMock.mockResolvedValue(conversation);
     mocks.touchConversationMock.mockResolvedValue(undefined);
     mocks.getConversationRuntimeStatusesMock.mockResolvedValue({});
     mocks.getConversationsForTaskMock.mockResolvedValue([]);
@@ -128,6 +131,38 @@ describe('ConversationManagerStore', () => {
     });
   });
 
+  it('keeps awaiting-input visible after the active conversation is marked seen', () => {
+    const store = new ConversationManagerStore('project-1', 'task-1', [conversation]);
+    const item = store.conversations.get('conversation-1');
+
+    item?.setAwaitingInput('elicitation_dialog');
+    item?.markSeen();
+
+    expect(item?.indicatorStatus).toBe('awaiting-input');
+    expect(store.taskStatus).toBe('awaiting-input');
+  });
+
+  it('prioritizes awaiting-input over another working conversation', () => {
+    const workingConversation: Conversation = {
+      ...conversation,
+      id: 'conversation-2',
+      title: 'Codex',
+      runtimeId: 'codex',
+    };
+    const store = new ConversationManagerStore('project-1', 'task-1', [
+      conversation,
+      workingConversation,
+    ]);
+
+    const awaiting = store.conversations.get('conversation-1');
+    const working = store.conversations.get('conversation-2');
+    working?.setWorking();
+    awaiting?.setAwaitingInput('elicitation_dialog');
+    awaiting?.markSeen();
+
+    expect(store.taskStatus).toBe('awaiting-input');
+  });
+
   it('passes current terminal size when resuming and reapplies it after spawn', async () => {
     const store = new ConversationManagerStore('project-1', 'task-1', [conversation]);
 
@@ -163,7 +198,7 @@ describe('ConversationManagerStore', () => {
       ...conversation,
       id: 'conversation-2',
       title: 'Imported Codex',
-      providerId: 'codex' as const,
+      runtimeId: 'codex' as const,
     };
     mocks.getConversationsForTaskMock.mockResolvedValueOnce([conversation, externalConversation]);
     const store = new ConversationManagerStore('project-1', 'task-1', [conversation]);
@@ -208,18 +243,52 @@ describe('ConversationManagerStore', () => {
     expect(store.conversations.get('conversation-1')?.data.title).toBe('Synced Codex title');
   });
 
-  it('archives conversations optimistically and disposes the session on success', async () => {
+  it('keeps auto-rename events that arrive before a created conversation is merged', async () => {
+    const createdConversation: Conversation = {
+      ...conversation,
+      id: 'conversation-2',
+      runtimeId: 'codex',
+      title: 'Codex',
+      isInitialConversation: false,
+    };
+    mocks.createConversationMock.mockImplementationOnce(async () => {
+      const listener = mocks.listeners.get(conversationRenamedChannel.name);
+      listener?.({
+        conversationId: 'conversation-2',
+        projectId: 'project-1',
+        taskId: 'task-1',
+        title: 'Synced Codex title',
+      });
+      return createdConversation;
+    });
     const store = new ConversationManagerStore('project-1', 'task-1', [conversation]);
 
-    await store.archiveConversation('conversation-1');
+    await store.createConversation({
+      id: 'conversation-2',
+      projectId: 'project-1',
+      taskId: 'task-1',
+      runtime: 'codex',
+      title: 'Codex',
+    });
+
+    expect(store.conversations.get('conversation-2')?.data.title).toBe('Synced Codex title');
+  });
+
+  it('archives conversations via RPC and leaves removal to the archive event', async () => {
+    const store = new ConversationManagerStore('project-1', 'task-1', [conversation]);
+
+    await store.archiveConversation('conversation-1', { runPreArchiveCommand: true });
 
     expect(mocks.archiveConversationMock).toHaveBeenCalledWith(
       'project-1',
       'task-1',
-      'conversation-1'
+      'conversation-1',
+      { runPreArchiveCommand: true }
     );
-    expect(store.conversations.has('conversation-1')).toBe(false);
-    expect(mocks.ptyDisposeMock).toHaveBeenCalled();
+    // The main process owns the archive (it may run a pre-archive command
+    // first); the store is only pruned by the conversationArchivedChannel event.
+    expect(store.conversations.has('conversation-1')).toBe(true);
+    expect(mocks.ptyDisposeMock).not.toHaveBeenCalled();
   });
 
   it('removes conversations when an archive event arrives', () => {
