@@ -92,13 +92,23 @@ export class FrontendPty {
    * without this, a restarted tmux/TUI session is born at 24 rows and only
    * paints the top half of the pane.
    */
-  static noteResize(sessionId: string, cols: number, rows: number): void {
+  /**
+   * Record the dims sent to the backend PTY for this session. Returns true
+   * when they DIFFER from the previously recorded dims — i.e. the rpc.pty
+   * resize must actually be sent. Per-session (not per-pane) so a session
+   * moving between panes (pin/unpin) is never deduped against a stale pane
+   * broadcast.
+   */
+  static noteResize(sessionId: string, cols: number, rows: number): boolean {
     for (const pty of FrontendPty.all) {
       if (pty.sessionId === sessionId) {
+        const changed = pty.lastSentDims?.cols !== cols || pty.lastSentDims?.rows !== rows;
         pty.lastSentDims = { cols, rows };
-        return;
+        return changed;
       }
     }
+    // Unknown session — never skip the resize.
+    return true;
   }
   readonly terminal: Terminal;
   readonly ownedContainer: HTMLDivElement;
@@ -114,6 +124,12 @@ export class FrontendPty {
   private pendingWrites: string[] = [];
   private hasFlushed = false;
   private savedViewportY: number | null = null;
+  /** Deferred terminal.resize, applied on the next data chunk (or timeout). */
+  private deferredResize: {
+    cols: number;
+    rows: number;
+    timer: ReturnType<typeof setTimeout>;
+  } | null = null;
   private readonly scrollDisposable: { dispose(): void };
   private webglAddon: WebglAddon | null = null;
   private webglContextLossDisposable: IDisposable | null = null;
@@ -227,12 +243,95 @@ export class FrontendPty {
     );
   }
 
+  /**
+   * Does this chunk look like a TUI full-screen repaint rather than an
+   * incremental update?  Incremental writes use positioned CUPs only
+   * (`\x1b[35;1H…`), while a full repaint homes the cursor (bare `\x1b[H`),
+   * clears the screen, or switches the alt buffer.  Deliberately NO size
+   * heuristic: large chunks can be plain streamed output or OSC52 clipboard
+   * payloads, and a false positive here paints rewrap garbage.
+   */
+  private static looksLikeRepaint(data: string): boolean {
+    return (
+      data.includes('\x1b[H') ||
+      data.includes('\x1b[2J') ||
+      data.includes('\x1b[3J') ||
+      data.includes('\x1b[?1049')
+    );
+  }
+
   private writeOrBuffer(data: string): void {
     if (this.hasFlushed) {
+      // Apply a deferred reflow only when the app's repaint frame arrives, so
+      // the rewrapped viewport is overwritten by the new frame in the same
+      // tick (before the next paint).  Incremental chunks (spinners, streamed
+      // output) must NOT trigger it — they'd expose the rewrap garbage for
+      // the 30-100ms until the real repaint lands.
+      if (this.deferredResize && FrontendPty.looksLikeRepaint(data)) {
+        this.applyDeferredResize();
+      }
       this.terminal.write(data);
     } else {
       this.pendingWrites.push(data);
     }
+  }
+
+  /**
+   * Apply a resize without ever painting forced-rewrap garbage.
+   *
+   * xterm's resize is asymmetric:
+   *  - Cols GROWTH never force-wraps existing lines (it only unwraps
+   *    previously wrapped ones) — that reflow is correct by construction, so
+   *    growth applies immediately: live reflow with no garbage possible.
+   *  - Cols SHRINK force-wraps every line longer than the new width, which
+   *    garbles absolutely-positioned TUI screens — and apps like Claude Code
+   *    debounce their resize repaint, so the garbage would stay on screen for
+   *    the whole drag.  Instead the PTY learns the new size immediately (the
+   *    app starts rendering at the narrow width right away) while the
+   *    terminal keeps its wider grid — narrow content on a wide grid renders
+   *    fine, zero visual debt.  The shrink lands either when a full-screen
+   *    repaint arrives (vim-class apps repaint per SIGWINCH — atomic swap in
+   *    writeOrBuffer) or `settleMs` after the LAST resize report (drag
+   *    settled; by then on-screen content is already narrow, so the shrink
+   *    wraps nothing).  Resetting the timer per report is deliberate — the
+   *    deferral shows a correct frame, so there is nothing to starve.
+   *
+   * Rows-only changes never rewrap, and a terminal that hasn't flushed its
+   * historical buffer yet has no frame worth protecting — both apply
+   * immediately.
+   */
+  requestResize(cols: number, rows: number, settleMs: number): void {
+    if (this.terminal.cols === cols && this.terminal.rows === rows) {
+      this.cancelDeferredResize();
+      return;
+    }
+    if (cols >= this.terminal.cols || !this.hasFlushed) {
+      this.cancelDeferredResize();
+      this.terminal.resize(cols, rows);
+      return;
+    }
+    // Cols shrink: rows apply now, the cols shrink waits for repaint/settle.
+    if (this.terminal.rows !== rows) {
+      this.terminal.resize(this.terminal.cols, rows);
+    }
+    this.cancelDeferredResize();
+    const timer = setTimeout(() => this.applyDeferredResize(), settleMs);
+    this.deferredResize = { cols, rows, timer };
+  }
+
+  private applyDeferredResize(): void {
+    const pending = this.deferredResize;
+    if (!pending) return;
+    this.cancelDeferredResize();
+    if (this.terminal.cols !== pending.cols || this.terminal.rows !== pending.rows) {
+      this.terminal.resize(pending.cols, pending.rows);
+    }
+  }
+
+  private cancelDeferredResize(): void {
+    if (!this.deferredResize) return;
+    clearTimeout(this.deferredResize.timer);
+    this.deferredResize = null;
   }
 
   /**
@@ -262,6 +361,8 @@ export class FrontendPty {
    * to eliminate the flash caused by a post-mount resize.
    */
   mount(mountTarget: HTMLElement, targetDims?: { cols: number; rows: number }): void {
+    // Mount dims are authoritative — drop any stale deferred reflow.
+    this.cancelDeferredResize();
     if (
       targetDims &&
       (this.terminal.cols !== targetDims.cols || this.terminal.rows !== targetDims.rows)
@@ -299,6 +400,7 @@ export class FrontendPty {
    */
   dispose(): void {
     FrontendPty.all.delete(this);
+    this.cancelDeferredResize();
     this.offData?.();
     this.offData = null;
     this.scrollDisposable.dispose();

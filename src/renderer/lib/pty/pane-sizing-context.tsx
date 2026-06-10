@@ -2,9 +2,11 @@
  * PaneSizingContext — owns PTY resize for every session that belongs to a pane.
  *
  * The active TerminalPane calls reportDimensions(cols, rows) whenever its
- * terminal resizes.  The provider then forwards that resize to ALL registered
- * sessions (active + background), so background agents always have the correct
- * terminal width even when they are off-screen.
+ * terminal resizes.  The provider forwards that resize to ALL registered
+ * sessions (active + background) immediately, so background agents always have
+ * the correct terminal width even when they are off-screen.  Pacing is owned
+ * by the caller (use-pty throttles measure+resize); broadcasting synchronously
+ * keeps the PTY SIGWINCH in the same tick as the xterm reflow.
  *
  * Each provider renders a wrapper <div> that fills its parent and registers
  * itself in the module-level paneRegistry under its paneId.  This lets any
@@ -36,7 +38,6 @@ import { rpc } from '@renderer/lib/ipc';
 import { FrontendPty } from './pty';
 import { measureDimensions, type TerminalDimensions } from './pty-dimensions';
 
-const PTY_RESIZE_DEBOUNCE_MS = 60;
 const MIN_TERMINAL_COLS = 2;
 const MIN_TERMINAL_ROWS = 1;
 
@@ -59,9 +60,9 @@ export function getPaneContainer(paneId: string): HTMLDivElement | null {
 
 export interface PaneSizingContextValue {
   /**
-   * Called by the active terminal after every resize.  Broadcasts the
-   * dimensions to all registered sessions (active + background) after a short
-   * debounce.
+   * Called by the active terminal after every resize.  Synchronously
+   * broadcasts the dimensions to all registered sessions (active +
+   * background); identical dims for the same session set are deduped.
    */
   reportDimensions: (cols: number, rows: number) => void;
   /**
@@ -114,13 +115,6 @@ export function PaneSizingProvider({ paneId, sessionIds, children }: PaneSizingP
   const containerRef = useRef<HTMLDivElement>(null);
   const sessionsRef = useRef<string[]>([]);
   const lastDimensionsRef = useRef<{ cols: number; rows: number } | null>(null);
-  const lastBroadcastRef = useRef<{
-    cols: number;
-    rows: number;
-    sessionIdsKey: string;
-  } | null>(null);
-  const pendingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingDimsRef = useRef<{ cols: number; rows: number } | null>(null);
 
   // Register/unregister this pane in the module-level registry.
   useEffect(() => {
@@ -133,7 +127,8 @@ export function PaneSizingProvider({ paneId, sessionIds, children }: PaneSizingP
   }, [paneId]);
 
   // When sessionIds change, send the current known dimensions to any sessions
-  // that are newly added (e.g. a conversation was just created).
+  // that are newly added (e.g. a conversation was just created, or a tab was
+  // unpinned back from the sidebar into this pane).
   useEffect(() => {
     const prev = sessionsRef.current;
     const added = sessionIds.filter((id) => !prev.includes(id));
@@ -141,64 +136,32 @@ export function PaneSizingProvider({ paneId, sessionIds, children }: PaneSizingP
     const dims = lastDimensionsRef.current;
     if (dims && added.length > 0) {
       for (const id of added) {
-        FrontendPty.noteResize(id, dims.cols, dims.rows);
-        void rpc.pty.resize(id, dims.cols, dims.rows);
+        if (FrontendPty.noteResize(id, dims.cols, dims.rows)) {
+          void rpc.pty.resize(id, dims.cols, dims.rows);
+        }
       }
     }
   }, [sessionIds]);
 
-  // Clear debounce timer on unmount.
-  useEffect(() => {
-    return () => {
-      if (pendingTimerRef.current) {
-        clearTimeout(pendingTimerRef.current);
-      }
+  const reportDimensions = useCallback((cols: number, rows: number) => {
+    const dims = {
+      cols: Math.max(MIN_TERMINAL_COLS, cols),
+      rows: Math.max(MIN_TERMINAL_ROWS, rows),
     };
-  }, []);
-
-  const flush = useCallback(() => {
-    const dims = pendingDimsRef.current;
-    pendingDimsRef.current = null;
-    if (!dims) return;
     lastDimensionsRef.current = dims;
-    // Always record the dims on each live FrontendPty, even when the IPC
-    // broadcast is deduped below. A restarted session reuses the same sessionId
-    // but gets a NEW FrontendPty (lastSentDims=null); if the broadcast is skipped
-    // because the pane size is unchanged, that pty must still learn its size so a
-    // subsequent restart spawns the backend PTY at the real dims instead of 80x24.
+    // The skip-redundant-IPC dedup is PER SESSION (FrontendPty.lastSentDims),
+    // never per pane: a session can move between panes (sidebar pin/unpin),
+    // and a pane-level "did my size change" check would silently swallow the
+    // backend resize after another pane changed that session's dims. The
+    // per-session record also covers restarted sessions: a restart reuses the
+    // sessionId but gets a NEW FrontendPty (lastSentDims=null), so the next
+    // report always reaches it.
     for (const id of sessionsRef.current) {
-      FrontendPty.noteResize(id, dims.cols, dims.rows);
-    }
-    const sessionIdsKey = sessionsRef.current.join('\0');
-    const last = lastBroadcastRef.current;
-    if (
-      last?.cols === dims.cols &&
-      last.rows === dims.rows &&
-      last.sessionIdsKey === sessionIdsKey
-    ) {
-      return;
-    }
-    lastBroadcastRef.current = { ...dims, sessionIdsKey };
-    for (const id of sessionsRef.current) {
-      void rpc.pty.resize(id, dims.cols, dims.rows);
+      if (FrontendPty.noteResize(id, dims.cols, dims.rows)) {
+        void rpc.pty.resize(id, dims.cols, dims.rows);
+      }
     }
   }, []);
-
-  const reportDimensions = useCallback(
-    (cols: number, rows: number) => {
-      const c = Math.max(MIN_TERMINAL_COLS, cols);
-      const r = Math.max(MIN_TERMINAL_ROWS, rows);
-      // Newly added sessions are handled by the sessionIds effect above; this
-      // path only needs to coalesce repeated reports for the same session set.
-      pendingDimsRef.current = { cols: c, rows: r };
-      if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
-      pendingTimerRef.current = setTimeout(() => {
-        pendingTimerRef.current = null;
-        flush();
-      }, PTY_RESIZE_DEBOUNCE_MS);
-    },
-    [flush]
-  );
 
   const getCurrentDimensions = useCallback(
     (): { cols: number; rows: number } | null => lastDimensionsRef.current,

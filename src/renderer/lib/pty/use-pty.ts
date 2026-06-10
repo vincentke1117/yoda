@@ -1,11 +1,10 @@
 import { type Terminal } from '@xterm/xterm';
-import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import type { AppSettings } from '@shared/app-settings';
 import { appPasteChannel } from '@shared/events/appEvents';
 import { ptyDataChannel, ptyExitChannel } from '@shared/events/ptyEvents';
 import { DEFAULT_TERMINAL_SCROLLBACK_LINES } from '@shared/terminal-settings';
 import { events, rpc } from '@renderer/lib/ipc';
-import { panelDragStore } from '@renderer/lib/layout/panel-drag-store';
 import { log } from '@renderer/utils/logger';
 import { usePaneSizingContext } from './pane-sizing-context';
 import { buildTerminalFontFamily, buildTheme, FrontendPty, type SessionTheme } from './pty';
@@ -34,9 +33,24 @@ import { registerTerminalImeDiagnostics } from './terminal-ime-diagnostics';
 import { registerTerminalImeNativePunctuation } from './terminal-ime-native-punctuation';
 import { isTerminalLinkActivation } from './terminal-link-activation';
 import type { TerminalLinkTarget } from './terminal-link-target';
+import { TERMINAL_RELAYOUT_EVENT } from './terminal-relayout';
 import { getTerminalWebLinkAtCell, registerTerminalWebLinkProvider } from './terminal-web-links';
 
-const PTY_RESIZE_DEBOUNCE_MS = 120;
+/**
+ * Throttle interval for live resize (panel drags, window resizes). One
+ * measure → term.resize → rpc.pty.resize step per interval, leading +
+ * trailing, so xterm reflow and the app's SIGWINCH repaint stay in lockstep
+ * (~10Hz live reflow) instead of xterm reflowing per-frame against a stale
+ * PTY size and the app repainting at random pauses.
+ */
+const TERMINAL_RESIZE_THROTTLE_MS = 100;
+/**
+ * How long after the LAST resize report a deferred cols-shrink waits before
+ * landing (the deferral shows a correct frame — narrow content on the wider
+ * grid — so this is a settle window, not a deadline; see
+ * FrontendPty.requestResize).
+ */
+const TERMINAL_RESIZE_SETTLE_MS = 150;
 const MIN_TERMINAL_COLS = 2;
 const MIN_TERMINAL_ROWS = 1;
 const MAX_LAYOUT_READY_RETRIES = 8;
@@ -203,21 +217,10 @@ export function usePty(
   const paneSizingRef = useRef(paneSizing);
   paneSizingRef.current = paneSizing;
 
-  // Subscribe to panel drag state so ResizeObserver skips fits while dragging.
-  const isPanelDragging = useSyncExternalStore(
-    panelDragStore.subscribe,
-    panelDragStore.getSnapshot
-  );
-  // Keep a ref in sync so the ResizeObserver callback (inside the main effect)
-  // always reads the latest value without re-running the effect.
-  const isPanelDraggingRef = useRef(isPanelDragging);
-  isPanelDraggingRef.current = isPanelDragging;
-
   // Core xterm.js reference, kept alive across renders.
   const termRef = useRef<Terminal | null>(null);
 
-  // Resize debounce state.
-  const pendingResizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Resize dedup state.
   const lastSentResizeRef = useRef<{ cols: number; rows: number } | null>(null);
 
   // First-message capture state.
@@ -235,27 +238,26 @@ export function usePty(
 
   // ─── Helpers ───────────────────────────────────────────────────────────────
 
-  const queuePtyResize = useCallback(
+  // Sends the PTY resize immediately (deduped). Pacing is owned by the
+  // measureAndResize throttle, so the SIGWINCH lands in the same tick as the
+  // corresponding term.resize() instead of drifting behind a debounce.
+  const sendPtyResize = useCallback(
     (newCols: number, newRows: number) => {
       const c = Math.max(MIN_TERMINAL_COLS, Math.floor(newCols));
       const r = Math.max(MIN_TERMINAL_ROWS, Math.floor(newRows));
       const last = lastSentResizeRef.current;
       if (last?.cols === c && last?.rows === r) return;
-      if (pendingResizeTimerRef.current) clearTimeout(pendingResizeTimerRef.current);
-      pendingResizeTimerRef.current = setTimeout(() => {
-        pendingResizeTimerRef.current = null;
-        lastSentResizeRef.current = { cols: c, rows: r };
-        FrontendPty.noteResize(sessionId, c, r);
-        void rpc.pty.resize(sessionId, c, r);
-      }, PTY_RESIZE_DEBOUNCE_MS);
+      lastSentResizeRef.current = { cols: c, rows: r };
+      FrontendPty.noteResize(sessionId, c, r);
+      void rpc.pty.resize(sessionId, c, r);
     },
     [sessionId]
   );
 
-  // Stable ref so measureAndResize can always call the latest queuePtyResize
+  // Stable ref so measureAndResize can always call the latest sendPtyResize
   // without needing it as a useCallback dependency.
-  const queuePtyResizeRef = useRef(queuePtyResize);
-  queuePtyResizeRef.current = queuePtyResize;
+  const sendPtyResizeRef = useRef(sendPtyResize);
+  sendPtyResizeRef.current = sendPtyResize;
 
   const retryMeasureAndResize = useCallback(
     (retries: number, options?: MeasureAndResizeOptions) => {
@@ -328,7 +330,10 @@ export function usePty(
 
           let didResize = false;
           if (term.cols !== targetCols || term.rows !== targetRows) {
-            term.resize(targetCols, targetRows);
+            // Growth/rows apply immediately (live reflow, garbage-free by
+            // construction); cols shrinks land on repaint/settle — see
+            // FrontendPty.requestResize.
+            pty.requestResize(targetCols, targetRows, TERMINAL_RESIZE_SETTLE_MS);
             didResize = true;
           }
 
@@ -343,7 +348,7 @@ export function usePty(
           if (pane) {
             pane.reportDimensions(targetCols, targetRows);
           } else {
-            queuePtyResizeRef.current(targetCols, targetRows);
+            sendPtyResizeRef.current(targetCols, targetRows);
           }
         } catch (e) {
           log.warn('useTerminal: measureAndResize failed', { sessionId, error: e });
@@ -357,6 +362,31 @@ export function usePty(
   // the latest version without creating a circular useCallback dependency.
   const measureAndResizeRef = useRef(measureAndResize);
   measureAndResizeRef.current = measureAndResize;
+
+  // Throttled entry point for high-frequency resize sources (ResizeObserver
+  // during panel drags, window resizes, panel collapse animations).
+  // Leading + trailing: the first event resizes immediately so the terminal
+  // tracks the drag, intermediate events coalesce to one resize per interval,
+  // and the trailing run settles on the final size (measureAndResize reads
+  // the live DOM at execution time, so it always measures the latest layout).
+  const resizeThrottleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastThrottledResizeRef = useRef(0);
+  const measureAndResizeThrottled = useCallback(() => {
+    if (resizeThrottleTimerRef.current !== null) return;
+    const run = () => {
+      lastThrottledResizeRef.current = Date.now();
+      measureAndResizeRef.current();
+    };
+    const elapsed = Date.now() - lastThrottledResizeRef.current;
+    if (elapsed >= TERMINAL_RESIZE_THROTTLE_MS) {
+      run();
+    } else {
+      resizeThrottleTimerRef.current = setTimeout(() => {
+        resizeThrottleTimerRef.current = null;
+        run();
+      }, TERMINAL_RESIZE_THROTTLE_MS - elapsed);
+    }
+  }, []);
 
   const applyTheme = useCallback((t?: SessionTheme) => {
     if (!termRef.current) return;
@@ -885,10 +915,19 @@ export function usePty(
           detail?.scrollbackLines ?? DEFAULT_TERMINAL_SCROLLBACK_LINES
         );
       };
+      // Host position changes (tab pin/unpin/reclaim between panes) re-host the
+      // terminal without a container size change, so the ResizeObserver never
+      // fires and a same-sessionId pane skips its mount measure. Same recipe as
+      // the HMR re-fit: clear the dedup so the resize always lands.
+      const handleRelayout = () => {
+        measureAndResizeRef.current(0, { forceRefresh: true, resetResizeDedup: true });
+      };
+      window.addEventListener(TERMINAL_RELAYOUT_EVENT, handleRelayout);
       window.addEventListener('terminal-font-changed', handleFontChange);
       window.addEventListener('terminal-auto-copy-changed', handleAutoCopyChange);
       window.addEventListener('terminal-scrollback-lines-changed', handleScrollbackLinesChange);
       cleanups.push(
+        () => window.removeEventListener(TERMINAL_RELAYOUT_EVENT, handleRelayout),
         () => window.removeEventListener('terminal-font-changed', handleFontChange),
         () => window.removeEventListener('terminal-auto-copy-changed', handleAutoCopyChange),
         () =>
@@ -899,10 +938,10 @@ export function usePty(
       );
 
       // ── ResizeObserver (observes the mount-target, not the owned container) ─
-      // Skips measuring while a panel drag is in progress; the drag-end effect
-      // below fires one measure once the drag completes.
+      // Live reflow: every size change measures + resizes, throttled so xterm
+      // reflow and the PTY SIGWINCH advance in lockstep at a bounded rate.
       const resizeObserver = new ResizeObserver(() => {
-        if (!isPanelDraggingRef.current) measureAndResize();
+        measureAndResizeThrottled();
       });
       resizeObserver.observe(container);
       cleanups.push(() => resizeObserver.disconnect());
@@ -940,9 +979,9 @@ export function usePty(
 
     // ── Cleanup ───────────────────────────────────────────────────────────────
     return () => {
-      if (pendingResizeTimerRef.current) {
-        clearTimeout(pendingResizeTimerRef.current);
-        pendingResizeTimerRef.current = null;
+      if (resizeThrottleTimerRef.current) {
+        clearTimeout(resizeThrottleTimerRef.current);
+        resizeThrottleTimerRef.current = null;
       }
       // Reset dedup so the next session always gets a resize on mount.
       lastSentResizeRef.current = null;
@@ -969,18 +1008,6 @@ export function usePty(
   useEffect(() => {
     applyTheme(theme);
   }, [theme, applyTheme]);
-
-  // ── Measure once when a panel drag ends ─────────────────────────────────────
-  // The ResizeObserver skips measurements during the drag; this effect fires a
-  // single measurement (which resizes the terminal and notifies PTYs) when done.
-  const prevIsPanelDraggingRef = useRef(isPanelDragging);
-  useEffect(() => {
-    const wasDragging = prevIsPanelDraggingRef.current;
-    prevIsPanelDraggingRef.current = isPanelDragging;
-    if (wasDragging && !isPanelDragging) {
-      measureAndResize();
-    }
-  }, [isPanelDragging, measureAndResize]);
 
   return { focus, setTheme, sendInput, getLinkTargetAtEvent };
 }
