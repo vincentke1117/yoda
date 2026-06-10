@@ -1,14 +1,16 @@
 import * as AccordionPrimitive from '@radix-ui/react-accordion';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Brain,
+  Check,
   ChevronRight,
-  Cpu,
   FileText,
   Info,
+  PanelBottom,
   Plug,
   Search,
   Sparkles,
+  SquareTerminal,
   Users,
   Webhook,
   Wrench,
@@ -16,15 +18,18 @@ import {
 import { observer } from 'mobx-react-lite';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { HookInspectionResult } from '@shared/agent-hooks';
 import type {
   ClaudeMemoryFile,
   ClaudeSessionContext,
   ClaudeSessionPrompt,
+  ClaudeStatuslineConfig,
   CodexDynamicTool,
   CodexMemoryFile,
   CodexSessionContext,
   ContextSkill,
 } from '@shared/conversations';
+import { useAppSettingsKey } from '@renderer/features/settings/use-app-settings-key';
 import {
   FileActionsContextMenu,
   FileActionsDropdown,
@@ -33,8 +38,9 @@ import {
   PersistedDetails,
   usePersistedDisclosure,
 } from '@renderer/features/tasks/components/persisted-disclosure';
+import { getTaskMenuConversation } from '@renderer/features/tasks/components/task-menu-session-info';
 import { HooksPanel } from '@renderer/features/tasks/hooks/hooks-panel';
-import { useProvisionedTask } from '@renderer/features/tasks/task-view-context';
+import { useProvisionedTask, useTaskViewContext } from '@renderer/features/tasks/task-view-context';
 import { rpc } from '@renderer/lib/ipc';
 import { Input } from '@renderer/lib/ui/input';
 import { MicroLabel } from '@renderer/lib/ui/label';
@@ -44,81 +50,158 @@ import { formatBytes } from '@renderer/utils/formatBytes';
 import { cn } from '@renderer/utils/utils';
 
 const CONTEXT_REFRESH_MS = 3_000;
-const CONTEXT_PANEL_SECTION_IDS = {
-  llmContext: 'llm-context',
-  memory: 'memory',
-  tools: 'tools',
-  mcpServers: 'mcp-servers',
-  skills: 'skills',
-  agentsAvailable: 'agents-available',
-  hooks: 'hooks',
-} as const;
-
-type ContextPanelSectionId =
-  (typeof CONTEXT_PANEL_SECTION_IDS)[keyof typeof CONTEXT_PANEL_SECTION_IDS];
 
 /**
- * The harness blinds (agent runtime view: memory, tools, MCP, skills, agents,
- * hooks) — accordion items meant to live inside the Session panel's root.
+ * The harness blinds (agent runtime view), each an independently
+ * orderable/hideable unit of the Session panel.
  */
-export const HarnessSections = observer(function HarnessSections({
+export const HARNESS_SECTION_IDS = [
+  'memory',
+  'tools',
+  'mcp-servers',
+  'skills',
+  'agents-available',
+  'statusline',
+  'hooks',
+] as const;
+
+export type HarnessSectionId = (typeof HARNESS_SECTION_IDS)[number];
+
+type ContextPanelSectionId = HarnessSectionId;
+
+/** Header chrome per harness section — used by loading/empty placeholders. */
+function harnessSectionChrome(
+  id: HarnessSectionId,
+  t: (key: string) => string
+): { title: string; icon: React.ReactNode } {
+  switch (id) {
+    case 'memory':
+      return { title: t('tasks.panel.memory'), icon: <Brain className="size-3.5" /> };
+    case 'tools':
+      return { title: t('tasks.panel.tools'), icon: <Wrench className="size-3.5" /> };
+    case 'mcp-servers':
+      return { title: t('tasks.panel.mcpServers'), icon: <Plug className="size-3.5" /> };
+    case 'skills':
+      return { title: t('tasks.panel.skills'), icon: <Sparkles className="size-3.5" /> };
+    case 'agents-available':
+      return { title: t('tasks.panel.agentsAvailable'), icon: <Users className="size-3.5" /> };
+    case 'statusline':
+      return { title: t('tasks.panel.statusline'), icon: <PanelBottom className="size-3.5" /> };
+    case 'hooks':
+      return { title: t('tasks.sessionPanel.hooks'), icon: <Webhook className="size-3.5" /> };
+  }
+}
+
+/**
+ * One harness blind, independently placeable anywhere in the Session panel
+ * accordion. Every instance reads the runtime context via React Query with a
+ * shared query key, so rendering N sections still issues a single fetch loop.
+ */
+export const HarnessSection = observer(function HarnessSection({
+  id,
   active = true,
 }: {
+  id: HarnessSectionId;
   /** When false, live sub-panels (e.g. hooks) pause their queries/subscriptions. */
   active?: boolean;
-} = {}) {
+}) {
   const { t } = useTranslation();
   const provisioned = useProvisionedTask();
   const { taskView } = provisioned;
-  const { tabManager } = taskView;
-  const activeConversation = tabManager.activeConversation;
-
+  const activeConversation = taskView.tabManager.activeConversation;
   const runtimeId = activeConversation?.data.runtimeId;
-  const hooksOpen =
-    active && taskView.sessionPanelOpenSectionIds.includes(CONTEXT_PANEL_SECTION_IDS.hooks);
+
+  if (id === 'hooks') {
+    return <HooksSection active={active} />;
+  }
+
+  if (!activeConversation) {
+    return <HarnessPlaceholder id={id}>{t('tasks.panel.noActiveConversation')}</HarnessPlaceholder>;
+  }
+  if (id === 'statusline') {
+    // Statusline is settings-file-based (no transcript needed) and currently
+    // Claude-only — Codex has no statusline support.
+    return runtimeId === 'claude' ? (
+      <StatuslineSection cwd={provisioned.path} />
+    ) : (
+      <HarnessPlaceholder id={id}>{t('tasks.panel.contextUnsupported')}</HarnessPlaceholder>
+    );
+  }
+  if (runtimeId === 'claude') {
+    return (
+      <ClaudeHarnessSection id={id} cwd={provisioned.path} sessionId={activeConversation.data.id} />
+    );
+  }
+  if (runtimeId === 'codex') {
+    return (
+      <CodexHarnessSection
+        id={id}
+        cwd={provisioned.path}
+        conversationId={activeConversation.data.id}
+        conversationTitle={activeConversation.data.title}
+        conversationCreatedAt={activeConversation.data.createdAt ?? null}
+      />
+    );
+  }
+  return <HarnessPlaceholder id={id}>{t('tasks.panel.contextUnsupported')}</HarnessPlaceholder>;
+});
+
+const HooksSection = observer(function HooksSection({ active }: { active: boolean }) {
+  const { t } = useTranslation();
+  const { taskId } = useTaskViewContext();
+  const provisioned = useProvisionedTask();
+  const conversation = getTaskMenuConversation(provisioned);
+  const runtimeId = conversation?.runtimeId;
+  // Refetch on session restart (mirrors HooksPanel's reload trigger).
+  const sessionStatus = conversation
+    ? provisioned.conversations.conversations.get(conversation.id)?.session.status
+    : undefined;
+  const hooksOpen = active && provisioned.taskView.sessionPanelOpenSectionIds.includes('hooks');
+
+  // Eager fetch just for the header count, so it shows while collapsed like
+  // the other harness sections. HooksPanel owns the full interactive state.
+  const { data } = useQuery<HookInspectionResult | null>({
+    queryKey: ['agentHooksInspect', provisioned.path, runtimeId, taskId, sessionStatus],
+    queryFn: () => (runtimeId ? rpc.agentHooks.inspect(provisioned.path, runtimeId, taskId) : null),
+    enabled: active && !!runtimeId,
+    refetchOnWindowFocus: false,
+  });
 
   return (
-    <>
-      {!activeConversation ? (
-        <Section
-          id={CONTEXT_PANEL_SECTION_IDS.llmContext}
-          title={t('tasks.panel.llmContext')}
-          icon={<Cpu className="size-3.5" />}
-        >
-          <Empty>{t('tasks.panel.noActiveConversation')}</Empty>
-        </Section>
-      ) : runtimeId === 'claude' ? (
-        <ClaudeContextSections cwd={provisioned.path} sessionId={activeConversation.data.id} />
-      ) : runtimeId === 'codex' ? (
-        <CodexContextSections
-          cwd={provisioned.path}
-          conversationId={activeConversation.data.id}
-          conversationTitle={activeConversation.data.title}
-          conversationCreatedAt={activeConversation.data.createdAt ?? null}
-        />
-      ) : (
-        <Section
-          id={CONTEXT_PANEL_SECTION_IDS.llmContext}
-          title={t('tasks.panel.llmContext')}
-          icon={<Cpu className="size-3.5" />}
-        >
-          <Empty>{t('tasks.panel.contextUnsupported')}</Empty>
-        </Section>
-      )}
-
-      <Section
-        id={CONTEXT_PANEL_SECTION_IDS.hooks}
-        title={t('tasks.sessionPanel.hooks')}
-        icon={<Webhook className="size-3.5" />}
-        bare
-      >
-        <HooksPanel active={hooksOpen} chromeless />
-      </Section>
-    </>
+    <Section
+      id="hooks"
+      title={t('tasks.sessionPanel.hooks')}
+      count={data?.supported ? data.hooks.length : undefined}
+      icon={<Webhook className="size-3.5" />}
+      bare
+    >
+      <HooksPanel active={hooksOpen} chromeless />
+    </Section>
   );
 });
 
-function ClaudeContextSections({ cwd, sessionId }: { cwd: string; sessionId: string }) {
+/** A harness section shell with an empty/loading message as its content. */
+function HarnessPlaceholder({ id, children }: { id: HarnessSectionId; children: React.ReactNode }) {
+  const { t } = useTranslation();
+  const chrome = harnessSectionChrome(id, t);
+  return (
+    <Section id={id} title={chrome.title} icon={chrome.icon}>
+      <Empty>{children}</Empty>
+    </Section>
+  );
+}
+
+type RuntimeHarnessSectionId = Exclude<HarnessSectionId, 'hooks' | 'statusline'>;
+
+function ClaudeHarnessSection({
+  id,
+  cwd,
+  sessionId,
+}: {
+  id: RuntimeHarnessSectionId;
+  cwd: string;
+  sessionId: string;
+}) {
   const { t } = useTranslation();
   const { data, isPending } = useQuery<ClaudeSessionContext | null>({
     queryKey: ['claudeSessionContext', cwd, sessionId],
@@ -129,53 +212,46 @@ function ClaudeContextSections({ cwd, sessionId }: { cwd: string; sessionId: str
     staleTime: 0,
   });
 
-  if (!data && isPending) {
-    return (
-      <Section
-        id={CONTEXT_PANEL_SECTION_IDS.llmContext}
-        title={t('tasks.panel.llmContext')}
-        icon={<Cpu className="size-3.5" />}
-      >
-        <Empty>{t('common.loading')}</Empty>
-      </Section>
-    );
-  }
-
   if (!data) {
     return (
-      <Section
-        id={CONTEXT_PANEL_SECTION_IDS.llmContext}
-        title={t('tasks.panel.llmContext')}
-        icon={<Cpu className="size-3.5" />}
-      >
-        <Empty>{t('tasks.panel.noTranscript')}</Empty>
-      </Section>
+      <HarnessPlaceholder id={id}>
+        {isPending ? t('common.loading') : t('tasks.panel.noTranscript')}
+      </HarnessPlaceholder>
     );
   }
 
-  return (
-    <>
-      <MemorySection
-        files={data.memoryFiles}
-        systemPromptHint={t('tasks.panel.systemPromptHint')}
-      />
-      <ToolsSection tools={data.tools.filter((t) => !t.startsWith('mcp__'))} />
-      <McpSection
-        servers={data.mcpServers}
-        mcpTools={data.tools.filter((t) => t.startsWith('mcp__'))}
-      />
-      <SkillsSection skills={data.skills} content={data.skillsListing} />
-      <AgentsSection agents={data.agents} />
-    </>
-  );
+  switch (id) {
+    case 'memory':
+      return (
+        <MemorySection
+          files={data.memoryFiles}
+          systemPromptHint={t('tasks.panel.systemPromptHint')}
+        />
+      );
+    case 'tools':
+      return <ToolsSection tools={data.tools.filter((tool) => !tool.startsWith('mcp__'))} />;
+    case 'mcp-servers':
+      return (
+        <McpSection
+          servers={data.mcpServers}
+          mcpTools={data.tools.filter((tool) => tool.startsWith('mcp__'))}
+        />
+      );
+    case 'skills':
+      return <SkillsSection skills={data.skills} content={data.skillsListing} />;
+    case 'agents-available':
+      return <AgentsSection agents={data.agents} />;
+  }
 }
 
-function CodexContextSections({
+function CodexHarnessSection({
+  id,
   cwd,
   conversationId,
   conversationTitle,
   conversationCreatedAt,
 }: {
+  id: RuntimeHarnessSectionId;
   cwd: string;
   conversationId: string;
   conversationTitle: string;
@@ -203,48 +279,41 @@ function CodexContextSections({
     staleTime: 0,
   });
 
-  if (!data && isPending) {
-    return (
-      <Section
-        id={CONTEXT_PANEL_SECTION_IDS.llmContext}
-        title={t('tasks.panel.llmContext')}
-        icon={<Cpu className="size-3.5" />}
-      >
-        <Empty>{t('common.loading')}</Empty>
-      </Section>
-    );
-  }
-
   if (!data) {
     return (
-      <Section
-        id={CONTEXT_PANEL_SECTION_IDS.llmContext}
-        title={t('tasks.panel.llmContext')}
-        icon={<Cpu className="size-3.5" />}
-      >
-        <Empty>{t('tasks.panel.noTranscript')}</Empty>
-      </Section>
+      <HarnessPlaceholder id={id}>
+        {isPending ? t('common.loading') : t('tasks.panel.noTranscript')}
+      </HarnessPlaceholder>
     );
   }
 
-  const codexTools = data.dynamicTools.filter((tool) => !isCodexMcpTool(tool));
-  const codexMcpTools = data.dynamicTools.filter(isCodexMcpTool);
-
-  return (
-    <>
-      <MemorySection
-        files={data.memoryFiles}
-        codexSystemPrompt={{
-          baseInstructions: data.baseInstructions,
-          developerMessages: data.developerMessages,
-          sourcePath: data.rolloutPath,
-        }}
-      />
-      <CodexDynamicToolsSection tools={codexTools} />
-      <CodexMcpSection tools={codexMcpTools} />
-      <SkillsSection skills={data.skills} content={data.skillsListing} />
-    </>
-  );
+  switch (id) {
+    case 'memory':
+      return (
+        <MemorySection
+          files={data.memoryFiles}
+          codexSystemPrompt={{
+            baseInstructions: data.baseInstructions,
+            developerMessages: data.developerMessages,
+            sourcePath: data.rolloutPath,
+          }}
+        />
+      );
+    case 'tools':
+      return (
+        <CodexDynamicToolsSection
+          tools={data.dynamicTools.filter((tool) => !isCodexMcpTool(tool))}
+        />
+      );
+    case 'mcp-servers':
+      return <CodexMcpSection tools={data.dynamicTools.filter(isCodexMcpTool)} />;
+    case 'skills':
+      return <SkillsSection skills={data.skills} content={data.skillsListing} />;
+    case 'agents-available':
+      // Codex has no subagent registry — keep the section honest with an
+      // explicit empty state instead of hiding it.
+      return <AgentsSection agents={[]} />;
+  }
 }
 
 function isCodexMcpTool(tool: CodexDynamicTool): boolean {
@@ -255,7 +324,7 @@ function CodexDynamicToolsSection({ tools }: { tools: CodexDynamicTool[] }) {
   const { t } = useTranslation();
   return (
     <Section
-      id={CONTEXT_PANEL_SECTION_IDS.tools}
+      id={'tools'}
       title={t('tasks.panel.tools')}
       count={tools.length}
       icon={<Wrench className="size-3.5" />}
@@ -299,7 +368,7 @@ function CodexMcpSection({ tools }: { tools: CodexDynamicTool[] }) {
 
   return (
     <Section
-      id={CONTEXT_PANEL_SECTION_IDS.mcpServers}
+      id={'mcp-servers'}
       title={t('tasks.panel.mcpServers')}
       count={serverItems.length}
       icon={<Plug className="size-3.5" />}
@@ -380,7 +449,7 @@ function MemorySection({
 
   return (
     <Section
-      id={CONTEXT_PANEL_SECTION_IDS.memory}
+      id={'memory'}
       title={t('tasks.panel.memory')}
       icon={<Brain className="size-3.5" />}
       count={files.length}
@@ -473,7 +542,7 @@ function ToolsSection({ tools }: { tools: string[] }) {
   const { t } = useTranslation();
   return (
     <Section
-      id={CONTEXT_PANEL_SECTION_IDS.tools}
+      id={'tools'}
       title={t('tasks.panel.tools')}
       count={tools.length}
       icon={<Wrench className="size-3.5" />}
@@ -516,7 +585,7 @@ function McpSection({
 
   return (
     <Section
-      id={CONTEXT_PANEL_SECTION_IDS.mcpServers}
+      id={'mcp-servers'}
       title={t('tasks.panel.mcpServers')}
       count={serverItems.length}
       icon={<Plug className="size-3.5" />}
@@ -586,7 +655,7 @@ function SkillsSection({ skills, content }: { skills?: ContextSkill[]; content: 
   const filteredSkillTree = useMemo(() => filterSkillTree(skillTree, query), [query, skillTree]);
   return (
     <Section
-      id={CONTEXT_PANEL_SECTION_IDS.skills}
+      id={'skills'}
       title={t('tasks.panel.skills')}
       count={entries.length}
       icon={<Sparkles className="size-3.5" />}
@@ -897,7 +966,7 @@ function AgentsSection({ agents }: { agents: string[] }) {
   const { t } = useTranslation();
   return (
     <Section
-      id={CONTEXT_PANEL_SECTION_IDS.agentsAvailable}
+      id={'agents-available'}
       title={t('tasks.panel.agentsAvailable')}
       count={agents.length}
       icon={<Users className="size-3.5" />}
@@ -937,6 +1006,121 @@ function formatCodexTool(tool: CodexDynamicTool): string {
   return parts.join('\n\n') || tool.name;
 }
 
+/**
+ * The Statusline blind: shows the EFFECTIVE Claude Code `statusLine` command
+ * (resolved across settings files in the main process) and lets the user
+ * switch between candidate templates managed in Settings → Agents.
+ */
+function StatuslineSection({ cwd }: { cwd: string }) {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const { data } = useQuery<ClaudeStatuslineConfig>({
+    queryKey: ['claudeStatusline', cwd],
+    queryFn: () => rpc.conversations.getClaudeStatusline(cwd),
+    refetchInterval: CONTEXT_REFRESH_MS,
+    refetchOnWindowFocus: false,
+    staleTime: 0,
+  });
+  const { value: statuslineSettings, update: updateStatuslineSettings } =
+    useAppSettingsKey('statusline');
+  const templates = statuslineSettings?.templates ?? [];
+  const applyTemplate = useMutation({
+    mutationFn: (command: string) => {
+      // Switching OVERWRITES the settings file. If the command being replaced
+      // isn't one of our templates, capture it as one first so the user can
+      // always switch back to their original configuration.
+      const replaced = data?.command;
+      if (replaced && replaced !== command && !templates.some((tpl) => tpl.command === replaced)) {
+        updateStatuslineSettings({
+          templates: [
+            ...templates,
+            {
+              id: crypto.randomUUID(),
+              name: t('tasks.panel.statuslineCapturedName'),
+              command: replaced,
+            },
+          ],
+        });
+      }
+      return rpc.conversations.setClaudeStatusline(cwd, command);
+    },
+    onSuccess: (next) => queryClient.setQueryData(['claudeStatusline', cwd], next),
+  });
+  const activeCommand = data?.command ?? null;
+
+  return (
+    <Section
+      id="statusline"
+      title={t('tasks.panel.statusline')}
+      icon={<PanelBottom className="size-3.5" />}
+      count={templates.length}
+      hint={t('tasks.panel.statuslineHint')}
+    >
+      <SubGroup label={t('tasks.panel.statuslineCurrent')}>
+        {data && activeCommand ? (
+          <ContextItem
+            icon={<SquareTerminal className="size-3.5" />}
+            label={statuslineSourceLabel(data.sourceKind, t)}
+            text={activeCommand}
+            renderMode="plain"
+            // Script commands point file actions at the script itself;
+            // inline one-liners fall back to the defining settings file.
+            sourcePath={data.commandScriptPath ?? data.sourcePath ?? undefined}
+          />
+        ) : (
+          <Empty>{t('tasks.panel.statuslineNotConfigured')}</Empty>
+        )}
+      </SubGroup>
+
+      <SubGroup label={t('tasks.panel.statuslineTemplates')}>
+        {templates.length === 0 ? (
+          <Empty>{t('tasks.panel.noStatuslineTemplates')}</Empty>
+        ) : (
+          templates.map((template) => {
+            const active = template.command === activeCommand;
+            return (
+              <button
+                key={template.id}
+                type="button"
+                disabled={active || applyTemplate.isPending}
+                onClick={() => applyTemplate.mutate(template.command)}
+                className={cn(
+                  'flex min-w-0 items-center gap-1.5 rounded-sm border border-dashed border-border/80 bg-background-1/40 px-1.5 py-1 text-left text-[11px] transition-colors',
+                  !active && 'hover:bg-background-1',
+                  applyTemplate.isPending && 'opacity-60'
+                )}
+                title={template.command}
+              >
+                <Check
+                  className={cn('size-3.5 shrink-0', active ? 'text-foreground' : 'opacity-0')}
+                />
+                <span className={cn('min-w-0 flex-1 truncate', active && 'font-medium')}>
+                  {template.name}
+                </span>
+              </button>
+            );
+          })
+        )}
+      </SubGroup>
+    </Section>
+  );
+}
+
+function statuslineSourceLabel(
+  kind: ClaudeStatuslineConfig['sourceKind'],
+  t: (k: string) => string
+): string {
+  switch (kind) {
+    case 'local':
+      return t('tasks.panel.statuslineSourceLocal');
+    case 'project':
+      return t('tasks.panel.statuslineSourceProject');
+    case 'user':
+    default:
+      return t('tasks.panel.statuslineSourceUser');
+  }
+}
+
 function Section({
   id,
   title,
@@ -959,7 +1143,7 @@ function Section({
 
   return (
     <AccordionPrimitive.Item value={id} className="min-w-0 border-b border-border/70">
-      <AccordionPrimitive.Header className="m-0 flex h-8 min-w-0 items-center pr-1.5 hover:bg-background-2">
+      <AccordionPrimitive.Header className="group/section m-0 flex h-8 min-w-0 items-center pr-1.5 hover:bg-background-2">
         {hasContent ? (
           <AccordionPrimitive.Trigger className="group flex h-full min-w-0 flex-1 items-center gap-2 px-3 text-left text-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-border">
             <ChevronRight className="size-3 shrink-0 text-foreground-passive transition-transform group-data-[state=open]:rotate-90" />
@@ -972,10 +1156,23 @@ function Section({
           </div>
         )}
         <div className="flex h-full shrink-0 items-center gap-1 pr-0.5">
-          {typeof count === 'number' ? (
+          {hint ? (
+            // The hint icon stays hidden until the header is hovered, then
+            // swaps in over the count (same meta↔actions pattern as
+            // ContextItemTrailing).
+            <span className="relative flex h-5 min-w-5 shrink-0 items-center justify-end">
+              {typeof count === 'number' ? (
+                <span className="font-mono text-[10px] text-foreground-passive transition-opacity group-hover/section:opacity-0 group-focus-within/section:opacity-0">
+                  {count}
+                </span>
+              ) : null}
+              <span className="absolute right-0 flex opacity-0 transition-opacity group-hover/section:opacity-100 group-focus-within/section:opacity-100">
+                <SectionHint hint={hint} />
+              </span>
+            </span>
+          ) : typeof count === 'number' ? (
             <span className="shrink-0 font-mono text-[10px] text-foreground-passive">{count}</span>
           ) : null}
-          {hint ? <SectionHint hint={hint} /> : null}
         </div>
       </AccordionPrimitive.Header>
       {hasContent ? (
