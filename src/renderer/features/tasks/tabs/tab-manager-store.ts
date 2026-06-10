@@ -222,6 +222,7 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
       activeDescriptor: computed,
       activeConversation: computed,
       activeConversationId: computed,
+      activeTopLevelTarget: computed,
       activeFileEntry: computed,
       activeFilePath: computed,
       activeDiffEntry: computed,
@@ -360,6 +361,31 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
   get activeConversationId(): string | undefined {
     const desc = this.activeDescriptor;
     return desc?.kind === 'conversation' ? desc.conversationId : undefined;
+  }
+
+  /**
+   * The active entry expressed as a top-level tab target. Used by the view
+   * layer to resolve a tab-less route (scope entry) to this task's own
+   * last-active tab instead of forcing the overview.
+   */
+  get activeTopLevelTarget(): TaskWindowTabTarget | null {
+    const desc = this.activeDescriptor;
+    if (!desc || desc.kind === 'overview') return null;
+    if (desc.kind === 'conversation') {
+      return { kind: 'conversation', conversationId: desc.conversationId };
+    }
+    if (desc.kind === 'diff') {
+      return {
+        kind: 'diff',
+        path: desc.path,
+        diffGroup: desc.diffGroup,
+        originalRef: desc.originalRef,
+        modifiedRef: desc.modifiedRef,
+        prNumber: desc.prNumber,
+        status: desc.status,
+      };
+    }
+    return { kind: 'file', path: desc.path };
   }
 
   get activeFileEntry(): FileTabStore | undefined {

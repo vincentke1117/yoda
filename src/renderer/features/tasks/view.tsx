@@ -90,10 +90,23 @@ const TopLevelTabSync = observer(function TopLevelTabSync({
   // the same session again must re-align internal state.
   const replayNonce = appState.appTabs.replayNonce;
 
-  // The route's target only applies while this task IS the routed task.
-  const target: TaskWindowTabTarget | null =
-    isActive && params.taskId === taskId ? (params.tab ?? { kind: 'overview' }) : null;
+  // The route's target only applies while this task IS the routed task. A
+  // tab-less route is a scope entry — resolved by the effect below to the
+  // task's own last-active tab, never treated as an overview target itself.
+  const isRoutedTask = isActive && params.taskId === taskId;
+  const target: TaskWindowTabTarget | null = isRoutedTask ? (params.tab ?? null) : null;
   const targetKey = target ? JSON.stringify(target) : null;
+  const isScopeEntry = isRoutedTask && params.tab === undefined;
+
+  // Scope entry: rewrite the route with the task's last-active internal tab
+  // (restored by TabManagerStore's snapshot) instead of forcing the overview.
+  // openTaskTopTab re-applies the route with an explicit target, which the
+  // replay effect below then aligns — and, for overview, normalizes the stored
+  // index tab's tab-less params to the explicit shape.
+  useEffect(() => {
+    if (!isScopeEntry) return;
+    openTaskTopTab(projectId, taskId, tabManager.activeTopLevelTarget ?? { kind: 'overview' });
+  }, [isScopeEntry, replayNonce, tabManager, projectId, taskId]);
 
   useEffect(() => {
     const bridge = {

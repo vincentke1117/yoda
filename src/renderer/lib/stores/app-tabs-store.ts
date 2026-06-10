@@ -156,22 +156,23 @@ export class AppTabsStore implements Snapshottable<AppTabsSnapshot> {
 
         // Entering a task/project without an explicit target (sidebar click,
         // deep link to the entity itself) restores the scope's last active
-        // tab instead of forcing the overview.
+        // tab instead of forcing the overview. Re-entering the already-active
+        // scope keeps the current tab — a tab-less route is a scope-entry
+        // command, never a tab identity.
         const isScopeEntry =
           (viewId === 'task' && nextParams.tab === undefined) ||
           (viewId === 'project' && nextParams.view === undefined);
         if (isScopeEntry) {
           const scope = tabScopeKey(viewId, nextParams);
-          if (scope !== tabScopeKey(tab.viewId, tab.params)) {
-            const remembered = this._lastActiveInScope(scope);
-            if (remembered) {
-              this._activate(remembered);
-              this.navigation._applyNavigation(
-                remembered.viewId,
-                remembered.params as WrapParams<ViewId>
-              );
-              return;
-            }
+          const remembered =
+            scope === tabScopeKey(tab.viewId, tab.params) ? tab : this._lastActiveInScope(scope);
+          if (remembered) {
+            this._activate(remembered);
+            this.navigation._applyNavigation(
+              remembered.viewId,
+              remembered.params as WrapParams<ViewId>
+            );
+            return;
           }
         }
 
