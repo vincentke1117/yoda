@@ -11,6 +11,7 @@ import { FileTabStore } from '@renderer/features/tasks/tabs/file-tab-store';
 import type { FileRendererData } from '@renderer/features/tasks/types';
 import { modelRegistry } from '@renderer/lib/monaco/monaco-model-registry';
 import { buildMonacoModelPath } from '@renderer/lib/monaco/monacoModelPath';
+import { scheduleTerminalRelayout } from '@renderer/lib/pty/terminal-relayout';
 import type { Snapshottable } from '@renderer/lib/stores/snapshottable';
 import {
   addTabId,
@@ -172,13 +173,13 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
   activeTabId: string | undefined = undefined;
   isVisible = false;
   /**
-   * Tab pinned into the right side pane. The entry stays in `entries` but is
-   * removed from `tabOrder`, so a tab lives in exactly one place at a time
-   * (move semantics — never duplicated across panes).
+   * Tabs pinned into the task sidebar strip (ordered). Entries stay in
+   * `entries` but are removed from `tabOrder`, so a tab lives in exactly one
+   * place at a time (move semantics — never duplicated across panes).
    */
-  sidePaneTabId: string | undefined = undefined;
-  /** True while a tab dragged from the strip hovers the side pane drop zone. */
-  sidePaneDropHover = false;
+  sidebarTabIds: string[] = [];
+  /** The pinned sidebar tab currently selected in the sidebar strip, if any. */
+  activeSidebarTabId: string | undefined = undefined;
 
   /** Used by resolvedTabs and FileModelLifecycleStore to build buffer URIs. */
   readonly modelRootPath: string;
@@ -214,11 +215,10 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
       tabOrder: observable,
       activeTabId: observable,
       isVisible: observable,
-      sidePaneTabId: observable,
-      sidePaneDropHover: observable,
-      sidePaneEntry: computed,
-      sidePaneTab: computed,
-      sidePaneConversation: computed,
+      sidebarTabIds: observable,
+      activeSidebarTabId: observable,
+      resolvedSidebarTabs: computed,
+      activeSidebarConversation: computed,
       resolvedActiveTabId: computed,
       activeDescriptor: computed,
       activeConversation: computed,
@@ -250,9 +250,9 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
       setNextTabActive: action,
       setPreviousTabActive: action,
       setTabActiveIndex: action,
-      moveTabToSidePane: action,
-      moveSidePaneTabBack: action,
-      setSidePaneDropHover: action,
+      moveTabToSidebar: action,
+      moveSidebarTabBack: action,
+      setActiveSidebarTab: action,
       setVisible: action,
       updateRenderer: action,
       setImageContent: action,
@@ -291,11 +291,15 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
       })
     );
 
-    // The side pane conversation is always visible alongside the active tab.
+    // The selected sidebar-pinned conversation is visible alongside the active tab.
     this.disposers.push(
       autorun(() => {
-        if (this.isVisible && this.sidePaneConversation && !this.sidePaneConversation.seen) {
-          this.sidePaneConversation.markSeen();
+        if (
+          this.isVisible &&
+          this.activeSidebarConversation &&
+          !this.activeSidebarConversation.seen
+        ) {
+          this.activeSidebarConversation.markSeen();
         }
       })
     );
@@ -325,7 +329,7 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
   get resolvedActiveTabId(): string | undefined {
     if (
       this.activeTabId &&
-      this.activeTabId !== this.sidePaneTabId &&
+      !this.sidebarTabIds.includes(this.activeTabId) &&
       this.entries.has(this.activeTabId)
     ) {
       return this.activeTabId;
@@ -333,17 +337,20 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
     return this.tabOrder[0];
   }
 
-  get sidePaneEntry(): TabEntry | undefined {
-    return this.sidePaneTabId ? this.entries.get(this.sidePaneTabId) : undefined;
+  /** Sidebar-pinned tabs resolved for the sidebar strip, in pin order. */
+  get resolvedSidebarTabs(): ResolvedTab[] {
+    const result: ResolvedTab[] = [];
+    for (const id of this.sidebarTabIds) {
+      const entry = this.entries.get(id);
+      if (!entry) continue;
+      const resolved = this._resolveTab(entry, this.activeSidebarTabId === id);
+      if (resolved) result.push(resolved);
+    }
+    return result;
   }
 
-  get sidePaneTab(): ResolvedTab | undefined {
-    const entry = this.sidePaneEntry;
-    return entry ? this._resolveTab(entry, false) : undefined;
-  }
-
-  get sidePaneConversation(): ConversationStore | undefined {
-    const entry = this.sidePaneEntry;
+  get activeSidebarConversation(): ConversationStore | undefined {
+    const entry = this.activeSidebarTabId ? this.entries.get(this.activeSidebarTabId) : undefined;
     if (entry?.kind !== 'conversation') return undefined;
     return this.conversations.conversations.get(entry.conversationId);
   }
@@ -454,9 +461,19 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
       const descriptor = this._describeTab(entry);
       if (descriptor) tabs.push(descriptor);
     }
-    const sideEntry = this.sidePaneEntry;
-    const sidePaneTab = sideEntry ? this._describeTab(sideEntry) : undefined;
-    return { tabs, activeTabId: this.activeTabId, sidePaneTab };
+    const sidebarTabs: TabDescriptor[] = [];
+    for (const id of this.sidebarTabIds) {
+      const entry = this.entries.get(id);
+      if (!entry) continue;
+      const descriptor = this._describeTab(entry);
+      if (descriptor) sidebarTabs.push(descriptor);
+    }
+    return {
+      tabs,
+      activeTabId: this.activeTabId,
+      sidebarTabs,
+      activeSidebarTabId: this.activeSidebarTabId,
+    };
   }
 
   // ---------------------------------------------------------------------------
@@ -760,41 +777,54 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
   }
 
   // ---------------------------------------------------------------------------
-  // Actions — side pane
+  // Actions — sidebar-pinned tabs
   // ---------------------------------------------------------------------------
 
   /**
-   * Move a tab from the strip into the right side pane. The side pane holds a
-   * single tab; if it is already occupied, the previous occupant returns to the
-   * strip in the departing tab's slot (swap, never lost).
+   * Move a tab from the strip into the sidebar strip (appended) and select it
+   * there. Pinned tabs accumulate — closing one returns it to the strip.
    */
-  moveTabToSidePane(tabId: string): void {
+  moveTabToSidebar(tabId: string): void {
     const entry = this.entries.get(tabId);
-    if (!entry || entry.kind === 'overview' || this.sidePaneTabId === tabId) return;
+    if (!entry || entry.kind === 'overview' || this.sidebarTabIds.includes(tabId)) return;
     // Pinning aside is a deliberate act — never keep preview semantics.
     entry.isPreview = false;
-    const idx = this.tabOrder.indexOf(tabId);
-    const prev = this.sidePaneTabId;
     removeTabId(this, tabId);
-    if (prev && this.entries.has(prev)) {
-      const insertAt = idx === -1 ? this.tabOrder.length : Math.min(idx, this.tabOrder.length);
-      this.tabOrder.splice(insertAt, 0, prev);
+    this.sidebarTabIds.push(tabId);
+    this.activeSidebarTabId = tabId;
+    // The entity changes HOST (main area → sidebar) without its new container
+    // resizing, so mounted terminals must re-measure explicitly.
+    scheduleTerminalRelayout();
+  }
+
+  /** Move a sidebar-pinned tab back to the end of the strip and activate it. */
+  moveSidebarTabBack(tabId: string): void {
+    if (!this._unpinSidebarTab(tabId)) return;
+    if (!this.entries.has(tabId)) return;
+    addTabId(this, tabId);
+    this.activeTabId = tabId;
+  }
+
+  /** Select a pinned tab in the sidebar strip; undefined yields to the builtin panels. */
+  setActiveSidebarTab(tabId: string | undefined): void {
+    this.activeSidebarTabId = tabId && this.sidebarTabIds.includes(tabId) ? tabId : undefined;
+  }
+
+  /** Remove a tab from the pinned list, fixing selection. Returns true when it was pinned. */
+  private _unpinSidebarTab(tabId: string): boolean {
+    const idx = this.sidebarTabIds.indexOf(tabId);
+    if (idx === -1) return false;
+    this.sidebarTabIds.splice(idx, 1);
+    if (this.activeSidebarTabId === tabId) {
+      // Fall to the neighboring pin so the sidebar doesn't snap back to a
+      // builtin panel while other pins remain.
+      this.activeSidebarTabId = this.sidebarTabIds[idx] ?? this.sidebarTabIds[idx - 1];
     }
-    this.sidePaneTabId = tabId;
-  }
-
-  /** Move the side pane tab back to the end of the strip and activate it. */
-  moveSidePaneTabBack(): void {
-    const id = this.sidePaneTabId;
-    if (!id) return;
-    this.sidePaneTabId = undefined;
-    if (!this.entries.has(id)) return;
-    addTabId(this, id);
-    this.activeTabId = id;
-  }
-
-  setSidePaneDropHover(hovering: boolean): void {
-    this.sidePaneDropHover = hovering;
+    // Covers every unpin path (close chip, reclaim-on-activate, tab removal):
+    // the entity returns to the main area whose container size didn't change,
+    // so mounted terminals must re-measure explicitly.
+    scheduleTerminalRelayout();
+    return true;
   }
 
   // ---------------------------------------------------------------------------
@@ -847,16 +877,22 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
     if (snapshot.tabs) {
       this.entries.clear();
       this.tabOrder = [];
-      this.sidePaneTabId = undefined;
+      this.sidebarTabIds = [];
+      this.activeSidebarTabId = undefined;
       for (const t of snapshot.tabs) {
         const entry = this._entryFromDescriptor(t);
         this.entries.set(entry.tabId, entry);
         this.tabOrder.push(entry.tabId);
       }
-      if (snapshot.sidePaneTab) {
-        const entry = this._entryFromDescriptor(snapshot.sidePaneTab);
+      // Legacy single side-pane slot migrates into the pinned list.
+      const pinned = snapshot.sidebarTabs ?? (snapshot.sidePaneTab ? [snapshot.sidePaneTab] : []);
+      for (const t of pinned) {
+        const entry = this._entryFromDescriptor(t);
         this.entries.set(entry.tabId, entry);
-        this.sidePaneTabId = entry.tabId;
+        this.sidebarTabIds.push(entry.tabId);
+      }
+      if (snapshot.activeSidebarTabId && this.sidebarTabIds.includes(snapshot.activeSidebarTabId)) {
+        this.activeSidebarTabId = snapshot.activeSidebarTabId;
       }
     }
     this._ensureOverviewTab();
@@ -893,24 +929,21 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
   // Private helpers
   // ---------------------------------------------------------------------------
 
-  /** All tab ids that hold a live entry: the strip order plus the side pane tab. */
+  /** All tab ids that hold a live entry: the strip order plus the sidebar pins. */
   private *_allTabIds(): Iterable<string> {
     yield* this.tabOrder;
-    if (this.sidePaneTabId) yield this.sidePaneTabId;
+    yield* this.sidebarTabIds;
   }
 
   /**
-   * Activate an already-open tab found by an open* dedupe lookup. A tab living
-   * in the side pane is already visible — activating it in the strip would
-   * render it twice, so the active tab is left untouched in that case.
+   * Activate an already-open tab found by an open* dedupe lookup. Activating a
+   * sidebar-pinned tab (list click / top-level route replay) means "show it in
+   * the MAIN area" — reclaim it, otherwise resolvedActiveTabId skips it and
+   * silently falls back to the overview while every upstream step looks
+   * successful.
    */
   private _activateExisting(tabId: string): void {
-    if (tabId === this.sidePaneTabId) {
-      // The entry lives in the side pane slot. Activating it (list click /
-      // top-level route replay) means "show it in the MAIN area" — reclaim it,
-      // otherwise resolvedActiveTabId skips it and silently falls back to the
-      // overview while every upstream step looks successful.
-      this.sidePaneTabId = undefined;
+    if (this._unpinSidebarTab(tabId)) {
       addTabId(this, tabId);
     }
     this.activeTabId = tabId;
@@ -1068,7 +1101,7 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
     if (entry.kind === 'conversation') {
       this.lastClosedConversationId = entry.conversationId;
     }
-    if (this.sidePaneTabId === id) this.sidePaneTabId = undefined;
+    this._unpinSidebarTab(id);
     this.entries.delete(id);
     removeTabId(this, id);
   }

@@ -18,7 +18,7 @@ import {
 import { copyTaskLink } from '@renderer/features/tasks/components/task-context-menu';
 import type { ProvisionedTask } from '@renderer/features/tasks/stores/task';
 import { asProvisioned, getTaskStore } from '@renderer/features/tasks/stores/task-selectors';
-import { openTaskTabInWindow } from '@renderer/features/tasks/tabs/task-tab-strip';
+import { openTaskTabInWindow } from '@renderer/features/tasks/tabs/tab-meta';
 import { FilePathMenuItems, type FilePathTarget } from '@renderer/lib/components/file-path-actions';
 import { appState } from '@renderer/lib/stores/app-state';
 import type { AppTabEntry } from '@renderer/lib/stores/app-tabs-store';
@@ -105,9 +105,9 @@ function buildTaskSections(
   if (provisioned) {
     placement.push(
       <ContextMenuItem
-        key="side-pane"
+        key="sidebar-pin"
         className="whitespace-nowrap"
-        onClick={() => void moveTopTabToSidePane(tab, provisioned, target)}
+        onClick={() => void moveTopTabToSidebar(tab, provisioned, target)}
       >
         <PanelRight className="size-4" />
         {t('tasks.tabs.openInSidePane')}
@@ -206,12 +206,12 @@ function buildTaskSections(
 }
 
 /**
- * Moves a top-level task tab into the task's right side pane: ensures the
- * internal tab entry exists (replaying the target below the bridge), hands it
- * to the side pane, then closes the top-level tab — the entity now lives in
- * the pane, not the strip.
+ * Pins a top-level task tab into the task sidebar strip: ensures the internal
+ * tab entry exists (replaying the target below the bridge), moves it into the
+ * sidebar, then closes the top-level tab — the entity now lives in the
+ * sidebar, not the strip.
  */
-async function moveTopTabToSidePane(
+async function moveTopTabToSidebar(
   tab: AppTabEntry,
   provisioned: ProvisionedTask,
   target: TaskWindowTabTarget
@@ -232,19 +232,9 @@ async function moveTopTabToSidePane(
   }
   if (!internalId) return;
 
-  const { projectId, taskId } = tab.params as { projectId: string; taskId: string };
-
-  // Single pane slot app-wide: a pin from another task returns that task's
-  // previous occupant to its internal store before taking over the column.
-  const previous = appState.sidePane.attachment;
-  if (previous && (previous.projectId !== projectId || previous.taskId !== taskId)) {
-    asProvisioned(
-      getTaskStore(previous.projectId, previous.taskId)
-    )?.taskView.tabManager.moveSidePaneTabBack();
-  }
-
-  tabManager.moveTabToSidePane(internalId);
-  appState.sidePane.show(projectId, taskId);
+  tabManager.moveTabToSidebar(internalId);
+  // Pinning while the sidebar is hidden would silently swallow the tab.
+  provisioned.taskView.setSidebarCollapsed(false);
   appState.appTabs.closeTab(tab.id);
 }
 

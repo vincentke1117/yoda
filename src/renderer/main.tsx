@@ -4,12 +4,7 @@ import { ErrorBoundary } from './lib/components/error-boundary';
 import './lib/i18n';
 import './index.css';
 import 'devicon/devicon.min.css';
-import type {
-  AppSidePaneSnapshot,
-  AppTabsSnapshot,
-  NavigationSnapshot,
-  SidebarSnapshot,
-} from '@shared/view-state';
+import type { AppTabsSnapshot, NavigationSnapshot, SidebarSnapshot } from '@shared/view-state';
 import { setupAppCommandProvider } from '@renderer/lib/commands/app-commands';
 import { setupViewCommandProvider } from '@renderer/lib/commands/registry';
 import { wireCommitHistoryInvalidation } from '@renderer/lib/commit-history-invalidation';
@@ -84,10 +79,6 @@ async function bootstrap() {
     const appTabsResult = (allViewState as Record<string, unknown>)?.appTabs;
     if (appTabsResult) {
       appState.appTabs.restoreSnapshot(appTabsResult as Partial<AppTabsSnapshot>);
-    }
-    const sidePaneResult = (allViewState as Record<string, unknown>)?.appSidePane;
-    if (sidePaneResult) {
-      appState.sidePane.restoreSnapshot(sidePaneResult as Partial<AppSidePaneSnapshot>);
     }
   }
   appState.appTabs.start();
