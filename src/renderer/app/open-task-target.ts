@@ -4,9 +4,13 @@ import type { TaskWindowTabTarget, TaskWindowTarget } from '@shared/task-window'
 import type { ActiveFile } from '@shared/view-state';
 import type { ProvisionedTask } from '@renderer/features/tasks/stores/task';
 import { asProvisioned, getTaskStore } from '@renderer/features/tasks/stores/task-selectors';
-import { OVERVIEW_TAB_ID } from '@renderer/features/tasks/tabs/tab-manager-store';
+import {
+  OVERVIEW_TAB_ID,
+  type TabManagerStore,
+} from '@renderer/features/tasks/tabs/tab-manager-store';
 import type { NavigateFnTyped } from '@renderer/lib/layout/navigation-provider';
 import { appState } from '@renderer/lib/stores/app-state';
+import type { AppTabEntry } from '@renderer/lib/stores/app-tabs-store';
 import { log } from '@renderer/utils/logger';
 
 /**
@@ -16,6 +20,52 @@ import { log } from '@renderer/utils/logger';
  */
 export function openTaskTopTab(projectId: string, taskId: string, tab: TaskWindowTabTarget): void {
   appState.appTabs.openTab('task', { projectId, taskId, tab });
+}
+
+/**
+ * Closes a top-level tab; for task tabs, the matching internal TabManagerStore
+ * entry closes first. Without the internal close the entity would stay the
+ * task's active internal tab, and the scope-entry restore in TopLevelTabSync
+ * would resurrect the top-level tab in the same frame (the × appearing dead).
+ * Non-task tabs fall through to a plain top-level close.
+ */
+export function closeTaskTopTab(tab: AppTabEntry): void {
+  const { projectId, taskId } = tab.params as { projectId?: string; taskId?: string };
+  const target = tab.params.tab as TaskWindowTabTarget | undefined;
+  if (tab.viewId === 'task' && projectId && taskId && target && target.kind !== 'overview') {
+    const tabManager = asProvisioned(getTaskStore(projectId, taskId))?.taskView.tabManager;
+    const internalId = tabManager ? findInternalTabId(tabManager, target) : undefined;
+    if (tabManager && internalId) tabManager.closeTab(internalId);
+  }
+  appState.appTabs.closeTab(tab.id);
+}
+
+/** Resolves a top-level tab target to the matching internal tab id, if open. */
+export function findInternalTabId(
+  tabManager: TabManagerStore,
+  target: TaskWindowTabTarget
+): string | undefined {
+  for (const resolved of tabManager.resolvedTabs) {
+    if (
+      target.kind === 'conversation' &&
+      resolved.kind === 'conversation' &&
+      resolved.conversationId === target.conversationId
+    ) {
+      return resolved.tabId;
+    }
+    if (target.kind === 'file' && resolved.kind === 'file' && resolved.path === target.path) {
+      return resolved.tabId;
+    }
+    if (
+      target.kind === 'diff' &&
+      resolved.kind === 'diff' &&
+      resolved.path === target.path &&
+      resolved.diffGroup === target.diffGroup
+    ) {
+      return resolved.tabId;
+    }
+  }
+  return undefined;
 }
 
 export type OpenTaskTarget = Pick<

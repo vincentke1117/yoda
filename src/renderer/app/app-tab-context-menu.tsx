@@ -4,7 +4,11 @@ import { Fragment, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { buildTaskDeepLink } from '@shared/deep-links';
 import type { TaskWindowTabTarget } from '@shared/task-window';
-import { openProvisionedTaskTab } from '@renderer/app/open-task-target';
+import {
+  closeTaskTopTab,
+  findInternalTabId,
+  openProvisionedTaskTab,
+} from '@renderer/app/open-task-target';
 import { getProjectStore } from '@renderer/features/projects/stores/project-selectors';
 import { useAppSettingsKey } from '@renderer/features/settings/use-app-settings-key';
 import {
@@ -14,7 +18,6 @@ import {
 import { copyTaskLink } from '@renderer/features/tasks/components/task-context-menu';
 import type { ProvisionedTask } from '@renderer/features/tasks/stores/task';
 import { asProvisioned, getTaskStore } from '@renderer/features/tasks/stores/task-selectors';
-import type { TabManagerStore } from '@renderer/features/tasks/tabs/tab-manager-store';
 import { openTaskTabInWindow } from '@renderer/features/tasks/tabs/task-tab-strip';
 import { FilePathMenuItems, type FilePathTarget } from '@renderer/lib/components/file-path-actions';
 import { appState } from '@renderer/lib/stores/app-state';
@@ -117,7 +120,7 @@ function buildTaskSections(
       className="whitespace-nowrap"
       onClick={() => {
         void openTaskTabInWindow({ projectId, taskId, tab: target }).then((opened) => {
-          if (opened) appState.appTabs.closeTab(tab.id);
+          if (opened) closeTaskTopTab(tab);
         });
       }}
     >
@@ -243,33 +246,6 @@ async function moveTopTabToSidePane(
   tabManager.moveTabToSidePane(internalId);
   appState.sidePane.show(projectId, taskId);
   appState.appTabs.closeTab(tab.id);
-}
-
-function findInternalTabId(
-  tabManager: TabManagerStore,
-  target: TaskWindowTabTarget
-): string | undefined {
-  for (const resolved of tabManager.resolvedTabs) {
-    if (
-      target.kind === 'conversation' &&
-      resolved.kind === 'conversation' &&
-      resolved.conversationId === target.conversationId
-    ) {
-      return resolved.tabId;
-    }
-    if (target.kind === 'file' && resolved.kind === 'file' && resolved.path === target.path) {
-      return resolved.tabId;
-    }
-    if (
-      target.kind === 'diff' &&
-      resolved.kind === 'diff' &&
-      resolved.path === target.path &&
-      resolved.diffGroup === target.diffGroup
-    ) {
-      return resolved.tabId;
-    }
-  }
-  return undefined;
 }
 
 // ---------------------------------------------------------------------------

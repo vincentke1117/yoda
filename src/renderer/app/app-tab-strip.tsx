@@ -21,6 +21,7 @@ import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TaskWindowTabTarget } from '@shared/task-window';
 import { AppTabContextMenu } from '@renderer/app/app-tab-context-menu';
+import { closeTaskTopTab } from '@renderer/app/open-task-target';
 import type { ViewId } from '@renderer/app/view-registry';
 import { formatConversationTitleForDisplay } from '@renderer/features/tasks/conversations/conversation-title-utils';
 import { asProvisioned, getTaskStore } from '@renderer/features/tasks/stores/task-selectors';
@@ -90,7 +91,7 @@ export const AppTabStrip = observer(function AppTabStrip() {
             closeable={!isIndexTab(tab)}
             closeLabel={t('appTabs.closeTab')}
             onSelect={() => appState.appTabs.activateTab(tab.id)}
-            onClose={() => appState.appTabs.closeTab(tab.id)}
+            onClose={() => closeTaskTopTab(tab)}
           />
         </AppTabContextMenu>
       ))}
