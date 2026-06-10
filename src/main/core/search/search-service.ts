@@ -8,6 +8,7 @@ import type {
   SearchItemKind,
 } from '@shared/search';
 import type { Task } from '@shared/tasks';
+import { DEFAULT_WORKSPACE_ID } from '@shared/workspaces';
 import { db, sqlite } from '@main/db/client';
 import { projects, tasks } from '@main/db/schema';
 import { log } from '@main/lib/logger';
@@ -37,6 +38,30 @@ type RecentConversationRow = {
   project_id: string;
   task_id: string;
 };
+
+/**
+ * Effective sidebar workspace of a task: its own assignment (projectless Drafts)
+ * falls back to the owning project's. Mirrors the renderer's sidebar filtering.
+ */
+const TASK_WORKSPACE_EXPR = 'COALESCE(wt.sidebar_workspace_id, wp.workspace_id)';
+
+/**
+ * SQL condition (with bind params) filtering `search_index` task rows to a
+ * sidebar workspace. DEFAULT_WORKSPACE_ID means "no workspace assigned".
+ * Non-task rows pass through untouched.
+ */
+function workspaceTaskCondition(workspaceId: string): { sql: string; params: string[] } {
+  const cmp =
+    workspaceId === DEFAULT_WORKSPACE_ID
+      ? `${TASK_WORKSPACE_EXPR} IS NULL`
+      : `${TASK_WORKSPACE_EXPR} = ?`;
+  return {
+    sql: `(item_type != 'task' OR EXISTS (
+       SELECT 1 FROM tasks wt LEFT JOIN projects wp ON wt.project_id = wp.id
+       WHERE wt.id = search_index.item_id AND ${cmp}))`,
+    params: workspaceId === DEFAULT_WORKSPACE_ID ? [] : [workspaceId],
+  };
+}
 
 function toSearchItem(r: FtsRow): SearchItem {
   return {
@@ -179,54 +204,36 @@ class SearchService {
     const trigramOk = terms.length > 0 && terms.every((t) => t.length >= 3);
     // Conversations are only matched within the current task, mirroring search().
     const convScoped = kind === 'conversation' && context?.taskId;
+    const ws =
+      kind === 'task' && context?.workspaceId ? workspaceTaskCondition(context.workspaceId) : null;
+
+    const extraSql = `${convScoped ? 'AND task_id = ?' : ''} ${ws ? `AND ${ws.sql}` : ''}`;
+    const extraParams = [...(convScoped ? [context!.taskId!] : []), ...(ws ? ws.params : [])];
 
     try {
       if (trigramOk) {
         const ftsQuery = terms.map((t) => `"${t.replace(/"/g, '""')}"`).join(' AND ');
-        const rows = (
-          convScoped
-            ? sqlite
-                .prepare(
-                  `SELECT item_type, item_id, project_id, task_id, archived, title, bm25(search_index) AS rank
-                   FROM search_index
-                   WHERE search_index MATCH ? AND item_type = ? AND task_id = ?
-                   ORDER BY archived, rank LIMIT ? OFFSET ?`
-                )
-                .all(ftsQuery, kind, context!.taskId, limit, offset)
-            : sqlite
-                .prepare(
-                  `SELECT item_type, item_id, project_id, task_id, archived, title, bm25(search_index) AS rank
-                   FROM search_index
-                   WHERE search_index MATCH ? AND item_type = ?
-                   ORDER BY archived, rank LIMIT ? OFFSET ?`
-                )
-                .all(ftsQuery, kind, limit, offset)
-        ) as FtsRow[];
+        const rows = sqlite
+          .prepare(
+            `SELECT item_type, item_id, project_id, task_id, archived, title, bm25(search_index) AS rank
+             FROM search_index
+             WHERE search_index MATCH ? AND item_type = ? ${extraSql}
+             ORDER BY archived, rank LIMIT ? OFFSET ?`
+          )
+          .all(ftsQuery, kind, ...extraParams, limit, offset) as FtsRow[];
         return rows.map(toSearchItem);
       }
 
       const like = `%${query.replace(/[\\%_]/g, '\\$&')}%`;
-      const rows = (
-        convScoped
-          ? sqlite
-              .prepare(
-                `SELECT item_type, item_id, project_id, task_id, archived, title, 0 AS rank
-                 FROM search_index
-                 WHERE (title LIKE ? ESCAPE '\\' OR keywords LIKE ? ESCAPE '\\')
-                   AND item_type = ? AND task_id = ?
-                 ORDER BY archived LIMIT ? OFFSET ?`
-              )
-              .all(like, like, kind, context!.taskId, limit, offset)
-          : sqlite
-              .prepare(
-                `SELECT item_type, item_id, project_id, task_id, archived, title, 0 AS rank
-                 FROM search_index
-                 WHERE (title LIKE ? ESCAPE '\\' OR keywords LIKE ? ESCAPE '\\')
-                   AND item_type = ?
-                 ORDER BY archived LIMIT ? OFFSET ?`
-              )
-              .all(like, like, kind, limit, offset)
-      ) as FtsRow[];
+      const rows = sqlite
+        .prepare(
+          `SELECT item_type, item_id, project_id, task_id, archived, title, 0 AS rank
+           FROM search_index
+           WHERE (title LIKE ? ESCAPE '\\' OR keywords LIKE ? ESCAPE '\\')
+             AND item_type = ? ${extraSql}
+           ORDER BY archived LIMIT ? OFFSET ?`
+        )
+        .all(like, like, kind, ...extraParams, limit, offset) as FtsRow[];
       return rows.map(toSearchItem);
     } catch (e) {
       log.warn('SearchService: searchKindPaged failed', { kind, error: String(e) });
@@ -239,31 +246,27 @@ class SearchService {
     // Quote each term so trigram treats it as a literal substring and FTS5
     // operators inside the term (-, ", *) are not interpreted as query syntax.
     const ftsQuery = terms.map((t) => `"${t.replace(/"/g, '""')}"`).join(' AND ');
+    const convSql = context?.taskId
+      ? `AND (item_type != 'conversation' OR task_id = ?)`
+      : `AND item_type != 'conversation'`;
+    const ws = context?.workspaceId ? workspaceTaskCondition(context.workspaceId) : null;
 
     try {
-      const rows = (
-        context?.taskId
-          ? sqlite
-              .prepare(
-                `SELECT item_type, item_id, project_id, task_id, archived, title, bm25(search_index) AS rank
-                 FROM search_index
-                 WHERE search_index MATCH ?
-                   AND (item_type != 'conversation' OR task_id = ?)
-                 ORDER BY archived, rank
-                 LIMIT 30`
-              )
-              .all(ftsQuery, context.taskId)
-          : sqlite
-              .prepare(
-                `SELECT item_type, item_id, project_id, task_id, archived, title, bm25(search_index) AS rank
-                 FROM search_index
-                 WHERE search_index MATCH ?
-                   AND item_type != 'conversation'
-                 ORDER BY archived, rank
-                 LIMIT 30`
-              )
-              .all(ftsQuery)
-      ) as FtsRow[];
+      const rows = sqlite
+        .prepare(
+          `SELECT item_type, item_id, project_id, task_id, archived, title, bm25(search_index) AS rank
+           FROM search_index
+           WHERE search_index MATCH ?
+             ${convSql}
+             ${ws ? `AND ${ws.sql}` : ''}
+           ORDER BY archived, rank
+           LIMIT 30`
+        )
+        .all(
+          ftsQuery,
+          ...(context?.taskId ? [context.taskId] : []),
+          ...(ws ? ws.params : [])
+        ) as FtsRow[];
       return rows.map(toSearchItem);
     } catch (e) {
       log.warn('SearchService: FTS query failed', { terms, error: String(e) });
@@ -274,30 +277,27 @@ class SearchService {
   /** Substring fallback for short (1-2 char) queries the trigram index can't serve. */
   private searchLike(needle: string, context?: CommandPaletteQuery['context']): SearchItem[] {
     const like = `%${needle.replace(/[\\%_]/g, '\\$&')}%`;
+    const convSql = context?.taskId
+      ? `AND (item_type != 'conversation' OR task_id = ?)`
+      : `AND item_type != 'conversation'`;
+    const ws = context?.workspaceId ? workspaceTaskCondition(context.workspaceId) : null;
     try {
-      const rows = (
-        context?.taskId
-          ? sqlite
-              .prepare(
-                `SELECT item_type, item_id, project_id, task_id, archived, title, 0 AS rank
-                 FROM search_index
-                 WHERE (title LIKE ? ESCAPE '\\' OR keywords LIKE ? ESCAPE '\\')
-                   AND (item_type != 'conversation' OR task_id = ?)
-                 ORDER BY archived
-                 LIMIT 30`
-              )
-              .all(like, like, context.taskId)
-          : sqlite
-              .prepare(
-                `SELECT item_type, item_id, project_id, task_id, archived, title, 0 AS rank
-                 FROM search_index
-                 WHERE (title LIKE ? ESCAPE '\\' OR keywords LIKE ? ESCAPE '\\')
-                   AND item_type != 'conversation'
-                 ORDER BY archived
-                 LIMIT 30`
-              )
-              .all(like, like)
-      ) as FtsRow[];
+      const rows = sqlite
+        .prepare(
+          `SELECT item_type, item_id, project_id, task_id, archived, title, 0 AS rank
+           FROM search_index
+           WHERE (title LIKE ? ESCAPE '\\' OR keywords LIKE ? ESCAPE '\\')
+             ${convSql}
+             ${ws ? `AND ${ws.sql}` : ''}
+           ORDER BY archived
+           LIMIT 30`
+        )
+        .all(
+          like,
+          like,
+          ...(context?.taskId ? [context.taskId] : []),
+          ...(ws ? ws.params : [])
+        ) as FtsRow[];
       return rows.map(toSearchItem);
     } catch (e) {
       log.warn('SearchService: LIKE query failed', { needle, error: String(e) });
@@ -335,26 +335,37 @@ class SearchService {
     limit = 10,
     offset = 0
   ): SearchItem[] {
-    const taskRows = (
-      context?.projectId
-        ? sqlite
-            .prepare(
-              `SELECT t.id, t.name, t.project_id, t.archived_at, t.last_interacted_at
-               FROM tasks t
-               WHERE t.project_id = ?
-               ORDER BY (t.archived_at IS NOT NULL), t.last_interacted_at DESC
-               LIMIT ? OFFSET ?`
-            )
-            .all(context.projectId, limit, offset)
-        : sqlite
-            .prepare(
-              `SELECT t.id, t.name, t.project_id, t.archived_at, t.last_interacted_at
-               FROM tasks t
-               ORDER BY (t.archived_at IS NOT NULL), t.last_interacted_at DESC
-               LIMIT ? OFFSET ?`
-            )
-            .all(limit, offset)
-    ) as (RecentTaskRow & { archived_at: string | null; last_interacted_at: string | null })[];
+    const conditions: string[] = [];
+    const params: (string | number)[] = [];
+    if (context?.projectId) {
+      conditions.push('t.project_id = ?');
+      params.push(context.projectId);
+    }
+    if (context?.workspaceId) {
+      // Effective workspace mirrors workspaceTaskCondition: task assignment
+      // (projectless Drafts) falls back to the owning project's.
+      const effective = 'COALESCE(t.sidebar_workspace_id, p.workspace_id)';
+      if (context.workspaceId === DEFAULT_WORKSPACE_ID) {
+        conditions.push(`${effective} IS NULL`);
+      } else {
+        conditions.push(`${effective} = ?`);
+        params.push(context.workspaceId);
+      }
+    }
+
+    const taskRows = sqlite
+      .prepare(
+        `SELECT t.id, t.name, t.project_id, t.archived_at, t.last_interacted_at
+         FROM tasks t
+         LEFT JOIN projects p ON t.project_id = p.id
+         ${conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''}
+         ORDER BY (t.archived_at IS NOT NULL), t.last_interacted_at DESC
+         LIMIT ? OFFSET ?`
+      )
+      .all(...params, limit, offset) as (RecentTaskRow & {
+      archived_at: string | null;
+      last_interacted_at: string | null;
+    })[];
 
     return taskRows.map((r) => ({
       kind: 'task' as const,

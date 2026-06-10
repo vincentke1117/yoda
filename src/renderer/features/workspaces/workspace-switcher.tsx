@@ -1,4 +1,4 @@
-import { Check, FolderInput, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Check, Layers, Pencil, Plus, Trash2 } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
@@ -97,7 +97,7 @@ export const WorkspaceSwitcher = observer(function WorkspaceSwitcher() {
         )}
         aria-label={t('workspaces.switch')}
       >
-        <FolderInput className="h-4 w-4 shrink-0" />
+        <Layers className="h-4 w-4 shrink-0" />
         <span className="truncate">{currentName}</span>
         <WorkspaceCounts counts={activeCounts} />
       </DropdownMenuTrigger>

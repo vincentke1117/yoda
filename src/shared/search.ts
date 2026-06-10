@@ -19,6 +19,11 @@ export interface CommandPaletteQuery {
   context?: {
     projectId?: string;
     taskId?: string;
+    /**
+     * Restricts task results to a sidebar workspace (`in:workspace`). A real
+     * workspace id, or DEFAULT_WORKSPACE_ID for tasks with no workspace assigned.
+     */
+    workspaceId?: string;
   };
 }
 
@@ -31,6 +36,8 @@ export interface CommandPalettePagedQuery {
   context?: {
     projectId?: string;
     taskId?: string;
+    /** See CommandPaletteQuery.context.workspaceId. */
+    workspaceId?: string;
   };
 }
 

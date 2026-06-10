@@ -1,3 +1,4 @@
+import { ChevronRight } from 'lucide-react';
 import * as React from 'react';
 import { MicroLabel } from '@renderer/lib/ui/label';
 import { cn } from '@renderer/utils/utils';
@@ -128,14 +129,20 @@ export function SidebarSectionHeader({
   rightSlot,
 }: SidebarSectionHeaderProps) {
   return (
-    <div className="flex items-center pl-5 pr-4 h-8">
+    <div className="group/section-header flex items-center pl-5 pr-4 h-8">
       <button
         type="button"
         onClick={onToggle}
         aria-expanded={!collapsed}
-        className="flex items-center flex-1 min-w-0 text-left hover:text-foreground-tertiary"
+        className="flex items-center gap-1 flex-1 min-w-0 text-left hover:text-foreground-tertiary"
       >
         <MicroLabel className="text-foreground-tertiary-passive cursor-pointer">{label}</MicroLabel>
+        <ChevronRight
+          className={cn(
+            'size-3 shrink-0 text-foreground-tertiary-passive opacity-0 transition-all duration-150 group-hover/section-header:opacity-100',
+            !collapsed && 'rotate-90'
+          )}
+        />
       </button>
       {rightSlot}
     </div>

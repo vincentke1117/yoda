@@ -6,6 +6,8 @@ export type ParsedQuery = {
   text: string;
   /** The active scope — at most one qualifier is honoured. */
   scope: SearchScope;
+  /** True when `in:workspace` is present — restricts results to the active workspace. */
+  workspace: boolean;
 };
 
 /** A scope qualifier (`in:<name>`) and its matching regex. */
@@ -16,15 +18,19 @@ const QUALIFIERS: Record<Exclude<SearchScope, 'all'>, RegExp> = {
   actions: /(^|\s)in:actions(?=\s|$)/i,
 };
 
+/** Orthogonal modifier — combines with any scope rather than competing with them. */
+const WORKSPACE_QUALIFIER = /(^|\s)in:workspace(?=\s|$)/i;
+
 const SCOPE_ORDER: Exclude<SearchScope, 'all'>[] = ['sessions', 'tasks', 'projects', 'actions'];
 
 export function parseQuery(raw: string): ParsedQuery {
   // First-matching qualifier wins; the scope chips are mutually exclusive.
   const scope = SCOPE_ORDER.find((name) => QUALIFIERS[name].test(raw)) ?? 'all';
-  let text = raw;
+  const workspace = WORKSPACE_QUALIFIER.test(raw);
+  let text = raw.replace(WORKSPACE_QUALIFIER, ' ');
   for (const re of Object.values(QUALIFIERS)) text = text.replace(re, ' ');
   text = text.replace(/\s+/g, ' ').trim();
-  return { text, scope };
+  return { text, scope, workspace };
 }
 
 /** Rewrites the query so it carries exactly the given scope (or none for `all`). */

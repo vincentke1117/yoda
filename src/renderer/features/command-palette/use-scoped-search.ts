@@ -11,11 +11,11 @@ const PAGE_SIZE = 25;
 export function useScopedSearch(
   kind: SearchItemKind,
   query: string,
-  context: { projectId?: string; taskId?: string },
+  context: { projectId?: string; taskId?: string; workspaceId?: string },
   enabled: boolean
 ) {
   const q = useInfiniteQuery({
-    queryKey: ['cmdk-paged', kind, query, context.projectId, context.taskId],
+    queryKey: ['cmdk-paged', kind, query, context.projectId, context.taskId, context.workspaceId],
     queryFn: ({ pageParam }) =>
       rpc.search.commandPalettePaged({
         query,

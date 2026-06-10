@@ -1,18 +1,25 @@
 import {
   AlertTriangle,
   Bot,
+  ChartColumn,
   Cloud,
+  Download,
   FolderInput,
+  MessageSquareShare,
   Puzzle,
+  RefreshCw,
   Search,
+  Settings,
   Smartphone,
   SquarePen,
+  Tag,
   Terminal,
   Workflow,
 } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { PRODUCT_NAME } from '@shared/app-identity';
 import {
   useSkillValidationIssues,
   type SkillValidationIssueEntry,
@@ -25,7 +32,7 @@ import {
   useWorkspaceSlots,
 } from '@renderer/lib/layout/navigation-provider';
 import { useShowModal } from '@renderer/lib/modal/modal-provider';
-import { sidebarStore } from '@renderer/lib/stores/app-state';
+import { appState, sidebarStore } from '@renderer/lib/stores/app-state';
 import { ShortcutHint } from '@renderer/lib/ui/shortcut-hint';
 import { cn } from '@renderer/utils/utils';
 import { type SidebarNavItemKey } from './nav-items';
@@ -53,7 +60,10 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
   const { currentView } = useWorkspaceSlots();
 
   const showCommandPalette = useShowModal('commandPaletteModal');
-  const showMobileConnection = useShowModal('mobileConnectionModal');
+  const showFeedbackModal = useShowModal('feedbackModal');
+  const update = appState.update;
+  const versionLabel = `V${update.currentVersion || '...'}`;
+  const productVersionLabel = `${PRODUCT_NAME} ${versionLabel}`;
   const { count: skillIssueCount, firstIssue: firstSkillIssue } = useSkillValidationIssues();
   const { isDragOver, onDragOver, onDragEnter, onDragLeave, onDrop } = useSidebarDrop();
 
@@ -98,6 +108,18 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
       >
         <Cloud className="h-5 w-5 sm:h-4 sm:w-4" />
         {t('sidebar.maas')}
+      </SidebarMenuButton>
+    ),
+    usage: (
+      <SidebarMenuButton
+        key="usage"
+        isActive={isCurrentView(currentView, 'usage')}
+        onClick={() => navigate('usage')}
+        aria-label={t('sidebar.usage')}
+        className="w-full justify-start"
+      >
+        <ChartColumn className="h-5 w-5 sm:h-4 sm:w-4" />
+        {t('sidebar.usage')}
       </SidebarMenuButton>
     ),
     agents: (
@@ -170,7 +192,8 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
     mobile: (
       <SidebarMenuButton
         key="mobile"
-        onClick={() => showMobileConnection({})}
+        isActive={isCurrentView(currentView, 'mobile')}
+        onClick={() => navigate('mobile')}
         aria-label={t('sidebar.mobile')}
         className="w-full justify-start"
       >
@@ -203,6 +226,11 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
       <SidebarContainer className="w-full border-r-0 flex-1 min-h-0">
         <SidebarFooter className="mt-0 border-t-0 px-2 pb-0">
           <SidebarMenu>
+            <div className="group/ws flex h-8 items-center gap-1 rounded-lg pr-1 text-foreground-tertiary-muted transition-colors hover:bg-background-tertiary-1 hover:text-foreground-tertiary has-data-popup-open:bg-background-tertiary-1 has-data-popup-open:text-foreground-tertiary">
+              <WorkspaceSwitcher />
+              <ProjectsSettingsMenu />
+            </div>
+            <div className="my-1 border-t border-border" />
             <SidebarMenuButton
               isActive={isCurrentView(currentView, 'home')}
               onClick={handleNewTask}
@@ -233,10 +261,6 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
               <ShortcutHint settingsKey="commandPaletteTasks" />
             </SidebarMenuButton>
             <div className="my-1 border-t border-border" />
-            <div className="group/ws flex h-8 items-center gap-1 rounded-lg pr-1 text-foreground-tertiary-muted transition-colors hover:bg-background-tertiary-1 hover:text-foreground-tertiary has-data-popup-open:bg-background-tertiary-1 has-data-popup-open:text-foreground-tertiary">
-              <WorkspaceSwitcher />
-              <ProjectsSettingsMenu />
-            </div>
           </SidebarMenu>
         </SidebarFooter>
         <SidebarContent className="flex flex-col overflow-y-auto">
@@ -253,13 +277,72 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
           </SidebarGroup>
           <SidebarProjectlessTaskList />
         </SidebarContent>
-        <div className="flex flex-col border-t border-border">
-          <SidebarMenu className="px-2 pt-2">
-            {sidebarStore.orderedNavItems
-              .filter((key) => !sidebarStore.isNavItemHidden(key))
-              .map((key) => navItems[key])}
-          </SidebarMenu>
-          <div className="border-t border-border">
+        <div className="flex flex-col">
+          {!sidebarStore.navSectionHidden && (
+            <SidebarMenu className="px-2 pt-2">
+              {sidebarStore.orderedNavItems
+                .filter((key) => !sidebarStore.isNavItemHidden(key))
+                .map((key) => navItems[key])}
+              <div className="my-1 border-t border-border" />
+              <SidebarMenuButton
+                isActive={isCurrentView(currentView, 'settings')}
+                onClick={() => navigate('settings')}
+                aria-label={t('sidebar.settings')}
+                className="w-full justify-start"
+              >
+                <Settings className="h-5 w-5 sm:h-4 sm:w-4" />
+                {t('sidebar.settings')}
+              </SidebarMenuButton>
+              <SidebarMenuButton
+                onClick={() => showFeedbackModal({})}
+                aria-label={t('sidebar.giveFeedback')}
+                className="w-full justify-start"
+              >
+                <MessageSquareShare className="h-5 w-5 sm:h-4 sm:w-4" />
+                {t('sidebar.giveFeedback')}
+              </SidebarMenuButton>
+              {update.hasUpdate ? (
+                <SidebarMenuButton
+                  onClick={() => navigate('settings', { tab: 'general' })}
+                  aria-label={t('sidebar.update')}
+                  className="w-full justify-between text-accent"
+                >
+                  <span className="flex items-center gap-2 min-w-0">
+                    <Download className="h-5 w-5 sm:h-4 sm:w-4 shrink-0" />
+                    <span className="truncate">{t('sidebar.update')}</span>
+                  </span>
+                  {update.availableVersion && (
+                    <span className="ml-auto font-mono text-xs">V{update.availableVersion}</span>
+                  )}
+                </SidebarMenuButton>
+              ) : (
+                <SidebarMenuButton
+                  onClick={() => void update.check({ notify: true })}
+                  disabled={update.state.status === 'checking'}
+                  aria-label={`${productVersionLabel} ${t('settings.update.checkForUpdates')}`}
+                  className="group/version w-full justify-between"
+                >
+                  <span className="flex items-center gap-2 min-w-0">
+                    <Tag className="h-5 w-5 sm:h-4 sm:w-4 shrink-0" />
+                    <span className="truncate">{PRODUCT_NAME}</span>
+                  </span>
+                  <span className="ml-auto grid shrink-0 items-center justify-items-end text-xs text-foreground-tertiary-passive">
+                    <span className="col-start-1 row-start-1 font-mono text-[10px] transition-opacity group-hover/version:opacity-0">
+                      {versionLabel}
+                    </span>
+                    <span className="col-start-1 row-start-1 flex items-center gap-1 whitespace-nowrap opacity-0 transition-opacity group-hover/version:opacity-100">
+                      {update.state.status === 'checking' && (
+                        <RefreshCw className="h-3 w-3 animate-spin" />
+                      )}
+                      {t('settings.update.checkForUpdates')}
+                    </span>
+                  </span>
+                </SidebarMenuButton>
+              )}
+            </SidebarMenu>
+          )}
+          <div>
+            <div className="mx-2 my-1 border-t border-border" />
             <SidebarAccount />
           </div>
         </div>

@@ -12,6 +12,7 @@ import {
 import React, { useDeferredValue, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { SearchItem } from '@shared/search';
+import { ALL_WORKSPACES_ID } from '@shared/workspaces';
 import { asMounted, getProjectStore } from '@renderer/features/projects/stores/project-selectors';
 import {
   getTaskManagerStore,
@@ -24,6 +25,7 @@ import { APP_SHORTCUTS } from '@renderer/lib/hooks/useKeyboardShortcuts';
 import { rpc } from '@renderer/lib/ipc';
 import { useNavigate } from '@renderer/lib/layout/navigation-provider';
 import { type BaseModalProps } from '@renderer/lib/modal/modal-provider';
+import { workspaceStore } from '@renderer/lib/stores/app-state';
 import { RelativeTime } from '@renderer/lib/ui/relative-time';
 import { cn } from '@renderer/utils/utils';
 import { InfiniteGroup } from './infinite-group';
@@ -143,6 +145,12 @@ export function CommandPaletteModal({
   const inProjectsScope = scope === 'projects';
   const inActionsScope = scope === 'actions';
   const searchText = parsed.text;
+  // `in:workspace` restricts task results to the active sidebar workspace.
+  // A no-op on the "All" tab, where nothing is filtered out anyway.
+  const workspaceId =
+    parsed.workspace && workspaceStore.activeWorkspaceId !== ALL_WORKSPACES_ID
+      ? workspaceStore.activeWorkspaceId
+      : undefined;
 
   const mounted = projectId ? asMounted(getProjectStore(projectId)) : undefined;
   const projectPath = mounted?.data.type === 'local' ? mounted.data.path : null;
@@ -162,11 +170,11 @@ export function CommandPaletteModal({
   const recentsTaskId = isRecents ? undefined : taskId;
 
   const { data: dbResults = [] } = useQuery({
-    queryKey: ['cmdk-search', searchText, recentsProjectId, recentsTaskId],
+    queryKey: ['cmdk-search', searchText, recentsProjectId, recentsTaskId, workspaceId],
     queryFn: () =>
       rpc.search.commandPalette({
         query: searchText,
-        context: { projectId: recentsProjectId, taskId: recentsTaskId },
+        context: { projectId: recentsProjectId, taskId: recentsTaskId, workspaceId },
       }),
     staleTime: 0,
     placeholderData: (prev) => prev,
@@ -176,7 +184,7 @@ export function CommandPaletteModal({
   // Scoped views (one chip selected) paginate a single kind with infinite scroll.
   // Recents are global (consistent with the "all" view); typed search keeps
   // project/task context.
-  const scopedCtx = { projectId: recentsProjectId, taskId: recentsTaskId };
+  const scopedCtx = { projectId: recentsProjectId, taskId: recentsTaskId, workspaceId };
   const tasksPage = useScopedSearch('task', searchText, scopedCtx, inTasksScope);
   const projectsPage = useScopedSearch('project', searchText, scopedCtx, inProjectsScope);
   // Sessions always shows ALL conversations across tasks (never scoped to the
