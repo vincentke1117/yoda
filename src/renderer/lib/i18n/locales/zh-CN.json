@@ -1535,7 +1535,37 @@
         "otherSkill": "触发了 {{skill}}",
         "timeout": "超时",
         "error": "失败"
-      }
+      },
+      "reviseAction": "AI 优化描述",
+      "reviseInstruction": "优化这个技能 frontmatter 里的 description，让下列触发测试通过。只修改 description 字段，不要改动正文和其他字段。失败的测试：",
+      "failExpectedTrigger": "期望触发，但未触发",
+      "failExpectedNoTrigger": "期望不触发，但被触发了"
+    },
+    "revise": {
+      "action": "AI 修改",
+      "title": "AI 修改 {{skill}}",
+      "hint": "描述要对这个技能做的修改（description、正文皆可）。AI 生成修改后会先展示 diff，确认后才写回 SKILL.md。",
+      "instructionPlaceholder": "例如：让 description 更精准地描述触发场景；把正文里的步骤合并成 3 步…",
+      "generate": "生成修改",
+      "generating": "生成中…",
+      "back": "返回修改指令",
+      "apply": "应用修改",
+      "applied": "已写回 SKILL.md",
+      "failed": "生成修改失败",
+      "applyFailed": "写回失败",
+      "noChanges": "AI 没有产生任何改动。"
+    },
+    "fork": {
+      "action": "创建副本",
+      "title": "基于 {{skill}} 创建副本",
+      "nameLabel": "新技能名称",
+      "instructionLabel": "AI 改造指令（可选）",
+      "instructionPlaceholder": "留空则原样复制。填写后 AI 会按指令改写副本，例如：改成面向 Python 项目的版本…",
+      "create": "创建",
+      "creating": "创建中…",
+      "created": "已创建 {{skill}}",
+      "failed": "创建副本失败",
+      "reviseFailed": "副本已创建，但 AI 改造失败，请手动编辑"
     }
   },
   "agentManager": {

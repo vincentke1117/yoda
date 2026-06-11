@@ -1,9 +1,20 @@
-import { CheckCircle2, Loader2, Play, Plus, Square, Wand2, X, XCircle } from 'lucide-react';
+import {
+  CheckCircle2,
+  Loader2,
+  Play,
+  Plus,
+  Sparkles,
+  Square,
+  Wand2,
+  X,
+  XCircle,
+} from 'lucide-react';
 import React, { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { SkillTriggerRunResult } from '@shared/skills/types';
 import { useToast } from '@renderer/lib/hooks/use-toast';
 import { rpc } from '@renderer/lib/ipc';
+import { useShowModal } from '@renderer/lib/modal/modal-provider';
 import { Button } from '@renderer/lib/ui/button';
 import { Input } from '@renderer/lib/ui/input';
 import { cn } from '@renderer/utils/utils';
@@ -115,6 +126,32 @@ export const SkillTriggerTest: React.FC<{ skillId: string }> = ({ skillId }) => 
   const passed = finished.filter((row) => rowPassed(row) === true);
   const hasRunnableQuery = rows.some((row) => row.text.trim());
 
+  // Only genuine trigger mismatches feed the description optimizer — errors
+  // and timeouts are infrastructure noise, not description problems.
+  const showReviseModal = useShowModal('reviseSkillModal');
+  const mismatches = finished.filter(
+    (row) =>
+      rowPassed(row) === false &&
+      (row.result?.status === 'triggered' ||
+        row.result?.status === 'not-triggered' ||
+        row.result?.status === 'other-skill')
+  );
+
+  const handleReviseDescription = useCallback(() => {
+    const instruction = [
+      t('skills.triggerTest.reviseInstruction'),
+      ...mismatches.map(
+        (row) =>
+          `- "${row.text.trim()}" — ${
+            row.shouldTrigger
+              ? t('skills.triggerTest.failExpectedTrigger')
+              : t('skills.triggerTest.failExpectedNoTrigger')
+          }`
+      ),
+    ].join('\n');
+    showReviseModal({ skillId, presetInstruction: instruction });
+  }, [mismatches, showReviseModal, skillId, t]);
+
   return (
     <div className="space-y-2">
       <p className="text-[11px] leading-relaxed text-muted-foreground">
@@ -184,6 +221,12 @@ export const SkillTriggerTest: React.FC<{ skillId: string }> = ({ skillId }) => 
           <span className="text-[11px] text-muted-foreground">
             {t('skills.triggerTest.summary', { passed: passed.length, total: finished.length })}
           </span>
+        )}
+        {mismatches.length > 0 && !isRunning && (
+          <Button variant="outline" size="sm" onClick={handleReviseDescription}>
+            <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+            {t('skills.triggerTest.reviseAction')}
+          </Button>
         )}
       </div>
     </div>

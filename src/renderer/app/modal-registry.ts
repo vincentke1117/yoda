@@ -11,6 +11,8 @@ import { ManageQuickActionsModal } from '@renderer/features/projects/components/
 import { RenameProjectModal } from '@renderer/features/projects/components/rename-project-modal';
 import { ShareProjectConfigModal } from '@renderer/features/projects/components/settings-view/share-project-config-modal';
 import { CreateSkillModal } from '@renderer/features/skills/components/CreateSkillModal';
+import { ForkSkillModal } from '@renderer/features/skills/components/ForkSkillModal';
+import { ReviseSkillModal } from '@renderer/features/skills/components/ReviseSkillModal';
 import { AddRemoteModal } from '@renderer/features/tasks/add-remote-modal';
 import { ArchiveTaskWithNoteModal } from '@renderer/features/tasks/archive-task-with-note-modal';
 import { ArchivedSessionTranscriptModal } from '@renderer/features/tasks/archived-session-transcript-modal';
@@ -63,6 +65,8 @@ export const modalRegistry = {
   feedbackModal: createModal(FeedbackModal),
   mcpServerModal: createModal(McpModal),
   createSkillModal: createModal(CreateSkillModal),
+  reviseSkillModal: createModal(ReviseSkillModal, { size: 'lg' }),
+  forkSkillModal: createModal(ForkSkillModal, { size: 'sm' }),
   agentEditModal: createModal(AgentEditModal, { size: 'lg' }),
   conflictDialog: createModal(ConflictDialog, { size: 'sm' }),
   createPrModal: createModal(CreatePrModal, { size: 'md' }),

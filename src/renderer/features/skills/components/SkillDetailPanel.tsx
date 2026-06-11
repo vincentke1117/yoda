@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   Copy,
+  CopyPlus,
   ExternalLink,
   FileText,
   FolderOpen,
@@ -26,6 +27,8 @@ import {
 } from '@renderer/lib/components/file-path-actions';
 import { useToast } from '@renderer/lib/hooks/use-toast';
 import { rpc } from '@renderer/lib/ipc';
+import { useShowModal } from '@renderer/lib/modal/modal-provider';
+import { appState } from '@renderer/lib/stores/app-state';
 import { Badge } from '@renderer/lib/ui/badge';
 import { Button } from '@renderer/lib/ui/button';
 import { ConfirmButton } from '@renderer/lib/ui/confirm-button';
@@ -229,6 +232,24 @@ const SkillDetailContent: React.FC<{
     if (skill.localPath) void rpc.app.openIn({ app: 'terminal', path: skill.localPath });
   }, [skill.localPath]);
 
+  const showReviseModal = useShowModal('reviseSkillModal');
+  const showForkModal = useShowModal('forkSkillModal');
+
+  const handleRevise = useCallback(() => {
+    showReviseModal({ skillId: skill.id });
+  }, [showReviseModal, skill.id]);
+
+  const handleFork = useCallback(() => {
+    showForkModal({
+      skillId: skill.id,
+      onSuccess: ({ skillId: newSkillId }) => {
+        appState.appTabs.openTab('skill', { skillId: newSkillId, displayName: newSkillId });
+      },
+    });
+  }, [showForkModal, skill.id]);
+
+  const canEditLocally = skill.installed && Boolean(skill.localPath);
+
   const handleOpenSource = useCallback(() => {
     if (skill.sourceUrl) void rpc.app.openExternal(skill.sourceUrl);
   }, [skill.sourceUrl]);
@@ -301,6 +322,23 @@ const SkillDetailContent: React.FC<{
             {skill.installed ? (
               <>
                 <div className="hidden items-center gap-2 @xl:flex">
+                  {canEditLocally && (
+                    <>
+                      <Button variant="outline" size="sm" onClick={handleRevise}>
+                        <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                        {t('skills.revise.action')}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="icon-sm"
+                        onClick={handleFork}
+                        aria-label={t('skills.fork.action')}
+                        title={t('skills.fork.action')}
+                      >
+                        <CopyPlus className="h-3.5 w-3.5" />
+                      </Button>
+                    </>
+                  )}
                   <Button
                     variant="outline"
                     size="sm"
@@ -345,6 +383,19 @@ const SkillDetailContent: React.FC<{
                     }
                   />
                   <DropdownMenuContent align="end" className="min-w-40">
+                    {canEditLocally && (
+                      <>
+                        <DropdownMenuItem onClick={handleRevise}>
+                          <Sparkles />
+                          {t('skills.revise.action')}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={handleFork}>
+                          <CopyPlus />
+                          {t('skills.fork.action')}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                      </>
+                    )}
                     <DropdownMenuItem
                       disabled={isProcessing}
                       onClick={() => void handleSetDisabled(!skill.disabled)}

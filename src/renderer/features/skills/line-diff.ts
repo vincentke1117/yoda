@@ -45,7 +45,7 @@ export function diffLines(before: string, after: string): DiffLine[] {
 
 /**
  * Collapse long unchanged runs to `context` lines around each change,
- * inserting `{ kind: 'context', text: null }` gap markers.
+ * inserting `gap` marker rows where lines were elided.
  */
 export interface DiffHunkLine {
   kind: 'context' | 'added' | 'removed' | 'gap';
@@ -56,7 +56,11 @@ export function collapseContext(lines: DiffLine[], context = 3): DiffHunkLine[] 
   const keep = new Array<boolean>(lines.length).fill(false);
   lines.forEach((line, index) => {
     if (line.kind === 'context') return;
-    for (let k = Math.max(0, index - context); k <= Math.min(lines.length - 1, index + context); k += 1) {
+    for (
+      let k = Math.max(0, index - context);
+      k <= Math.min(lines.length - 1, index + context);
+      k += 1
+    ) {
       keep[k] = true;
     }
   });

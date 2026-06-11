@@ -1535,7 +1535,37 @@
         "otherSkill": "Triggered {{skill}}",
         "timeout": "Timed out",
         "error": "Error"
-      }
+      },
+      "reviseAction": "Optimize description",
+      "reviseInstruction": "Improve the description field in this skill's frontmatter so the failing trigger tests below pass. Change only the description field; keep the body and other fields untouched. Failing tests:",
+      "failExpectedTrigger": "expected to trigger, but did not",
+      "failExpectedNoTrigger": "expected not to trigger, but it did"
+    },
+    "revise": {
+      "action": "AI revise",
+      "title": "AI revise {{skill}}",
+      "hint": "Describe the change you want (description or body). The AI proposes a revision, shows a diff, and only writes SKILL.md after you confirm.",
+      "instructionPlaceholder": "e.g. Make the description state the trigger scenarios precisely; merge the body steps into 3…",
+      "generate": "Generate revision",
+      "generating": "Generating…",
+      "back": "Back to instruction",
+      "apply": "Apply revision",
+      "applied": "SKILL.md updated",
+      "failed": "Failed to generate revision",
+      "applyFailed": "Failed to write the file",
+      "noChanges": "The AI produced no changes."
+    },
+    "fork": {
+      "action": "Duplicate",
+      "title": "Duplicate {{skill}}",
+      "nameLabel": "New skill name",
+      "instructionLabel": "AI transform instruction (optional)",
+      "instructionPlaceholder": "Leave empty for a plain copy. With an instruction the AI rewrites the copy, e.g. adapt it for Python projects…",
+      "create": "Create",
+      "creating": "Creating…",
+      "created": "Created {{skill}}",
+      "failed": "Failed to duplicate the skill",
+      "reviseFailed": "Copy created, but the AI transform failed — edit it manually"
     }
   },
   "agentManager": {
