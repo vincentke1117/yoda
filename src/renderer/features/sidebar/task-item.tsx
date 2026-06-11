@@ -152,9 +152,14 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
     provisionedTask?.workspace.git.branchName ??
     ('taskBranch' in task.data ? task.data.taskBranch : undefined);
   const branchDisplay = sidebarStore.taskBranchDisplay;
-  // Compact mode drops the namespace prefix (`yoda/feat-x` → `feat-x`): the
-  // basename carries the distinguishing part, the prefix is shared noise.
-  const compactBranchName = branchName?.slice(branchName.lastIndexOf('/') + 1);
+  // Generated branches end in a 5-char random suffix (createTask:
+  // Math.random().toString(36).slice(2, 7)). The slug before it mirrors the
+  // task name shown right next to it, so compact mode renders only that
+  // suffix — the one part that distinguishes the branch. Non-generated
+  // branches (Linear, custom) fall back to their basename.
+  const compactBranchName = branchName
+    ? (/-([0-9a-z]{5})$/.exec(branchName)?.[1] ?? branchName.slice(branchName.lastIndexOf('/') + 1))
+    : undefined;
   const workspace = provisionedTask?.workspace;
   const handleReconnect =
     workspace?.connectionState != null ? () => workspace.reconnect() : undefined;
@@ -384,6 +389,7 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
               )}
               {branchDisplay === 'compact' && compactBranchName && (
                 <span
+                  title={branchName}
                   className={cn(
                     'shrink-0 truncate max-w-[7rem] font-mono text-[10px] text-foreground-tertiary-passive',
                     (isBootstrapping || isArchiving) && 'opacity-40'
