@@ -8,6 +8,7 @@ import { useAppSettingsKey } from '@renderer/features/settings/use-app-settings-
 
 export interface TaskSettingsModel {
   autoGenerateName: boolean;
+  initTaskNameFromSession: boolean;
   namingAgentId: string;
   summaryAgentId: string;
   summaryLanguage: 'app' | 'prompt' | 'en' | 'zh-CN';
@@ -29,6 +30,7 @@ export interface TaskSettingsModel {
   isFieldOverridden: (
     field:
       | 'autoGenerateName'
+      | 'initTaskNameFromSession'
       | 'namingAgentId'
       | 'namingModel'
       | 'namingLanguage'
@@ -38,6 +40,7 @@ export interface TaskSettingsModel {
       | 'autoTrustWorktrees'
   ) => boolean;
   updateAutoGenerateName: (next: boolean) => void;
+  updateInitTaskNameFromSession: (next: boolean) => void;
   updateNamingAgentId: (next: string) => void;
   updateSummaryAgentId: (next: string) => void;
   updateSummaryLanguage: (next: 'app' | 'prompt' | 'en' | 'zh-CN') => void;
@@ -48,6 +51,7 @@ export interface TaskSettingsModel {
   updateNamingRequestTimeoutMs: (next: number) => void;
   updateAutoTrustWorktrees: (next: boolean) => void;
   resetAutoGenerateName: () => void;
+  resetInitTaskNameFromSession: () => void;
   resetAutoTrustWorktrees: () => void;
 }
 
@@ -63,6 +67,7 @@ export function useTaskSettings(): TaskSettingsModel {
 
   return {
     autoGenerateName: tasks?.autoGenerateName ?? false,
+    initTaskNameFromSession: tasks?.initTaskNameFromSession ?? true,
     namingAgentId: tasks?.namingAgentId ?? '',
     summaryAgentId: tasks?.summaryAgentId ?? '',
     summaryLanguage: tasks?.summaryLanguage ?? 'app',
@@ -83,6 +88,7 @@ export function useTaskSettings(): TaskSettingsModel {
     saving,
     isFieldOverridden,
     updateAutoGenerateName: (next) => update({ autoGenerateName: next }),
+    updateInitTaskNameFromSession: (next) => update({ initTaskNameFromSession: next }),
     updateNamingAgentId: (next) => update({ namingAgentId: next }),
     updateSummaryAgentId: (next) => update({ summaryAgentId: next }),
     updateSummaryLanguage: (next) => update({ summaryLanguage: next }),
@@ -109,6 +115,7 @@ export function useTaskSettings(): TaskSettingsModel {
       update({ namingRequestTimeoutMs: normalizeTaskNamingTimeoutMs(next) }),
     updateAutoTrustWorktrees: (next) => update({ autoTrustWorktrees: next }),
     resetAutoGenerateName: () => resetField('autoGenerateName'),
+    resetInitTaskNameFromSession: () => resetField('initTaskNameFromSession'),
     resetAutoTrustWorktrees: () => resetField('autoTrustWorktrees'),
   };
 }

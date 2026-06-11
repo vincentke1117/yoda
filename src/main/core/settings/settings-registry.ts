@@ -38,6 +38,7 @@ export const SETTINGS_DEFAULTS = {
   }),
   tasks: {
     autoGenerateName: true,
+    initTaskNameFromSession: true,
     namingAgentId: '',
     summaryAgentId: '',
     summaryLanguage: 'app' as const,

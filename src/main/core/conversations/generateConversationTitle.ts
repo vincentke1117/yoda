@@ -6,20 +6,17 @@ import type {
 } from '@shared/conversations';
 import { conversationNamingUpdatedChannel } from '@shared/events/conversationEvents';
 import type { RuntimeId } from '@shared/runtime-registry';
-import { normalizeTaskDisplayName } from '@shared/task-name';
 import type {
   TaskNamingContextSnapshot,
   TaskNamingDebugStage,
   TaskNamingSettings,
   TaskNamingStatus,
 } from '@shared/task-naming';
-import { projectManager } from '@main/core/projects/project-manager';
-import type { ProjectProvider } from '@main/core/projects/project-provider';
 import {
-  buildCommonProjectNamingSources,
   buildDebugTrace,
   buildNamingPromptParts,
   createNamingContextSnapshot,
+  normalizeGeneratedSessionTitle,
   requestAgentNamingPayload,
   resolveNamingRuntime,
   type AgentNamingRuntime,
@@ -36,7 +33,6 @@ import { mapConversationRowToConversation } from './utils';
 const MAX_TRANSCRIPT_CHARS = 6_000;
 const MAX_MESSAGE_CHARS = 1_200;
 const MAX_CONTEXT_MESSAGES = 12;
-const MAX_SESSION_TITLE_CHARS = 48;
 
 const conversationNamingSnapshots = new Map<string, ConversationNamingSnapshot>();
 
@@ -163,7 +159,7 @@ export async function generateConversationTitle(
       model: result.model || null,
     });
 
-    const title = normalizeGeneratedConversationTitle(
+    const title = normalizeGeneratedSessionTitle(
       result.payload.sessionTitle ?? result.payload.title ?? result.payload.taskName
     );
     if (!title) throw new Error('Model did not return a usable session title.');
@@ -276,7 +272,7 @@ async function buildConversationNamingDraft(
   conversationId: string,
   cwd?: string
 ): Promise<ConversationNamingDraft> {
-  const { conversation, projectName, workingDirectory } = await loadConversationForNaming(
+  const { conversation, workingDirectory } = await loadConversationForNaming(
     projectId,
     taskId,
     conversationId,
@@ -290,8 +286,6 @@ async function buildConversationNamingDraft(
   }
   const context = await buildConversationNamingContextSnapshot({
     conversation,
-    project: projectManager.getProject(projectId) ?? null,
-    projectName,
     projectPath: workingDirectory,
     messages,
     settings,
@@ -382,8 +376,6 @@ function promptsToMessages(
 
 async function buildConversationNamingContextSnapshot(input: {
   conversation: Conversation;
-  project: ProjectProvider | null;
-  projectName: string;
   projectPath: string;
   messages: SessionTranscriptMessage[];
   settings: TaskNamingSettings;
@@ -404,17 +396,8 @@ async function buildConversationNamingContextSnapshot(input: {
     });
   }
 
-  sources.push(
-    ...(await buildCommonProjectNamingSources({
-      projectId: input.conversation.projectId,
-      project: input.project,
-      projectName: input.projectName,
-      projectPath: input.projectPath,
-      settings: input.settings,
-      excludeTaskId: input.conversation.taskId,
-    }))
-  );
-
+  // Session naming is session-internal by design: the transcript is the only
+  // source. Project path / README / recent tasks belong to task naming.
   return createNamingContextSnapshot({
     taskId: input.conversation.taskId,
     projectId: input.conversation.projectId,
@@ -424,23 +407,22 @@ async function buildConversationNamingContextSnapshot(input: {
 }
 
 function formatTranscript(messages: SessionTranscriptMessage[]): string {
+  // First message anchors the session's intent, recent messages capture where
+  // it actually went — both matter for a title, the middle rarely does.
+  const selected =
+    messages.length <= MAX_CONTEXT_MESSAGES
+      ? messages
+      : [messages[0], ...messages.slice(-(MAX_CONTEXT_MESSAGES - 1))];
   return clip(
-    messages
-      .slice(-MAX_CONTEXT_MESSAGES)
+    selected
       .map((message, index) => {
         const text = clip(message.text.trim(), MAX_MESSAGE_CHARS);
-        return `${index + 1}. ${message.role.toUpperCase()}: ${text}`;
+        const gapMarker = messages.length > MAX_CONTEXT_MESSAGES && index === 1 ? '[…] ' : '';
+        return `${index + 1}. ${gapMarker}${message.role.toUpperCase()}: ${text}`;
       })
       .join('\n\n'),
     MAX_TRANSCRIPT_CHARS
   );
-}
-
-function normalizeGeneratedConversationTitle(value: unknown): string | undefined {
-  if (typeof value !== 'string') return undefined;
-  const stripped = value.replace(/[\r\n]+/g, ' ').replace(/^["'“”‘’`]+|["'“”‘’`。.!?！？]+$/g, '');
-  const normalized = normalizeTaskDisplayName(stripped);
-  return normalized ? normalized.slice(0, MAX_SESSION_TITLE_CHARS) : undefined;
 }
 
 type ConversationNamingSnapshotInput = {

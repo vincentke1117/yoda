@@ -476,10 +476,12 @@
       "osNotificationsDescription": "当代理需要处理或完成任务时（且 Yoda 未聚焦）显示系统横幅。"
     },
     "tasks": {
-      "autoGenerateName": "自动生成任务名",
-      "autoGenerateNameDescription": "创建新任务时生成可读任务名和专业分支名。",
+      "autoGenerateName": "自动生成会话名",
+      "autoGenerateNameDescription": "会话收到首条 Prompt 后，自动生成可读的会话名。",
+      "initTaskNameFromSession": "基于会话名初始化任务名",
+      "initTaskNameFromSessionDescription": "初始会话生成会话名后，用它初始化任务名；手动命名过的任务不受影响。",
       "namingConfigTitle": "命名",
-      "namingConfigDescription": "用于命名任务的模型、目标语言和上下文来源。",
+      "namingConfigDescription": "用于命名会话与任务的 Agent、目标语言和上下文来源。",
       "summaryConfigTitle": "会话摘要",
       "summaryConfigDescription": "用于生成会话摘要的 Agent。使用其自身的 Runtime 与模型运行，独立于各会话的运行时。",
       "namingAgentLabel": "命名 Agent",

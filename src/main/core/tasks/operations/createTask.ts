@@ -31,7 +31,6 @@ import { resolveTaskBranchName } from '../resolveTaskBranchName';
 import { toStoredBranch } from '../stored-branch';
 import { mapTaskRowToTask } from '../utils/utils';
 import { replaceTaskIssueLinks } from './task-issues';
-import { renameTaskBranchForName } from './taskBranchRename';
 
 function mapProvisionError(error: ProvisionTaskError): CreateTaskError {
   switch (error.type) {
@@ -58,6 +57,15 @@ function branchSeed(strategy: CreateTaskParams['strategy']): string | undefined 
   if (strategy.kind === 'new-branch') return strategy.taskBranch;
   if (strategy.kind === 'from-pull-request') return strategy.taskBranch || strategy.headBranch;
   return undefined;
+}
+
+/**
+ * Short time-based branch seed. Branch names are decoupled from generated
+ * titles: when auto-naming owns the branch, it gets this hash up front instead
+ * of being renamed once the LLM title arrives.
+ */
+function timeBranchSeed(): string {
+  return Date.now().toString(36);
 }
 
 function formatCreateBranchError(error: CreateBranchError): string {
@@ -102,15 +110,13 @@ async function loadTaskRow(taskId: string): Promise<TaskRow | undefined> {
 
 async function applyBackgroundTaskNaming(input: {
   namingPromise: ReturnType<typeof generateTaskNames>;
-  project: ProjectProvider;
   projectId: string;
   taskId: string;
   initialConversationId?: string;
-  initialConversationTitle?: string;
 }): Promise<void> {
   const naming = await input.namingPromise;
   if (!naming.success || !naming.taskName) {
-    log.warn('createTask: background task naming did not produce a task name', {
+    log.warn('createTask: background session naming did not produce a title', {
       taskId: input.taskId,
       projectId: input.projectId,
       success: naming.success,
@@ -118,66 +124,50 @@ async function applyBackgroundTaskNaming(input: {
     });
     return;
   }
+  const sessionTitle = naming.taskName;
 
+  // The generated title belongs to the session: rename the conversation first,
+  // then let the task name follow it. Our title overrides the provider CLI's
+  // interim auto-title ('agent'), but never a manual rename ('user').
+  if (input.initialConversationId) {
+    const [conversation] = await db
+      .select({ titleSource: conversations.titleSource })
+      .from(conversations)
+      .where(eq(conversations.id, input.initialConversationId))
+      .limit(1);
+    if (conversation && conversation.titleSource !== 'user') {
+      await renameConversation(input.initialConversationId, sessionTitle, 'yoda');
+    }
+  }
+
+  const taskSettings = await appSettingsService.get('tasks');
+  if (!taskSettings.initTaskNameFromSession) return;
   const row = await loadTaskRow(input.taskId);
   if (!row) return;
   if (row.isUserNamed) {
-    log.info('createTask: skipping background task naming because task is user named', {
+    log.info('createTask: skipping task-name init because task is user named', {
       taskId: input.taskId,
       projectId: input.projectId,
     });
     return;
   }
 
-  const branchRename = await renameTaskBranchForName({
-    project: input.project,
-    projectId: input.projectId,
-    taskId: input.taskId,
-    oldBranch: row.taskBranch,
-    sourceBranch: row.sourceBranch,
-    displayName: naming.branchName ?? naming.taskName,
-  });
-  if (!branchRename.success) {
-    log.warn('createTask: background task branch rename failed', {
-      taskId: input.taskId,
-      projectId: input.projectId,
-      error: branchRename.error,
-    });
-  }
-
-  const nextBranch = branchRename.success ? (branchRename.data ?? row.taskBranch) : row.taskBranch;
   const [updatedRow] = await db
     .update(tasks)
     .set({
-      name: naming.taskName,
-      taskBranch: nextBranch,
+      name: sessionTitle,
       updatedAt: sql`CURRENT_TIMESTAMP`,
     })
     .where(eq(tasks.id, input.taskId))
     .returning();
-  const task = mapTaskRowToTask(
-    updatedRow ?? { ...row, name: naming.taskName, taskBranch: nextBranch }
-  );
+  const task = mapTaskRowToTask(updatedRow ?? { ...row, name: sessionTitle });
   taskEvents._emit('task:updated', task);
   events.emit(taskRenamedChannel, {
     taskId: input.taskId,
     projectId: input.projectId,
-    name: naming.taskName,
+    name: sessionTitle,
     isUserNamed: task.isUserNamed,
   });
-
-  if (input.initialConversationId && input.initialConversationTitle) {
-    const [conversation] = await db
-      .select({ titleSource: conversations.titleSource })
-      .from(conversations)
-      .where(eq(conversations.id, input.initialConversationId))
-      .limit(1);
-    // Our generated title overrides the provider CLI's interim auto-title
-    // ('agent'), but never a manual rename ('user').
-    if (conversation && conversation.titleSource !== 'user') {
-      await renameConversation(input.initialConversationId, naming.taskName, 'yoda');
-    }
-  }
 }
 
 async function setupBranch(options: {
@@ -418,21 +408,26 @@ export async function createTask(
   taskEvents._emit('task:created', initialTask);
 
   const displayName = params.name;
-  const branchSeedName = branchSeed(strategy);
   // Only auto-name when there is real content to name from. A blank submit has no
   // initial prompt, so naming would otherwise run against the random placeholder
   // name and surface that slug as the "First user prompt" — the user can trigger
   // naming manually later once the task has content.
   const hasInitialPrompt = Boolean(params.initialConversation?.initialPrompt?.trim());
   const shouldGenerate = taskSettings.autoGenerateName && hasInitialPrompt;
-  const includeBranchName = shouldGenerate && createTaskStrategyRequiresBranchName(strategy);
+  // Where the LLM used to own the branch name, a time hash now takes its place
+  // up front — no post-naming branch rename.
+  const branchSeedName =
+    shouldGenerate && createTaskStrategyRequiresBranchName(strategy)
+      ? timeBranchSeed()
+      : branchSeed(strategy);
   const namingPromise = shouldGenerate
     ? generateTaskNames({
         taskId: params.id,
         projectId: params.projectId,
         project,
         params: { ...params, sourceBranch: dbSourceBranch },
-        includeBranchName,
+        includeBranchName: false,
+        target: 'session',
       })
     : null;
   if (namingPromise) {
@@ -519,11 +514,9 @@ export async function createTask(
   if (namingPromise) {
     void applyBackgroundTaskNaming({
       namingPromise,
-      project,
       projectId: params.projectId,
       taskId: params.id,
       initialConversationId: params.initialConversation?.id,
-      initialConversationTitle: params.initialConversation?.title,
     });
   }
 
@@ -621,41 +614,16 @@ export async function retryTaskSetup(
     dbSourceBranch = { type: 'local', branch: params.strategy.headBranch };
   }
 
-  let displayName = row.name;
-  let nextBranchSeed = manualBranchName?.trim() || branchSeed(params.strategy);
-  const includeBranchName =
-    !manualBranchName?.trim() &&
-    taskSettings.autoGenerateName &&
-    createTaskStrategyRequiresBranchName(params.strategy);
-  if (taskSettings.autoGenerateName && !manualBranchName?.trim()) {
-    const naming = await generateTaskNames({
-      taskId,
-      projectId,
-      project,
-      params,
-      includeBranchName,
-    });
-    if (naming.success) {
-      if (naming.taskName) {
-        displayName = naming.taskName;
-        events.emit(taskRenamedChannel, {
-          taskId,
-          projectId,
-          name: displayName,
-          isUserNamed: false,
-        });
-      }
-      if (naming.branchName) nextBranchSeed = naming.branchName;
-    } else if (includeBranchName) {
-      const failedRow = await markSetupFailure(taskId, 'naming_failed', naming.message, row);
-      return ok({
-        task: mapTaskRowToTask(failedRow),
-        warning: { type: 'task-naming-failed', message: naming.message, blocksProvision: true },
-      });
-    } else {
-      warning = { type: 'task-naming-failed', message: naming.message, blocksProvision: false };
-    }
-  }
+  const displayName = row.name;
+  const hasInitialPrompt = Boolean(params.initialConversation?.initialPrompt?.trim());
+  const shouldGenerate = taskSettings.autoGenerateName && hasInitialPrompt;
+  // Where the LLM used to own the branch name, a time hash now takes its place
+  // up front; naming runs in the background and never blocks provisioning.
+  const nextBranchSeed =
+    manualBranchName?.trim() ||
+    (taskSettings.autoGenerateName && createTaskStrategyRequiresBranchName(params.strategy)
+      ? timeBranchSeed()
+      : branchSeed(params.strategy));
 
   const branchSetup = await setupBranch({
     project,
@@ -717,6 +685,22 @@ export async function retryTaskSetup(
         runtimeAutoApproveDefaults,
         params.initialConversation.runtime
       ),
+    });
+  }
+
+  if (shouldGenerate) {
+    void applyBackgroundTaskNaming({
+      namingPromise: generateTaskNames({
+        taskId,
+        projectId,
+        project,
+        params: { ...params, sourceBranch: dbSourceBranch },
+        includeBranchName: false,
+        target: 'session',
+      }),
+      projectId,
+      taskId,
+      initialConversationId: params.initialConversation?.id,
     });
   }
 

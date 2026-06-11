@@ -52,6 +52,8 @@ const summaryContextSchema = z.object(
 
 export const taskSettingsSchema = z.object({
   autoGenerateName: z.boolean(),
+  /** Initialize the task name from the initial session's auto-generated title. */
+  initTaskNameFromSession: z.boolean().catch(true),
   /** Agent that drives task naming. Empty = use the built-in naming Agent. */
   namingAgentId: z.string().catch(''),
   /** Agent that drives session-summary generation. Empty = built-in summary Agent. */

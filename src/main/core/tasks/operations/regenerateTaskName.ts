@@ -10,7 +10,6 @@ import { tasks } from '@main/db/schema';
 import { events } from '@main/lib/events';
 import { fromStoredBranch } from '../stored-branch';
 import { mapTaskRowToTask } from '../utils/utils';
-import { renameTaskBranchForName } from './taskBranchRename';
 
 export async function regenerateTaskName(
   projectId: string,
@@ -60,12 +59,15 @@ export async function regenerateTaskName(
   });
 
   const namingStartedAt = Date.now();
+  // Aggregate task naming: the task's session titles + summaries are the
+  // primary signal (target 'task'); the branch is never renamed along the way.
   const naming = await generateTaskNames({
     taskId,
     projectId,
     project,
     params,
-    includeBranchName: true,
+    includeBranchName: false,
+    target: 'task',
   });
   console.log('[DEBUG][regenerate-task-name] generateTaskNames result:', {
     projectId,
@@ -87,38 +89,11 @@ export async function regenerateTaskName(
   }
 
   const displayName = naming.taskName;
-  const branchStartedAt = Date.now();
-  const branchRename = await renameTaskBranchForName({
-    project,
-    projectId,
-    taskId,
-    oldBranch: row.taskBranch,
-    sourceBranch: row.sourceBranch,
-    displayName: naming.branchName ?? displayName,
-  });
-  console.log('[DEBUG][regenerate-task-name] branch rename result:', {
-    projectId,
-    taskId,
-    success: branchRename.success,
-    durationMs: Date.now() - branchStartedAt,
-    nextBranch: branchRename.success ? branchRename.data : undefined,
-    error: branchRename.success ? undefined : branchRename.error,
-  });
-  if (!branchRename.success) {
-    console.log('[DEBUG][regenerate-task-name] exit branch rename failed:', {
-      projectId,
-      taskId,
-      totalDurationMs: Date.now() - startedAt,
-    });
-    return ok(mapTaskRowToTask(row));
-  }
-
   const updateStartedAt = Date.now();
   const [updatedRow] = await db
     .update(tasks)
     .set({
       name: displayName,
-      taskBranch: branchRename.data ?? row.taskBranch,
       updatedAt: sql`CURRENT_TIMESTAMP`,
     })
     .where(eq(tasks.id, taskId))
