@@ -113,8 +113,18 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
   // name offset), so the hover-only chevron aligns with the project row's chevron
   // column instead of pushing the name right.
   const hasRootToggle = hasChildren && treeDepth === 0;
+  const branchDisplay = sidebarStore.taskBranchDisplay;
+  // Compact branch mode reserves the pl-8 icon column on EVERY variant (the
+  // suffix renders inside it), so labels line up at the same 32px offset
+  // across the projects list, the pinned strip, and the Drafts list.
   const taskIndentClass =
-    rowVariant === 'underProject' ? (hasRootToggle ? undefined : 'pl-8') : 'pl-2';
+    rowVariant === 'underProject'
+      ? hasRootToggle
+        ? undefined
+        : 'pl-8'
+      : branchDisplay === 'compact'
+        ? 'pl-8'
+        : 'pl-2';
 
   const handleProvision = () => {
     if (task.state !== 'unprovisioned' || task.phase !== 'idle') return;
@@ -151,7 +161,6 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
   const branchName =
     provisionedTask?.workspace.git.branchName ??
     ('taskBranch' in task.data ? task.data.taskBranch : undefined);
-  const branchDisplay = sidebarStore.taskBranchDisplay;
   // Generated branches end in a 5-char random suffix (createTask:
   // Math.random().toString(36).slice(2, 7)). The slug before it mirrors the
   // task name shown right next to it, so compact mode renders only that
@@ -368,44 +377,29 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
               })}
             </span>
           )}
-          {branchDisplay === 'compact' &&
-            (rowVariant === 'underProject' ? (
-              // The suffix lives INSIDE the pl-8 icon column (same column as
-              // the project rows' chevron/icon), absolutely positioned so the
-              // label keeps its exact indent and stays aligned across rows.
-              // Parent rows reuse that column for the hover collapse chevron —
-              // the suffix fades out as the chevron fades in.
-              compactBranchName && (
-                <span
-                  title={branchName}
-                  className={cn(
-                    'pointer-events-none absolute inset-y-0 left-0 flex w-8 items-center justify-center overflow-hidden',
-                    hasRootToggle && 'transition-opacity duration-150 group-hover/row:opacity-0',
-                    (isBootstrapping || isArchiving) && 'opacity-40'
-                  )}
-                >
-                  {/* 8px keeps 5 mono chars (~24px) comfortably inside the
-                      32px column — at 9px the text nearly touched the row's
-                      rounded background edge. */}
-                  <span className="truncate font-mono text-[8px] tracking-tight text-foreground-tertiary-passive">
-                    {compactBranchName}
-                  </span>
-                </span>
-              )
-            ) : (
-              // Flat/pinned rows have no icon column — a fixed-width leading
-              // gutter keeps their labels mutually aligned instead (kept empty
-              // for branch-less rows so names don't drift).
-              <span
-                title={branchName}
-                className={cn(
-                  'shrink-0 w-[5ch] truncate font-mono text-[10px] text-foreground-tertiary-passive',
-                  (isBootstrapping || isArchiving) && 'opacity-40'
-                )}
-              >
+          {branchDisplay === 'compact' && compactBranchName && (
+            // The suffix lives INSIDE the pl-8 icon column (same column as
+            // the project rows' chevron/icon), absolutely positioned so the
+            // label keeps its exact indent and stays aligned across rows and
+            // lists (projects list, pinned strip, Drafts). Parent rows reuse
+            // that column for the hover collapse chevron — the suffix fades
+            // out as the chevron fades in.
+            <span
+              title={branchName}
+              className={cn(
+                'pointer-events-none absolute inset-y-0 left-0 flex w-8 items-center justify-center overflow-hidden',
+                hasRootToggle && 'transition-opacity duration-150 group-hover/row:opacity-0',
+                (isBootstrapping || isArchiving) && 'opacity-40'
+              )}
+            >
+              {/* 8px keeps 5 mono chars (~24px) comfortably inside the
+                  32px column — at 9px the text nearly touched the row's
+                  rounded background edge. */}
+              <span className="truncate font-mono text-[8px] tracking-tight text-foreground-tertiary-passive">
                 {compactBranchName}
               </span>
-            ))}
+            </span>
+          )}
           <div className="flex min-w-0 flex-1 flex-col justify-center overflow-hidden">
             <div className="flex min-w-0 items-center gap-1">
               <span
