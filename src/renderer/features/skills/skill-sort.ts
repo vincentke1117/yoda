@@ -1,13 +1,17 @@
 import type { CatalogSkill, SkillUsageStat } from '@shared/skills/types';
 
-/** 'name' is always available; usage-based modes need skillusage stats. */
-export const SKILL_SORT_MODES = ['name', 'total', 'manual', 'auto', 'recent'] as const;
+/**
+ * 'name' is always available; usage-based modes need skillusage stats;
+ * 'count' (group member count) only applies to the tree layout.
+ */
+export const SKILL_SORT_MODES = ['name', 'count', 'total', 'manual', 'auto', 'recent'] as const;
 
 export type SkillSortMode = (typeof SKILL_SORT_MODES)[number];
 
 /**
  * Sort catalog skills by name or by real usage stats. Usage ties (and skills
  * without stats) keep their relative order — Array.prototype.sort is stable.
+ * 'count' is a group-level order; at the skill level it falls back to name.
  */
 export function sortSkills(
   skills: CatalogSkill[],
@@ -15,7 +19,7 @@ export function sortSkills(
   lookupUsage: (skillId: string) => SkillUsageStat | undefined
 ): CatalogSkill[] {
   return [...skills].sort((a, b) => {
-    if (mode === 'name') {
+    if (mode === 'name' || mode === 'count') {
       return a.displayName.localeCompare(b.displayName, undefined, { sensitivity: 'base' });
     }
     const ua = lookupUsage(a.id);

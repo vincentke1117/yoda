@@ -1452,6 +1452,7 @@
     "sort": {
       "ariaLabel": "Sort skills",
       "name": "Name (A-Z)",
+      "count": "Most skills",
       "total": "Most used",
       "manual": "Most manual",
       "auto": "Most agent-invoked",

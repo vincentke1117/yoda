@@ -11,11 +11,16 @@ export function skillPrefix(id: string): string {
 }
 
 /**
- * Group skills by their first name segment for the tree layout. Preserves the
- * incoming sort order: a group sits where its first member appeared and
- * members keep their relative order. Prefixes with a single skill stay flat.
+ * Group skills by their first name segment for the tree layout. By default a
+ * group sits where its first member appeared in the incoming sort order and
+ * members keep their relative order; prefixes with a single skill stay flat.
+ * With `orderBy: 'count'`, entries are reordered by member count descending
+ * (leaves count as 1), ties keeping their relative order.
  */
-export function buildSkillTree(skills: CatalogSkill[]): SkillTreeEntry[] {
+export function buildSkillTree(
+  skills: CatalogSkill[],
+  orderBy: 'position' | 'count' = 'position'
+): SkillTreeEntry[] {
   const counts = new Map<string, number>();
   for (const skill of skills) {
     const prefix = skillPrefix(skill.id);
@@ -37,6 +42,10 @@ export function buildSkillTree(skills: CatalogSkill[]): SkillTreeEntry[] {
       entries.push({ kind: 'group', prefix, skills: members });
     }
     members.push(skill);
+  }
+  if (orderBy === 'count') {
+    const sizeOf = (entry: SkillTreeEntry) => (entry.kind === 'group' ? entry.skills.length : 1);
+    entries.sort((a, b) => sizeOf(b) - sizeOf(a));
   }
   return entries;
 }

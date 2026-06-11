@@ -64,12 +64,25 @@ const SkillsView: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
 
   const switchLayout = React.useCallback((value: SkillsLayout) => {
     setLayout(value);
+    // 'count' is a tree-only group order; fall back when returning to cards.
+    if (value === 'grid') setSortMode((mode) => (mode === 'count' ? 'name' : mode));
     try {
       window.localStorage.setItem(LAYOUT_STORAGE_KEY, value);
     } catch {
       // Persistence is best-effort.
     }
   }, []);
+
+  // 'name' always works; 'count' needs the tree; usage modes need stats.
+  const visibleSortModes = React.useMemo(
+    () =>
+      SKILL_SORT_MODES.filter((mode) => {
+        if (mode === 'count') return layout === 'tree';
+        if (mode === 'name') return true;
+        return usageAvailable;
+      }),
+    [layout, usageAvailable]
+  );
 
   const sortedInstalledSkills = React.useMemo(
     () => sortSkills(installedSkills, sortMode, lookupUsage),
@@ -206,7 +219,7 @@ const SkillsView: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
               <ListTree className="h-3.5 w-3.5" />
             </ToggleGroupItem>
           </ToggleGroup>
-          {usageAvailable && (
+          {visibleSortModes.length > 1 && (
             <Select value={sortMode} onValueChange={(value) => setSortMode(value as SkillSortMode)}>
               <SelectTrigger
                 className="w-auto gap-1.5 text-xs text-muted-foreground"
@@ -216,7 +229,7 @@ const SkillsView: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent align="end">
-                {SKILL_SORT_MODES.map((mode) => (
+                {visibleSortModes.map((mode) => (
                   <SelectItem key={mode} value={mode} className="text-xs">
                     {t(`skills.sort.${mode}`)}
                   </SelectItem>
@@ -256,6 +269,7 @@ const SkillsView: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
                 {layout === 'tree' ? (
                   <SkillsTreeSection
                     skills={skills}
+                    orderBy={sortMode === 'count' ? 'count' : 'position'}
                     lookupUsage={lookupUsage}
                     onSelect={openDetail}
                     onInstall={install}

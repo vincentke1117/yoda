@@ -7,6 +7,10 @@ import { cancelSkillTriggerRuns, runSkillTriggerQuery } from '@main/core/skills/
 import { requestUtilityAgentJson } from '@main/core/tasks/name-generation/task-naming-service';
 import { log } from '@main/lib/logger';
 
+function ensureTrailingNewline(content: string): string {
+  return content.endsWith('\n') ? content : `${content}\n`;
+}
+
 function parseTriggerQueries(raw: unknown): SkillTriggerQuery[] {
   if (!Array.isArray(raw)) return [];
   const queries: SkillTriggerQuery[] = [];
@@ -146,6 +150,57 @@ export const skillsController = createRPCController({
       return { success: true, data: queries };
     } catch (error) {
       log.error('Failed to generate trigger queries:', error);
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  },
+
+  /** AI-revise a skill's SKILL.md per a user instruction. Returns the proposal; nothing is written. */
+  revise: async (args: { skillId: string; instruction: string }) => {
+    try {
+      const skill = await skillsService.getSkillDetail(args.skillId);
+      if (!skill?.skillMdContent) throw new Error(`Skill content unavailable: ${args.skillId}`);
+      const prompt = [
+        'You revise an agent skill definition (a SKILL.md file with YAML frontmatter).',
+        'Apply the user instruction to the file. Keep everything the instruction does not',
+        'ask to change byte-identical, including the frontmatter structure and field order.',
+        'Never change the name field. Keep the description a single frontmatter scalar.',
+        'Return strict JSON only. Do not include markdown fences or explanations.',
+        'JSON schema: {"content":"<the full revised SKILL.md>"}',
+        '',
+        `User instruction: ${args.instruction}`,
+        '',
+        'Current SKILL.md:',
+        skill.skillMdContent,
+      ].join('\n');
+      const payload = await requestUtilityAgentJson({ prompt, cwd: os.homedir() });
+      const content = typeof payload.content === 'string' ? payload.content : '';
+      if (!content.trim()) throw new Error('Model returned no revised content.');
+      return {
+        success: true,
+        data: { original: skill.skillMdContent, revised: ensureTrailingNewline(content) },
+      };
+    } catch (error) {
+      log.error('Failed to revise skill:', error);
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  },
+
+  updateContent: async (args: { skillId: string; content: string }) => {
+    try {
+      const skill = await skillsService.updateSkillContent(args.skillId, args.content);
+      return { success: true, data: skill };
+    } catch (error) {
+      log.error('Failed to update skill content:', error);
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  },
+
+  duplicate: async (args: { skillId: string; newName: string }) => {
+    try {
+      const skill = await skillsService.duplicateSkill(args.skillId, args.newName);
+      return { success: true, data: skill };
+    } catch (error) {
+      log.error('Failed to duplicate skill:', error);
       return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
   },

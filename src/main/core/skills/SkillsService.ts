@@ -33,6 +33,16 @@ const PROJECT_SKILL_SUBDIRS = [
 
 const MAX_REDIRECTS = 5;
 
+/** Point the frontmatter `name:` field at the fork's new name, adding it if absent. */
+function renameSkillFrontmatter(content: string, newName: string): string {
+  return content.replace(/^---\r?\n([\s\S]*?)(\r?\n---)/, (_match, block: string, tail: string) => {
+    const renamed = /^name:/m.test(block)
+      ? block.replace(/^name:.*$/m, `name: ${newName}`)
+      : `name: ${newName}\n${block}`;
+    return `---\n${renamed}${tail}`;
+  });
+}
+
 function isPathInside(parent: string, child: string): boolean {
   const relative = path.relative(parent, child);
   return (
@@ -388,6 +398,83 @@ export class SkillsService {
       localPath: skillDir,
       skillMdContent: skillContent,
     };
+  }
+
+  /** Overwrite an installed skill's SKILL.md (works on disabled skills too). */
+  async updateSkillContent(skillId: string, content: string): Promise<CatalogSkill> {
+    await this.initialize();
+    const catalog = await this.getCatalogIndex();
+    const skill = catalog.skills.find((s) => s.id === skillId);
+    if (!skill) throw new Error(`Skill "${skillId}" not found in catalog`);
+    if (!skill.installed || !skill.localPath) {
+      throw new Error(`Skill "${skillId}" is not installed`);
+    }
+
+    const fileName = skill.disabled ? DISABLED_SKILL_MD_FILENAME : SKILL_MD_FILENAME;
+    await fs.promises.writeFile(path.join(skill.localPath, fileName), content);
+
+    this.catalogCache = null;
+    const updated = await this.getSkillDetail(skillId);
+    if (!updated) throw new Error(`Skill "${skillId}" not found after update`);
+    return updated;
+  }
+
+  /**
+   * Fork an installed skill: copy its whole directory (references/, scripts/,
+   * assets/ included) into the global skills root under a new name.
+   */
+  async duplicateSkill(skillId: string, newName: string): Promise<CatalogSkill> {
+    if (!isValidSkillName(newName)) {
+      throw new Error(
+        'Invalid skill name. Use lowercase letters, numbers, and hyphens (1-64 chars).'
+      );
+    }
+
+    await this.initialize();
+    const catalog = await this.getCatalogIndex();
+    const skill = catalog.skills.find((s) => s.id === skillId);
+    if (!skill) throw new Error(`Skill "${skillId}" not found in catalog`);
+    if (!skill.installed || !skill.localPath) {
+      throw new Error(`Skill "${skillId}" is not installed`);
+    }
+    if (catalog.skills.some((s) => s.id === newName)) {
+      throw new Error(`Skill "${newName}" already exists`);
+    }
+
+    const targetDir = path.join(SKILLS_ROOT, newName);
+    try {
+      await fs.promises.access(targetDir);
+      throw new Error(`Skill "${newName}" already exists`);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+    }
+
+    try {
+      await fs.promises.cp(skill.localPath, targetDir, { recursive: true });
+
+      // A disabled source stays runnable in the fork.
+      const disabledMd = path.join(targetDir, DISABLED_SKILL_MD_FILENAME);
+      const activeMd = path.join(targetDir, SKILL_MD_FILENAME);
+      try {
+        await fs.promises.access(disabledMd);
+        await fs.promises.rename(disabledMd, activeMd);
+      } catch {
+        // No disabled file — normal case
+      }
+
+      const content = await fs.promises.readFile(activeMd, 'utf-8');
+      await fs.promises.writeFile(activeMd, renameSkillFrontmatter(content, newName));
+
+      await this.syncToAgents(newName);
+    } catch (error) {
+      await fs.promises.rm(targetDir, { recursive: true, force: true }).catch(() => {});
+      throw error;
+    }
+
+    this.catalogCache = null;
+    const created = await this.getSkillDetail(newName);
+    if (!created) throw new Error(`Skill "${newName}" not found after duplication`);
+    return created;
   }
 
   async setSkillDisabled(skillId: string, disabled: boolean): Promise<CatalogSkill> {

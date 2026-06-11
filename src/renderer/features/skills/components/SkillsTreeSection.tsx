@@ -9,6 +9,8 @@ import { buildSkillTree } from '../skill-tree';
 interface SkillsTreeSectionProps {
   /** Pre-sorted skills; tree grouping preserves this order. */
   skills: CatalogSkill[];
+  /** 'count' reorders entries by group member count descending. */
+  orderBy: 'position' | 'count';
   lookupUsage: (skillId: string) => SkillUsageStat | undefined;
   onSelect: (skill: CatalogSkill) => void;
   onInstall: (skillId: string) => void;
@@ -19,13 +21,14 @@ interface SkillsTreeSectionProps {
 /** Tree layout: skills grouped by their first name segment (brand/author). */
 const SkillsTreeSection: React.FC<SkillsTreeSectionProps> = ({
   skills,
+  orderBy,
   lookupUsage,
   onSelect,
   onInstall,
   setSkillRef,
   highlightedSkillId,
 }) => {
-  const entries = React.useMemo(() => buildSkillTree(skills), [skills]);
+  const entries = React.useMemo(() => buildSkillTree(skills, orderBy), [skills, orderBy]);
 
   return (
     <div className="flex flex-col gap-0.5">
@@ -57,7 +60,7 @@ const SkillsTreeSection: React.FC<SkillsTreeSectionProps> = ({
   );
 };
 
-interface SkillTreeGroupProps extends Omit<SkillsTreeSectionProps, 'skills'> {
+interface SkillTreeGroupProps extends Omit<SkillsTreeSectionProps, 'skills' | 'orderBy'> {
   prefix: string;
   skills: CatalogSkill[];
 }
