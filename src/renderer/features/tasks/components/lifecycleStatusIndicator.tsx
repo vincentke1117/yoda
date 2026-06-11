@@ -21,7 +21,13 @@ const STATUS_OPTIONS: StatusOption[] = [
   { value: 'cancelled', labelKey: 'tasks.lifecycle.cancelled' },
 ];
 
-function StatusIcon({ status, className }: { status: TaskLifecycleStatus; className?: string }) {
+export function StatusIcon({
+  status,
+  className,
+}: {
+  status: TaskLifecycleStatus;
+  className?: string;
+}) {
   switch (status) {
     case 'todo':
       return (

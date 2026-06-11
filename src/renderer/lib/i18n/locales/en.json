@@ -248,7 +248,8 @@
     },
     "needsReview": "Needs review",
     "toggleSubtasks": "Toggle subtasks",
-    "setParentFailed": "Failed to move task"
+    "setParentFailed": "Failed to move task",
+    "kanban": "Kanban"
   },
   "settings": {
     "title": "Settings",
@@ -1999,6 +2000,24 @@
       "title": "Shape the roadmap",
       "desc": "Want a runtime or capability prioritized? Tell us — feedback directly drives the order of this list.",
       "button": "Give feedback"
+    }
+  },
+  "kanban": {
+    "moveFailed": "Failed to move task",
+    "emptyColumn": "No tasks",
+    "hooks": {
+      "title": "Column hooks",
+      "description": "Run when a card is dropped into this column.",
+      "typePrompt": "Send prompt to sessions",
+      "typeCommand": "Run command in worktree",
+      "typeNotify": "Show notification",
+      "promptPlaceholder": "Prompt injected into the task’s live agent sessions",
+      "commandPlaceholder": "Shell command, runs in the task worktree",
+      "notifyPlaceholder": "Notification message",
+      "enabled": "Enabled",
+      "remove": "Remove hook",
+      "add": "Add hook",
+      "empty": "No hooks for this column yet."
     }
   },
   "usage": {

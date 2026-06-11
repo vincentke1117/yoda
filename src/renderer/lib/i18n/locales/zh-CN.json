@@ -248,7 +248,8 @@
     "expressMode": "一键建任务",
     "expressModeDescription": "点击项目行的「+」时不再打开主页配置，而是立即创建任务并进入：自动生成任务名，从默认分支建任务分支，用上次使用的 Runtime 直接开启会话。Runtime 或默认分支尚未就绪时，仍会打开主页让你补全。",
     "toggleSubtasks": "展开/折叠子任务",
-    "setParentFailed": "移动任务失败"
+    "setParentFailed": "移动任务失败",
+    "kanban": "看板"
   },
   "settings": {
     "title": "设置",
@@ -1999,6 +2000,24 @@
       "title": "影响 Roadmap",
       "desc": "想让某个 Runtime 或能力被优先支持？告诉我们——反馈会直接决定这张表的推进顺序。",
       "button": "反馈建议"
+    }
+  },
+  "kanban": {
+    "moveFailed": "移动任务失败",
+    "emptyColumn": "暂无任务",
+    "hooks": {
+      "title": "列 Hooks",
+      "description": "卡片拖入该列时执行。",
+      "typePrompt": "向会话发送 Prompt",
+      "typeCommand": "在 worktree 运行命令",
+      "typeNotify": "显示系统通知",
+      "promptPlaceholder": "注入到该任务运行中 agent 会话的 prompt",
+      "commandPlaceholder": "Shell 命令，在任务 worktree 中执行",
+      "notifyPlaceholder": "通知内容",
+      "enabled": "启用",
+      "remove": "移除 Hook",
+      "add": "添加 Hook",
+      "empty": "该列还没有配置 Hook。"
     }
   },
   "usage": {

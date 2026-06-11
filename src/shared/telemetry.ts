@@ -21,7 +21,8 @@ export type FocusView =
   | 'automation'
   | 'mobile'
   | 'usage'
-  | 'roadmap';
+  | 'roadmap'
+  | 'kanban';
 export type FocusMainPanel = 'agents' | 'editor' | 'diff';
 export type FocusedRegion = 'main' | 'bottom';
 
@@ -69,6 +70,7 @@ export type TelemetryEventProperties = {
   maas_viewed: { from_view: FocusView | null };
   usage_viewed: { from_view: FocusView | null };
   roadmap_viewed: { from_view: FocusView | null };
+  kanban_viewed: { from_view: FocusView | null };
   automation_viewed: { from_view: FocusView | null };
   mobile_viewed: { from_view: FocusView | null };
 
@@ -86,6 +88,11 @@ export type TelemetryEventProperties = {
   task_provisioned: EmptyProps;
   task_archived: EmptyProps;
   task_status_changed: { from_status: TaskLifecycleStatus; to_status: TaskLifecycleStatus };
+  kanban_task_moved: {
+    from_status: TaskLifecycleStatus;
+    to_status: TaskLifecycleStatus;
+    hook_count: number;
+  };
   task_deleted: EmptyProps;
 
   conversation_created: { provider: RuntimeId; is_first_in_task: boolean };

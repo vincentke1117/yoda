@@ -11,6 +11,7 @@ import { generateTaskCommitMessage } from './operations/generateTaskCommitMessag
 import { getTasks } from './operations/getTasks';
 import { getWorkspaceSettings } from './operations/getWorkspaceSettings';
 import { mergeTaskBranch } from './operations/mergeTaskBranch';
+import { moveTaskStatus } from './operations/moveTaskStatus';
 import { regenerateTaskName } from './operations/regenerateTaskName';
 import { renameTask } from './operations/renameTask';
 import { restoreTask } from './operations/restoreTask';
@@ -42,6 +43,7 @@ export const taskController = createRPCController({
   updateLinkedIssue,
   updateLinkedIssues,
   updateTaskStatus,
+  moveTaskStatus,
   setTaskPinned,
   setTaskNeedsReview,
   setTaskParent,

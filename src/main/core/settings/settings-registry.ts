@@ -57,6 +57,9 @@ export const SETTINGS_DEFAULTS = {
   automations: {
     items: [],
   },
+  kanban: {
+    hooksByStatus: {},
+  },
   maas: {
     selectedPlatformId: MAAS_PLATFORMS.zenmux.id,
     connections: [],

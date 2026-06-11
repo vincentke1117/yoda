@@ -19,12 +19,50 @@ import { log } from '@main/lib/logger';
 const COMPLETION_TIMEOUT_MS = 10 * 60_000;
 const COMPLETION_POLL_MS = 2_000;
 
-type PreArchiveTarget = {
+export type AgentCommandTarget = {
   projectId: string;
   taskId: string;
   conversationId: string;
   runtimeId: RuntimeId;
 };
+
+/**
+ * Inject `command` into the conversation's live PTY and force the session
+ * into `working` (a defined edge, so completion is a working→settled
+ * transition regardless of prior state; also broadcasts the spinner to the
+ * renderer). Returns false when the command is empty or there is no live PTY.
+ */
+export async function injectAgentCommand(
+  target: AgentCommandTarget,
+  command: string,
+  source: string
+): Promise<boolean> {
+  const trimmed = command.trim();
+  if (!trimmed) return false;
+
+  const pty = ptySessionRegistry.get(
+    makePtySessionId(target.projectId, target.taskId, target.conversationId)
+  );
+  // No live PTY — nothing to run the command against.
+  if (!pty) return false;
+
+  const normalizedCommand = applyAgentCommandPrefix(target.runtimeId, trimmed);
+  const payload = buildPromptInjectionPayload(normalizedCommand);
+  if (!payload) return false;
+
+  pty.write(payload);
+  const submitSuffix = getAgentCommandSubmitSuffix(target.runtimeId, normalizedCommand);
+  if (submitSuffix) pty.write(submitSuffix);
+  await sleep(getAgentCommandSubmitDelayMs(target.runtimeId));
+  pty.write(getAgentCommandSubmitInput(target.runtimeId));
+
+  agentSessionRuntimeStore.dispatch(
+    target,
+    { kind: 'turn-started', at: Date.now(), force: true },
+    source
+  );
+  return true;
+}
 
 /**
  * If `command` is non-empty and the conversation has a live PTY, inject the
@@ -36,36 +74,10 @@ type PreArchiveTarget = {
  * always proceeds.
  */
 export async function runPreArchiveCommand(
-  target: PreArchiveTarget,
+  target: AgentCommandTarget,
   command: string
 ): Promise<void> {
-  const trimmed = command.trim();
-  if (!trimmed) return;
-
-  const pty = ptySessionRegistry.get(
-    makePtySessionId(target.projectId, target.taskId, target.conversationId)
-  );
-  // No live PTY — nothing to run the command against.
-  if (!pty) return;
-
-  const normalizedCommand = applyAgentCommandPrefix(target.runtimeId, trimmed);
-  const payload = buildPromptInjectionPayload(normalizedCommand);
-  if (!payload) return;
-
-  pty.write(payload);
-  const submitSuffix = getAgentCommandSubmitSuffix(target.runtimeId, normalizedCommand);
-  if (submitSuffix) pty.write(submitSuffix);
-  await sleep(getAgentCommandSubmitDelayMs(target.runtimeId));
-  pty.write(getAgentCommandSubmitInput(target.runtimeId));
-
-  // Force a defined `working` edge so completion is a working→settled
-  // transition regardless of the session's prior state. Also broadcasts the
-  // spinner to the renderer.
-  agentSessionRuntimeStore.dispatch(
-    target,
-    { kind: 'turn-started', at: Date.now(), force: true },
-    'pre-archive'
-  );
+  if (!(await injectAgentCommand(target, command, 'pre-archive'))) return;
 
   try {
     await waitForSettled(target);
@@ -82,7 +94,7 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function waitForSettled(target: PreArchiveTarget): Promise<void> {
+function waitForSettled(target: AgentCommandTarget): Promise<void> {
   if (!agentSessionRuntimeStore.isRunning(target)) return Promise.resolve();
 
   return new Promise((resolve, reject) => {

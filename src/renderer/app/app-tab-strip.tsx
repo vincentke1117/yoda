@@ -17,6 +17,7 @@ import {
   Server,
   Settings,
   Smartphone,
+  SquareKanban,
   Terminal,
   Workflow,
   X,
@@ -66,6 +67,7 @@ const VIEW_ICONS: Partial<Record<ViewId, LucideIcon>> = {
   maas: Cloud,
   usage: ChartColumn,
   roadmap: Milestone,
+  kanban: SquareKanban,
 };
 
 /**

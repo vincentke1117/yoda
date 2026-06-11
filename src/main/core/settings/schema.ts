@@ -1,5 +1,6 @@
 import z from 'zod';
 import { customThemeSelectionSchema, customThemesSettingsSchema } from '@shared/custom-theme';
+import { KANBAN_STATUSES } from '@shared/kanban';
 import { MAAS_PLATFORM_IDS } from '@shared/maas';
 import { openInAppIdSchema } from '@shared/openInApps';
 import { quickActionSchema } from '@shared/project-settings';
@@ -125,6 +126,26 @@ export const automationsSettingsSchema = z.object({
       automationEntrySchema
     )
   ),
+});
+
+export const kanbanHookActionSchema = z.discriminatedUnion('type', [
+  /** Inject a prompt into the task's live agent sessions. */
+  z.object({ type: z.literal('prompt'), text: z.string() }),
+  /** Run a shell command in the task's worktree (project root when none). */
+  z.object({ type: z.literal('command'), command: z.string() }),
+  /** Show an OS notification. */
+  z.object({ type: z.literal('notify'), message: z.string() }),
+]);
+
+export const kanbanColumnHookSchema = z.object({
+  id: z.string(),
+  enabled: z.boolean(),
+  action: kanbanHookActionSchema,
+});
+
+export const kanbanSettingsSchema = z.object({
+  /** Hooks executed in the main process when a card is dropped into a column. */
+  hooksByStatus: z.partialRecord(z.enum(KANBAN_STATUSES), z.array(kanbanColumnHookSchema)),
 });
 
 export const maasPlatformIdSchema = z.enum(MAAS_PLATFORM_IDS);
@@ -395,6 +416,7 @@ export const APP_SETTINGS_SCHEMA_MAP = {
   tasks: taskSettingsSchema,
   runtimeAutoApproveDefaults: runtimeAutoApproveDefaultsSchema,
   automations: automationsSettingsSchema,
+  kanban: kanbanSettingsSchema,
   maas: maasSettingsSchema,
   runtimeModelCandidates: runtimeModelCandidatesSettingsSchema,
   defaultRuntime: defaultRuntimeSchema,
@@ -418,6 +440,7 @@ export const appSettingsSchema = z.object({
   tasks: taskSettingsSchema,
   runtimeAutoApproveDefaults: runtimeAutoApproveDefaultsSchema,
   automations: automationsSettingsSchema,
+  kanban: kanbanSettingsSchema,
   maas: maasSettingsSchema,
   runtimeModelCandidates: runtimeModelCandidatesSettingsSchema,
   defaultRuntime: defaultRuntimeSchema,

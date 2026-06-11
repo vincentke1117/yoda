@@ -5,6 +5,9 @@ import {
   type automationsSettingsSchema,
   type homeDraftSchema,
   type interfaceSettingsSchema,
+  type kanbanColumnHookSchema,
+  type kanbanHookActionSchema,
+  type kanbanSettingsSchema,
   type localProjectSettingsSchema,
   type maasSettingsSchema,
   type notificationSettingsSchema,
@@ -27,6 +30,9 @@ export type TaskSettings = z.infer<typeof taskSettingsSchema>;
 export type RuntimeAutoApproveDefaults = z.infer<typeof runtimeAutoApproveDefaultsSchema>;
 export type AutomationEntry = z.infer<typeof automationEntrySchema>;
 export type AutomationsSettings = z.infer<typeof automationsSettingsSchema>;
+export type KanbanHookAction = z.infer<typeof kanbanHookActionSchema>;
+export type KanbanColumnHook = z.infer<typeof kanbanColumnHookSchema>;
+export type KanbanSettings = z.infer<typeof kanbanSettingsSchema>;
 export type MaasSettings = z.infer<typeof maasSettingsSchema>;
 export type RuntimeModelCandidatesSettings = z.infer<typeof runtimeModelCandidatesSettingsSchema>;
 export type TerminalSettings = z.infer<typeof terminalSettingsSchema>;

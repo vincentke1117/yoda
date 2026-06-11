@@ -9,6 +9,7 @@ import {
   Search,
   Settings,
   Smartphone,
+  SquareKanban,
   SquarePen,
   Workflow,
 } from 'lucide-react';
@@ -276,6 +277,19 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
           <div className="mx-2 my-1 border-t border-border" />
           {!sidebarStore.navSectionHidden && (
             <SidebarMenu className="px-2">
+              <GlobalSidePaneTarget viewId="kanban" altHeld={altHeld}>
+                <SidebarMenuButton
+                  isActive={isCurrentView(currentView, 'kanban')}
+                  onClick={(e) =>
+                    e.altKey ? appState.sidePane.pinView('kanban', {}) : navigate('kanban')
+                  }
+                  aria-label={t('sidebar.kanban')}
+                  className="w-full justify-start"
+                >
+                  <SquareKanban className="h-5 w-5 sm:h-4 sm:w-4" />
+                  {t('sidebar.kanban')}
+                </SidebarMenuButton>
+              </GlobalSidePaneTarget>
               <GlobalSidePaneTarget viewId="settings" altHeld={altHeld}>
                 <SidebarMenuButton
                   isActive={isCurrentView(currentView, 'settings')}

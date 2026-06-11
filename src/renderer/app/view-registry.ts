@@ -3,6 +3,7 @@ import { homeView } from '@renderer/app/home-view';
 import { agentManagerView } from '@renderer/features/agents-config/agent-manager-view';
 import { agentsView } from '@renderer/features/agents/agents-view';
 import { automationView } from '@renderer/features/automation/automation-view';
+import { kanbanView } from '@renderer/features/kanban/kanban-view';
 import { maasView } from '@renderer/features/maas/maas-view';
 import { mcpView } from '@renderer/features/mcp/mcp-view';
 import { mobileView } from '@renderer/features/mobile/mobile-view';
@@ -29,6 +30,7 @@ export const views = {
   mcp: mcpView,
   mobile: mobileView,
   roadmap: roadmapView,
+  kanban: kanbanView,
   project: projectView,
   task: taskView,
   file: projectFileView,
