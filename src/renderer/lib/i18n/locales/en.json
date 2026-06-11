@@ -355,7 +355,11 @@
       "autoPush": "Auto-push on create",
       "autoPushAria": "Enable automatic push on create",
       "autoUpdateGitignore": "Auto-update .gitignore",
-      "autoUpdateGitignoreAria": "Enable .gitignore updates for CLI hook configs"
+      "autoUpdateGitignoreAria": "Enable .gitignore updates for CLI hook configs",
+      "defaultWorktreeDirectory": "Default worktree directory",
+      "defaultWorktreeDirectoryDescription": "Where task worktrees are created for local projects. Each project can override this in its project settings.",
+      "defaultWorktreeDirectoryAria": "Default worktree directory",
+      "defaultWorktreeDirectoryBrowse": "Choose directory"
     },
     "archivedProjects": {
       "title": "Archived projects",
