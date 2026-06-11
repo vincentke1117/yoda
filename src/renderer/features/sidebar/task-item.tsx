@@ -151,6 +151,10 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
   const branchName =
     provisionedTask?.workspace.git.branchName ??
     ('taskBranch' in task.data ? task.data.taskBranch : undefined);
+  const branchDisplay = sidebarStore.taskBranchDisplay;
+  // Compact mode drops the namespace prefix (`yoda/feat-x` → `feat-x`): the
+  // basename carries the distinguishing part, the prefix is shared noise.
+  const compactBranchName = branchName?.slice(branchName.lastIndexOf('/') + 1);
   const workspace = provisionedTask?.workspace;
   const handleReconnect =
     workspace?.connectionState != null ? () => workspace.reconnect() : undefined;
@@ -378,9 +382,19 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
                   {projectName}
                 </span>
               )}
+              {branchDisplay === 'compact' && compactBranchName && (
+                <span
+                  className={cn(
+                    'shrink-0 truncate max-w-[7rem] font-mono text-[10px] text-foreground-tertiary-passive',
+                    (isBootstrapping || isArchiving) && 'opacity-40'
+                  )}
+                >
+                  {compactBranchName}
+                </span>
+              )}
               <RenderPrBadge task={task} />
             </div>
-            {branchName && (
+            {branchDisplay === 'full' && branchName && (
               <div
                 className={cn(
                   'flex min-w-0 items-center gap-1 text-foreground-tertiary-passive',

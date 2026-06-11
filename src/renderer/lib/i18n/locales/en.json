@@ -118,6 +118,10 @@
     "groupByNone": "No grouping",
     "groupByType": "By type",
     "groupByActivity": "By recent activity",
+    "branchDisplay": "Branch",
+    "branchDisplayHidden": "Hidden",
+    "branchDisplayCompact": "Compact",
+    "branchDisplayFull": "Full",
     "activityBucket": {
       "today": "Today",
       "thisWeek": "This week",

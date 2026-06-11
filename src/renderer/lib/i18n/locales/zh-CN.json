@@ -118,6 +118,10 @@
     "groupByNone": "不分组",
     "groupByType": "按类型",
     "groupByActivity": "按活跃时间",
+    "branchDisplay": "分支显示",
+    "branchDisplayHidden": "隐藏",
+    "branchDisplayCompact": "简洁",
+    "branchDisplayFull": "完整",
     "activityBucket": {
       "today": "今天",
       "thisWeek": "本周",
