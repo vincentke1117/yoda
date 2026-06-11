@@ -25,7 +25,11 @@ export function useFileActions(sourcePath: string) {
   const { t } = useTranslation();
   const provisioned = useProvisionedTask();
   const relativePath = toWorkspaceRelativePath(sourcePath, provisioned.path);
-  const placement = useTaskFilePlacementActions(relativePath);
+  // Workspace files open by relative path (stable buffer URIs under the
+  // workspace model root); anything else — user CLAUDE.md, global skills,
+  // transcripts — opens by absolute path, same as the transcript viewer.
+  const openablePath = relativePath ?? sourcePath;
+  const placement = useTaskFilePlacementActions(openablePath);
 
   const target: FilePathTarget = {
     absolutePath: sourcePath,
@@ -34,20 +38,21 @@ export function useFileActions(sourcePath: string) {
   };
 
   const openInEditor = () => {
-    if (!relativePath) return;
-    provisioned.taskView.tabManager.openFile(relativePath);
+    provisioned.taskView.tabManager.openFile(openablePath);
     provisioned.taskView.setFocusedRegion('main');
   };
 
-  const revealInFileTree = () => {
-    if (!relativePath) return;
-    provisioned.taskView.setSidebarTab('files');
-    provisioned.taskView.setSidebarCollapsed(false);
-    void provisioned.workspace.files.revealFile(
-      relativePath,
-      provisioned.taskView.editorView.expandedPaths
-    );
-  };
+  // Reveal needs a node in the workspace file tree — outside files have none.
+  const revealInFileTree = relativePath
+    ? () => {
+        provisioned.taskView.setSidebarTab('files');
+        provisioned.taskView.setSidebarCollapsed(false);
+        void provisioned.workspace.files.revealFile(
+          relativePath,
+          provisioned.taskView.editorView.expandedPaths
+        );
+      }
+    : null;
 
   return { t, relativePath, target, openInEditor, revealInFileTree, ...placement };
 }
@@ -82,57 +87,48 @@ export function FileActionsDropdown({
   sourcePath: string;
   className?: string;
 }) {
-  const {
-    t,
-    relativePath,
-    target,
-    openInEditor,
-    openInSidebar,
-    openInGlobalSidebar,
-    revealInFileTree,
-  } = useFileActions(sourcePath);
+  const { t, target, openInEditor, openInSidebar, openInGlobalSidebar, revealInFileTree } =
+    useFileActions(sourcePath);
 
   return (
     <FilePathActionsDropdown target={target} className={className}>
-      {relativePath ? (
-        <>
-          <DropdownMenuItem
-            onClick={(event) => {
-              event.stopPropagation();
-              openInEditor();
-            }}
-          >
-            <FileText className="size-4" />
-            {t('fileActions.openInYoda')}
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={(event) => {
-              event.stopPropagation();
-              openInSidebar();
-            }}
-          >
-            <PanelRight className="size-4" />
-            {t('tasks.tabs.openInSidePane')}
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={(event) => {
-              event.stopPropagation();
-              openInGlobalSidebar();
-            }}
-          >
-            <PanelRightOpen className="size-4" />
-            {t('appTabs.openInGlobalSidePane')}
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={(event) => {
-              event.stopPropagation();
-              revealInFileTree();
-            }}
-          >
-            <FolderTree className="size-4" />
-            {t('tasks.panel.revealInFileTree')}
-          </DropdownMenuItem>
-        </>
+      <DropdownMenuItem
+        onClick={(event) => {
+          event.stopPropagation();
+          openInEditor();
+        }}
+      >
+        <FileText className="size-4" />
+        {t('fileActions.openInYoda')}
+      </DropdownMenuItem>
+      <DropdownMenuItem
+        onClick={(event) => {
+          event.stopPropagation();
+          openInSidebar();
+        }}
+      >
+        <PanelRight className="size-4" />
+        {t('tasks.tabs.openInSidePane')}
+      </DropdownMenuItem>
+      <DropdownMenuItem
+        onClick={(event) => {
+          event.stopPropagation();
+          openInGlobalSidebar();
+        }}
+      >
+        <PanelRightOpen className="size-4" />
+        {t('appTabs.openInGlobalSidePane')}
+      </DropdownMenuItem>
+      {revealInFileTree ? (
+        <DropdownMenuItem
+          onClick={(event) => {
+            event.stopPropagation();
+            revealInFileTree();
+          }}
+        >
+          <FolderTree className="size-4" />
+          {t('tasks.panel.revealInFileTree')}
+        </DropdownMenuItem>
       ) : null}
     </FilePathActionsDropdown>
   );
@@ -199,19 +195,12 @@ export function FileActionsMenuItems({
   sourcePath: string;
   kind?: 'file' | 'directory';
 }) {
-  const {
-    t,
-    relativePath,
-    target,
-    openInEditor,
-    openInSidebar,
-    openInGlobalSidebar,
-    revealInFileTree,
-  } = useFileActions(sourcePath);
+  const { t, target, openInEditor, openInSidebar, openInGlobalSidebar, revealInFileTree } =
+    useFileActions(sourcePath);
 
   return (
     <>
-      {relativePath ? (
+      {kind === 'file' || revealInFileTree ? (
         <>
           {kind === 'file' ? (
             <>
@@ -229,10 +218,12 @@ export function FileActionsMenuItems({
               </ContextMenuItem>
             </>
           ) : null}
-          <ContextMenuItem className="whitespace-nowrap" onClick={revealInFileTree}>
-            <FolderTree className="size-4" />
-            {t('tasks.panel.revealInFileTree')}
-          </ContextMenuItem>
+          {revealInFileTree ? (
+            <ContextMenuItem className="whitespace-nowrap" onClick={revealInFileTree}>
+              <FolderTree className="size-4" />
+              {t('tasks.panel.revealInFileTree')}
+            </ContextMenuItem>
+          ) : null}
           <ContextMenuSeparator />
         </>
       ) : null}
