@@ -148,10 +148,6 @@ export function SettingsPage({
           id: 'auto-trust-worktrees',
           component: <AutoTrustWorktreesRow />,
         },
-        {
-          id: 'enable-tmux',
-          component: <EnableTmuxRow />,
-        },
       ],
     },
     sessions: {
@@ -185,6 +181,10 @@ export function SettingsPage({
               <SummaryConfigFields />
             </div>
           ),
+        },
+        {
+          id: 'enable-tmux',
+          component: <EnableTmuxRow />,
         },
         {
           id: 'pre-archive-command',
