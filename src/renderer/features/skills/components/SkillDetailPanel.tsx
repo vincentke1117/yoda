@@ -247,8 +247,8 @@ const SkillDetailContent: React.FC<{
   return (
     <div className="@container h-full overflow-y-auto bg-background text-foreground">
       <div className="mx-auto w-full max-w-3xl px-4 py-6 @xl:px-8 @xl:py-8">
-        {/* Header — actions sit beside the title on wide containers, drop below it on narrow ones */}
-        <div className="mb-6 flex flex-wrap items-start gap-3">
+        {/* Header — actions stay top-right; labels collapse to icon-only on narrow containers */}
+        <div className="mb-6 flex items-start gap-3">
           <SkillIconRenderer skill={skill} size="md" />
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-base font-semibold">{skill.displayName}</h1>
@@ -288,7 +288,7 @@ const SkillDetailContent: React.FC<{
             </div>
           </div>
           {/* Actions */}
-          <div className="flex w-full shrink-0 flex-wrap items-center gap-2 @xl:w-auto @xl:justify-end">
+          <div className="flex shrink-0 items-center justify-end gap-2">
             {skill.installed ? (
               <>
                 <Button
@@ -296,18 +296,28 @@ const SkillDetailContent: React.FC<{
                   size="sm"
                   onClick={() => void handleSetDisabled(!skill.disabled)}
                   disabled={isProcessing}
+                  title={skill.disabled ? t('skills.enable') : t('skills.disable')}
+                  className="px-2 @xl:px-3"
                 >
                   {skill.disabled ? (
-                    <Power className="mr-1.5 h-3.5 w-3.5" />
+                    <Power className="h-3.5 w-3.5 @xl:mr-1.5" />
                   ) : (
-                    <PowerOff className="mr-1.5 h-3.5 w-3.5" />
+                    <PowerOff className="h-3.5 w-3.5 @xl:mr-1.5" />
                   )}
-                  {skill.disabled ? t('skills.enable') : t('skills.disable')}
+                  <span className="hidden @xl:inline">
+                    {skill.disabled ? t('skills.enable') : t('skills.disable')}
+                  </span>
                 </Button>
                 {skill.localPath && (
-                  <Button variant="outline" size="sm" onClick={handleOpen}>
-                    <FolderOpen className="mr-1.5 h-3.5 w-3.5" />
-                    {t('common.open')}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleOpen}
+                    title={t('common.open')}
+                    className="px-2 @xl:px-3"
+                  >
+                    <FolderOpen className="h-3.5 w-3.5 @xl:mr-1.5" />
+                    <span className="hidden @xl:inline">{t('common.open')}</span>
                   </Button>
                 )}
                 <Button
@@ -315,10 +325,11 @@ const SkillDetailContent: React.FC<{
                   size="sm"
                   onClick={() => void handleUninstall()}
                   disabled={isProcessing}
-                  className="text-destructive hover:text-destructive"
+                  title={t('skills.uninstall')}
+                  className="px-2 text-destructive hover:text-destructive @xl:px-3"
                 >
-                  <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                  {t('skills.uninstall')}
+                  <Trash2 className="h-3.5 w-3.5 @xl:mr-1.5" />
+                  <span className="hidden @xl:inline">{t('skills.uninstall')}</span>
                 </Button>
               </>
             ) : (
