@@ -135,7 +135,9 @@ export const AppTabStrip = observer(function AppTabStrip() {
         aria-label={newSessionLabel}
         title={newSessionLabel}
         disabled={newSessionDisabled}
-        className="flex size-7 shrink-0 items-center justify-center rounded-md text-foreground-passive hover:bg-background-2 hover:text-foreground disabled:pointer-events-none disabled:opacity-50 [-webkit-app-region:no-drag]"
+        // Follows the tabs normally; once the strip overflows it pins to the
+        // scrollport's right edge and tabs scroll beneath it.
+        className="sticky right-0 z-10 flex size-7 shrink-0 items-center justify-center rounded-md bg-background-secondary text-foreground-passive hover:bg-background-2 hover:text-foreground disabled:pointer-events-none disabled:opacity-50 dark:bg-background [-webkit-app-region:no-drag]"
         onClick={handleNewSession}
       >
         <Plus className="size-3.5" />
