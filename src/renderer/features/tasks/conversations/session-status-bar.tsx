@@ -254,10 +254,12 @@ function PromptHistoryRows({
           <button
             key="truncated"
             type="button"
-            className="flex h-6 w-full items-center justify-start gap-1.5 pl-3 pr-9 text-[11px] leading-5 text-[var(--xterm-fg)] opacity-45 transition-opacity hover:opacity-100"
+            // Ellipsis stays left-aligned with the prompt rows; the count
+            // label is centered in the row.
+            className="relative flex h-6 w-full items-center justify-center text-[11px] leading-5 text-[var(--xterm-fg)] opacity-45 transition-opacity hover:opacity-100"
             onClick={onOpenAll}
           >
-            <MoreHorizontal className="size-3" />
+            <MoreHorizontal className="absolute left-3 size-3" />
             {t('tasks.sessionInfo.truncatedPrompts', { count: item.hiddenCount })}
           </button>
         ) : (
