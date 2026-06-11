@@ -367,25 +367,25 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
               })}
             </span>
           )}
+          {branchDisplay === 'compact' && (
+            <span
+              title={branchName}
+              className={cn(
+                // Leading fixed-width gutter, sibling of (not inside) the
+                // label block: generated suffixes are always 5 chars, so
+                // `w-[5ch]` lines task names up across rows. Longer fallbacks
+                // (custom/Linear basenames) truncate inside the same column,
+                // and branch-less rows keep the empty gutter so their names
+                // stay aligned too.
+                'shrink-0 w-[5ch] truncate font-mono text-[10px] text-foreground-tertiary-passive',
+                (isBootstrapping || isArchiving) && 'opacity-40'
+              )}
+            >
+              {compactBranchName}
+            </span>
+          )}
           <div className="flex min-w-0 flex-1 flex-col justify-center overflow-hidden">
             <div className="flex min-w-0 items-center gap-1">
-              {branchDisplay === 'compact' && (
-                <span
-                  title={branchName}
-                  className={cn(
-                    // Leading fixed-width gutter: generated suffixes are always
-                    // 5 chars, so `w-[5ch]` lines task names up across rows
-                    // (trailing placement followed the name length and looked
-                    // ragged). Longer fallbacks (custom/Linear basenames)
-                    // truncate inside the same column, and branch-less rows
-                    // keep the empty gutter so their names stay aligned too.
-                    'shrink-0 w-[5ch] truncate font-mono text-[10px] text-foreground-tertiary-passive',
-                    (isBootstrapping || isArchiving) && 'opacity-40'
-                  )}
-                >
-                  {compactBranchName}
-                </span>
-              )}
               <span
                 className={cn(
                   'min-w-0 truncate text-left transition-colors',
