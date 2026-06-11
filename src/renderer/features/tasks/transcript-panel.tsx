@@ -1,14 +1,11 @@
-import { FileText, PanelRight, PanelRightOpen } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { conversationTranscriptChangedChannel } from '@shared/events/conversationEvents';
-import { useTaskFilePlacementActions } from '@renderer/features/tasks/components/file-actions';
+import { FileActionsDropdown } from '@renderer/features/tasks/components/file-actions';
 import { getTaskMenuConversation } from '@renderer/features/tasks/components/task-menu-session-info';
 import { useProvisionedTask } from '@renderer/features/tasks/task-view-context';
-import { FilePathActionsDropdown } from '@renderer/lib/components/file-path-actions';
 import { events, rpc } from '@renderer/lib/ipc';
-import { DropdownMenuItem } from '@renderer/lib/ui/dropdown-menu';
 import { TranscriptLineItem } from './components/transcript-line';
 import {
   normalizeConversationTranscript,
@@ -92,47 +89,9 @@ export const TranscriptFileActions = observer(function TranscriptFileActions({
 }: {
   feed: ReturnType<typeof useConversationTranscript>;
 }) {
-  const { t } = useTranslation();
-  const provisioned = useProvisionedTask();
   const filePath = feed.transcript?.filePath;
-  const { openInSidebar, openInGlobalSidebar } = useTaskFilePlacementActions(filePath);
   if (!filePath) return null;
-  return (
-    <FilePathActionsDropdown
-      target={{
-        absolutePath: filePath,
-        sshConnectionId: provisioned.workspace.sshConnectionId ?? null,
-      }}
-    >
-      <DropdownMenuItem
-        onClick={(event) => {
-          event.stopPropagation();
-          feed.openFile();
-        }}
-      >
-        <FileText className="size-4" />
-        {t('fileActions.openInYoda')}
-      </DropdownMenuItem>
-      <DropdownMenuItem
-        onClick={(event) => {
-          event.stopPropagation();
-          openInSidebar();
-        }}
-      >
-        <PanelRight className="size-4" />
-        {t('tasks.tabs.openInSidePane')}
-      </DropdownMenuItem>
-      <DropdownMenuItem
-        onClick={(event) => {
-          event.stopPropagation();
-          openInGlobalSidebar();
-        }}
-      >
-        <PanelRightOpen className="size-4" />
-        {t('appTabs.openInGlobalSidePane')}
-      </DropdownMenuItem>
-    </FilePathActionsDropdown>
-  );
+  return <FileActionsDropdown sourcePath={filePath} />;
 });
 
 /** Content of the Transcript blind — raw JSONL tail, pinned to bottom. */
