@@ -1,6 +1,7 @@
 {
   "appTabs": {
     "closeTab": "Close tab",
+    "openInGlobalSidePane": "Open in global sidebar",
     "overview": "Overview",
     "home": "Home",
     "project": "Project",

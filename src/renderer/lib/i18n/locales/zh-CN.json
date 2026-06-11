@@ -1,6 +1,7 @@
 {
   "appTabs": {
     "closeTab": "关闭标签页",
+    "openInGlobalSidePane": "在全局侧边栏打开",
     "overview": "概览",
     "home": "主页",
     "project": "项目",
