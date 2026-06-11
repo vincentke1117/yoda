@@ -71,8 +71,8 @@ export type TaskViewSnapshot = {
   isSidebarCollapsed?: boolean;
   focusedRegion: 'main' | 'bottom';
   isTerminalDrawerOpen?: boolean;
-  /** Which content the bottom drawer shows (terminals / session history). */
-  bottomPanelTab?: 'terminals' | 'session';
+  /** Which content the bottom drawer shows (terminals / scripts / session history). */
+  bottomPanelTab?: 'terminals' | 'scripts' | 'session';
   tabManager?: TabManagerSnapshot;
   /** @deprecated Legacy field from before the unified tab refactor. Used only for migration. */
   conversations?: TabViewSnapshot;

@@ -1,4 +1,4 @@
-import { Check, ChevronsUpDown, MessageSquareText, Terminal } from 'lucide-react';
+import { Check, ChevronsUpDown, MessageSquareText, ScrollText, Terminal } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { Activity } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,6 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@renderer/lib/ui/dropdown-menu';
+import { ScriptsPanel } from './terminals/scripts-panel';
 import { TerminalsPanel } from './terminals/terminal-panel';
 
 const MODES: { id: BottomPanelTab; icon: React.ReactNode; labelKey: string }[] = [
@@ -18,6 +19,11 @@ const MODES: { id: BottomPanelTab; icon: React.ReactNode; labelKey: string }[] =
     id: 'terminals',
     icon: <Terminal className="size-3" />,
     labelKey: 'tasks.bottomPanel.terminals',
+  },
+  {
+    id: 'scripts',
+    icon: <ScrollText className="size-3" />,
+    labelKey: 'tasks.terminals.scripts',
   },
   {
     id: 'session',
@@ -74,6 +80,9 @@ export const BottomPanel = observer(function BottomPanel() {
       <div className="relative min-h-0 flex-1 overflow-hidden">
         <Activity mode={tab === 'terminals' ? 'visible' : 'hidden'}>
           <TerminalsPanel />
+        </Activity>
+        <Activity mode={tab === 'scripts' ? 'visible' : 'hidden'}>
+          <ScriptsPanel />
         </Activity>
         <Activity mode={tab === 'session' ? 'visible' : 'hidden'}>
           <SessionHistoryPanel active={taskView.isTerminalDrawerOpen && tab === 'session'} />

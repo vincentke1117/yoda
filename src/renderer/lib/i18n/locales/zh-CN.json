@@ -1048,7 +1048,9 @@
       "emptyTitle": "没有终端",
       "emptyDescription": "创建终端以在此任务工作区运行命令。",
       "scripts": "脚本",
-      "configureInProjectSettings": "在项目设置中配置脚本。"
+      "configureInProjectSettings": "在项目设置中配置脚本。",
+      "scriptsEmptyTitle": "暂无生命周期脚本",
+      "scriptsEmptyDescription": "在项目设置中配置 setup / run / teardown 脚本后，这里会显示它们的输出。"
     },
     "panel": {
       "agent": "代理",

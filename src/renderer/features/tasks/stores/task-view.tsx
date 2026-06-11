@@ -56,7 +56,7 @@ function isTaskViewHistoryEntry(entry: HistoryEntry, projectId: string, taskId: 
   return params.projectId === projectId && params.taskId === taskId;
 }
 
-export type BottomPanelTab = 'terminals' | 'session';
+export type BottomPanelTab = 'terminals' | 'scripts' | 'session';
 
 export class TaskViewStore {
   focusedRegion: 'main' | 'bottom';
@@ -84,7 +84,9 @@ export class TaskViewStore {
     taskSidebarPreferenceStore.hydrate(sharedSidebarSnapshot ?? null, savedSnapshot ?? null);
     this.focusedRegion = savedSnapshot?.focusedRegion === 'bottom' ? 'bottom' : 'main';
     this.isTerminalDrawerOpen = savedSnapshot?.isTerminalDrawerOpen ?? false;
-    this.bottomPanelTab = savedSnapshot?.bottomPanelTab === 'session' ? 'session' : 'terminals';
+    const savedBottomTab = savedSnapshot?.bottomPanelTab;
+    this.bottomPanelTab =
+      savedBottomTab === 'session' || savedBottomTab === 'scripts' ? savedBottomTab : 'terminals';
     this.terminalsMgr = resources.terminals;
 
     this.tabManager = new TabManagerStore(resources.conversations, resources.workspaceId);

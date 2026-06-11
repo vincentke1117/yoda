@@ -1048,7 +1048,9 @@
       "emptyTitle": "No terminals",
       "emptyDescription": "Create a terminal to run commands in this task workspace.",
       "scripts": "Scripts",
-      "configureInProjectSettings": "Configure scripts in project settings."
+      "configureInProjectSettings": "Configure scripts in project settings.",
+      "scriptsEmptyTitle": "No lifecycle scripts",
+      "scriptsEmptyDescription": "Configure setup / run / teardown scripts in project settings; their output shows up here."
     },
     "panel": {
       "agent": "Agent",

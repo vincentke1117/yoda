@@ -11,29 +11,8 @@ import { isImeComposing } from '@renderer/utils/ime';
 import { cn } from '@renderer/utils/utils';
 import { scriptIcon } from './terminal-tabs';
 
-interface TerminalDrawerSidebarProps {
-  lifecycleScriptsMgr: LifecycleScriptsStore | null;
-  activeScriptId: string | undefined;
-  onSelectScript: (id: string) => void;
-  onRunScript: () => void;
-  onStopScript: () => void;
-  terminalTabView: TerminalTabViewStore;
-  activeTerminalId: string | undefined;
-  onSelectTerminal: (id: string) => void;
-  onAddTerminal: () => void;
-  onRemoveTerminal: (id: string) => void;
-  onRenameTerminal: (id: string, name: string) => void;
-  onClose: () => void;
-  projectId: string;
-  className?: string;
-}
-
+/** Sidebar of the terminals drawer mode: the terminal list. */
 export const TerminalDrawerSidebar = observer(function TerminalDrawerSidebar({
-  lifecycleScriptsMgr,
-  activeScriptId,
-  onSelectScript,
-  onRunScript,
-  onStopScript,
   terminalTabView,
   activeTerminalId,
   onSelectTerminal,
@@ -41,73 +20,187 @@ export const TerminalDrawerSidebar = observer(function TerminalDrawerSidebar({
   onRemoveTerminal,
   onRenameTerminal,
   onClose,
+  className,
+}: {
+  terminalTabView: TerminalTabViewStore;
+  activeTerminalId: string | undefined;
+  onSelectTerminal: (id: string) => void;
+  onAddTerminal: () => void;
+  onRemoveTerminal: (id: string) => void;
+  onRenameTerminal: (id: string, name: string) => void;
+  onClose: () => void;
+  className?: string;
+}) {
+  const { t } = useTranslation();
+  return (
+    <SidebarShell
+      className={className}
+      title={t('tasks.terminals.title')}
+      actions={
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <button className={HEADER_BUTTON_CLASS} onClick={onAddTerminal}>
+                <Plus className="size-3" />
+              </button>
+            }
+          />
+          <TooltipContent>{t('tasks.terminals.newTerminal')}</TooltipContent>
+        </Tooltip>
+      }
+      onClose={onClose}
+    >
+      {terminalTabView.tabs.map((terminal) => (
+        <SidebarRow
+          key={terminal.data.id}
+          icon={<Terminal className="size-3" />}
+          label={terminal.data.name}
+          isActive={activeTerminalId === terminal.data.id}
+          onSelect={() => onSelectTerminal(terminal.data.id)}
+          onRename={(name) => onRenameTerminal(terminal.data.id, name)}
+          action={
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <button
+                    className="ml-1 shrink-0 flex items-center justify-center size-5 rounded opacity-0 group-hover:opacity-100 hover:bg-background text-foreground-muted hover:text-foreground"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRemoveTerminal(terminal.data.id);
+                    }}
+                  >
+                    <X className="size-3" />
+                  </button>
+                }
+              />
+              <TooltipContent>{t('tasks.terminals.closeTerminal')}</TooltipContent>
+            </Tooltip>
+          }
+        />
+      ))}
+    </SidebarShell>
+  );
+});
+
+/** Sidebar of the scripts drawer mode: lifecycle scripts with run/stop. */
+export const ScriptsDrawerSidebar = observer(function ScriptsDrawerSidebar({
+  lifecycleScriptsMgr,
+  activeScriptId,
+  onSelectScript,
+  onRunScript,
+  onStopScript,
+  onClose,
   projectId,
   className,
-}: TerminalDrawerSidebarProps) {
+}: {
+  lifecycleScriptsMgr: LifecycleScriptsStore | null;
+  activeScriptId: string | undefined;
+  onSelectScript: (id: string) => void;
+  onRunScript: () => void;
+  onStopScript: () => void;
+  onClose: () => void;
+  projectId: string;
+  className?: string;
+}) {
   const { t } = useTranslation();
-  const scripts = lifecycleScriptsMgr?.tabs ?? [];
-  const terminals = terminalTabView.tabs;
-  const hasScripts = scripts.length > 0 && lifecycleScriptsMgr !== null;
-
   const { navigate } = useNavigate();
+  const scripts = lifecycleScriptsMgr?.tabs ?? [];
 
-  const [selectedSection, setSelectedSection] = useState<'terminals' | 'scripts'>('terminals');
-  const section = selectedSection === 'scripts' && hasScripts ? 'scripts' : 'terminals';
+  return (
+    <SidebarShell
+      className={className}
+      title={t('tasks.terminals.scripts')}
+      actions={
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <button
+                onClick={() => navigate('project', { projectId })}
+                className={HEADER_BUTTON_CLASS}
+              >
+                <Settings className="size-3" />
+              </button>
+            }
+          />
+          <TooltipContent>{t('tasks.terminals.configureInProjectSettings')}</TooltipContent>
+        </Tooltip>
+      }
+      onClose={onClose}
+    >
+      {scripts.map((script) => {
+        const isActive = activeScriptId === script.data.id;
+        return (
+          <SidebarRow
+            key={script.data.id}
+            icon={scriptIcon(script.data.type)}
+            label={script.data.label}
+            isActive={isActive}
+            onSelect={() => onSelectScript(script.data.id)}
+            action={
+              isActive ? (
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <button
+                        className="ml-1 shrink-0 flex items-center justify-center size-5 rounded hover:bg-background text-foreground-muted hover:text-foreground"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (script.isRunning) {
+                            onStopScript();
+                          } else {
+                            onRunScript();
+                          }
+                        }}
+                      >
+                        {script.isRunning ? (
+                          <Pause className="size-3" />
+                        ) : (
+                          <Play className="size-3" />
+                        )}
+                      </button>
+                    }
+                  />
+                  <TooltipContent>
+                    {script.isRunning ? t('common.stop') : t('common.run')}
+                  </TooltipContent>
+                </Tooltip>
+              ) : null
+            }
+          />
+        );
+      })}
+    </SidebarShell>
+  );
+});
 
+const HEADER_BUTTON_CLASS =
+  'flex items-center justify-center size-5 rounded hover:bg-background-2 text-foreground-muted hover:text-foreground';
+
+/** Shared chrome: header (title + actions + close) above a row list. */
+function SidebarShell({
+  title,
+  actions,
+  onClose,
+  className,
+  children,
+}: {
+  title: string;
+  actions?: ReactNode;
+  onClose: () => void;
+  className?: string;
+  children: ReactNode;
+}) {
+  const { t } = useTranslation();
   return (
     <div className={cn('flex flex-col overflow-y-auto text-sm', className)}>
       <div className="flex items-center justify-between px-4 pt-2">
-        <div className="flex items-center gap-3">
-          <SectionTab
-            label={t('tasks.terminals.title')}
-            isActive={section === 'terminals'}
-            onClick={() => setSelectedSection('terminals')}
-          />
-          {hasScripts && (
-            <SectionTab
-              label={t('tasks.terminals.scripts')}
-              isActive={section === 'scripts'}
-              onClick={() => setSelectedSection('scripts')}
-            />
-          )}
-        </div>
+        <MicroLabel className="text-foreground">{title}</MicroLabel>
         <div className="flex items-center gap-0.5">
-          {section === 'terminals' ? (
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <button
-                    className="flex items-center justify-center size-5 rounded hover:bg-background-2 text-foreground-muted hover:text-foreground"
-                    onClick={onAddTerminal}
-                  >
-                    <Plus className="size-3" />
-                  </button>
-                }
-              />
-              <TooltipContent>{t('tasks.terminals.newTerminal')}</TooltipContent>
-            </Tooltip>
-          ) : (
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <button
-                    onClick={() => navigate('project', { projectId })}
-                    className="flex items-center justify-center size-5 rounded hover:bg-background-2 text-foreground-muted hover:text-foreground"
-                  >
-                    <Settings className="size-3" />
-                  </button>
-                }
-              />
-              <TooltipContent>{t('tasks.terminals.configureInProjectSettings')}</TooltipContent>
-            </Tooltip>
-          )}
+          {actions}
           <Tooltip>
             <TooltipTrigger
               render={
-                <button
-                  className="flex items-center justify-center size-5 rounded hover:bg-background-2 text-foreground-muted hover:text-foreground"
-                  onClick={onClose}
-                >
+                <button className={HEADER_BUTTON_CLASS} onClick={onClose}>
                   <X className="size-3" />
                 </button>
               }
@@ -116,103 +209,8 @@ export const TerminalDrawerSidebar = observer(function TerminalDrawerSidebar({
           </Tooltip>
         </div>
       </div>
-      <div className="flex flex-col gap-0.5 p-2">
-        {section === 'terminals'
-          ? terminals.map((terminal) => (
-              <SidebarRow
-                key={terminal.data.id}
-                icon={<Terminal className="size-3" />}
-                label={terminal.data.name}
-                isActive={activeTerminalId === terminal.data.id}
-                onSelect={() => onSelectTerminal(terminal.data.id)}
-                onRename={(name) => onRenameTerminal(terminal.data.id, name)}
-                action={
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <button
-                          className="ml-1 shrink-0 flex items-center justify-center size-5 rounded opacity-0 group-hover:opacity-100 hover:bg-background text-foreground-muted hover:text-foreground"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onRemoveTerminal(terminal.data.id);
-                          }}
-                        >
-                          <X className="size-3" />
-                        </button>
-                      }
-                    />
-                    <TooltipContent>{t('tasks.terminals.closeTerminal')}</TooltipContent>
-                  </Tooltip>
-                }
-              />
-            ))
-          : scripts.map((script) => {
-              const isActive = activeScriptId === script.data.id;
-              return (
-                <SidebarRow
-                  key={script.data.id}
-                  icon={scriptIcon(script.data.type)}
-                  label={script.data.label}
-                  isActive={isActive}
-                  onSelect={() => onSelectScript(script.data.id)}
-                  action={
-                    isActive ? (
-                      <Tooltip>
-                        <TooltipTrigger
-                          render={
-                            <button
-                              className="ml-1 shrink-0 flex items-center justify-center size-5 rounded hover:bg-background text-foreground-muted hover:text-foreground"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (script.isRunning) {
-                                  onStopScript();
-                                } else {
-                                  onRunScript();
-                                }
-                              }}
-                            >
-                              {script.isRunning ? (
-                                <Pause className="size-3" />
-                              ) : (
-                                <Play className="size-3" />
-                              )}
-                            </button>
-                          }
-                        />
-                        <TooltipContent>
-                          {script.isRunning ? t('common.stop') : t('common.run')}
-                        </TooltipContent>
-                      </Tooltip>
-                    ) : null
-                  }
-                />
-              );
-            })}
-      </div>
+      <div className="flex flex-col gap-0.5 p-2">{children}</div>
     </div>
-  );
-});
-
-function SectionTab({
-  label,
-  isActive,
-  onClick,
-}: {
-  label: string;
-  isActive: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button onClick={onClick}>
-      <MicroLabel
-        className={cn(
-          'cursor-pointer',
-          isActive ? 'text-foreground' : 'hover:text-foreground-muted'
-        )}
-      >
-        {label}
-      </MicroLabel>
-    </button>
   );
 }
 
