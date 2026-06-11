@@ -775,7 +775,7 @@
       "overview": "概览",
       "newConversation": "新建会话",
       "archiveConversation": "归档会话",
-      "archiveConversationSkipPre": "归档会话（跳过归档前 skill）",
+      "archiveConversationDirect": "直接归档",
       "reloadConversation": "重新加载会话",
       "renameConversation": "重命名会话",
       "preview": "预览"

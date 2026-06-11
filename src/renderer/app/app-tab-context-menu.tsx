@@ -8,6 +8,8 @@ import {
   PanelRight,
   Pencil,
   RefreshCw,
+  Settings2,
+  Sparkles,
   X,
 } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
@@ -21,6 +23,7 @@ import {
   openProvisionedTaskTab,
 } from '@renderer/app/open-task-target';
 import { getProjectStore } from '@renderer/features/projects/stores/project-selectors';
+import { useAppSettingsKey } from '@renderer/features/settings/use-app-settings-key';
 import { archiveConversationFlow } from '@renderer/features/tasks/archive-task';
 import { copyTaskLink } from '@renderer/features/tasks/components/task-context-menu';
 import type { ProvisionedTask } from '@renderer/features/tasks/stores/task';
@@ -28,6 +31,7 @@ import { asProvisioned, getTaskStore } from '@renderer/features/tasks/stores/tas
 import { openTaskTabInWindow } from '@renderer/features/tasks/tabs/tab-meta';
 import { FilePathMenuItems, type FilePathTarget } from '@renderer/lib/components/file-path-actions';
 import { APP_SHORTCUTS } from '@renderer/lib/hooks/useKeyboardShortcuts';
+import { useNavigate } from '@renderer/lib/layout/navigation-provider';
 import { showModal } from '@renderer/lib/modal/modal-provider';
 import { appState } from '@renderer/lib/stores/app-state';
 import { isIndexTab, type AppTabEntry } from '@renderer/lib/stores/app-tabs-store';
@@ -37,6 +41,9 @@ import {
   ContextMenuItem,
   ContextMenuSeparator,
   ContextMenuShortcut,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from '@renderer/lib/ui/context-menu';
 import { log } from '@renderer/utils/logger';
@@ -276,25 +283,12 @@ export function buildConversationSections(
         <Pencil className="size-4" />
         {t('tasks.tabs.renameConversation')}
       </ContextMenuItem>,
-      <ContextMenuItem
+      <ConversationArchiveSubmenu
         key="archive"
-        className="whitespace-nowrap"
-        onClick={() => {
-          void archiveConversationFlow(projectId, taskId, conversationId).catch(
-            (error: unknown) => {
-              log.warn('AppTabContextMenu: archive conversation failed', {
-                projectId,
-                taskId,
-                conversationId,
-                error,
-              });
-            }
-          );
-        }}
-      >
-        <Archive className="size-4" />
-        {t('tasks.tabs.archiveConversation')}
-      </ContextMenuItem>
+        projectId={projectId}
+        taskId={taskId}
+        conversationId={conversationId}
+      />
     );
   }
 
@@ -326,6 +320,69 @@ export function buildConversationSections(
   }
 
   return [management, copy, maintenance];
+}
+
+/**
+ * Archive entry as a submenu, mirroring the task context menu's archive
+ * options: direct archive (skip the pre-archive skill), run the configured
+ * skill then archive, and a shortcut to where the skill is configured.
+ */
+function ConversationArchiveSubmenu({
+  projectId,
+  taskId,
+  conversationId,
+}: {
+  projectId: string;
+  taskId: string;
+  conversationId: string;
+}) {
+  const { t } = useTranslation();
+  const { navigate } = useNavigate();
+  const { value: homeDraft } = useAppSettingsKey('homeDraft');
+  const hasArchiveSkill = (homeDraft?.preArchiveCommand ?? '').trim().length > 0;
+
+  const archive = (skipPreCommand: boolean) => {
+    void archiveConversationFlow(projectId, taskId, conversationId, { skipPreCommand }).catch(
+      (error: unknown) => {
+        log.warn('AppTabContextMenu: archive conversation failed', {
+          projectId,
+          taskId,
+          conversationId,
+          error,
+        });
+      }
+    );
+  };
+
+  return (
+    <ContextMenuSub>
+      <ContextMenuSubTrigger className="whitespace-nowrap">
+        <Archive className="size-4" />
+        {t('tasks.tabs.archiveConversation')}
+      </ContextMenuSubTrigger>
+      <ContextMenuSubContent>
+        <ContextMenuItem className="whitespace-nowrap" onClick={() => archive(true)}>
+          <Archive className="size-4" />
+          {t('tasks.tabs.archiveConversationDirect')}
+        </ContextMenuItem>
+        <ContextMenuItem
+          className="whitespace-nowrap"
+          disabled={!hasArchiveSkill}
+          onClick={() => archive(false)}
+        >
+          <Sparkles className="size-4" />
+          {t('tasks.context.archiveWithSkill')}
+        </ContextMenuItem>
+        <ContextMenuItem
+          className="whitespace-nowrap"
+          onClick={() => navigate('settings', { tab: 'tasks' })}
+        >
+          <Settings2 className="size-4" />
+          {t('tasks.context.configureArchiveSkill')}
+        </ContextMenuItem>
+      </ContextMenuSubContent>
+    </ContextMenuSub>
+  );
 }
 
 /**

@@ -775,7 +775,7 @@
       "overview": "Overview",
       "newConversation": "New conversation",
       "archiveConversation": "Archive session",
-      "archiveConversationSkipPre": "Archive session without pre-archive skill",
+      "archiveConversationDirect": "Archive directly",
       "reloadConversation": "Reload session",
       "renameConversation": "Rename session",
       "preview": "Preview"

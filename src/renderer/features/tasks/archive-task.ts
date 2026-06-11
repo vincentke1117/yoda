@@ -65,13 +65,14 @@ export async function archiveConversationWithPreCommand(
 export async function archiveConversationFlow(
   projectId: string,
   taskId: string,
-  conversationId: string
+  conversationId: string,
+  options: ArchiveConversationOptions = {}
 ): Promise<void> {
   const provisioned = asProvisioned(getTaskStore(projectId, taskId));
   if (!provisioned) return;
   if (provisioned.conversations.conversations.get(conversationId)?.isArchiving) return;
 
-  await archiveConversationWithPreCommand(projectId, taskId, conversationId);
+  await archiveConversationWithPreCommand(projectId, taskId, conversationId, options);
   await archiveTaskIfNoConversationsLeft(projectId, taskId);
 }
 
