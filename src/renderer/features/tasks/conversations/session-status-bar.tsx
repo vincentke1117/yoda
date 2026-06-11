@@ -1,5 +1,4 @@
-import type { Terminal } from '@xterm/xterm';
-import { Check, ChevronDown, MessageSquareText, MoreHorizontal, Sparkles } from 'lucide-react';
+import { Check, MessageSquareText, MoreHorizontal, Settings2, Sparkles } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -8,7 +7,6 @@ import {
   SESSION_STATUS_BAR_SOURCE_IDS,
   type SessionStatusBarSource,
 } from '@shared/session-status-bar';
-import { getTaskMenuConversation } from '@renderer/features/tasks/components/task-menu-session-info';
 import { displaySessionPromptText } from '@renderer/features/tasks/context-panel-prompt-display';
 import { useTaskSettings } from '@renderer/features/tasks/hooks/useTaskSettings';
 import {
@@ -17,11 +15,6 @@ import {
   useSessionSummary,
 } from '@renderer/features/tasks/session-info-panel';
 import { buildPromptPreviewItems } from '@renderer/features/tasks/session-prompts-preview';
-import { useProvisionedTask } from '@renderer/features/tasks/task-view-context';
-import {
-  collectTerminalSearchMatches,
-  type TerminalSearchBufferLike,
-} from '@renderer/lib/pty/terminal-search';
 import { Popover, PopoverContent, PopoverTrigger } from '@renderer/lib/ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@renderer/lib/ui/tooltip';
 import { cn } from '@renderer/utils/utils';
@@ -44,7 +37,7 @@ const SOURCE_ICONS: Record<Exclude<SessionStatusBarSource, 'off'>, React.ReactNo
 };
 
 const BODY_CLASS =
-  'min-w-0 truncate text-center text-[13px] leading-5 text-[var(--xterm-fg)] opacity-75';
+  'min-w-0 truncate text-left text-[13px] leading-5 text-[var(--xterm-fg)] opacity-75';
 
 /**
  * The strip below the terminal. Shows ONE configurable content source at a
@@ -65,7 +58,6 @@ export const SessionStatusBar = observer(function SessionStatusBar({
   // never spawns work.
   const summary = useSessionSummary(active && source === 'summary', 'recent');
   const prompts = useSessionPrompts(active && source === 'recentPrompt');
-  const jumpToPrompt = usePromptTerminalJump(prompts);
 
   if (source === 'off') return null;
 
@@ -79,16 +71,6 @@ export const SessionStatusBar = observer(function SessionStatusBar({
   const olderPrompts = isPromptSource ? prompts.prompts.slice(0, -1) : [];
   const expanded =
     isPromptSource && taskSettings.statusBarPromptsExpanded && olderPrompts.length > 0;
-
-  const handlePromptBarClick = () => {
-    if (olderPrompts.length === 0) {
-      // Single prompt: nothing to unfold — jump straight to it.
-      const latest = prompts.prompts[prompts.prompts.length - 1];
-      if (latest) jumpToPrompt(latest, prompts.prompts.length);
-      return;
-    }
-    taskSettings.updateStatusBarPromptsExpanded(!taskSettings.statusBarPromptsExpanded);
-  };
 
   return (
     <section className="group/status relative min-w-0 shrink-0 bg-[var(--xterm-bg)]">
@@ -108,7 +90,6 @@ export const SessionStatusBar = observer(function SessionStatusBar({
               head={taskSettings.statusBarPromptHead}
               // The tail count includes the bar's own newest entry below.
               tail={taskSettings.statusBarPromptTail - 1}
-              onJump={jumpToPrompt}
               onOpenAll={prompts.openPromptsModal}
             />
           </div>
@@ -116,22 +97,19 @@ export const SessionStatusBar = observer(function SessionStatusBar({
       ) : null}
       <div
         className={cn(
-          'relative flex h-7 w-full min-w-0 items-center bg-[var(--xterm-bg)] px-9',
+          'relative flex h-7 w-full min-w-0 items-center bg-[var(--xterm-bg)] pl-3 pr-9',
           // When the blind is up, the separator moves to its top edge so the
           // rows and the bar read as one continuous list.
           !expanded && 'border-t border-foreground/10'
         )}
       >
-        <SourceSwitcher
-          source={source}
-          onSelect={(next) => taskSettings.updateStatusBarSource(next)}
-          className="absolute inset-y-0 left-1.5 flex items-center"
-        />
-        {isPromptSource && prompts.hasPrompts ? (
+        {olderPrompts.length > 0 ? (
           <button
             type="button"
-            onClick={handlePromptBarClick}
-            className="flex min-w-0 flex-1 items-center justify-center"
+            onClick={() =>
+              taskSettings.updateStatusBarPromptsExpanded(!taskSettings.statusBarPromptsExpanded)
+            }
+            className="flex min-w-0 flex-1 items-center justify-start"
             aria-label={content.tooltip}
             aria-expanded={expanded}
           >
@@ -148,7 +126,7 @@ export const SessionStatusBar = observer(function SessionStatusBar({
               render={
                 <div
                   role="status"
-                  className="flex min-w-0 flex-1 items-center justify-center"
+                  className="flex min-w-0 flex-1 items-center justify-start"
                   aria-label={content.tooltip}
                 />
               }
@@ -160,11 +138,13 @@ export const SessionStatusBar = observer(function SessionStatusBar({
             <TooltipContent>{content.tooltip}</TooltipContent>
           </Tooltip>
         )}
-        {content.controls ? (
-          <div className="absolute inset-y-0 right-1.5 flex items-center opacity-0 transition-opacity group-hover/status:opacity-100 focus-within:opacity-100">
-            {content.controls}
-          </div>
-        ) : null}
+        <div className="absolute inset-y-0 right-1.5 flex items-center gap-0.5 opacity-0 transition-opacity group-hover/status:opacity-100 focus-within:opacity-100">
+          {content.controls}
+          <SourceSwitcher
+            source={source}
+            onSelect={(next) => taskSettings.updateStatusBarSource(next)}
+          />
+        </div>
       </div>
     </section>
   );
@@ -210,44 +190,19 @@ function resolveContent(
 }
 
 /**
- * Resolves the active conversation's terminal and returns a jump function that
- * scrolls it to where a given prompt was submitted.
- */
-function usePromptTerminalJump(prompts: ReturnType<typeof useSessionPrompts>) {
-  const provisionedTask = useProvisionedTask();
-  const conversation = getTaskMenuConversation(provisionedTask);
-  const terminal = conversation
-    ? provisionedTask.conversations.conversations.get(conversation.id)?.session.pty?.terminal
-    : undefined;
-
-  return (prompt: ClaudeSessionPrompt, promptIndex: number) => {
-    if (!terminal) return;
-    // Repeated prompts produce identical buffer matches — pick the occurrence
-    // matching this prompt's position in the history.
-    const line = firstPromptLine(prompt.text);
-    const occurrence = prompts.prompts
-      .slice(0, promptIndex - 1)
-      .filter((p) => firstPromptLine(p.text) === line).length;
-    scrollTerminalToPromptText(terminal, line, occurrence);
-  };
-}
-
-/**
  * The unfolded prompt history above the bar: first `head` / last `tail`
- * prompts with the middle elided. Clicking a row scrolls the terminal to that
- * prompt; the elided-middle row opens the full history modal.
+ * prompts with the middle elided. The elided-middle row opens the full
+ * history modal.
  */
 function PromptHistoryRows({
   prompts,
   head,
   tail,
-  onJump,
   onOpenAll,
 }: {
   prompts: ClaudeSessionPrompt[];
   head: number;
   tail: number;
-  onJump: (prompt: ClaudeSessionPrompt, promptIndex: number) => void;
   onOpenAll: () => void;
 }) {
   const { t } = useTranslation();
@@ -259,7 +214,7 @@ function PromptHistoryRows({
           <button
             key="truncated"
             type="button"
-            className="flex h-6 w-full items-center justify-center gap-1.5 text-[11px] leading-5 text-[var(--xterm-fg)] opacity-45 transition-opacity hover:opacity-100"
+            className="flex h-6 w-full items-center justify-start gap-1.5 pl-3 pr-9 text-[11px] leading-5 text-[var(--xterm-fg)] opacity-45 transition-opacity hover:opacity-100"
             onClick={onOpenAll}
           >
             <MoreHorizontal className="size-3" />
@@ -269,7 +224,6 @@ function PromptHistoryRows({
           <BlindPromptRow
             key={item.prompt.id || `prompt-${item.promptIndex}`}
             prompt={item.prompt}
-            onClick={() => onJump(item.prompt, item.promptIndex)}
           />
         )
       )}
@@ -278,72 +232,28 @@ function PromptHistoryRows({
 }
 
 /** One older prompt inside the blind, styled like a dimmer copy of the bar. */
-function BlindPromptRow({ prompt, onClick }: { prompt: ClaudeSessionPrompt; onClick: () => void }) {
+function BlindPromptRow({ prompt }: { prompt: ClaudeSessionPrompt }) {
   const text = displaySessionPromptText(prompt.text).trim();
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex h-6 w-full min-w-0 items-center justify-center px-9"
-      title={text}
-    >
-      <span className={cn(BODY_CLASS, 'opacity-55 transition-opacity hover:opacity-100')}>
-        {text}
-      </span>
-    </button>
+    <div className="flex h-6 w-full min-w-0 items-center justify-start pl-3 pr-9" title={text}>
+      <span className={cn(BODY_CLASS, 'opacity-55')}>{text}</span>
+    </div>
   );
-}
-
-/** First non-empty line of a prompt, as displayed — the buffer search needle. */
-function firstPromptLine(text: string): string {
-  return (
-    displaySessionPromptText(text)
-      .split('\n')
-      .map((line) => line.trim())
-      .find(Boolean) ?? ''
-  );
-}
-
-/**
- * Scroll the terminal to the `occurrence`-th place the prompt's first line
- * appears in the scrollback, selecting the match for visibility. CLIs may
- * hard-wrap long prompts at their input-box width (those rows are NOT marked
- * as wrapped), so progressively shorter prefixes are retried until one hits.
- */
-function scrollTerminalToPromptText(terminal: Terminal, line: string, occurrence: number): void {
-  const buffer = terminal.buffer?.active as TerminalSearchBufferLike | undefined;
-  if (!buffer || !line) return;
-  const prefixLengths = [...new Set([line.length, 60, 30, 15].filter((n) => n <= line.length))];
-  for (const length of prefixLengths) {
-    const query = line.slice(0, length).trim();
-    if (!query) continue;
-    const matches = collectTerminalSearchMatches(buffer, query);
-    if (matches.length === 0) continue;
-    const match = matches[Math.min(occurrence, matches.length - 1)];
-    try {
-      terminal.select(match.col, match.row, match.length);
-      const contextRows = Math.max(0, Math.floor(terminal.rows / 2));
-      terminal.scrollToLine(Math.max(0, match.row - contextRows));
-    } catch {}
-    return;
-  }
 }
 
 /** Compact dropdown to pick which source the status bar shows. */
 const SourceSwitcher = observer(function SourceSwitcher({
   source,
   onSelect,
-  className,
 }: {
   source: SessionStatusBarSource;
   onSelect: (next: SessionStatusBarSource) => void;
-  className?: string;
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const label = (id: SessionStatusBarSource) => t(`tasks.sessionPanel.statusBar.source.${id}`);
   return (
-    <div className={className}>
+    <div className="flex items-center">
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger
           render={
@@ -353,11 +263,11 @@ const SourceSwitcher = observer(function SourceSwitcher({
               aria-label={t('tasks.sessionPanel.statusBar.switchSource')}
               title={t('tasks.sessionPanel.statusBar.switchSource')}
             >
-              <ChevronDown className="size-3" />
+              <Settings2 className="size-3" />
             </button>
           }
         />
-        <PopoverContent align="start" side="top" className="w-48 gap-0 p-1">
+        <PopoverContent align="end" side="top" className="w-48 gap-0 p-1">
           {SESSION_STATUS_BAR_SOURCE_IDS.map((id) => (
             <button
               key={id}
