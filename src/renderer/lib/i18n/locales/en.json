@@ -478,7 +478,7 @@
       "statusBarSourceLabel": "Status bar",
       "statusBarSourceHint": "What the strip below the terminal shows. Choose \"Hidden\" to hide it.",
       "statusBarPromptEdgesLabel": "Expanded history rows",
-      "statusBarPromptEdgesHint": "How many oldest / newest prompts the expanded bar shows; the middle is elided.",
+      "statusBarPromptEdgesHint": "How many oldest / newest prompts the expanded bar shows (middle elided). The newest count includes the always-visible bottom row.",
       "statusBarPrompt": {
         "head": "First",
         "tail": "Last"

@@ -11,6 +11,7 @@ import {
   DEFAULT_STATUS_BAR_PROMPT_TAIL,
   SESSION_STATUS_BAR_SOURCE_IDS,
   STATUS_BAR_PROMPT_EDGE_MAX,
+  STATUS_BAR_PROMPT_TAIL_MIN,
 } from '@shared/session-status-bar';
 import {
   DEFAULT_SUMMARY_CONTEXT_GLOBAL,
@@ -76,11 +77,11 @@ export const taskSettingsSchema = z.object({
     .min(0)
     .max(STATUS_BAR_PROMPT_EDGE_MAX)
     .catch(DEFAULT_STATUS_BAR_PROMPT_HEAD),
-  /** How many newest prompts (before the bar's own) the unfolded blind shows. */
+  /** How many newest prompts the unfolded blind shows, INCLUDING the bar's own. */
   statusBarPromptTail: z
     .number()
     .int()
-    .min(0)
+    .min(STATUS_BAR_PROMPT_TAIL_MIN)
     .max(STATUS_BAR_PROMPT_EDGE_MAX)
     .catch(DEFAULT_STATUS_BAR_PROMPT_TAIL),
   /** Which transcript parts feed the `recent` summary (defaults to user-only for speed). */

@@ -106,14 +106,22 @@ export const SessionStatusBar = observer(function SessionStatusBar({
             <PromptHistoryRows
               prompts={olderPrompts}
               head={taskSettings.statusBarPromptHead}
-              tail={taskSettings.statusBarPromptTail}
+              // The tail count includes the bar's own newest entry below.
+              tail={taskSettings.statusBarPromptTail - 1}
               onJump={jumpToPrompt}
               onOpenAll={prompts.openPromptsModal}
             />
           </div>
         </div>
       ) : null}
-      <div className="relative flex h-7 w-full min-w-0 items-center border-t border-foreground/10 bg-[var(--xterm-bg)] px-9">
+      <div
+        className={cn(
+          'relative flex h-7 w-full min-w-0 items-center bg-[var(--xterm-bg)] px-9',
+          // When the blind is up, the separator moves to its top edge so the
+          // rows and the bar read as one continuous list.
+          !expanded && 'border-t border-foreground/10'
+        )}
+      >
         <SourceSwitcher
           source={source}
           onSelect={(next) => taskSettings.updateStatusBarSource(next)}

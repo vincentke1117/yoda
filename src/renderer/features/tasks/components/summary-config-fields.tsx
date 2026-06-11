@@ -7,6 +7,7 @@ import {
   DEFAULT_STATUS_BAR_PROMPT_TAIL,
   SESSION_STATUS_BAR_SOURCE_IDS,
   STATUS_BAR_PROMPT_EDGE_MAX,
+  STATUS_BAR_PROMPT_TAIL_MIN,
 } from '@shared/session-status-bar';
 import { SUMMARY_CONTEXT_SOURCE_IDS } from '@shared/session-summary';
 import { useAgents } from '@renderer/features/agents-config/use-agents';
@@ -205,6 +206,9 @@ const PromptEdgeInput = observer(function PromptEdgeInput({
     edge === 'head' ? taskSettings.statusBarPromptHead : taskSettings.statusBarPromptTail;
   const fallback =
     edge === 'head' ? DEFAULT_STATUS_BAR_PROMPT_HEAD : DEFAULT_STATUS_BAR_PROMPT_TAIL;
+  // The tail count includes the bar's always-visible newest entry, so it can
+  // never drop below 1.
+  const min = edge === 'tail' ? STATUS_BAR_PROMPT_TAIL_MIN : 0;
   const label = t(`settings.tasks.statusBarPrompt.${edge}`);
   return (
     <label className="flex min-w-0 items-center gap-1.5 text-xs text-foreground-muted">
@@ -212,14 +216,14 @@ const PromptEdgeInput = observer(function PromptEdgeInput({
       <Input
         key={value}
         type="number"
-        min={0}
+        min={min}
         max={STATUS_BAR_PROMPT_EDGE_MAX}
         step={1}
         defaultValue={value}
         disabled={disabled}
         aria-label={label}
         onBlur={(e) => {
-          const next = clampStatusBarPromptEdge(Number(e.target.value), fallback);
+          const next = clampStatusBarPromptEdge(Number(e.target.value), fallback, min);
           e.target.value = String(next);
           if (next !== value) taskSettings.updateStatusBarPromptEdges({ [edge]: next });
         }}

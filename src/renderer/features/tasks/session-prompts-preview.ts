@@ -19,7 +19,7 @@ export function buildPromptPreviewItems(
   tailCount = headCount
 ): PromptPreviewItem[] {
   const visibleLimit = Math.max(0, headCount) + Math.max(0, tailCount);
-  if (visibleLimit <= 0 || prompts.length <= visibleLimit) {
+  if (prompts.length <= visibleLimit) {
     return prompts.map((prompt, index) => ({
       type: 'prompt',
       prompt,

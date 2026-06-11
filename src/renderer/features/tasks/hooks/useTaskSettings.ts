@@ -3,6 +3,7 @@ import {
   DEFAULT_SESSION_STATUS_BAR_SOURCE,
   DEFAULT_STATUS_BAR_PROMPT_HEAD,
   DEFAULT_STATUS_BAR_PROMPT_TAIL,
+  STATUS_BAR_PROMPT_TAIL_MIN,
   type SessionStatusBarSource,
 } from '@shared/session-status-bar';
 import {
@@ -121,7 +122,8 @@ export function useTaskSettings(): TaskSettingsModel {
           : {
               statusBarPromptTail: clampStatusBarPromptEdge(
                 next.tail,
-                DEFAULT_STATUS_BAR_PROMPT_TAIL
+                DEFAULT_STATUS_BAR_PROMPT_TAIL,
+                STATUS_BAR_PROMPT_TAIL_MIN
               ),
             }),
       }),
