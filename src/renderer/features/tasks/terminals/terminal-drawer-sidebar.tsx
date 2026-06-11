@@ -115,7 +115,7 @@ export const ScriptsDrawerSidebar = observer(function ScriptsDrawerSidebar({
           <TooltipTrigger
             render={
               <button
-                onClick={() => navigate('project', { projectId })}
+                onClick={() => navigate('project', { projectId, view: 'settings' })}
                 className={HEADER_BUTTON_CLASS}
               >
                 <Settings className="size-3" />

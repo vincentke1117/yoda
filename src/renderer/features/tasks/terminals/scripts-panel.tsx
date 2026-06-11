@@ -63,7 +63,11 @@ export const ScriptsPanel = observer(function ScriptsPanel() {
           label={t('tasks.terminals.scriptsEmptyTitle')}
           description={t('tasks.terminals.scriptsEmptyDescription')}
           action={
-            <Button size="sm" variant="outline" onClick={() => navigate('project', { projectId })}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => navigate('project', { projectId, view: 'settings' })}
+            >
               {t('tasks.terminals.configureInProjectSettings')}
             </Button>
           }
