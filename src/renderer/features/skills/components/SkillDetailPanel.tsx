@@ -369,7 +369,6 @@ const SkillDetailContent: React.FC<{
                 <ValueRow
                   label={t('skills.detail.installPath')}
                   value={skill.localPath}
-                  onCopy={() => void handleCopy(skill.localPath!)}
                   extraAction={
                     <FilePathActionsDropdown
                       target={{ absolutePath: skill.localPath, kind: 'directory' }}
@@ -380,7 +379,6 @@ const SkillDetailContent: React.FC<{
                   <ValueRow
                     label={t('skills.detail.skillFile')}
                     value={localSkillFilePath}
-                    onCopy={() => void handleCopy(localSkillFilePath)}
                     extraAction={
                       <FilePathActionsDropdown
                         target={{ absolutePath: localSkillFilePath, kind: 'file' }}
@@ -570,7 +568,8 @@ function ValueRow({
 }: {
   label: string;
   value: string;
-  onCopy: () => void;
+  /** Quick one-click copy; omit when the extra action's menu already covers it. */
+  onCopy?: () => void;
   extraAction?: React.ReactNode;
 }) {
   return (
@@ -591,20 +590,22 @@ function ValueRow({
           {extraAction}
         </div>
       )}
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        onClick={onCopy}
-        aria-label={label}
-        title={label}
-        className={cn(
-          'shrink-0',
-          hoverActionBaseClass,
-          'group-hover/value-row:opacity-100 group-focus-within/value-row:opacity-100'
-        )}
-      >
-        <Copy className="h-3.5 w-3.5" />
-      </Button>
+      {onCopy ? (
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          onClick={onCopy}
+          aria-label={label}
+          title={label}
+          className={cn(
+            'shrink-0',
+            hoverActionBaseClass,
+            'group-hover/value-row:opacity-100 group-focus-within/value-row:opacity-100'
+          )}
+        >
+          <Copy className="h-3.5 w-3.5" />
+        </Button>
+      ) : null}
     </div>
   );
 }
