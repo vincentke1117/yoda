@@ -770,6 +770,45 @@ function buildSessionNamingSystemPrompt(language: string): string {
   ].join('\n');
 }
 
+/**
+ * One-shot utility-agent call outside the task-naming flow: send a prompt
+ * through the configured naming CLI and parse the JSON object it returns.
+ * Reused by features that need a single structured answer (e.g. commit
+ * message generation) without the naming snapshot/debug machinery.
+ */
+export async function requestUtilityAgentJson(input: {
+  prompt: string;
+  cwd: string;
+}): Promise<Record<string, unknown>> {
+  const resolved = await resolveNamingRuntime();
+  if (!resolved.runtime) {
+    throw new Error(`No naming command is configured for ${resolved.runtimeName}.`);
+  }
+  const command = withProviderStreamingMode(
+    buildAgentNamingCommand(resolved.runtime.providerConfig, input.prompt),
+    resolved.runtime.runtimeId
+  );
+  const result = await runAgentNamingCommand({
+    ...command,
+    cwd: input.cwd,
+    env: {
+      ...buildExternalToolEnv(
+        resolveRuntimeBaseEnv(
+          process.env,
+          resolved.runtime.providerConfig,
+          resolved.runtime.runtimeId
+        )
+      ),
+      ...resolveRuntimeEnv(resolved.runtime.providerConfig, {
+        runtimeId: resolved.runtime.runtimeId,
+      }),
+    },
+    timeoutMs: resolved.settings.requestTimeoutMs,
+    runtimeName: resolved.runtime.runtimeName,
+  });
+  return parseNamingPayload(result.stdout) as Record<string, unknown>;
+}
+
 function withProviderStreamingMode(
   command: ReturnType<typeof buildAgentNamingCommand>,
   runtimeId: RuntimeId

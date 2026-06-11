@@ -2,6 +2,7 @@ import { PanelBottom, PanelRight } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useTranslation } from 'react-i18next';
 import { asMounted, getProjectStore } from '@renderer/features/projects/stores/project-selectors';
+import { TaskFinishControl } from '@renderer/features/tasks/finish-flow/finish-control';
 import { getTaskStore, taskViewKind } from '@renderer/features/tasks/stores/task-selectors';
 import { useProvisionedTask, useTaskViewContext } from '@renderer/features/tasks/task-view-context';
 import { OpenInMenu } from '@renderer/lib/components/titlebar/open-in-menu';
@@ -47,6 +48,7 @@ export const ActiveTaskTitlebar = observer(function ActiveTaskTitlebar({
       rightSlot={
         <div className="flex items-center gap-2">
           <DevServerPills projectId={projectId} taskId={taskId} />
+          <TaskFinishControl />
           {!isRemoteProject && (
             <OpenInMenu path={provisionedTask.path} className="h-7 bg-background" borderless />
           )}

@@ -104,6 +104,11 @@ export type TelemetryEventProperties = {
     success: boolean;
     error_type?: string;
   };
+  /** Local quick-merge of a task branch back into its source branch. */
+  task_branch_merged: {
+    success: boolean;
+    error_type?: string;
+  };
 
   vcs_branch_published: { success: boolean; error_type?: string };
   vcs_fetch: { success: boolean; error_type?: string };
