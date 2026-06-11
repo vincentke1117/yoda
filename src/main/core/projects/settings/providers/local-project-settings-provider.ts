@@ -4,6 +4,7 @@ import path from 'node:path';
 import type { UpdateProjectSettingsError } from '@shared/projects';
 import type { Result } from '@shared/result';
 import { appSettingsService } from '@main/core/settings/settings-service';
+import { getDefaultLocalWorktreeDirectory } from '@main/core/settings/worktree-defaults';
 import type { ProjectSettingsStorage } from '../project-settings-storage';
 import {
   normalizeWorktreeDirectory,
@@ -11,11 +12,17 @@ import {
 } from '../worktree-directory';
 import { DbProjectSettingsProvider } from './db-project-settings-provider';
 
-async function getLocalDefaultWorktreeDirectory(): Promise<string> {
-  return (await appSettingsService.get('localProject')).defaultWorktreeDirectory;
-}
-
 const localPathPlatform = process.platform === 'win32' ? 'win32' : 'posix';
+
+async function getLocalDefaultWorktreeDirectory(): Promise<string> {
+  const configured = (await appSettingsService.get('localProject')).defaultWorktreeDirectory;
+  const normalized = await normalizeWorktreeDirectory(configured, {
+    pathApi: path,
+    pathPlatform: localPathPlatform,
+    homeDirectory: os.homedir(),
+  });
+  return normalized.success ? normalized.data : getDefaultLocalWorktreeDirectory();
+}
 
 export class LocalProjectSettingsProvider extends DbProjectSettingsProvider {
   constructor(
