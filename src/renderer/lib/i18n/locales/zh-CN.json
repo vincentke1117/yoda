@@ -271,6 +271,7 @@
       "repository": "项目",
       "github": "GitHub",
       "interface": "界面",
+      "terminal": "终端",
       "keyboardShortcuts": "快捷键"
     },
     "general": {
@@ -364,6 +365,9 @@
     "interfaceTab": {
       "description": "自定义应用的外观与行为。",
       "keyboardShortcuts": "键盘快捷键"
+    },
+    "terminalTab": {
+      "description": "配置终端字体、历史行数与剪贴板行为。"
     },
     "keyboardShortcutsTab": {
       "description": "自定义应用操作的键盘快捷键。"

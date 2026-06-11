@@ -271,6 +271,7 @@
       "repository": "Project",
       "github": "GitHub",
       "interface": "Interface",
+      "terminal": "Terminal",
       "keyboardShortcuts": "Keyboard shortcuts"
     },
     "general": {
@@ -364,6 +365,9 @@
     "interfaceTab": {
       "description": "Customize the appearance and behavior of the app.",
       "keyboardShortcuts": "Keyboard shortcuts"
+    },
+    "terminalTab": {
+      "description": "Configure terminal font, history, and clipboard behavior."
     },
     "keyboardShortcutsTab": {
       "description": "Customize keyboard shortcuts for app actions."

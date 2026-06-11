@@ -519,7 +519,7 @@ export function usePty(
           frontendPty.setScrollbackLines(
             terminalSettings?.scrollbackLines ?? DEFAULT_TERMINAL_SCROLLBACK_LINES
           );
-          autoCopyOnSelectionRef.current = terminalSettings?.autoCopyOnSelection ?? false;
+          autoCopyOnSelectionRef.current = terminalSettings?.autoCopyOnSelection ?? true;
         }
       );
 
