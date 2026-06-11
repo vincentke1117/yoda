@@ -369,6 +369,23 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
           )}
           <div className="flex min-w-0 flex-1 flex-col justify-center overflow-hidden">
             <div className="flex min-w-0 items-center gap-1">
+              {branchDisplay === 'compact' && (
+                <span
+                  title={branchName}
+                  className={cn(
+                    // Leading fixed-width gutter: generated suffixes are always
+                    // 5 chars, so `w-[5ch]` lines task names up across rows
+                    // (trailing placement followed the name length and looked
+                    // ragged). Longer fallbacks (custom/Linear basenames)
+                    // truncate inside the same column, and branch-less rows
+                    // keep the empty gutter so their names stay aligned too.
+                    'shrink-0 w-[5ch] truncate font-mono text-[10px] text-foreground-tertiary-passive',
+                    (isBootstrapping || isArchiving) && 'opacity-40'
+                  )}
+                >
+                  {compactBranchName}
+                </span>
+              )}
               <span
                 className={cn(
                   'min-w-0 truncate text-left transition-colors',
@@ -385,17 +402,6 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
               {rowVariant === 'flat' && (
                 <span className="shrink-0 truncate max-w-[8rem] rounded-sm bg-background-tertiary-2 px-1 text-[10px] uppercase tracking-wide text-foreground-tertiary">
                   {projectName}
-                </span>
-              )}
-              {branchDisplay === 'compact' && compactBranchName && (
-                <span
-                  title={branchName}
-                  className={cn(
-                    'shrink-0 truncate max-w-[7rem] font-mono text-[10px] text-foreground-tertiary-passive',
-                    (isBootstrapping || isArchiving) && 'opacity-40'
-                  )}
-                >
-                  {compactBranchName}
                 </span>
               )}
               <RenderPrBadge task={task} />
