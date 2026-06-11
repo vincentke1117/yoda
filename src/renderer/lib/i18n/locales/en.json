@@ -476,10 +476,12 @@
       "osNotificationsDescription": "Show system banners when agents need attention or finish (while Yoda is unfocused)."
     },
     "tasks": {
-      "autoGenerateName": "Auto-generate task names",
-      "autoGenerateNameDescription": "Generate readable task names and professional branch names when creating a new task.",
+      "autoGenerateName": "Auto-generate session titles",
+      "autoGenerateNameDescription": "Generate a readable session title from a session's first prompt.",
+      "initTaskNameFromSession": "Initialize task names from session titles",
+      "initTaskNameFromSessionDescription": "When the initial session's title is generated, use it as the task name. Tasks you renamed yourself are left untouched.",
       "namingConfigTitle": "Naming",
-      "namingConfigDescription": "Model, target language, and the context sources used to name tasks.",
+      "namingConfigDescription": "Agent, target language, and the context sources used to name sessions and tasks.",
       "summaryConfigTitle": "Session summary",
       "summaryConfigDescription": "The agent used to generate session summaries. Runs on its own runtime and model, independent of each session's runtime.",
       "namingAgentLabel": "Naming agent",

@@ -64,6 +64,33 @@ export const AutoGenerateTaskNamesRow: React.FC = () => {
   );
 };
 
+export const InitTaskNameFromSessionRow: React.FC = () => {
+  const { t } = useTranslation();
+  const taskSettings = useTaskSettings();
+
+  return (
+    <SettingRow
+      title={t('settings.tasks.initTaskNameFromSession')}
+      description={t('settings.tasks.initTaskNameFromSessionDescription')}
+      control={
+        <>
+          <ResetToDefaultButton
+            visible={taskSettings.isFieldOverridden('initTaskNameFromSession')}
+            defaultLabel="on"
+            onReset={taskSettings.resetInitTaskNameFromSession}
+            disabled={taskSettings.loading || taskSettings.saving}
+          />
+          <Switch
+            checked={taskSettings.initTaskNameFromSession}
+            disabled={taskSettings.loading || taskSettings.saving}
+            onCheckedChange={taskSettings.updateInitTaskNameFromSession}
+          />
+        </>
+      }
+    />
+  );
+};
+
 export const AutoTrustWorktreesRow: React.FC = () => {
   const { t } = useTranslation();
   const taskSettings = useTaskSettings();

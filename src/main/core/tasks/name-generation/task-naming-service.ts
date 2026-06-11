@@ -21,12 +21,13 @@ import {
   resolveRuntimeBaseEnv,
   resolveRuntimeEnv,
 } from '@main/core/conversations/impl/runtime-env';
+import { getManualSummary, getStoredSummary } from '@main/core/conversations/session-summary-store';
 import { projectManager } from '@main/core/projects/project-manager';
 import type { ProjectProvider } from '@main/core/projects/project-provider';
 import { runtimeOverrideSettings } from '@main/core/settings/runtime-settings-service';
 import { appSettingsService } from '@main/core/settings/settings-service';
 import { db } from '@main/db/client';
-import { projects, taskNamingSnapshots, tasks } from '@main/db/schema';
+import { conversations, projects, taskNamingSnapshots, tasks } from '@main/db/schema';
 import { events } from '@main/lib/events';
 import { log } from '@main/lib/logger';
 import { buildExternalToolEnv } from '@main/utils/childProcessEnv';
@@ -52,6 +53,11 @@ type GenerateTaskNamesInput = {
   project: ProjectProvider;
   params: CreateTaskParams;
   includeBranchName: boolean;
+  /**
+   * 'session' names the session from its own content (first prompt) only;
+   * 'task' (default) aggregates session titles/summaries plus project sources.
+   */
+  target?: NamingTarget;
 };
 
 type GenerateTaskNamesResult =
@@ -368,7 +374,7 @@ export async function generateTaskNames(
     })),
   });
   const promptParts = buildNamingPromptParts({
-    target: 'task',
+    target: input.target ?? 'task',
     context,
     includeBranchName: input.includeBranchName,
     customSystemPrompt: namingRuntime.customSystemPrompt,
@@ -410,7 +416,10 @@ export async function generateTaskNames(
       hasBranchName: typeof result.payload.branchName === 'string',
     });
     const payload = result.payload;
-    const taskName = normalizeGeneratedTaskName(payload.taskName);
+    const taskName =
+      (input.target ?? 'task') === 'session'
+        ? normalizeGeneratedSessionTitle(payload.sessionTitle ?? payload.title ?? payload.taskName)
+        : normalizeGeneratedTaskName(payload.taskName);
     const branchName = input.includeBranchName
       ? normalizeGeneratedBranchName(payload.branchName ?? taskName)
       : undefined;
@@ -526,6 +535,7 @@ async function buildTaskNamingContextSnapshot(
   input: GenerateTaskNamesInput,
   settings: TaskNamingSettings
 ): Promise<TaskNamingContextSnapshot> {
+  const target = input.target ?? 'task';
   const sources: NamingContextSourceDraft[] = [];
 
   if (settings.context.prompt) {
@@ -538,15 +548,20 @@ async function buildTaskNamingContextSnapshot(
     });
   }
 
-  sources.push(
-    ...(await buildCommonProjectNamingSources({
-      projectId: input.projectId,
-      project: input.project,
-      projectPath: input.project.repoPath,
-      settings,
-      excludeTaskId: input.taskId,
-    }))
-  );
+  // Session naming is session-internal by design; only task naming aggregates
+  // the task's sessions (titles + summaries) and the wider project sources.
+  if (target === 'task') {
+    sources.push(await buildTaskSessionsNamingSource(input.taskId));
+    sources.push(
+      ...(await buildCommonProjectNamingSources({
+        projectId: input.projectId,
+        project: input.project,
+        projectPath: input.project.repoPath,
+        settings,
+        excludeTaskId: input.taskId,
+      }))
+    );
+  }
 
   return createNamingContextSnapshot({
     taskId: input.taskId,
@@ -554,6 +569,44 @@ async function buildTaskNamingContextSnapshot(
     settings,
     sources,
   });
+}
+
+const MAX_SESSION_SUMMARY_CHARS = 400;
+
+/**
+ * Aggregates this task's sessions (title + stored summary) — the primary
+ * signal for task naming: the task name should reflect what its sessions did.
+ * Uses stored summaries only (manual first, then the cached generated one);
+ * naming must never trigger a summary generation of its own.
+ */
+async function buildTaskSessionsNamingSource(taskId: string): Promise<NamingContextSourceDraft> {
+  const rows = await db
+    .select({
+      id: conversations.id,
+      title: conversations.title,
+      archivedAt: conversations.archivedAt,
+    })
+    .from(conversations)
+    .where(eq(conversations.taskId, taskId))
+    .orderBy(conversations.createdAt);
+  const lines = await Promise.all(
+    rows.map(async (row, index) => {
+      const summary =
+        (await getManualSummary(row.id, 'global'))?.text ??
+        (await getStoredSummary(row.id, 'global'))?.summary.text;
+      const flattened = summary?.replace(/\s+/g, ' ').trim();
+      const summaryPart = flattened
+        ? ` — ${clip(flattened, MAX_SESSION_SUMMARY_CHARS).content}`
+        : '';
+      const archivedPart = row.archivedAt ? ' (archived)' : '';
+      return `${index + 1}. ${row.title}${archivedPart}${summaryPart}`;
+    })
+  );
+  return {
+    id: 'sessions',
+    label: 'Sessions in this task (title — summary)',
+    content: lines.join('\n'),
+  };
 }
 
 async function readProjectReadme(
@@ -875,6 +928,13 @@ function normalizeGeneratedTaskName(value: unknown): string | undefined {
   const stripped = value.replace(/[\r\n]+/g, ' ').replace(/^["'“”‘’`]+|["'“”‘’`。.!?！？]+$/g, '');
   const normalized = normalizeTaskDisplayName(stripped);
   return normalized ? normalized.slice(0, MAX_TASK_NAME_CHARS) : undefined;
+}
+
+export function normalizeGeneratedSessionTitle(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const stripped = value.replace(/[\r\n]+/g, ' ').replace(/^["'“”‘’`]+|["'“”‘’`。.!?！？]+$/g, '');
+  const normalized = normalizeTaskDisplayName(stripped);
+  return normalized ? normalized.slice(0, MAX_SESSION_TITLE_CHARS) : undefined;
 }
 
 function normalizeGeneratedBranchName(value: unknown): string | undefined {
