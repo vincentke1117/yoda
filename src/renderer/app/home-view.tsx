@@ -1562,6 +1562,18 @@ export const HomeComposer = observer(function HomeComposer({
     },
     [updateDraft]
   );
+  const { value: promptPrinciplesValue, update: updatePromptPrinciples } =
+    useAppSettingsKey('promptPrinciples');
+  const promptPrinciples = promptPrinciplesValue?.items ?? [];
+  const setPromptPrincipleEnabled = useCallback(
+    (id: string, enabled: boolean) => {
+      const items = promptPrinciplesValue?.items ?? [];
+      updatePromptPrinciples({
+        items: items.map((item) => (item.id === id ? { ...item, enabled } : item)),
+      });
+    },
+    [promptPrinciplesValue, updatePromptPrinciples]
+  );
   const modeCanRunWithoutProject = runMode === 'normal' || runMode === 'brainstorm';
   const modeRequiresWorktree =
     !taskScopedTarget &&
@@ -2899,6 +2911,31 @@ export const HomeComposer = observer(function HomeComposer({
                     className="mt-0.5"
                   />
                 </div>
+                {promptPrinciples.length > 0 && (
+                  <div className="mt-3 flex flex-col gap-2 border-t border-border/60 pt-3">
+                    <span className="text-sm font-medium text-foreground">
+                      {t('home.promptPrinciplesLabel')}
+                    </span>
+                    {promptPrinciples.map((principle) => (
+                      <div key={principle.id} className="flex items-center justify-between gap-3">
+                        <span
+                          className="min-w-0 truncate text-xs text-foreground-muted"
+                          title={principle.text}
+                        >
+                          {principle.name || t('home.promptPrincipleUnnamed')}
+                        </span>
+                        <Switch
+                          size="sm"
+                          checked={principle.enabled}
+                          onCheckedChange={(checked) =>
+                            setPromptPrincipleEnabled(principle.id, checked)
+                          }
+                          aria-label={t('settings.prompts.toggle')}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
               </PopoverContent>
             </Popover>
           </div>
