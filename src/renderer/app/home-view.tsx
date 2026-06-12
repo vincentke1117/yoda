@@ -2450,9 +2450,13 @@ export const HomeComposer = observer(function HomeComposer({
                       )}
                       style={{
                         left: rect.left + 3,
-                        top: rect.top - promptScrollTop + 2,
+                        // The measured rect is the glyph inline box (~1.2em),
+                        // tighter than the chip's contents need — grow 1px
+                        // into the line box's half-leading on each side so the
+                        // label never clips vertically.
+                        top: rect.top - promptScrollTop - 1,
                         width: Math.max(rect.width - 6, 0),
-                        height: Math.max(rect.height - 4, 0),
+                        height: rect.height + 2,
                       }}
                     >
                       {index === 0 && (
