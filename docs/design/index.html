@@ -1,0 +1,646 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Yoda — Design</title>
+    <meta
+      name="description"
+      content="The Yoda brand identity: The Hood mark, lockup, app icon, and palette."
+    />
+    <link rel="icon" type="image/svg+xml" href="/yoda-app-icon.svg" />
+    <link rel="canonical" href="https://yoda.lovstudio.ai/design/" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@300;400;500&family=Poppins:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #0b130e;
+        --bg-1: #101a13;
+        --bg-3: #1c2c21;
+        --fg: #d9eadf;
+        --fg-muted: #8aa593;
+        --fg-passive: #5a7363;
+        --border-1: #27392c;
+        --mark: #dbebde;
+        --dot: #5dc98f;
+        --serif: 'Instrument Serif', Georgia, serif;
+        --mono: 'IBM Plex Mono', ui-monospace, monospace;
+        --wordmark: 'Poppins', sans-serif;
+      }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html {
+        scroll-behavior: smooth;
+      }
+      body {
+        background: var(--bg);
+        color: var(--fg);
+        font-family: var(--mono);
+        font-weight: 300;
+        overflow-x: hidden;
+      }
+      body::after {
+        content: '';
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        opacity: 0.05;
+        z-index: 50;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+      }
+
+      /* ---------- hero ---------- */
+      .hero {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        padding: 4rem 2rem;
+      }
+      .hero::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background:
+          radial-gradient(ellipse 55% 42% at 50% 40%, rgba(93, 201, 143, 0.09), transparent 70%),
+          radial-gradient(ellipse 90% 60% at 50% 110%, rgba(93, 201, 143, 0.05), transparent 70%);
+      }
+      .hero-mark {
+        width: clamp(190px, 26vw, 280px);
+        animation: rise 1.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+      }
+      .hero h1 {
+        font-family: var(--wordmark);
+        font-weight: 500;
+        font-size: clamp(3.6rem, 9vw, 6.5rem);
+        letter-spacing: 0.22em;
+        margin-top: 2.4rem;
+        margin-right: -0.22em;
+        animation: rise 1.4s 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
+      }
+      .hero .tagline {
+        color: var(--fg-muted);
+        font-size: clamp(0.78rem, 1.5vw, 0.95rem);
+        letter-spacing: 0.42em;
+        text-transform: uppercase;
+        margin-top: 1.1rem;
+        animation: rise 1.4s 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+      }
+      .hero .quote {
+        margin-top: 3.2rem;
+        font-family: var(--serif);
+        font-style: italic;
+        font-size: clamp(1.05rem, 2.2vw, 1.4rem);
+        color: var(--fg-passive);
+        animation: rise 1.4s 0.65s cubic-bezier(0.22, 1, 0.36, 1) both;
+      }
+      @keyframes rise {
+        from {
+          opacity: 0;
+          transform: translateY(28px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      /* the presence breathes */
+      .breathe {
+        animation: breathe 4.5s ease-in-out infinite;
+        transform-box: fill-box;
+        transform-origin: center;
+      }
+      @keyframes breathe {
+        0%,
+        100% {
+          opacity: 0.55;
+          transform: scale(1);
+        }
+        50% {
+          opacity: 1;
+          transform: scale(1.18);
+        }
+      }
+
+      /* ---------- sections ---------- */
+      section {
+        max-width: 1060px;
+        margin: 0 auto;
+        padding: 7rem 2rem 0;
+      }
+      section:last-of-type {
+        padding-bottom: 7rem;
+      }
+      .kicker {
+        color: var(--dot);
+        font-size: 0.72rem;
+        letter-spacing: 0.38em;
+        text-transform: uppercase;
+      }
+      h2 {
+        font-family: var(--serif);
+        font-weight: 400;
+        font-size: clamp(2rem, 4.5vw, 3rem);
+        margin: 0.6rem 0 2.5rem;
+      }
+      h2 em {
+        color: var(--dot);
+      }
+
+      .grid {
+        display: grid;
+        gap: 1.25rem;
+      }
+      .grid.cols-3 {
+        grid-template-columns: repeat(3, 1fr);
+      }
+      @media (max-width: 760px) {
+        .grid.cols-3 {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .card {
+        background: var(--bg-1);
+        border: 1px solid var(--border-1);
+        border-radius: 14px;
+        padding: 2.2rem 1.6rem 1.4rem;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1.4rem;
+      }
+      .card.light {
+        background: #f4f7f4;
+        border-color: #d8e2da;
+      }
+      .card.terra {
+        background: #cc785c;
+        border-color: #b5654a;
+      }
+      .card .label {
+        font-size: 0.7rem;
+        letter-spacing: 0.28em;
+        text-transform: uppercase;
+        color: var(--fg-passive);
+      }
+      .card.light .label {
+        color: #6a7d70;
+      }
+      .card.terra .label {
+        color: #5e2f1e;
+      }
+      .card svg,
+      .card img {
+        width: 124px;
+        height: auto;
+      }
+
+      /* anatomy */
+      .anatomy {
+        display: grid;
+        grid-template-columns: minmax(260px, 1fr) 1fr;
+        gap: 3rem;
+        align-items: center;
+      }
+      @media (max-width: 760px) {
+        .anatomy {
+          grid-template-columns: 1fr;
+        }
+      }
+      .anatomy ul {
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 1.3rem;
+      }
+      .anatomy li {
+        display: flex;
+        gap: 1rem;
+        align-items: baseline;
+        font-size: 0.88rem;
+        line-height: 1.7;
+        color: var(--fg-muted);
+      }
+      .anatomy li b {
+        color: var(--fg);
+        font-weight: 500;
+      }
+      .anatomy li .n {
+        color: var(--dot);
+        font-size: 0.72rem;
+        min-width: 2ch;
+      }
+
+      /* lockup */
+      .lockup-stage {
+        background: var(--bg-1);
+        border: 1px solid var(--border-1);
+        border-radius: 14px;
+        padding: 4.5rem 2rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 56px;
+      }
+      .lockup-stage svg.mark {
+        height: 150px;
+        width: auto;
+      }
+      .lockup-stage .word {
+        font-family: var(--wordmark);
+        font-weight: 500;
+        font-size: 150px;
+        line-height: 1;
+        letter-spacing: 0.18em;
+        margin-right: -0.18em;
+        color: var(--mark);
+      }
+      @media (max-width: 860px) {
+        .lockup-stage {
+          gap: 36px;
+        }
+        .lockup-stage svg.mark {
+          height: 90px;
+        }
+        .lockup-stage .word {
+          font-size: 90px;
+        }
+      }
+      .spec-note {
+        margin-top: 1rem;
+        font-size: 0.74rem;
+        color: var(--fg-passive);
+        letter-spacing: 0.08em;
+        line-height: 1.9;
+      }
+      .spec-note code {
+        color: var(--fg-muted);
+      }
+
+      .lockup-stacked {
+        margin-top: 1.25rem;
+        background: var(--bg-1);
+        border: 1px solid var(--border-1);
+        border-radius: 14px;
+        padding: 3.5rem 2rem;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 30px;
+      }
+      .lockup-stacked svg.mark {
+        height: 130px;
+      }
+      .lockup-stacked .word {
+        font-family: var(--wordmark);
+        font-weight: 500;
+        font-size: 56px;
+        line-height: 1;
+        letter-spacing: 0.3em;
+        margin-right: -0.3em;
+        color: var(--mark);
+      }
+
+      /* scale test */
+      .scale-row {
+        display: flex;
+        align-items: flex-end;
+        gap: 2.6rem;
+        flex-wrap: wrap;
+        background: var(--bg-1);
+        border: 1px solid var(--border-1);
+        border-radius: 14px;
+        padding: 2.4rem 2rem 1.8rem;
+        margin-top: 1.25rem;
+      }
+      .scale-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.9rem;
+      }
+      .scale-item .label {
+        font-size: 0.66rem;
+        color: var(--fg-passive);
+        letter-spacing: 0.2em;
+      }
+
+      /* palette */
+      .swatches {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 1rem;
+      }
+      @media (max-width: 760px) {
+        .swatches {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+      .swatch {
+        border-radius: 12px;
+        border: 1px solid var(--border-1);
+        aspect-ratio: 1 / 1.15;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        padding: 0.9rem;
+      }
+      .swatch .name {
+        font-size: 0.72rem;
+        letter-spacing: 0.12em;
+      }
+      .swatch .hex {
+        font-size: 0.66rem;
+        opacity: 0.65;
+        margin-top: 0.2rem;
+      }
+
+      footer {
+        text-align: center;
+        padding: 4rem 2rem 5rem;
+        color: var(--fg-passive);
+        font-size: 0.74rem;
+        letter-spacing: 0.3em;
+        text-transform: uppercase;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- ============ HERO ============ -->
+    <a
+      href="/"
+      style="
+        position: fixed;
+        top: 22px;
+        left: 26px;
+        z-index: 60;
+        font-size: 0.72rem;
+        letter-spacing: 0.3em;
+        text-transform: uppercase;
+        color: var(--fg-passive);
+        text-decoration: none;
+      "
+      >&larr;&nbsp;Yoda</a
+    >
+    <div class="hero">
+      <svg
+        class="hero-mark"
+        viewBox="0 0 240 220"
+        xmlns="http://www.w3.org/2000/svg"
+        aria-label="Yoda mark"
+      >
+        <defs>
+          <radialGradient id="hGlow" cx="0.5" cy="0.5" r="0.5">
+            <stop offset="0" stop-color="#5dc98f" stop-opacity="0.55" />
+            <stop offset="1" stop-color="#5dc98f" stop-opacity="0" />
+          </radialGradient>
+          <mask id="hCowl">
+            <rect x="-60" y="-60" width="360" height="380" fill="#fff" />
+            <path fill="#000" d="M 167.2 120.4 A 50 50 0 1 0 72.8 120.4 L 120 256 Z" />
+          </mask>
+        </defs>
+        <path
+          mask="url(#hCowl)"
+          fill="#dbebde"
+          d="M 156.4 21.3 L 228.2 162.9 A 34 34 0 0 1 200 216 L 40 216 A 34 34 0 0 1 11.8 162.9 L 83.6 21.3 A 44 44 0 0 1 156.4 21.3 Z"
+        />
+        <circle class="breathe" cx="120" cy="104" r="36" fill="url(#hGlow)" />
+        <circle cx="120" cy="104" r="13" fill="#5dc98f" />
+      </svg>
+
+      <h1>YODA</h1>
+      <div class="tagline">Harness Engineering Studio</div>
+      <p class="quote">“Luminous beings are we, not this crude matter.”</p>
+    </div>
+
+    <!-- ============ 01 THE MARK ============ -->
+    <section id="s1">
+      <div class="kicker">01 — The Mark</div>
+      <h2>The <em>Hood</em></h2>
+      <div class="anatomy">
+        <svg viewBox="0 0 240 220" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <radialGradient id="aGlow" cx="0.5" cy="0.5" r="0.5">
+              <stop offset="0" stop-color="#5dc98f" stop-opacity="0.55" />
+              <stop offset="1" stop-color="#5dc98f" stop-opacity="0" />
+            </radialGradient>
+            <mask id="aCowl">
+              <rect x="-60" y="-60" width="360" height="380" fill="#fff" />
+              <path fill="#000" d="M 167.2 120.4 A 50 50 0 1 0 72.8 120.4 L 120 256 Z" />
+            </mask>
+          </defs>
+          <g stroke="#27392c" stroke-dasharray="3 5" fill="none">
+            <circle cx="120" cy="104" r="50" />
+            <line x1="6" y1="216" x2="234" y2="216" />
+            <line x1="120" y1="2" x2="120" y2="216" />
+          </g>
+          <path
+            mask="url(#aCowl)"
+            fill="#dbebde"
+            d="M 156.4 21.3 L 228.2 162.9 A 34 34 0 0 1 200 216 L 40 216 A 34 34 0 0 1 11.8 162.9 L 83.6 21.3 A 44 44 0 0 1 156.4 21.3 Z"
+          />
+          <circle class="breathe" cx="120" cy="104" r="36" fill="url(#aGlow)" />
+          <circle cx="120" cy="104" r="13" fill="#5dc98f" />
+        </svg>
+        <ul>
+          <li>
+            <span class="n">01</span
+            ><span
+              ><b>The robe</b> — a rounded triangle: stability, authority, shelter. The harness that
+              holds everything and shows almost nothing.</span
+            >
+          </li>
+          <li>
+            <span class="n">02</span
+            ><span
+              ><b>The cowl</b> — a teardrop of pure negative space cut through the base. The face is
+              never shown; mastery does not need one.</span
+            >
+          </li>
+          <li>
+            <span class="n">03</span
+            ><span
+              ><b>The presence</b> — a single luminous point inside the dark. The agent at work,
+              calm and awake. It breathes.</span
+            >
+          </li>
+          <li>
+            <span class="n">04</span
+            ><span
+              ><b>Geometry</b> — tangent-true arcs only: apex r44, base r34, cowl r50. Nothing
+              freehand, nothing cute.</span
+            >
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============ 02 LOCKUP ============ -->
+    <section id="s2">
+      <div class="kicker">02 — Lockup</div>
+      <h2>Mark <em>+</em> wordmark</h2>
+
+      <div class="lockup-stage">
+        <svg class="mark" viewBox="0 0 240 220" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <radialGradient id="lGlow" cx="0.5" cy="0.5" r="0.5">
+              <stop offset="0" stop-color="#5dc98f" stop-opacity="0.55" />
+              <stop offset="1" stop-color="#5dc98f" stop-opacity="0" />
+            </radialGradient>
+            <mask id="lCowl">
+              <rect x="-60" y="-60" width="360" height="380" fill="#fff" />
+              <path fill="#000" d="M 167.2 120.4 A 50 50 0 1 0 72.8 120.4 L 120 256 Z" />
+            </mask>
+          </defs>
+          <path
+            mask="url(#lCowl)"
+            fill="#dbebde"
+            d="M 156.4 21.3 L 228.2 162.9 A 34 34 0 0 1 200 216 L 40 216 A 34 34 0 0 1 11.8 162.9 L 83.6 21.3 A 44 44 0 0 1 156.4 21.3 Z"
+          />
+          <circle cx="120" cy="104" r="36" fill="url(#lGlow)" />
+          <circle cx="120" cy="104" r="13" fill="#5dc98f" />
+        </svg>
+        <div class="word">YODA</div>
+      </div>
+      <p class="spec-note">
+        Sizing — mark height = <code>1.4×</code> wordmark cap height; gap = <code>0.37×</code> mark
+        height; wordmark <code>Poppins Medium</code>, tracking <code>+0.18em</code>. Never scale the
+        mark past 1.5× cap height; never let it shrink below 1.2×.
+      </p>
+
+      <div class="lockup-stacked">
+        <svg class="mark" viewBox="0 0 240 220" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <radialGradient id="sGlow" cx="0.5" cy="0.5" r="0.5">
+              <stop offset="0" stop-color="#5dc98f" stop-opacity="0.55" />
+              <stop offset="1" stop-color="#5dc98f" stop-opacity="0" />
+            </radialGradient>
+            <mask id="sCowl">
+              <rect x="-60" y="-60" width="360" height="380" fill="#fff" />
+              <path fill="#000" d="M 167.2 120.4 A 50 50 0 1 0 72.8 120.4 L 120 256 Z" />
+            </mask>
+          </defs>
+          <path
+            mask="url(#sCowl)"
+            fill="#dbebde"
+            d="M 156.4 21.3 L 228.2 162.9 A 34 34 0 0 1 200 216 L 40 216 A 34 34 0 0 1 11.8 162.9 L 83.6 21.3 A 44 44 0 0 1 156.4 21.3 Z"
+          />
+          <circle cx="120" cy="104" r="36" fill="url(#sGlow)" />
+          <circle cx="120" cy="104" r="13" fill="#5dc98f" />
+        </svg>
+        <div class="word">YODA</div>
+      </div>
+    </section>
+
+    <!-- ============ 03 APP ICON ============ -->
+    <section id="s3">
+      <div class="kicker">03 — App Icon &amp; Variants</div>
+      <h2>One mark, <em>every</em> surface</h2>
+      <div class="cols-3 grid">
+        <div class="card">
+          <img src="/yoda-app-icon.svg" alt="Yoda app icon" />
+          <div class="label">ygreen / production</div>
+        </div>
+        <div class="card light">
+          <svg viewBox="0 0 240 220" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <mask id="mCowl">
+                <rect x="-60" y="-60" width="360" height="380" fill="#fff" />
+                <path fill="#000" d="M 167.2 120.4 A 50 50 0 1 0 72.8 120.4 L 120 256 Z" />
+              </mask>
+            </defs>
+            <path
+              mask="url(#mCowl)"
+              fill="#1a3b2a"
+              d="M 156.4 21.3 L 228.2 162.9 A 34 34 0 0 1 200 216 L 40 216 A 34 34 0 0 1 11.8 162.9 L 83.6 21.3 A 44 44 0 0 1 156.4 21.3 Z"
+            />
+            <circle cx="120" cy="104" r="13" fill="#2fa56e" />
+          </svg>
+          <div class="label">mono / on light</div>
+        </div>
+        <div class="card terra">
+          <svg viewBox="0 0 240 220" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <mask id="tCowl">
+                <rect x="-60" y="-60" width="360" height="380" fill="#fff" />
+                <path fill="#000" d="M 167.2 120.4 A 50 50 0 1 0 72.8 120.4 L 120 256 Z" />
+              </mask>
+            </defs>
+            <path
+              mask="url(#tCowl)"
+              fill="#ffffff"
+              d="M 156.4 21.3 L 228.2 162.9 A 34 34 0 0 1 200 216 L 40 216 A 34 34 0 0 1 11.8 162.9 L 83.6 21.3 A 44 44 0 0 1 156.4 21.3 Z"
+            />
+            <circle cx="120" cy="104" r="13" fill="#ffffff" />
+          </svg>
+          <div class="label">knockout / lovstudio terra</div>
+        </div>
+      </div>
+
+      <div class="scale-row">
+        <div class="scale-item">
+          <img src="/yoda-app-icon.svg" width="256" height="256" alt="" />
+          <div class="label">256</div>
+        </div>
+        <div class="scale-item">
+          <img src="/yoda-app-icon.svg" width="128" height="128" alt="" />
+          <div class="label">128</div>
+        </div>
+        <div class="scale-item">
+          <img src="/yoda-app-icon.svg" width="64" height="64" alt="" />
+          <div class="label">64</div>
+        </div>
+        <div class="scale-item">
+          <img src="/yoda-app-icon.svg" width="32" height="32" alt="" />
+          <div class="label">32</div>
+        </div>
+        <div class="scale-item">
+          <img src="/yoda-app-icon.svg" width="16" height="16" alt="" />
+          <div class="label">16</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 04 PALETTE ============ -->
+    <section id="s4">
+      <div class="kicker">04 — Palette</div>
+      <h2>Drawn from the <em>ygreen</em> theme</h2>
+      <div class="swatches">
+        <div class="swatch" style="background: #0b130e; color: #d9eadf">
+          <div class="name">Dagobah Night</div>
+          <div class="hex">#0B130E</div>
+        </div>
+        <div class="swatch" style="background: #1a3b2a; color: #d9eadf">
+          <div class="name">Robe Green</div>
+          <div class="hex">#1A3B2A</div>
+        </div>
+        <div class="swatch" style="background: #5dc98f; color: #08130d">
+          <div class="name">The Presence</div>
+          <div class="hex">#5DC98F</div>
+        </div>
+        <div class="swatch" style="background: #dbebde; color: #0b130e">
+          <div class="name">Hood Mist</div>
+          <div class="hex">#DBEBDE</div>
+        </div>
+        <div class="swatch" style="background: #8aa593; color: #0b130e">
+          <div class="name">Force Sage</div>
+          <div class="hex">#8AA593</div>
+        </div>
+      </div>
+    </section>
+
+    <footer>the hood · yoda · lovstudio · 2026</footer>
+  </body>
+</html>

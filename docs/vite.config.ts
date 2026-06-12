@@ -7,6 +7,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: resolve(__dirname, 'index.html'),
+        design: resolve(__dirname, 'design/index.html'),
         agenticCliMatrix: resolve(__dirname, 'agentic-cli-matrix/index.html'),
       },
     },

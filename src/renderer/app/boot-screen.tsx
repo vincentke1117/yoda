@@ -328,6 +328,46 @@ export function BootScreen({ ready, onFinished }: BootScreenProps) {
         className="absolute inset-0 flex flex-col items-center justify-center"
         style={{ transform: 'translateY(-4%)' }}
       >
+        {/* The Hood — brand mark. Hardcoded palette, same contract as the rest
+            of this screen (renders before any theme class exists). */}
+        <motion.svg
+          viewBox="0 0 240 220"
+          className="mb-7 w-[72px]"
+          initial={reducedMotion ? { opacity: 1 } : { opacity: 0, y: 18, filter: 'blur(8px)' }}
+          animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+          transition={{ duration: 0.7, delay: 0.05, ease: [0.2, 0.7, 0.3, 1] }}
+        >
+          <defs>
+            <radialGradient id="bootDotGlow" cx="0.5" cy="0.5" r="0.5">
+              <stop offset="0" stopColor={MINT} stopOpacity="0.55" />
+              <stop offset="1" stopColor={MINT} stopOpacity="0" />
+            </radialGradient>
+            <mask id="bootCowl">
+              <rect x="-60" y="-60" width="360" height="380" fill="#fff" />
+              <path fill="#000" d="M 167.2 120.4 A 50 50 0 1 0 72.8 120.4 L 120 256 Z" />
+            </mask>
+          </defs>
+          <path
+            mask="url(#bootCowl)"
+            fill={INK}
+            d="M 156.4 21.3 L 228.2 162.9 A 34 34 0 0 1 200 216 L 40 216 A 34 34 0 0 1 11.8 162.9 L 83.6 21.3 A 44 44 0 0 1 156.4 21.3 Z"
+          />
+          {reducedMotion ? (
+            <circle cx="120" cy="104" r="36" fill="url(#bootDotGlow)" />
+          ) : (
+            <motion.circle
+              cx="120"
+              cy="104"
+              r="36"
+              fill="url(#bootDotGlow)"
+              animate={{ opacity: [0.55, 1, 0.55], scale: [1, 1.16, 1] }}
+              transition={{ duration: 3.6, repeat: Infinity, ease: 'easeInOut' }}
+              style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
+            />
+          )}
+          <circle cx="120" cy="104" r="13" fill={MINT} />
+        </motion.svg>
+
         <div
           className="flex items-baseline font-mono font-bold"
           style={{ fontSize: 'clamp(56px, 9vw, 92px)', letterSpacing: '0.08em', color: INK }}

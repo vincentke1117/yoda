@@ -1,0 +1,30 @@
+<svg width="240" height="220" viewBox="0 0 240 220" xmlns="http://www.w3.org/2000/svg">
+  <!-- v17 "The Hood" — final mark, vectorized from the chosen v14 generation.
+       Rounded triangle robe (stroke-join rounding); teardrop cowl opening
+       cut via mask so the base edge opens; one luminous presence inside. -->
+  <defs>
+    <radialGradient id="dotGlow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#5dc98f" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#5dc98f" stop-opacity="0"/>
+    </radialGradient>
+    <mask id="cowl">
+      <rect width="240" height="220" fill="#fff"/>
+      <path fill="#000" d="M 167.2 120.4 A 50 50 0 1 0 72.8 120.4 L 120 256 Z"/>
+    </mask>
+  </defs>
+
+  <!-- Robe -->
+  <path mask="url(#cowl)" fill="#dbebde" d="
+    M 156.4 21.3
+    L 228.2 162.9
+    A 34 34 0 0 1 200 216
+    L 40 216
+    A 34 34 0 0 1 11.8 162.9
+    L 83.6 21.3
+    A 44 44 0 0 1 156.4 21.3
+    Z"/>
+
+  <!-- The presence: soft glow + luminous core -->
+  <circle cx="120" cy="104" r="36" fill="url(#dotGlow)"/>
+  <circle cx="120" cy="104" r="13" fill="#5dc98f"/>
+</svg>
