@@ -64,6 +64,28 @@ export class WorktreeService {
     await this.host.mkdirAbsolute(this.worktreePoolPath, { recursive: true });
   }
 
+  /**
+   * Removes a leftover directory that occupies a worktree path but is not a
+   * valid worktree (e.g. remnants from a removal that raced with a running
+   * install). Fails loudly if the path still exists afterwards — otherwise
+   * `git worktree add` would die with a cryptic "already exists" error.
+   */
+  private async removeStaleWorktreeDir(
+    targetPath: string
+  ): Promise<Result<void, ServeWorktreeError>> {
+    const removal = await this.host.removeAbsolute(targetPath, { recursive: true });
+    await this.ctx.exec('git', ['worktree', 'prune']).catch(() => {});
+    if (!removal.success && (await this.host.existsAbsolute(targetPath))) {
+      return err({
+        type: 'worktree-setup-failed',
+        cause: new Error(
+          `Failed to remove stale worktree directory at ${targetPath}: ${removal.error ?? 'unknown error'}`
+        ),
+      });
+    }
+    return ok(undefined);
+  }
+
   private async getRemoteCandidates(): Promise<string[]> {
     const configuredRemote = (await this.projectSettings.getRemote().catch(() => '')).trim();
     if (!configuredRemote || configuredRemote === DEFAULT_REMOTE_NAME) {
@@ -159,8 +181,8 @@ export class WorktreeService {
     const targetPath = path.join(this.worktreePoolPath, branchName);
     if (await this.host.existsAbsolute(targetPath)) {
       if (await this.isValidWorktree(targetPath)) return ok(targetPath);
-      await this.host.removeAbsolute(targetPath, { recursive: true }).catch(() => {});
-      await this.ctx.exec('git', ['worktree', 'prune']).catch(() => {});
+      const cleanup = await this.removeStaleWorktreeDir(targetPath);
+      if (!cleanup.success) return cleanup;
     }
 
     try {
@@ -213,8 +235,8 @@ export class WorktreeService {
 
     if (await this.host.existsAbsolute(targetPath)) {
       if (await this.isValidWorktree(targetPath)) return ok(targetPath);
-      await this.host.removeAbsolute(targetPath, { recursive: true });
-      await this.ctx.exec('git', ['worktree', 'prune']).catch(() => {});
+      const cleanup = await this.removeStaleWorktreeDir(targetPath);
+      if (!cleanup.success) return cleanup;
     }
 
     try {
@@ -273,7 +295,13 @@ export class WorktreeService {
   }
 
   async removeWorktree(worktreePath: string): Promise<void> {
-    await this.host.removeAbsolute(worktreePath, { recursive: true }).catch(() => {});
+    const removal = await this.host.removeAbsolute(worktreePath, { recursive: true });
+    if (!removal.success && (await this.host.existsAbsolute(worktreePath))) {
+      log.warn('WorktreeService: failed to remove worktree directory', {
+        worktreePath,
+        error: removal.error,
+      });
+    }
     await this.ctx.exec('git', ['worktree', 'prune']).catch(() => {});
   }
 
