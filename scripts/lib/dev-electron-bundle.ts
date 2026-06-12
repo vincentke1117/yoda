@@ -4,7 +4,7 @@ import path from 'node:path';
 
 const DEV_PRODUCT_NAME = 'Yoda';
 const DEV_BUNDLE_ID = 'ai.lovstudio.yoda.dev';
-const DEV_BUNDLE_CACHE_VERSION = '3';
+const DEV_BUNDLE_CACHE_VERSION = '4';
 const SOURCE_APP_NAME = 'Electron.app';
 const SOURCE_EXECUTABLE_NAME = 'Electron';
 const DEV_APP_NAME = 'Yoda.app';
@@ -53,6 +53,8 @@ export function prepareDevElectronBundle(repoRoot: string): string | undefined {
   });
   installDevBundleIcon(repoRoot, devBundlePath);
   writeFileSync(markerPath, markerValue);
+  // 原地替换 icns 后 iconservices 仍会按 bundle 缓存旧图标，touch 让缓存失效
+  spawnSync('/usr/bin/touch', [devBundlePath], { stdio: 'ignore' });
   registerBundle(devBundlePath);
 
   const executablePath = path.join(devBundlePath, 'Contents', 'MacOS', SOURCE_EXECUTABLE_NAME);
