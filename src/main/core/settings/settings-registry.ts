@@ -105,6 +105,7 @@ export const SETTINGS_DEFAULTS = {
     selectedProjectId: null,
     strategyKind: 'new-branch' as const,
     reviewStrategyKind: 'no-worktree' as const,
+    baseBranch: null,
     runtimeOverride: null,
     runMode: 'normal' as const,
     compareRuntimes: ['claude', 'codex'],
