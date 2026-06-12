@@ -33,6 +33,8 @@ function configureAboutPanel(appVersion: string): void {
   app.setAboutPanelOptions({
     applicationName: app.name,
     applicationVersion: appVersion,
+    // dev 壳的 CFBundleVersion 是 Electron 版本，不覆盖会显示成 0.x.x (41.x.x)
+    version: appVersion,
   });
 }
 
