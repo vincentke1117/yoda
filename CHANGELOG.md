@@ -5,6 +5,39 @@ All notable changes to Yoda will be documented in this file.
 The public Yoda changelog starts at **0.1.0**. Earlier non-Yoda release history
 is preserved in git tags only.
 
+## 0.10.3 — 2026-06-13
+
+### Added
+
+- **Sticky tabs**: a tab dragged back from another scope stays in the current
+  tab strip alongside its origin — drop position decides activation, cross-scope
+  drops surface a "go to" toast, and `stripScope` is decoupled so a sticky tab
+  renders content without rewriting the strip.
+- **Tab drag completion**: the main content area accepts drag-backs on every
+  route's central column, bottom terminal tabs support drag reordering, and
+  global-sidebar copy pins (view/overview) can return to the main window.
+- **Boot flow rework**: the main window shows immediately with a static splash
+  (centered Hood mark) covering the renderer loading phase, then waits for
+  user confirmation to enter.
+- The scripts list gains a "new script" row linking to project settings;
+  `releases.lovstudio.ai` update feed resurrected via a Vercel redirect.
+
+### Changed
+
+- Packaged builds ship only native deps and bundle the rest into `out/`,
+  slimming the install footprint.
+- Composer settings popover visual hierarchy rebuilt with tightened spacing
+  and width-adaptive toolbars.
+
+### Fixed
+
+- **Updater race**: releases are now created as drafts and published only
+  after all platform assets upload — mac update checks no longer 404 during
+  the upload window.
+- Tab dragging is pointer-driven, fixing real drags not registering; drops no
+  longer switch routes unexpectedly.
+- About panel shows the app version instead of the Electron version in dev.
+
 ## 0.10.2 — 2026-06-12
 
 ### Added
