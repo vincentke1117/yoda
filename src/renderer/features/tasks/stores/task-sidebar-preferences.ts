@@ -191,6 +191,18 @@ function resolveBottomPanelTab(
   return DEFAULT_BOTTOM_PANEL_TAB;
 }
 
+function resolveOpenBottomPanelTabs(
+  sharedSnapshot: TaskSidebarViewSnapshot | null,
+  legacySnapshot: LegacyTaskSidebarSnapshot | null
+): BottomPanelTab[] {
+  if (isStringArray(sharedSnapshot?.openBottomPanelTabs)) {
+    return [...new Set(sharedSnapshot.openBottomPanelTabs.filter(isBottomPanelTab))];
+  }
+  // Migration: before mode tabs became individually closable, only the active
+  // mode existed — keep it in the strip so the drawer stays continuous.
+  return [resolveBottomPanelTab(sharedSnapshot, legacySnapshot)];
+}
+
 export class TaskSidebarPreferenceStore {
   sidebarTab: SidebarTab = DEFAULT_SIDEBAR_TAB;
   isSidebarCollapsed: boolean = DEFAULT_SIDEBAR_COLLAPSED;
@@ -201,6 +213,7 @@ export class TaskSidebarPreferenceStore {
   openSidebarGroups: SidebarTabGroup[] = [];
   isBottomPanelOpen: boolean = DEFAULT_BOTTOM_PANEL_OPEN;
   bottomPanelTab: BottomPanelTab = DEFAULT_BOTTOM_PANEL_TAB;
+  openBottomPanelTabs: BottomPanelTab[] = [DEFAULT_BOTTOM_PANEL_TAB];
   isBottomPanelFullWidth: boolean = DEFAULT_BOTTOM_PANEL_FULL_WIDTH;
   private isHydrated: boolean = false;
 
@@ -219,6 +232,7 @@ export class TaskSidebarPreferenceStore {
       openSidebarGroups: [...this.openSidebarGroups],
       isBottomPanelOpen: this.isBottomPanelOpen,
       bottomPanelTab: this.bottomPanelTab,
+      openBottomPanelTabs: [...this.openBottomPanelTabs],
       isBottomPanelFullWidth: this.isBottomPanelFullWidth,
     };
   }
@@ -238,6 +252,7 @@ export class TaskSidebarPreferenceStore {
     this.openSidebarGroups = resolveOpenSidebarGroups(sharedSnapshot);
     this.isBottomPanelOpen = resolveBottomPanelOpen(sharedSnapshot, legacySnapshot);
     this.bottomPanelTab = resolveBottomPanelTab(sharedSnapshot, legacySnapshot);
+    this.openBottomPanelTabs = resolveOpenBottomPanelTabs(sharedSnapshot, legacySnapshot);
     this.isBottomPanelFullWidth =
       typeof sharedSnapshot?.isBottomPanelFullWidth === 'boolean'
         ? sharedSnapshot.isBottomPanelFullWidth
@@ -277,6 +292,18 @@ export class TaskSidebarPreferenceStore {
   setBottomPanelTab(tab: BottomPanelTab): void {
     if (this.bottomPanelTab === tab) return;
     this.bottomPanelTab = tab;
+    this.persist();
+  }
+
+  openBottomPanelTab(tab: BottomPanelTab): void {
+    if (this.openBottomPanelTabs.includes(tab)) return;
+    this.openBottomPanelTabs = [...this.openBottomPanelTabs, tab];
+    this.persist();
+  }
+
+  closeBottomPanelTab(tab: BottomPanelTab): void {
+    if (!this.openBottomPanelTabs.includes(tab)) return;
+    this.openBottomPanelTabs = this.openBottomPanelTabs.filter((t) => t !== tab);
     this.persist();
   }
 

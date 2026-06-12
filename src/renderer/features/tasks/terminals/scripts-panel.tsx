@@ -31,7 +31,7 @@ export const ScriptsPanel = observer(function ScriptsPanel() {
   const autoFocus =
     isActive &&
     provisionedTask.taskView.isTerminalDrawerOpen &&
-    provisionedTask.taskView.bottomPanelTab === 'scripts' &&
+    provisionedTask.taskView.activeBottomPanelTab === 'scripts' &&
     provisionedTask.taskView.focusedRegion === 'bottom';
 
   const scripts = lifecycleScriptsMgr?.tabs ?? [];

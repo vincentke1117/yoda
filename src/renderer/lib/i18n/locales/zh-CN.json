@@ -1356,6 +1356,9 @@
     "bottomPanel": {
       "terminals": "终端",
       "session": "会话",
+      "cardDescTerminals": "在任务工作区中运行 shell 会话",
+      "cardDescScripts": "运行项目配置的生命周期脚本",
+      "cardDescSession": "回看本任务的 prompt 历史",
       "layoutFullWidth": "底栏铺满全宽",
       "layoutBesideSidebar": "底栏避开侧边栏"
     }

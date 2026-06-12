@@ -36,7 +36,7 @@ export const TerminalsPanel = observer(function TerminalsPanel() {
   const autoFocus =
     isActive &&
     provisionedTask.taskView.isTerminalDrawerOpen &&
-    provisionedTask.taskView.bottomPanelTab === 'terminals' &&
+    provisionedTask.taskView.activeBottomPanelTab === 'terminals' &&
     provisionedTask.taskView.focusedRegion === 'bottom';
 
   const activeTerminalId = terminalTabView.activeTabId;

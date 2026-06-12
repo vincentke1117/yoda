@@ -1356,6 +1356,9 @@
     "bottomPanel": {
       "terminals": "Terminals",
       "session": "Session",
+      "cardDescTerminals": "Run shell sessions in the task worktree",
+      "cardDescScripts": "Run the project's lifecycle scripts",
+      "cardDescSession": "Browse this task's prompt history",
       "layoutFullWidth": "Span full width",
       "layoutBesideSidebar": "Yield to sidebar"
     }

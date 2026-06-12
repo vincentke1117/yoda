@@ -16,8 +16,15 @@ import { useTranslation } from 'react-i18next';
 import type { BottomPanelTab } from '@shared/view-state';
 import { SessionHistoryPanel } from '@renderer/features/tasks/conversations/session-history-panel';
 import { useProvisionedTask, useTaskViewContext } from '@renderer/features/tasks/task-view-context';
+import { FeatureCard } from '@renderer/lib/components/feature-card';
 import { rpc } from '@renderer/lib/ipc';
 import { useNavigate } from '@renderer/lib/layout/navigation-provider';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@renderer/lib/ui/dropdown-menu';
 import { isImeComposing } from '@renderer/utils/ime';
 import { cn } from '@renderer/utils/utils';
 import { ScriptsPanel } from './terminals/scripts-panel';
@@ -25,21 +32,29 @@ import { TerminalsPanel } from './terminals/terminal-panel';
 import { scriptIcon } from './terminals/terminal-tabs';
 import { useCreateTerminal } from './terminals/use-create-terminal';
 
-const MODES: { id: BottomPanelTab; icon: React.ReactNode; labelKey: string }[] = [
+const MODES: {
+  id: BottomPanelTab;
+  icon: React.ReactNode;
+  labelKey: string;
+  descKey: string;
+}[] = [
   {
     id: 'terminals',
     icon: <Terminal className="size-3" />,
     labelKey: 'tasks.bottomPanel.terminals',
+    descKey: 'tasks.bottomPanel.cardDescTerminals',
   },
   {
     id: 'scripts',
     icon: <ScrollText className="size-3" />,
     labelKey: 'tasks.terminals.scripts',
+    descKey: 'tasks.bottomPanel.cardDescScripts',
   },
   {
     id: 'session',
     icon: <MessageSquareText className="size-3" />,
     labelKey: 'tasks.bottomPanel.session',
+    descKey: 'tasks.bottomPanel.cardDescSession',
   },
 ];
 
@@ -47,11 +62,12 @@ const ICON_BUTTON_CLASS =
   'flex size-5 shrink-0 items-center justify-center rounded-sm text-foreground-passive transition-colors hover:bg-background-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border';
 
 /**
- * The abstracted bottom drawer, laid out as a tab bar: the mode tabs sit side
- * by side at the left, the active mode's items (terminals / scripts) render as
- * tabs after a divider with their "new" action glued after; config-type
- * actions sit at the tail and close is last. All panels stay mounted so PTY
- * state survives switches.
+ * The abstracted bottom drawer, mirroring the task sidebar's strip: mode tabs
+ * are individually closable, a "+" picker adds the remaining ones, and an
+ * empty strip shows feature cards. The active mode's items (terminals /
+ * scripts) render as tabs after a divider with their "new" action glued
+ * after; config-type actions sit at the tail and close is last. All panels
+ * stay mounted so PTY state survives switches.
  */
 export const BottomPanel = observer(function BottomPanel() {
   const { t } = useTranslation();
@@ -60,7 +76,10 @@ export const BottomPanel = observer(function BottomPanel() {
   const { taskView } = provisionedTask;
   const { navigate } = useNavigate();
   const createTerminal = useCreateTerminal();
-  const tab = taskView.bottomPanelTab;
+  const openTabs = taskView.openBottomPanelTabs;
+  const tab = taskView.activeBottomPanelTab;
+  const openModes = openTabs.flatMap((id) => MODES.filter((m) => m.id === id));
+  const availableModes = MODES.filter((m) => !openTabs.includes(m.id));
 
   const terminalMgr = provisionedTask.terminals;
   const terminalTabView = taskView.terminalTabs;
@@ -90,20 +109,53 @@ export const BottomPanel = observer(function BottomPanel() {
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
       <div className="flex h-7 shrink-0 items-center gap-1 border-b border-border px-2">
-        {/* Mode tabs side by side (same language as the sidebar chip strip),
-            leftmost — no N-choose-1 dropdown. */}
+        {/* Mode tabs side by side (same interaction as the sidebar chip
+            strip): each closable, "+" adds the remaining ones. */}
         <div className="flex shrink-0 items-center gap-0.5">
-          {MODES.map(({ id, icon, labelKey }) => (
+          {openModes.map(({ id, icon, labelKey }) => (
             <ItemTab
               key={id}
               icon={icon}
               label={t(labelKey)}
               isActive={tab === id}
               onSelect={() => taskView.setBottomPanelTab(id)}
+              action={
+                <button
+                  type="button"
+                  className="flex size-3.5 items-center justify-center rounded-sm text-foreground-passive opacity-0 transition-opacity hover:bg-background hover:text-foreground group-hover/tab:opacity-100"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    taskView.closeBottomPanelTab(id);
+                  }}
+                  aria-label={t('tasks.sidePane.removeCard')}
+                  title={t('tasks.sidePane.removeCard')}
+                >
+                  <X className="size-2.5" />
+                </button>
+              }
             />
           ))}
+          {availableModes.length > 0 ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                className={ICON_BUTTON_CLASS}
+                aria-label={t('tasks.sidePane.addCard')}
+                title={t('tasks.sidePane.addCard')}
+              >
+                <Plus className="size-3" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-auto">
+                {availableModes.map(({ id, icon, labelKey }) => (
+                  <DropdownMenuItem key={id} onClick={() => taskView.setBottomPanelTab(id)}>
+                    {icon}
+                    {t(labelKey)}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
         </div>
-        <div aria-hidden className="mx-0.5 h-3.5 w-px shrink-0 bg-border" />
+        {tab ? <div aria-hidden className="mx-0.5 h-3.5 w-px shrink-0 bg-border" /> : null}
         {/* Mode items as tabs + contextual "new" action glued after. */}
         <div className="flex min-w-0 items-center gap-0.5 overflow-x-auto">
           {tab === 'terminals'
@@ -217,6 +269,24 @@ export const BottomPanel = observer(function BottomPanel() {
         <Activity mode={tab === 'session' ? 'visible' : 'hidden'}>
           <SessionHistoryPanel active={taskView.isTerminalDrawerOpen && tab === 'session'} />
         </Activity>
+        {/* Empty state: feature cards for every available mode, like the sidebar. */}
+        {!tab ? (
+          <div className="flex h-full items-center justify-center overflow-y-auto p-4">
+            <div className="flex w-full max-w-3xl flex-wrap items-stretch justify-center gap-2">
+              {availableModes.map(({ id, icon, labelKey, descKey }, index) => (
+                <FeatureCard
+                  key={id}
+                  className="w-60"
+                  icon={icon}
+                  label={t(labelKey)}
+                  description={t(descKey)}
+                  index={index}
+                  onSelect={() => taskView.setBottomPanelTab(id)}
+                />
+              ))}
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );
