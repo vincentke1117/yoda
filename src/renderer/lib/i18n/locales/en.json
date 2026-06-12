@@ -760,6 +760,8 @@
     "strategyNoWorktreeDesc": "Fastest path. Changes land on the current branch in place — no isolation. Best for tiny fixes or solo work.",
     "strategyNewBranchTitle": "Worktree off {{branch}}",
     "strategyNewBranchDesc": "Spins up an isolated copy on a new branch. Keeps {{branch}} clean and lets multiple tasks run in parallel.",
+    "strategyCheckoutExistingTitle": "Work on {{branch}}",
+    "strategyCheckoutExistingDesc": "Checks out this existing branch in an isolated worktree — no new branch, and your project directory stays untouched.",
     "reviewStrategyAria": "Choose review branch mode",
     "reviewStrategySameBranchTitle": "Review on {{branch}}",
     "reviewStrategySameBranchDesc": "A and B share the current branch. Best when the loop should directly refine the working tree.",

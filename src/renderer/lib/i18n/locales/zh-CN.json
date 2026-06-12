@@ -760,6 +760,8 @@
     "strategyNoWorktreeDesc": "最快路径，改动直接落在当前分支，无隔离。适合小修小补或单人开发。",
     "strategyNewBranchTitle": "分叉至新 worktree",
     "strategyNewBranchDesc": "在新分支上拉出独立工作目录，保持 {{branch}} 干净，可同时跑多个任务互不打架。",
+    "strategyCheckoutExistingTitle": "检出已有分支 {{branch}}",
+    "strategyCheckoutExistingDesc": "在独立 worktree 中直接检出该分支继续工作，不新建分支，也不影响当前项目目录。",
     "reviewStrategyAria": "选择 Review 分支模式",
     "reviewStrategySameBranchTitle": "在 {{branch}} 上 Review",
     "reviewStrategySameBranchDesc": "A 和 B 共用当前分支，适合让 review loop 直接修正当前工作区。",

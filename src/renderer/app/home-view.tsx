@@ -143,6 +143,9 @@ import {
 } from './prompt-attachment-tokens';
 
 type TaskStrategyKind = 'new-branch' | 'no-worktree';
+/** Strategy actually submitted to createTask — adds checkout-existing, which is
+ *  derived (not forking + a non-current local branch picked), never persisted. */
+type TaskSubmitStrategyKind = TaskStrategyKind | 'checkout-existing';
 type HomeRunMode = 'normal' | 'brainstorm' | 'compare' | 'review' | 'team';
 type RunHostKind = 'local' | 'ssh';
 type SkillShortcutPrefix = '/' | '$';
@@ -960,26 +963,53 @@ export const HomeComposer = observer(function HomeComposer({
       ? `${forkBaseBranch.remote.name}/${forkBaseBranch.branch}`
       : forkBaseBranch.branch
     : 'main';
-  // No-worktree tasks run in place, i.e. on whatever is currently checked out.
-  const inPlaceBranchLabel = repo?.currentBranch ?? forkBaseLabel;
+  // Not forking: picking the current checkout (or nothing) runs the task in
+  // place (no-worktree); picking another existing local branch checks it out
+  // in an isolated worktree (checkout-existing) — no new branch, and the
+  // project directory is left untouched. Subtasks never re-target the pick.
+  const currentBranchName = repo?.currentBranch;
+  const inPlacePick =
+    !parentBranchName &&
+    pickedBaseBranch?.type === 'local' &&
+    pickedBaseBranch.branch !== currentBranchName
+      ? pickedBaseBranch
+      : undefined;
+  const inPlaceKind: 'no-worktree' | 'checkout-existing' = inPlacePick
+    ? 'checkout-existing'
+    : 'no-worktree';
+  const inPlaceBranchLabel = inPlacePick?.branch ?? currentBranchName ?? forkBaseLabel;
+  const inPlaceValue: Branch | undefined =
+    inPlacePick ?? (currentBranchName ? { type: 'local', branch: currentBranchName } : undefined);
   const runHostKind: RunHostKind = projectData?.type === 'ssh' ? 'ssh' : 'local';
   const strategyLabels = useMemo(
     () => ({
       newBranchTitle: t('home.strategyNewBranchTitle', { branch: forkBaseLabel }),
       newBranchDesc: t('home.strategyNewBranchDesc', { branch: forkBaseLabel }),
-      noWorktreeTitle: t('home.strategyNoWorktreeTitle', { branch: inPlaceBranchLabel }),
-      noWorktreeDesc: t('home.strategyNoWorktreeDesc'),
+      noWorktreeTitle:
+        inPlaceKind === 'checkout-existing'
+          ? t('home.strategyCheckoutExistingTitle', { branch: inPlaceBranchLabel })
+          : t('home.strategyNoWorktreeTitle', { branch: inPlaceBranchLabel }),
+      noWorktreeDesc:
+        inPlaceKind === 'checkout-existing'
+          ? t('home.strategyCheckoutExistingDesc', { branch: inPlaceBranchLabel })
+          : t('home.strategyNoWorktreeDesc'),
     }),
-    [forkBaseLabel, inPlaceBranchLabel, t]
+    [forkBaseLabel, inPlaceBranchLabel, inPlaceKind, t]
   );
   const reviewStrategyLabels = useMemo(
     () => ({
       newBranchTitle: t('home.reviewStrategyNewBranchTitle', { branch: forkBaseLabel }),
       newBranchDesc: t('home.reviewStrategyNewBranchDesc', { branch: forkBaseLabel }),
-      noWorktreeTitle: t('home.reviewStrategySameBranchTitle', { branch: inPlaceBranchLabel }),
-      noWorktreeDesc: t('home.reviewStrategySameBranchDesc'),
+      noWorktreeTitle:
+        inPlaceKind === 'checkout-existing'
+          ? t('home.strategyCheckoutExistingTitle', { branch: inPlaceBranchLabel })
+          : t('home.reviewStrategySameBranchTitle', { branch: inPlaceBranchLabel }),
+      noWorktreeDesc:
+        inPlaceKind === 'checkout-existing'
+          ? t('home.strategyCheckoutExistingDesc', { branch: inPlaceBranchLabel })
+          : t('home.reviewStrategySameBranchDesc'),
     }),
-    [forkBaseLabel, inPlaceBranchLabel, t]
+    [forkBaseLabel, inPlaceBranchLabel, inPlaceKind, t]
   );
 
   const providerOverrideValue = draft?.runtimeOverride ?? null;
@@ -1517,6 +1547,13 @@ export const HomeComposer = observer(function HomeComposer({
   const effectiveReviewStrategyKind: TaskStrategyKind = isUnborn
     ? 'no-worktree'
     : reviewStrategyKind;
+  // What actually gets submitted: the fork switch picks new-branch, otherwise
+  // the in-place pick decides between running in place and checking out an
+  // existing branch in a worktree.
+  const standardSubmitKind: TaskSubmitStrategyKind =
+    effectiveStandardStrategyKind === 'new-branch' ? 'new-branch' : inPlaceKind;
+  const reviewSubmitKind: TaskSubmitStrategyKind =
+    effectiveReviewStrategyKind === 'new-branch' ? 'new-branch' : inPlaceKind;
   const targetProvisionedTask = asProvisioned(taskScopedTaskStore);
   const attachImagesAsPaths = draft?.attachImagesAsPaths ?? false;
   const setAttachImagesAsPaths = useCallback(
@@ -1853,7 +1890,7 @@ export const HomeComposer = observer(function HomeComposer({
         nameSeed: string;
         initialPrompt: string | undefined;
         titlePrompt?: string;
-        strategyKind: TaskStrategyKind;
+        strategyKind: TaskSubmitStrategyKind;
       }) => {
         const taskId = crypto.randomUUID();
         const conversationId = crypto.randomUUID();
@@ -1861,7 +1898,9 @@ export const HomeComposer = observer(function HomeComposer({
         const strategy =
           args.strategyKind === 'no-worktree'
             ? ({ kind: 'no-worktree' } as const)
-            : ({ kind: 'new-branch', taskBranch: taskName, pushBranch: false } as const);
+            : args.strategyKind === 'checkout-existing'
+              ? ({ kind: 'checkout-existing' } as const)
+              : ({ kind: 'new-branch', taskBranch: taskName, pushBranch: false } as const);
         const promise = mounted.taskManager.createTask({
           id: taskId,
           projectId: mounted.data.id,
@@ -1869,9 +1908,11 @@ export const HomeComposer = observer(function HomeComposer({
           sourceBranch:
             args.strategyKind === 'new-branch'
               ? (forkBaseBranch ?? defaultBranch)
-              : parentBranchName
-                ? { type: 'local', branch: parentBranchName }
-                : defaultBranch,
+              : args.strategyKind === 'checkout-existing'
+                ? (inPlacePick ?? defaultBranch)
+                : parentBranchName
+                  ? { type: 'local', branch: parentBranchName }
+                  : defaultBranch,
           strategy,
           parentTaskId: parentTarget?.taskId,
           initialConversation: {
@@ -1950,7 +1991,7 @@ export const HomeComposer = observer(function HomeComposer({
             systemPrompt: implementerSlot.systemPrompt,
           }),
           titlePrompt: trimmed || undefined,
-          strategyKind: effectiveReviewStrategyKind,
+          strategyKind: reviewSubmitKind,
         });
         goToTask(mounted.data.id, implementation.taskId);
         void runReviewOrchestration({
@@ -2027,7 +2068,7 @@ export const HomeComposer = observer(function HomeComposer({
           ? buildRequirementPrompt({ requirement, systemPrompt: normalSystemPrompt })
           : requirement || undefined,
         titlePrompt: trimmed || undefined,
-        strategyKind: effectiveStandardStrategyKind,
+        strategyKind: standardSubmitKind,
       });
       goToTask(mounted.data.id, task.taskId);
       void task.promise.catch(() => {
@@ -2047,11 +2088,12 @@ export const HomeComposer = observer(function HomeComposer({
     runtimeId,
     defaultBranch,
     forkBaseBranch,
+    inPlacePick,
     promptTokens,
     attachImagesAsPaths,
     clearPromptTokens,
-    effectiveReviewStrategyKind,
-    effectiveStandardStrategyKind,
+    reviewSubmitKind,
+    standardSubmitKind,
     trimmed,
     submitting,
     runMode,
@@ -2753,9 +2795,17 @@ export const HomeComposer = observer(function HomeComposer({
                   projectId={mounted.data.id}
                   forking={effectiveStandardStrategyKind === 'new-branch'}
                   locked={Boolean(parentBranchName)}
-                  value={forkBaseBranch}
-                  forkLabel={forkBaseLabel}
-                  inPlaceLabel={inPlaceBranchLabel}
+                  value={
+                    effectiveStandardStrategyKind === 'new-branch' ? forkBaseBranch : inPlaceValue
+                  }
+                  label={
+                    effectiveStandardStrategyKind === 'new-branch'
+                      ? forkBaseLabel
+                      : inPlaceBranchLabel
+                  }
+                  inPlace={
+                    effectiveStandardStrategyKind !== 'new-branch' && inPlaceKind === 'no-worktree'
+                  }
                   onChange={setBaseBranch}
                   ariaLabel={t('home.baseBranchAria')}
                 />
@@ -2774,9 +2824,17 @@ export const HomeComposer = observer(function HomeComposer({
                   projectId={mounted.data.id}
                   forking={effectiveReviewStrategyKind === 'new-branch'}
                   locked={Boolean(parentBranchName)}
-                  value={forkBaseBranch}
-                  forkLabel={forkBaseLabel}
-                  inPlaceLabel={inPlaceBranchLabel}
+                  value={
+                    effectiveReviewStrategyKind === 'new-branch' ? forkBaseBranch : inPlaceValue
+                  }
+                  label={
+                    effectiveReviewStrategyKind === 'new-branch'
+                      ? forkBaseLabel
+                      : inPlaceBranchLabel
+                  }
+                  inPlace={
+                    effectiveReviewStrategyKind !== 'new-branch' && inPlaceKind === 'no-worktree'
+                  }
                   onChange={setBaseBranch}
                   ariaLabel={t('home.baseBranchAria')}
                 />
@@ -3572,13 +3630,15 @@ function RunHostSelector({ kind }: RunHostSelectorProps) {
 
 interface BaseBranchChipProps {
   projectId: string;
-  /** Whether the task will fork (new-branch strategy). Only then is the base branch pickable. */
+  /** Forking → any branch is a valid base; not forking → local branches only
+   *  (current = run in place, another = checkout-existing worktree). */
   forking: boolean;
   /** Subtasks are pinned to the parent task's branch. */
   locked: boolean;
   value: Branch | undefined;
-  forkLabel: string;
-  inPlaceLabel: string;
+  label: string;
+  /** The task will run in place on this branch (anchor icon). */
+  inPlace: boolean;
   onChange: (next: Branch) => void;
   ariaLabel: string;
 }
@@ -3588,22 +3648,18 @@ function BaseBranchChip({
   forking,
   locked,
   value,
-  forkLabel,
-  inPlaceLabel,
+  label,
+  inPlace,
   onChange,
   ariaLabel,
 }: BaseBranchChipProps) {
-  if (!forking || locked) {
-    // Not forking → the task runs on whatever is checked out; forking but
-    // locked → the base is dictated by the parent task. Read-only either way.
+  const Icon = inPlace ? Anchor : GitBranch;
+
+  if (locked) {
     return (
       <span className="flex h-7 items-center gap-1.5 rounded-md border border-border bg-background-1 px-2.5 text-xs text-foreground">
-        {forking ? (
-          <GitBranch className="size-3.5 text-foreground-muted" />
-        ) : (
-          <Anchor className="size-3.5 text-foreground-muted" />
-        )}
-        {forking ? forkLabel : inPlaceLabel}
+        <Icon className="size-3.5 text-foreground-muted" />
+        {label}
       </span>
     );
   }
@@ -3611,6 +3667,7 @@ function BaseBranchChip({
   return (
     <ProjectBranchSelector
       projectId={projectId}
+      localOnly={!forking}
       value={value}
       onValueChange={onChange}
       trigger={
@@ -3618,7 +3675,7 @@ function BaseBranchChip({
           aria-label={ariaLabel}
           className="flex h-7 items-center gap-1.5 rounded-md border border-border bg-background-1 px-2.5 text-xs text-foreground transition-colors hover:bg-background-2"
         >
-          <GitBranch className="size-3.5 text-foreground-muted" />
+          <Icon className="size-3.5 text-foreground-muted" />
           <ComboboxValue />
           <ChevronDown className="size-3 text-foreground-muted" />
         </ComboboxTrigger>

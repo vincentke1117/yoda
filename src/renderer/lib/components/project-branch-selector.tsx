@@ -9,6 +9,7 @@ export interface ProjectBranchSelectorProps {
   value?: Branch;
   onValueChange: (value: Branch) => void;
   remoteOnly?: boolean;
+  localOnly?: boolean;
   trigger?: React.ReactNode;
 }
 
@@ -17,6 +18,7 @@ export const ProjectBranchSelector = observer(function ProjectBranchSelector({
   value,
   onValueChange,
   remoteOnly,
+  localOnly,
   trigger,
 }: ProjectBranchSelectorProps) {
   const repo = getRepositoryStore(projectId);
@@ -34,6 +36,7 @@ export const ProjectBranchSelector = observer(function ProjectBranchSelector({
       value={value}
       onValueChange={onValueChange}
       remoteOnly={remoteOnly}
+      localOnly={localOnly}
       trigger={trigger}
       onRefresh={() => repo?.refresh()}
       isRefreshing={repo?.loading ?? false}

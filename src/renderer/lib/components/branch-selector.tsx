@@ -29,6 +29,7 @@ interface BranchSelectorProps {
   value?: Branch;
   onValueChange: (value: Branch) => void;
   remoteOnly?: boolean;
+  localOnly?: boolean;
   trigger?: React.ReactNode;
   onRefresh?: () => void;
   isRefreshing?: boolean;
@@ -39,6 +40,7 @@ export function BranchSelector({
   value,
   onValueChange,
   remoteOnly = false,
+  localOnly = false,
   trigger,
   onRefresh,
   isRefreshing = false,
@@ -52,7 +54,11 @@ export function BranchSelector({
     { tab: BranchSelectorTab; valueKey: string } | undefined
   >(undefined);
   const overriddenTab = tabOverride?.valueKey === valueKey ? tabOverride.tab : undefined;
-  const tab = remoteOnly ? 'remote' : (overriddenTab ?? value?.type ?? 'local');
+  const tab = remoteOnly
+    ? 'remote'
+    : localOnly
+      ? 'local'
+      : (overriddenTab ?? value?.type ?? 'local');
   const inputRef = React.useRef<HTMLInputElement>(null);
 
   const localCount = useMemo(() => branches.filter((b) => b.type === 'local').length, [branches]);
@@ -100,8 +106,10 @@ export function BranchSelector({
           </div>
         </ComboboxTrigger>
       )}
-      <ComboboxContent className="min-w-(--anchor-width) pb-1 border">
-        {!remoteOnly && (
+      {/* Floor the popup width so a narrow anchor (e.g. a chip trigger) does not
+          squeeze the tab strip, search input, and badges together. */}
+      <ComboboxContent className="min-w-[max(var(--anchor-width),16rem)] pb-1 border">
+        {!remoteOnly && !localOnly && (
           <ToggleGroup
             value={[tab]}
             onValueChange={([value]) => {
