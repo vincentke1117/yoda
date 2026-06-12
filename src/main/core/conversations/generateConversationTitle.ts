@@ -153,6 +153,7 @@ export async function generateConversationTitle(
       settings,
       runtime,
       cwd: workingDirectory,
+      purpose: 'session-title',
     });
     recordStage('agentCliRequest', Date.now() - requestStartedAt, {
       method: result.method,

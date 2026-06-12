@@ -28,7 +28,7 @@ type ChatCompletionResponse = {
 };
 
 export async function requestOpenAiCompatibleChat(
-  input: OpenAiCompatibleChatInput
+  input: OpenAiCompatibleChatInput & { purpose?: string }
 ): Promise<OpenAiCompatibleChatResult | undefined> {
   const connection = await loadActiveConnection();
   if (!connection) return undefined;
@@ -46,6 +46,16 @@ export async function requestOpenAiCompatibleChat(
   const controller = new AbortController();
   const startedAt = Date.now();
   const timer = setTimeout(() => controller.abort(), input.timeoutMs);
+
+  const { aiLogService } = await import('@main/core/ai-logs/ai-log-service');
+  const logId = await aiLogService.start({
+    purpose: input.purpose ?? 'maas-chat',
+    mode: 'api',
+    runtime: connection.platformId,
+    model,
+    command: url,
+    prompt: input.messages.map((message) => `${message.role}: ${message.content}`).join('\n\n'),
+  });
 
   try {
     const response = await fetch(url, {
@@ -67,13 +77,18 @@ export async function requestOpenAiCompatibleChat(
         platformId: connection.platformId,
         status: response.status,
       });
+      await aiLogService.finish(logId, { status: 'failed', error: `HTTP ${response.status}` });
       return undefined;
     }
 
     const body = (await response.json()) as ChatCompletionResponse;
     const content = body.choices?.[0]?.message?.content?.trim();
-    if (!content) return undefined;
+    if (!content) {
+      await aiLogService.finish(logId, { status: 'failed', error: 'Empty completion.' });
+      return undefined;
+    }
 
+    await aiLogService.finish(logId, { status: 'succeeded', output: content });
     return {
       content,
       model,
@@ -82,6 +97,10 @@ export async function requestOpenAiCompatibleChat(
     };
   } catch (error) {
     log.warn('openai-compatible-chat: request failed', { error: String(error) });
+    await aiLogService.finish(logId, {
+      status: 'failed',
+      error: error instanceof Error ? error.message : String(error),
+    });
     return undefined;
   } finally {
     clearTimeout(timer);

@@ -1,4 +1,5 @@
 import type { AiLabZenmuxModel } from '@shared/ai-lab';
+import { aiLogService } from '@main/core/ai-logs/ai-log-service';
 
 const REQUEST_TIMEOUT_MS = 180_000;
 
@@ -30,10 +31,31 @@ export async function generateZenmuxImages(input: {
   prompt: string;
   count: number;
 }): Promise<Buffer[]> {
-  if (input.model.startsWith('openai/')) {
-    return generateViaImagesApi(input);
+  const logId = await aiLogService.start({
+    purpose: 'logo-generation',
+    mode: 'api',
+    runtime: 'zenmux',
+    model: input.model,
+    command: input.endpoint,
+    prompt: input.prompt,
+    metadata: { count: String(input.count) },
+  });
+  try {
+    const buffers = input.model.startsWith('openai/')
+      ? await generateViaImagesApi(input)
+      : await Promise.all(Array.from({ length: input.count }, () => generateViaVertex(input)));
+    await aiLogService.finish(logId, {
+      status: 'succeeded',
+      output: `${buffers.length} image(s) generated.`,
+    });
+    return buffers;
+  } catch (error) {
+    await aiLogService.finish(logId, {
+      status: 'failed',
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
   }
-  return Promise.all(Array.from({ length: input.count }, () => generateViaVertex(input)));
 }
 
 async function generateViaImagesApi(input: {

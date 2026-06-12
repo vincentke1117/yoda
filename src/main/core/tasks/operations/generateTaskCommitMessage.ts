@@ -72,7 +72,12 @@ export async function generateTaskCommitMessage(
   ].join('\n');
 
   try {
-    const payload = await requestUtilityAgentJson({ prompt, cwd: worktreePath });
+    const payload = await requestUtilityAgentJson({
+      prompt,
+      cwd: worktreePath,
+      purpose: 'commit-message',
+      metadata: { taskId },
+    });
     const message = typeof payload.commitMessage === 'string' ? payload.commitMessage.trim() : '';
     if (!message) return err('Model returned no commit message.');
     return ok({ message });

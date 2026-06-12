@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { aiLogService } from '@main/core/ai-logs/ai-log-service';
 
 const MAX_COMMAND_OUTPUT_CHARS = 32_000;
 const MAX_COMMAND_ERROR_CHARS = 2_000;
@@ -8,16 +9,7 @@ export type AgentCliResult = {
   stderrChars: number;
 };
 
-/**
- * Spawns a provider CLI non-interactively, feeds it a prompt, and captures
- * stdout. This is the one generic "run the agent CLI and read its answer"
- * primitive — the app has no LLM API client, so every AI-generated feature
- * (task naming, session summary, …) goes through here.
- *
- * For Codex `--json` runs the process is killed as soon as the final
- * `agent_message` event arrives, instead of waiting for the CLI to exit.
- */
-export function runAgentCli(input: {
+export type RunAgentCliInput = {
   command: string;
   args: string[];
   stdin?: string;
@@ -25,13 +17,57 @@ export function runAgentCli(input: {
   env: NodeJS.ProcessEnv;
   timeoutMs: number;
   runtimeName: string;
+  /** What this run is for — recorded in the AI invocation log. */
+  purpose?: string;
+  model?: string | null;
+  metadata?: Record<string, string>;
   /**
    * Optional streaming callback. Fires with incremental answer text as the CLI
    * produces it — plain stdout for text-mode runs, or the growing tail of the
    * Codex `agent_message` for `--json` runs. Used for SSE-style summaries.
    */
   onDelta?: (delta: string) => void;
-}): Promise<AgentCliResult> {
+};
+
+/**
+ * Spawns a provider CLI non-interactively, feeds it a prompt, and captures
+ * stdout. This is the one generic "run the agent CLI and read its answer"
+ * primitive — the app has no LLM API client, so every AI-generated feature
+ * (task naming, session summary, …) goes through here.
+ *
+ * Every run is recorded in the AI invocation log (start + finish), so slow
+ * background jobs are observable from Settings → AI Logs while they run.
+ *
+ * For Codex `--json` runs the process is killed as soon as the final
+ * `agent_message` event arrives, instead of waiting for the CLI to exit.
+ */
+export async function runAgentCli(input: RunAgentCliInput): Promise<AgentCliResult> {
+  const logId = await aiLogService.start({
+    purpose: input.purpose ?? 'utility',
+    mode: 'cli',
+    runtime: input.runtimeName,
+    model: input.model ?? null,
+    command: [input.command, ...input.args].join(' '),
+    prompt: input.stdin ?? null,
+    metadata: input.metadata,
+  });
+  try {
+    const result = await spawnAgentCli(input);
+    await aiLogService.finish(logId, {
+      status: 'succeeded',
+      output: extractAgentMessageText(result.stdout),
+    });
+    return result;
+  } catch (error) {
+    await aiLogService.finish(logId, {
+      status: 'failed',
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
+}
+
+function spawnAgentCli(input: RunAgentCliInput): Promise<AgentCliResult> {
   return new Promise((resolve, reject) => {
     const child = spawn(input.command, input.args, {
       cwd: input.cwd,

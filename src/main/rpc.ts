@@ -3,6 +3,7 @@ import { accountController } from './core/account/controller';
 import { agentHooksController } from './core/agent-hooks/controller';
 import { agentsConfigController } from './core/agents-config/controller';
 import { aiLabController } from './core/ai-lab/controller';
+import { aiLogsController } from './core/ai-logs/controller';
 import { appController } from './core/app/controller';
 import { conversationController } from './core/conversations/controller';
 import { dependenciesController } from './core/dependencies/controller';
@@ -44,6 +45,7 @@ export const rpcRouter = createRPCRouter({
   agentHooks: agentHooksController,
   agentsConfig: agentsConfigController,
   aiLab: aiLabController,
+  aiLogs: aiLogsController,
   legacyPort: legacyPortController,
   app: appController,
   appSettings: appSettingsController,

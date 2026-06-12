@@ -45,6 +45,13 @@ vi.mock('@main/core/agent-hooks/classifier-wiring', () => ({
   wireAgentClassifier: mocks.wireAgentClassifier,
 }));
 
+vi.mock('@main/core/ai-logs/ai-log-service', () => ({
+  aiLogService: {
+    start: vi.fn().mockResolvedValue('ai-log-id'),
+    finish: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+
 vi.mock('@main/core/agent-hooks/claude-trust-service', () => ({
   claudeTrustService: {
     maybeAutoTrustLocal: mocks.maybeAutoTrustLocal,

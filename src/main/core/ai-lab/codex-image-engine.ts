@@ -44,6 +44,9 @@ export async function generateCodexImages(input: {
     env: buildExternalToolEnv(process.env),
     timeoutMs: CODEX_IMAGE_TIMEOUT_MS,
     runtimeName: 'Codex',
+    purpose: 'logo-generation',
+    model: 'gpt-image-2',
+    metadata: { count: String(input.count) },
   });
 
   const fileNames = (await readdir(input.workDir)).filter((name) => /\.png$/i.test(name)).sort();

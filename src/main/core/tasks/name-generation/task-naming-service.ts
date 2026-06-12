@@ -17,6 +17,7 @@ import {
 } from '@shared/task-naming';
 import type { CreateTaskParams } from '@shared/tasks';
 import { resolveSelectedUtilityAgent } from '@main/core/agents-config/builtin-agent-resolver';
+import { aiLogService } from '@main/core/ai-logs/ai-log-service';
 import {
   resolveRuntimeBaseEnv,
   resolveRuntimeEnv,
@@ -650,6 +651,8 @@ export async function requestAgentNamingPayload(input: {
   settings: Pick<TaskNamingSettings, 'requestTimeoutMs'>;
   runtime: AgentNamingRuntime;
   cwd: string;
+  /** AI invocation log purpose; defaults to task naming. */
+  purpose?: string;
 }): Promise<NamingPayloadResult> {
   const startedAt = Date.now();
   const stages: TaskNamingDebugStage[] = [];
@@ -713,6 +716,11 @@ export async function requestAgentNamingPayload(input: {
     },
     timeoutMs: input.settings.requestTimeoutMs,
     runtimeName: input.runtime.runtimeName,
+    purpose: input.purpose ?? 'task-naming',
+    metadata: {
+      taskId: input.context.taskId,
+      projectId: input.context.projectId,
+    },
   });
   stages.push({
     name: 'agentCli',
@@ -842,6 +850,9 @@ function buildSessionNamingSystemPrompt(language: string, includeBranchName: boo
 export async function requestUtilityAgentJson(input: {
   prompt: string;
   cwd: string;
+  /** AI invocation log purpose (e.g. 'commit-message'); defaults to 'utility'. */
+  purpose?: string;
+  metadata?: Record<string, string>;
 }): Promise<Record<string, unknown>> {
   const resolved = await resolveNamingRuntime();
   if (!resolved.runtime) {
@@ -868,6 +879,8 @@ export async function requestUtilityAgentJson(input: {
     },
     timeoutMs: resolved.settings.requestTimeoutMs,
     runtimeName: resolved.runtime.runtimeName,
+    purpose: input.purpose ?? 'utility',
+    metadata: input.metadata,
   });
   return parseNamingPayload(result.stdout) as Record<string, unknown>;
 }
@@ -1089,6 +1102,39 @@ function parseSetupParams(value: string | null): CreateTaskParams | null {
 }
 
 async function runAgentNamingCommand(input: {
+  command: string;
+  args: string[];
+  stdin?: string;
+  cwd: string;
+  env: NodeJS.ProcessEnv;
+  timeoutMs: number;
+  runtimeName: string;
+  /** What this run is for — recorded in the AI invocation log. */
+  purpose: string;
+  metadata?: Record<string, string>;
+}): Promise<AgentNamingCommandResult> {
+  const logId = await aiLogService.start({
+    purpose: input.purpose,
+    mode: 'cli',
+    runtime: input.runtimeName,
+    command: [input.command, ...input.args].join(' '),
+    prompt: input.stdin ?? null,
+    metadata: input.metadata,
+  });
+  try {
+    const result = await spawnAgentNamingProcess(input);
+    await aiLogService.finish(logId, { status: 'succeeded', output: result.stdout });
+    return result;
+  } catch (error) {
+    await aiLogService.finish(logId, {
+      status: 'failed',
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
+}
+
+function spawnAgentNamingProcess(input: {
   command: string;
   args: string[];
   stdin?: string;

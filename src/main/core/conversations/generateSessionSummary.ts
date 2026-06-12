@@ -160,6 +160,9 @@ export async function generateSessionSummary(
       },
       timeoutMs: SUMMARY_TIMEOUT_MS,
       runtimeName,
+      purpose: 'session-summary',
+      model: runtime.model,
+      metadata: { scope },
       onDelta,
     });
     const cliDurationMs = Date.now() - cliStartedAt;

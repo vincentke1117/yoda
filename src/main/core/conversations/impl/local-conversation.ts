@@ -11,6 +11,7 @@ import { claudeTrustService } from '@main/core/agent-hooks/claude-trust-service'
 import { HookConfigWriter } from '@main/core/agent-hooks/hook-config';
 import { applyHookOverrides } from '@main/core/agent-hooks/inspect/hook-overrides-apply';
 import { hookOverridesStore } from '@main/core/agent-hooks/inspect/hook-overrides-store';
+import { aiLogService } from '@main/core/ai-logs/ai-log-service';
 import { agentSessionRuntimeStore } from '@main/core/conversations/agent-session-runtime';
 import { agentSilenceReconciler } from '@main/core/conversations/agent-silence-reconciler';
 import { createClaudeInterruptSniffer } from '@main/core/conversations/claude-interrupt-sniffer';
@@ -205,6 +206,21 @@ export class LocalConversationProvider implements ConversationProvider {
       rows: initialSize.rows,
     });
 
+    const invocationLogId = await aiLogService.start({
+      purpose: 'interactive-session',
+      mode: 'interactive',
+      runtime: conversation.runtimeId,
+      command: [resolved.command, ...resolved.args].join(' '),
+      prompt: effectiveInitialPrompt ?? null,
+      metadata: {
+        projectId: conversation.projectId,
+        taskId: conversation.taskId,
+        conversationId: conversation.id,
+        sessionId,
+        resuming: String(isResuming),
+      },
+    });
+
     const hookActive = port > 0;
     const useHooksOnly = hookActive && providerDef?.supportsHooks;
 
@@ -237,6 +253,10 @@ export class LocalConversationProvider implements ConversationProvider {
 
     pty.onExit(({ exitCode }) => {
       if (this.sessions.get(sessionId) !== pty) return;
+      void aiLogService.finish(invocationLogId, {
+        status: typeof exitCode === 'number' && exitCode !== 0 ? 'failed' : 'succeeded',
+        error: typeof exitCode === 'number' && exitCode !== 0 ? `Exit code ${exitCode}` : undefined,
+      });
       detachSilenceReconciler();
       ptySessionRegistry.unregister(sessionId);
       this.sessions.delete(sessionId);

@@ -101,6 +101,9 @@ export const shellSessionStartedChannel = defineEvent<{
   title: string;
 }>('shell:session-started');
 
+/** Emitted whenever an AI invocation log row is inserted or updated. */
+export const aiLogUpdatedChannel = defineEvent<{ id: string }>('ai-log:updated');
+
 /** Emitted after each dependency probe completes (path resolution or version check). */
 export const dependencyStatusUpdatedChannel = defineEvent<DependencyStatusUpdatedEvent>(
   'dependency:status-updated'
