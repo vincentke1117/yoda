@@ -5,6 +5,31 @@ All notable changes to Yoda will be documented in this file.
 The public Yoda changelog starts at **0.1.0**. Earlier non-Yoda release history
 is preserved in git tags only.
 
+## 0.11.0 — 2026-06-12
+
+### Added
+
+- **AI Lab as an App center**: the lab view is rebuilt around a launcher grid
+  backed by an App registry, ready to host more built-in apps beyond logo
+  generation.
+- **Navigation slimmed down**: the sidebar nav keeps four entries — website /
+  docs / settings / feedback; Kanban, AI Lab, and Roadmap move into settings
+  tabs, and the website gains a Roadmap page.
+- Browser history entries can be deleted from the list.
+
+### Changed
+
+- **Brand v17 rollout continues**: the landing page cover (hero background +
+  og:image) is rebuilt around The Hood identity, and the README aligns with
+  the v17 brand layer (mark in the heading, official backronym, design-language
+  link).
+
+### Fixed
+
+- The nav section popped out from the sidebar version anchor now collapses
+  when clicking outside.
+- Lint no longer scans `.worktrees/**` artifacts from the parent checkout.
+
 ## 0.10.0 — 2026-06-12
 
 ### Added
