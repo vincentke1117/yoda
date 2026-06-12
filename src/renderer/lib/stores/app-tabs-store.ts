@@ -138,11 +138,17 @@ export class AppTabsStore implements Snapshottable<AppTabsSnapshot> {
   activeTabId: string | null = null;
   /**
    * Tabs pinned into the strip across scopes (browser-style coexistence):
-   * they stay visible in every scope's strip, in the background, until
-   * closed. Populated by drag drops whose tab would otherwise land in an
-   * invisible background scope.
+   * they stay visible in every scope's strip until closed. Populated by drag
+   * drops whose tab would otherwise land in an invisible background scope.
    */
   stickyTabIds: string[] = [];
+  /**
+   * The scope whose tab set the strip shows. Decoupled from the active tab:
+   * activating a STICKY tab renders its content but keeps the strip on the
+   * previous scope — content follows the click, the tab row stays stable.
+   * Explicit scope navigation (sidebar clicks, deep links) moves it.
+   */
+  stripScope: string | null = null;
   /**
    * Bumped on every activating openTab — lets the task view re-run its route
    * replay even when the route itself didn't change (clicking the same session
@@ -161,6 +167,7 @@ export class AppTabsStore implements Snapshottable<AppTabsSnapshot> {
       tabs: observable,
       activeTabId: observable,
       stickyTabIds: observable,
+      stripScope: observable,
       replayNonce: observable,
       visibleTabs: computed,
       start: action,
@@ -196,6 +203,7 @@ export class AppTabsStore implements Snapshottable<AppTabsSnapshot> {
       };
       this.tabs.push(tab);
       this.activeTabId = tab.id;
+      this.stripScope = tabScopeKey(tab.viewId, tab.params);
     }
 
     this.disposer = reaction(
@@ -225,6 +233,9 @@ export class AppTabsStore implements Snapshottable<AppTabsSnapshot> {
             // re-applying them verbatim would re-enter this scope-entry branch
             // forever (see normalizeTabParams).
             remembered.params = normalizeTabParams(remembered.viewId, remembered.params);
+            // Entering a scope is explicit — the strip follows even when the
+            // remembered tab is sticky.
+            this.stripScope = scope;
             this._activate(remembered);
             this.navigation._applyNavigation(
               remembered.viewId,
@@ -251,6 +262,9 @@ export class AppTabsStore implements Snapshottable<AppTabsSnapshot> {
         const existing = this.tabs.find((entry) => routeKey(entry.viewId, entry.params) === key);
         if (existing) {
           existing.params = nextParams;
+          // Route-driven navigation is explicit — the strip follows even when
+          // the destination tab is sticky.
+          this.stripScope = tabScopeKey(viewId, nextParams);
           this._activate(existing);
           return;
         }
@@ -277,10 +291,17 @@ export class AppTabsStore implements Snapshottable<AppTabsSnapshot> {
     );
   }
 
-  /** Marks a tab active and stamps its activation order (scope memory). */
+  /**
+   * Marks a tab active and stamps its activation order (scope memory). The
+   * strip follows non-sticky activations; sticky tabs render without swapping
+   * the visible tab set.
+   */
   private _activate(tab: AppTabEntry): void {
     this.activeTabId = tab.id;
     tab.seq = ++this.activationSeq;
+    if (!this.stickyTabIds.includes(tab.id)) {
+      this.stripScope = tabScopeKey(tab.viewId, tab.params);
+    }
   }
 
   private _lastActiveInScope(scope: string): AppTabEntry | undefined {
@@ -297,15 +318,25 @@ export class AppTabsStore implements Snapshottable<AppTabsSnapshot> {
   }
 
   /**
-   * The strip's contents: tabs of the active scope (fixed tabs first),
-   * followed by sticky tabs from other scopes.
+   * The strip's contents: tabs of the strip's scope (fixed tabs first),
+   * followed by sticky tabs from other scopes. The scope comes from
+   * `stripScope` (not the active tab) so an active sticky tab renders its
+   * content while the tab row stays put.
    */
   get visibleTabs(): AppTabEntry[] {
     const active = this.activeTab;
     if (!active) return [];
-    const scope = tabScopeKey(active.viewId, active.params);
+    let scope = this.stripScope ?? tabScopeKey(active.viewId, active.params);
+    // The anchor carries the scope identity for fixed-tab synthesis; when the
+    // strip's scope lost all tabs, fall back to the active tab's own scope.
+    let anchor =
+      tabScopeKey(active.viewId, active.params) === scope ? active : this._lastActiveInScope(scope);
+    if (!anchor) {
+      scope = tabScopeKey(active.viewId, active.params);
+      anchor = active;
+    }
     const scoped = this.tabs.filter((tab) => tabScopeKey(tab.viewId, tab.params) === scope);
-    const base = [...this._fixedTabs(active, scoped), ...scoped.filter((tab) => !isIndexTab(tab))];
+    const base = [...this._fixedTabs(anchor, scoped), ...scoped.filter((tab) => !isIndexTab(tab))];
     const seen = new Set(base.map((tab) => tab.id));
     for (const id of this.stickyTabIds) {
       const tab = this.tabs.find((entry) => entry.id === id);
@@ -532,6 +563,7 @@ export class AppTabsStore implements Snapshottable<AppTabsSnapshot> {
       tabs: toJS(this.tabs),
       activeTabId: this.activeTabId,
       stickyTabIds: [...this.stickyTabIds],
+      stripScope: this.stripScope,
     };
   }
 
@@ -557,6 +589,8 @@ export class AppTabsStore implements Snapshottable<AppTabsSnapshot> {
     this.stickyTabIds = (snapshot.stickyTabIds ?? []).filter((id) =>
       restored.some((tab) => tab.id === id)
     );
+    // visibleTabs falls back to the active tab's scope when this goes stale.
+    this.stripScope = typeof snapshot.stripScope === 'string' ? snapshot.stripScope : null;
     this.activationSeq = Math.max(0, ...restored.map((tab) => tab.seq ?? 0));
     this.activeTabId = restored.some((tab) => tab.id === snapshot.activeTabId)
       ? (snapshot.activeTabId ?? restored[0].id)

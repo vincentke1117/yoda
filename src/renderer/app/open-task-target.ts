@@ -52,10 +52,10 @@ export function closeTaskTopTab(tab: AppTabEntry): void {
  * entity (task-sidebar pin or shell-pane pin) returns to its scope's strip; a
  * shell view/overview pin reopens its tab there and unpins.
  *
- * Never activates — dropping must not yank the main area's route. A tab whose
- * scope isn't the visible one gets STUCK into the strip instead (browser-style
- * coexistence): it shows alongside the current scope's tabs, in the
- * background, until clicked or closed.
+ * Browser semantics: the dropped tab's CONTENT renders immediately, but the
+ * tab row stays put — a cross-scope tab is stuck into the current strip
+ * first (see AppTabsStore.stickTab / stripScope), then activated, so the
+ * strip never swaps to the destination scope's own set.
  */
 export function moveDraggedTabToStrip(payload: TabDragPayload): void {
   if (payload.kind === 'shell-pin') {
@@ -63,13 +63,12 @@ export function moveDraggedTabToStrip(payload: TabDragPayload): void {
     if (pin.kind === 'view') {
       appState.appTabs.openTab(pin.viewId, pin.params, { activate: false });
       stickWhenBackground(pin.viewId, pin.params);
+      appState.appTabs.openTab(pin.viewId, pin.params, { activate: true });
     } else {
-      openTaskTopTab(pin.projectId, pin.taskId, { kind: 'overview' }, { activate: false });
-      stickWhenBackground('task', {
-        projectId: pin.projectId,
-        taskId: pin.taskId,
-        tab: { kind: 'overview' },
-      });
+      const target = { kind: 'overview' } as const;
+      openTaskTopTab(pin.projectId, pin.taskId, target, { activate: false });
+      stickWhenBackground('task', { projectId: pin.projectId, taskId: pin.taskId, tab: target });
+      openTaskTopTab(pin.projectId, pin.taskId, target, { activate: true });
     }
     appState.sidePane.unpin(pin.id);
     return;
@@ -85,11 +84,12 @@ export function moveDraggedTabToStrip(payload: TabDragPayload): void {
   }
   openTaskTopTab(projectId, taskId, target, { activate: false });
   stickWhenBackground('task', { projectId, taskId, tab: target });
+  openTaskTopTab(projectId, taskId, target, { activate: true });
 }
 
 /**
- * A tab dropped while another scope is visible would land in an invisible
- * background strip — stick it so it coexists in the current strip instead.
+ * A tab dropped while another scope is visible would swap the whole strip on
+ * activation — stick it first so it coexists in the current strip instead.
  */
 function stickWhenBackground(viewId: string, params: Record<string, unknown>): void {
   const { currentViewId, viewParamsStore } = appState.navigation;

@@ -138,6 +138,8 @@ export type AppTabsSnapshot = {
   activeTabId: string | null;
   /** Tabs pinned into the strip across scopes (browser-style coexistence). */
   stickyTabIds?: string[];
+  /** The scope whose tab set the strip shows (decoupled from the active tab). */
+  stripScope?: string | null;
 };
 
 /** A pin in the shell-level (cross-route) side pane. */
