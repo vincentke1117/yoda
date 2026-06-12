@@ -5,7 +5,17 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  globalIgnores(['dist/**', 'docs/dist/**', 'out/**', 'build/**', 'node_modules/**', '**/_*/**']),
+  globalIgnores([
+    'dist/**',
+    'docs/dist/**',
+    'out/**',
+    'build/**',
+    'node_modules/**',
+    '**/_*/**',
+    // Worktrees are full checkouts that lint themselves — don't double-lint
+    // them (or their build artifacts) from the parent checkout.
+    '.worktrees/**',
+  ]),
 
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
