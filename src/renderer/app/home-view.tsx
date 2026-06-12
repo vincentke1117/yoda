@@ -42,6 +42,7 @@ import {
   useState,
   type ClipboardEvent,
   type ComponentType,
+  type DragEvent,
   type KeyboardEvent,
   type MouseEvent,
   type ReactNode,
@@ -2180,6 +2181,19 @@ export const HomeComposer = observer(function HomeComposer({
     [insertAttachmentToken, t]
   );
 
+  // Dropping a file on the prompt attaches it like the picker/paste paths do;
+  // preventDefault stops the textarea's text-insert and the window navigating
+  // to the dropped file.
+  const handlePromptDrop = useCallback(
+    (e: DragEvent<HTMLTextAreaElement>) => {
+      const files = Array.from(e.dataTransfer.files);
+      if (files.length === 0) return;
+      e.preventDefault();
+      attachFiles(files);
+    },
+    [attachFiles]
+  );
+
   const applyPromptMarkdownEdit = useCallback(
     (next: MarkdownTextareaEdit) => {
       applyPromptEdit(next.value, next.selection);
@@ -2389,6 +2403,8 @@ export const HomeComposer = observer(function HomeComposer({
               }}
               onKeyDown={handlePromptKeyDown}
               onPaste={handlePromptPaste}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={handlePromptDrop}
               onScroll={(e) => setPromptScrollTop(e.currentTarget.scrollTop)}
               onMouseMove={handlePromptMouseMove}
               onMouseLeave={() => setHoveredTokenId(null)}
