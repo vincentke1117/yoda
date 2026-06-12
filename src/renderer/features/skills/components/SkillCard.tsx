@@ -1,11 +1,10 @@
 import { motion } from 'framer-motion';
-import { AlertTriangle, ChartNoAxesColumn, FileText, Pencil, Plus, PowerOff } from 'lucide-react';
+import { AlertTriangle, ChartNoAxesColumn, Pencil, Plus, PowerOff } from 'lucide-react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import type { CatalogSkill, SkillUsageStat, SkillValidationIssue } from '@shared/skills/types';
 import { parseFrontmatter, skillIssueAgentLabel } from '@shared/skills/validation';
-import { openProjectFileTab } from '@renderer/features/project-file/project-file-session';
-import { FilePathMenuItems } from '@renderer/lib/components/file-path-actions';
+import { GlobalFileMenuItems } from '@renderer/lib/components/file-path-actions';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -114,20 +113,15 @@ const SkillCard: React.FC<SkillCardProps> = ({ skill, usage, onSelect, onInstall
     </motion.div>
   );
 
-  // A skill on disk is a folder — give it the standard file context menu.
+  // A skill on disk is a file — give it the standard file context menu.
   if (!skill.localPath) return card;
   const mdPath = skillFilePath(skill.localPath, skill.disabled);
   return (
     <ContextMenu>
       <ContextMenuTrigger className="block w-full min-w-0">{card}</ContextMenuTrigger>
       <ContextMenuContent className="w-52">
-        <ContextMenuItem onClick={() => openProjectFileTab(null, mdPath)}>
-          <FileText className="size-4" />
-          {t('fileActions.openInMainArea')}
-        </ContextMenuItem>
-        <ContextMenuSeparator />
-        <FilePathMenuItems
-          target={{ absolutePath: skill.localPath, kind: 'directory' }}
+        <GlobalFileMenuItems
+          absolutePath={mdPath}
           components={{ Item: ContextMenuItem, Separator: ContextMenuSeparator }}
         />
       </ContextMenuContent>

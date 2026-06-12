@@ -10,7 +10,6 @@ import {
   Hash,
   Loader2,
   MoreHorizontal,
-  PanelRightOpen,
   Power,
   PowerOff,
   Route,
@@ -22,11 +21,10 @@ import { useTranslation } from 'react-i18next';
 import { applyAgentCommandPrefix } from '@shared/agent-command-prefix';
 import type { CatalogSkill, SkillValidationIssue } from '@shared/skills/types';
 import { parseFrontmatter, skillIssueAgentLabel } from '@shared/skills/validation';
-import { openProjectFileTab } from '@renderer/features/project-file/project-file-session';
 import {
   FilePathActionsDropdown,
-  FilePathMenuItems,
   GlobalFileActionsDropdown,
+  GlobalFileMenuItems,
 } from '@renderer/lib/components/file-path-actions';
 import { useToast } from '@renderer/lib/hooks/use-toast';
 import { rpc } from '@renderer/lib/ipc';
@@ -335,36 +333,16 @@ const SkillDetailContent: React.FC<{
                       {skill.disabled ? <Power /> : <PowerOff />}
                       {skill.disabled ? t('skills.enable') : t('skills.disable')}
                     </DropdownMenuItem>
-                    {skill.localPath && (
+                    {localSkillFilePath && (
                       <DropdownMenuSub>
                         <DropdownMenuSubTrigger>
                           <FolderOpen />
                           {t('common.open')}
                         </DropdownMenuSubTrigger>
                         <DropdownMenuSubContent className="w-52">
-                          {localSkillFilePath && (
-                            <>
-                              <DropdownMenuItem
-                                onClick={() => openProjectFileTab(null, localSkillFilePath)}
-                              >
-                                <FileText />
-                                {t('fileActions.openInMainArea')}
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  appState.sidePane.pinView('file', {
-                                    filePath: localSkillFilePath,
-                                  })
-                                }
-                              >
-                                <PanelRightOpen />
-                                {t('appTabs.openInGlobalSidePane')}
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                            </>
-                          )}
-                          <FilePathMenuItems
-                            target={{ absolutePath: skill.localPath, kind: 'directory' }}
+                          <GlobalFileMenuItems
+                            absolutePath={localSkillFilePath}
+                            currentSurface="main"
                             components={{
                               Item: DropdownMenuItem,
                               Separator: DropdownMenuSeparator,
@@ -519,7 +497,12 @@ const SkillDetailContent: React.FC<{
                   <ValueRow
                     label={t('skills.detail.skillFile')}
                     value={localSkillFilePath}
-                    extraAction={<GlobalFileActionsDropdown absolutePath={localSkillFilePath} />}
+                    extraAction={
+                      <GlobalFileActionsDropdown
+                        absolutePath={localSkillFilePath}
+                        currentSurface="main"
+                      />
+                    }
                   />
                 )}
               </>

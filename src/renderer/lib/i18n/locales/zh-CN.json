@@ -19,7 +19,8 @@
     "copyRelativePath": "复制相对路径",
     "copyAbsolutePath": "复制绝对路径",
     "pathCopied": "路径已复制",
-    "openFailed": "打开失败"
+    "openFailed": "打开失败",
+    "currentLabel": "{{label}}（当前）"
   },
   "common": {
     "ok": "确定",

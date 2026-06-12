@@ -2,7 +2,6 @@ import {
   Copy,
   ExternalLink,
   FileText,
-  FolderOpen,
   MoreHorizontal,
   PanelRightOpen,
   TerminalSquare,
@@ -63,17 +62,14 @@ export function useFilePathActions(target: FilePathTarget) {
             t
           )
       : () => void openIn({ app: 'finder', path: target.absolutePath }, t),
-    revealFile: isRemote
-      ? null
-      : () => void openIn({ app: 'finder', path: target.absolutePath, reveal: true }, t),
   };
 }
 
 /**
  * All visible "Open in" targets — installed and not hidden in Settings →
- * Open in — with the user's default app first. Finder is excluded (the
- * dedicated open/reveal items cover it), as is Terminal on remote targets
- * (the open-in-terminal item covers it).
+ * Open in — with the user's default app first. Finder is included as a
+ * regular target (reveal for files, open for directories); Terminal is
+ * excluded on remote targets (the open-in-terminal item covers it).
  */
 function useOpenInTargets(isRemote: boolean) {
   const { icons, labels, installedApps, loading } = useOpenInApps();
@@ -82,9 +78,7 @@ function useOpenInTargets(isRemote: boolean) {
   if (loading) return [];
   const defaultId = openInSettings?.default;
   return installedApps
-    .filter(
-      (app) => app.id !== 'finder' && (!isRemote || (app.supportsRemote && app.id !== 'terminal'))
-    )
+    .filter((app) => !isRemote || (app.supportsRemote && app.id !== 'terminal'))
     .sort((a, b) => (a.id === defaultId ? -1 : b.id === defaultId ? 1 : 0))
     .map((app) => ({
       id: app.id,
@@ -107,6 +101,10 @@ type MenuPrimitives = {
 /**
  * The base file-action menu items, rendered through injected menu primitives so
  * both DropdownMenu and ContextMenu surfaces share one implementation.
+ *
+ * Group structure (placement items are the caller's first group, see
+ * GlobalFileMenuItems / features/tasks/components/file-actions.tsx):
+ * open-in apps incl. Finder, then copy-path actions.
  */
 export function FilePathMenuItems({
   target,
@@ -118,6 +116,7 @@ export function FilePathMenuItems({
   const { t } = useTranslation();
   const actions = useFilePathActions(target);
   const openInTargets = useOpenInTargets(actions.isRemote);
+  const isDirectory = target.kind === 'directory';
 
   return (
     <>
@@ -131,6 +130,8 @@ export function FilePathMenuItems({
               {
                 app: app.id,
                 path: target.absolutePath,
+                // Finder "opens" a file by revealing it; opening a directory is literal.
+                reveal: app.id === 'finder' && !isDirectory,
                 isRemote: actions.isRemote,
                 sshConnectionId: target.sshConnectionId ?? null,
               },
@@ -150,30 +151,16 @@ export function FilePathMenuItems({
           {t('fileActions.openInApp', { app: app.label })}
         </Item>
       ))}
-      <Item
-        className="whitespace-nowrap"
-        onClick={(event) => {
-          event.stopPropagation();
-          actions.openFile();
-        }}
-      >
-        {actions.isRemote ? (
-          <TerminalSquare className="size-4" />
-        ) : (
-          <ExternalLink className="size-4" />
-        )}
-        {actions.isRemote ? t('fileActions.openInTerminal') : t('fileActions.openFile')}
-      </Item>
-      {actions.revealFile ? (
+      {actions.isRemote ? (
         <Item
           className="whitespace-nowrap"
           onClick={(event) => {
             event.stopPropagation();
-            actions.revealFile?.();
+            actions.openFile();
           }}
         >
-          <FolderOpen className="size-4" />
-          {t('fileActions.revealInFolder')}
+          <TerminalSquare className="size-4" />
+          {t('fileActions.openInTerminal')}
         </Item>
       ) : null}
       <Separator />
@@ -253,43 +240,100 @@ export function FilePathActionsDropdown({
   );
 }
 
+/** In-app surface a global file can be placed in (used for the "current" marker). */
+export type GlobalFileSurface = 'main' | 'globalSidePane';
+
 /**
- * Dropdown for standalone files outside any project/task (agent-home files:
- * SKILL.md, user CLAUDE.md, …): the base path actions plus in-app placement —
- * open in the main area / the global side pane — backed by the project-less
- * `file` view. Task surfaces use features/tasks/components/file-actions
- * instead, which adds the task-sidebar placement on top.
+ * Full menu for standalone files outside any project/task (agent-home files:
+ * SKILL.md, user CLAUDE.md, …), via injected menu primitives so dropdowns,
+ * submenus, and context menus share it. Groups: in-app placement (main area /
+ * global side pane, the current surface marked), then the base path actions.
  */
-export function GlobalFileActionsDropdown({
+export function GlobalFileMenuItems({
   absolutePath,
-  className,
+  currentSurface,
+  components,
 }: {
   absolutePath: string;
-  className?: string;
+  /** Surface the menu is shown from; its placement item gets a "current" marker. */
+  currentSurface?: GlobalFileSurface;
+  components: MenuPrimitives;
 }) {
   const { t } = useTranslation();
+  const { Item, Separator } = components;
+  const placementLabel = (label: string, surface: GlobalFileSurface) =>
+    currentSurface === surface ? t('fileActions.currentLabel', { label }) : label;
 
   return (
-    <FilePathActionsDropdown target={{ absolutePath, kind: 'file' }} className={className}>
-      <DropdownMenuItem
+    <>
+      <Item
+        className="whitespace-nowrap"
         onClick={(event) => {
           event.stopPropagation();
           openProjectFileTab(null, absolutePath);
         }}
       >
         <FileText className="size-4" />
-        {t('fileActions.openInMainArea')}
-      </DropdownMenuItem>
-      <DropdownMenuItem
+        {placementLabel(t('fileActions.openInMainArea'), 'main')}
+      </Item>
+      <Item
+        className="whitespace-nowrap"
         onClick={(event) => {
           event.stopPropagation();
           appState.sidePane.pinView('file', { filePath: absolutePath });
         }}
       >
         <PanelRightOpen className="size-4" />
-        {t('appTabs.openInGlobalSidePane')}
-      </DropdownMenuItem>
-    </FilePathActionsDropdown>
+        {placementLabel(t('appTabs.openInGlobalSidePane'), 'globalSidePane')}
+      </Item>
+      <Separator />
+      <FilePathMenuItems target={{ absolutePath, kind: 'file' }} components={components} />
+    </>
+  );
+}
+
+/**
+ * Dropdown trigger (ellipsis button) wrapping GlobalFileMenuItems. Task
+ * surfaces use features/tasks/components/file-actions instead, which adds the
+ * task-sidebar placement on top.
+ */
+export function GlobalFileActionsDropdown({
+  absolutePath,
+  currentSurface,
+  className,
+}: {
+  absolutePath: string;
+  currentSurface?: GlobalFileSurface;
+  className?: string;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <button
+            type="button"
+            className={cn(
+              'flex size-5 items-center justify-center rounded-sm text-foreground-passive transition-colors hover:bg-background-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border',
+              className
+            )}
+            aria-label={t('fileActions.label')}
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <MoreHorizontal className="size-3.5" />
+          </button>
+        }
+      />
+      <DropdownMenuContent align="end" className="w-52">
+        <GlobalFileMenuItems
+          absolutePath={absolutePath}
+          currentSurface={currentSurface}
+          components={{ Item: DropdownMenuItem, Separator: DropdownMenuSeparator }}
+        />
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
