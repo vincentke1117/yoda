@@ -277,156 +277,178 @@ const SkillDetailContent: React.FC<{
   return (
     <div className="@container h-full overflow-y-auto bg-background text-foreground">
       <div className="mx-auto w-full max-w-3xl px-4 py-6 @xl:px-8 @xl:py-8">
-        {/* Header — actions stay top-right; labels collapse to icon-only on narrow containers */}
-        <div className="mb-6 flex items-start gap-3">
-          <SkillIconRenderer skill={skill} size="md" />
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-base font-semibold">{skill.displayName}</h1>
-            <div className="group/description mt-1 flex min-w-0 items-start gap-1.5">
-              <p className="min-w-0 flex-1 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">
-                {descriptionText}
-              </p>
-              {descriptionText && (
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={() => void handleCopy(descriptionText)}
-                  aria-label={t('skills.detail.copyDescription')}
-                  title={t('skills.detail.copyDescription')}
-                  className={cn(
-                    '-mt-1 shrink-0',
-                    hoverActionBaseClass,
-                    'group-hover/description:opacity-100 group-focus-within/description:opacity-100'
-                  )}
-                >
-                  <Copy className="h-3.5 w-3.5" />
-                </Button>
-              )}
+        {/* Header — identity row with a single primary action; the description gets
+            the full content width below instead of sharing a column with buttons */}
+        <div className="mb-6">
+          <div className="flex items-start gap-3">
+            <SkillIconRenderer skill={skill} size="md" />
+            <div className="min-w-0 flex-1 self-center">
+              <h1 className="truncate text-lg font-semibold leading-tight">{skill.displayName}</h1>
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                <Badge variant={skill.installed && !skill.disabled ? 'default' : 'secondary'}>
+                  {skill.installed
+                    ? skill.disabled
+                      ? t('skills.disabled')
+                      : t('skills.installed')
+                    : t('skills.detail.notInstalled')}
+                </Badge>
+                <Badge variant="outline">{sourceLabel(skill.source)}</Badge>
+                <Badge variant="secondary" className="font-mono">
+                  {skill.id}
+                </Badge>
+              </div>
             </div>
-            <div className="mt-2 flex flex-wrap items-center gap-1.5">
-              <Badge variant={skill.installed && !skill.disabled ? 'default' : 'secondary'}>
-                {skill.installed
-                  ? skill.disabled
-                    ? t('skills.disabled')
-                    : t('skills.installed')
-                  : t('skills.detail.notInstalled')}
-              </Badge>
-              <Badge variant="outline">{sourceLabel(skill.source)}</Badge>
-              <Badge variant="secondary" className="font-mono">
-                {skill.id}
-              </Badge>
-            </div>
-          </div>
-          {/* Actions — full buttons on wide containers, one overflow menu on narrow ones */}
-          <div className="flex shrink-0 items-center justify-end gap-2">
-            {skill.installed ? (
-              <>
-                <div className="hidden items-center gap-2 @xl:flex">
-                  {canEditLocally && (
-                    <>
-                      <Button variant="outline" size="sm" onClick={handleRevise}>
-                        <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-                        {t('skills.revise.action')}
-                      </Button>
+            {/* Actions — one labeled primary (AI revise), icon-only secondaries,
+                state toggles and the destructive uninstall live in the overflow menu */}
+            <div className="flex shrink-0 items-center justify-end gap-2 self-center">
+              {skill.installed ? (
+                <>
+                  <div className="hidden items-center gap-2 @xl:flex">
+                    {canEditLocally && (
+                      <>
+                        <Button size="sm" onClick={handleRevise}>
+                          <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                          {t('skills.revise.action')}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="icon-sm"
+                          onClick={handleFork}
+                          aria-label={t('skills.fork.action')}
+                          title={t('skills.fork.action')}
+                        >
+                          <CopyPlus className="h-3.5 w-3.5" />
+                        </Button>
+                      </>
+                    )}
+                    {skill.localPath && (
                       <Button
                         variant="outline"
                         size="icon-sm"
-                        onClick={handleFork}
-                        aria-label={t('skills.fork.action')}
-                        title={t('skills.fork.action')}
+                        onClick={handleOpen}
+                        aria-label={t('common.open')}
+                        title={t('common.open')}
                       >
-                        <CopyPlus className="h-3.5 w-3.5" />
+                        <FolderOpen className="h-3.5 w-3.5" />
                       </Button>
-                    </>
-                  )}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => void handleSetDisabled(!skill.disabled)}
-                    disabled={isProcessing}
-                  >
-                    {skill.disabled ? (
-                      <Power className="mr-1.5 h-3.5 w-3.5" />
-                    ) : (
-                      <PowerOff className="mr-1.5 h-3.5 w-3.5" />
                     )}
-                    {skill.disabled ? t('skills.enable') : t('skills.disable')}
-                  </Button>
-                  {skill.localPath && (
-                    <Button variant="outline" size="sm" onClick={handleOpen}>
-                      <FolderOpen className="mr-1.5 h-3.5 w-3.5" />
-                      {t('common.open')}
-                    </Button>
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => void handleUninstall()}
-                    disabled={isProcessing}
-                    className="text-destructive hover:text-destructive"
-                  >
-                    <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                    {t('skills.uninstall')}
-                  </Button>
-                </div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger
-                    render={
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={t('skills.detail.moreActions')}
-                        className="@xl:hidden"
-                      >
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    }
-                  />
-                  <DropdownMenuContent align="end" className="min-w-40">
-                    {canEditLocally && (
-                      <>
-                        <DropdownMenuItem onClick={handleRevise}>
-                          <Sparkles />
-                          {t('skills.revise.action')}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={handleFork}>
-                          <CopyPlus />
-                          {t('skills.fork.action')}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        render={
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={t('skills.detail.moreActions')}
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        }
+                      />
+                      <DropdownMenuContent align="end" className="min-w-40">
+                        <DropdownMenuItem
+                          disabled={isProcessing}
+                          onClick={() => void handleSetDisabled(!skill.disabled)}
+                        >
+                          {skill.disabled ? <Power /> : <PowerOff />}
+                          {skill.disabled ? t('skills.enable') : t('skills.disable')}
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                      </>
-                    )}
-                    <DropdownMenuItem
-                      disabled={isProcessing}
-                      onClick={() => void handleSetDisabled(!skill.disabled)}
-                    >
-                      {skill.disabled ? <Power /> : <PowerOff />}
-                      {skill.disabled ? t('skills.enable') : t('skills.disable')}
-                    </DropdownMenuItem>
-                    {skill.localPath && (
-                      <DropdownMenuItem onClick={handleOpen}>
-                        <FolderOpen />
-                        {t('common.open')}
+                        <DropdownMenuItem
+                          variant="destructive"
+                          disabled={isProcessing}
+                          onClick={() => void handleUninstall()}
+                        >
+                          <Trash2 />
+                          {t('skills.uninstall')}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                  {/* Narrow containers — everything folds into one overflow menu */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      render={
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={t('skills.detail.moreActions')}
+                          className="@xl:hidden"
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      }
+                    />
+                    <DropdownMenuContent align="end" className="min-w-40">
+                      {canEditLocally && (
+                        <>
+                          <DropdownMenuItem onClick={handleRevise}>
+                            <Sparkles />
+                            {t('skills.revise.action')}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={handleFork}>
+                            <CopyPlus />
+                            {t('skills.fork.action')}
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                        </>
+                      )}
+                      <DropdownMenuItem
+                        disabled={isProcessing}
+                        onClick={() => void handleSetDisabled(!skill.disabled)}
+                      >
+                        {skill.disabled ? <Power /> : <PowerOff />}
+                        {skill.disabled ? t('skills.enable') : t('skills.disable')}
                       </DropdownMenuItem>
-                    )}
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      variant="destructive"
-                      disabled={isProcessing}
-                      onClick={() => void handleUninstall()}
-                    >
-                      <Trash2 />
-                      {t('skills.uninstall')}
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </>
-            ) : (
-              <ConfirmButton size="sm" onClick={() => void handleInstall()} disabled={isProcessing}>
-                {isProcessing ? t('skills.installing') : t('skills.install')}
-              </ConfirmButton>
-            )}
+                      {skill.localPath && (
+                        <DropdownMenuItem onClick={handleOpen}>
+                          <FolderOpen />
+                          {t('common.open')}
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        variant="destructive"
+                        disabled={isProcessing}
+                        onClick={() => void handleUninstall()}
+                      >
+                        <Trash2 />
+                        {t('skills.uninstall')}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </>
+              ) : (
+                <ConfirmButton
+                  size="sm"
+                  onClick={() => void handleInstall()}
+                  disabled={isProcessing}
+                >
+                  {isProcessing ? t('skills.installing') : t('skills.install')}
+                </ConfirmButton>
+              )}
+            </div>
           </div>
+          {descriptionText && (
+            <div className="group/description mt-3 flex min-w-0 items-start gap-1.5">
+              <p className="min-w-0 flex-1 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">
+                {descriptionText}
+              </p>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                onClick={() => void handleCopy(descriptionText)}
+                aria-label={t('skills.detail.copyDescription')}
+                title={t('skills.detail.copyDescription')}
+                className={cn(
+                  '-mt-1 shrink-0',
+                  hoverActionBaseClass,
+                  'group-hover/description:opacity-100 group-focus-within/description:opacity-100'
+                )}
+              >
+                <Copy className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          )}
         </div>
 
         <div className="flex flex-col gap-4">
