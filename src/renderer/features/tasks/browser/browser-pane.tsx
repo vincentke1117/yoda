@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, ExternalLink, Globe, Plus, RotateCw } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ExternalLink, Globe, Plus, RotateCw, X } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -214,12 +214,16 @@ const BrowserHistoryList = observer(function BrowserHistoryList({
       </p>
       <div className="flex flex-col gap-1.5">
         {store.history.map((entry) => (
-          <button
+          <div
             key={entry.url}
-            type="button"
+            role="button"
+            tabIndex={0}
             title={entry.url}
-            className="flex w-full items-center gap-2.5 rounded-lg border border-border bg-background-1 px-3 py-2 text-left transition-colors hover:border-primary/40 hover:bg-background-2"
+            className="group flex w-full cursor-pointer items-center gap-2.5 rounded-lg border border-border bg-background-1 px-3 py-2 text-left transition-colors hover:border-primary/40 hover:bg-background-2"
             onClick={() => store.navigate(entry.url)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') store.navigate(entry.url);
+            }}
           >
             <span className="flex size-7 shrink-0 items-center justify-center rounded-md border border-border/70 bg-background-2 text-foreground-muted">
               <Globe className="size-3.5" />
@@ -232,7 +236,19 @@ const BrowserHistoryList = observer(function BrowserHistoryList({
                 {entry.url}
               </span>
             </span>
-          </button>
+            <button
+              type="button"
+              aria-label={t('tasks.browser.removeFromHistory')}
+              title={t('tasks.browser.removeFromHistory')}
+              className="flex size-6 shrink-0 items-center justify-center rounded-md text-foreground-passive opacity-0 transition-opacity hover:bg-background-3 hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+              onClick={(event) => {
+                event.stopPropagation();
+                store.removeFromHistory(entry.url);
+              }}
+            >
+              <X className="size-3.5" />
+            </button>
+          </div>
         ))}
       </div>
     </div>

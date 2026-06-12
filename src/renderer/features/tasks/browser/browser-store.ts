@@ -35,6 +35,7 @@ export class TaskBrowserStore {
       openNewTab: action,
       setLocation: action,
       setTitle: action,
+      removeFromHistory: action,
     });
   }
 
@@ -58,6 +59,12 @@ export class TaskBrowserStore {
   openNewTab(): void {
     this.url = null;
     this.title = '';
+  }
+
+  /** Remove a single entry from the visit history. */
+  removeFromHistory(url: string): void {
+    const index = this.history.findIndex((entry) => entry.url === url);
+    if (index !== -1) this.history.splice(index, 1);
   }
 
   /** Reported by the webview on did-navigate. */

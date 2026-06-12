@@ -1322,6 +1322,7 @@
       "newTab": "新标签页",
       "recent": "最近访问",
       "emptyHint": "输入 URL，或点击终端里的链接",
+      "removeFromHistory": "从历史中移除",
       "openExternal": "在系统浏览器中打开"
     },
     "sidePane": {

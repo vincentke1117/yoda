@@ -1322,6 +1322,7 @@
       "newTab": "New tab",
       "recent": "Recently visited",
       "emptyHint": "Enter a URL, or click a link in the terminal",
+      "removeFromHistory": "Remove from history",
       "openExternal": "Open in system browser"
     },
     "sidePane": {
