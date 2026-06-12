@@ -38,9 +38,10 @@
       <!-- Static splash: covers the gap between window.show() and the renderer
            bundle finishing. Inline styles only (app CSS hasn't loaded yet);
            React's first commit replaces it with the animated boot screen.
-           Just the Hood mark, dead-centered (a copy of the one in
-           boot-screen.tsx — same geometry, same hardcoded #111111 / ink /
-           mint palette). The progress bar lives in the boot screen only. -->
+           The Hood mark below is a copy of the one in boot-screen.tsx — same
+           geometry, same hardcoded #111111 / ink / mint palette, shifted up
+           roughly to where the boot screen's hood lands so the handoff reads
+           as the same mark coming alive. -->
       <div
         style="
           position: fixed;
@@ -51,7 +52,7 @@
           justify-content: center;
         "
       >
-        <svg viewBox="0 0 240 220" style="width: 72px">
+        <svg viewBox="0 0 240 220" style="width: 72px; transform: translateY(-90px)">
           <defs>
             <radialGradient id="splashDotGlow" cx="0.5" cy="0.5" r="0.5">
               <stop offset="0" stop-color="#7fe0a7" stop-opacity="0.55" />
