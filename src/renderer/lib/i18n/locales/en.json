@@ -1141,6 +1141,7 @@
     "terminals": {
       "title": "Terminals",
       "newTerminal": "New terminal",
+      "newScript": "New script",
       "closeTerminal": "Close terminal",
       "emptyTitle": "No terminals",
       "emptyDescription": "Create a terminal to run commands in this task workspace.",

@@ -1141,6 +1141,7 @@
     "terminals": {
       "title": "终端",
       "newTerminal": "新建终端",
+      "newScript": "新建脚本",
       "closeTerminal": "关闭终端",
       "emptyTitle": "没有终端",
       "emptyDescription": "创建终端以在此任务工作区运行命令。",

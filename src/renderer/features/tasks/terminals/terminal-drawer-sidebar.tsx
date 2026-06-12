@@ -74,8 +74,9 @@ export const TerminalDrawerSidebar = observer(function TerminalDrawerSidebar({
 });
 
 /**
- * Sidebar of the scripts drawer mode: lifecycle scripts with run/stop.
- * Chrome actions (configure, close drawer) live in the BottomPanel strip.
+ * Sidebar of the scripts drawer mode: lifecycle scripts with run/stop and a
+ * trailing "new script" row (scripts are defined in project settings, so the
+ * row jumps there). Drawer chrome lives in the BottomPanel strip.
  */
 export const ScriptsDrawerSidebar = observer(function ScriptsDrawerSidebar({
   lifecycleScriptsMgr,
@@ -83,6 +84,7 @@ export const ScriptsDrawerSidebar = observer(function ScriptsDrawerSidebar({
   onSelectScript,
   onRunScript,
   onStopScript,
+  onCreateScript,
   className,
 }: {
   lifecycleScriptsMgr: LifecycleScriptsStore | null;
@@ -90,6 +92,7 @@ export const ScriptsDrawerSidebar = observer(function ScriptsDrawerSidebar({
   onSelectScript: (id: string) => void;
   onRunScript: () => void;
   onStopScript: () => void;
+  onCreateScript: () => void;
   className?: string;
 }) {
   const { t } = useTranslation();
@@ -139,6 +142,15 @@ export const ScriptsDrawerSidebar = observer(function ScriptsDrawerSidebar({
           />
         );
       })}
+      <button
+        type="button"
+        className="flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-foreground-muted hover:bg-background-2 hover:text-foreground"
+        title={t('tasks.terminals.configureInProjectSettings')}
+        onClick={onCreateScript}
+      >
+        <Plus className="size-3 shrink-0" />
+        <span className="truncate">{t('tasks.terminals.newScript')}</span>
+      </button>
     </SidebarList>
   );
 });

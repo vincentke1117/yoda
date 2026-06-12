@@ -106,6 +106,7 @@ export const ScriptsPanel = observer(function ScriptsPanel() {
           onSelectScript={(id) => lifecycleScriptsMgr?.setActiveTab(id)}
           onRunScript={handleRun}
           onStopScript={handleStop}
+          onCreateScript={() => navigate('project', { projectId, view: 'settings' })}
         />
       </ResizablePanel>
     </ResizablePanelGroup>
