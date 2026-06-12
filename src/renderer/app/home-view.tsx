@@ -2900,7 +2900,7 @@ export const HomeComposer = observer(function HomeComposer({
               >
                 <Settings2 className="size-3.5" />
               </PopoverTrigger>
-              <PopoverContent align="end" className="w-96 p-2.5">
+              <PopoverContent align="end" className="w-96 gap-0 p-2.5">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-1.5">
                     <span className="text-xs text-foreground">
