@@ -136,6 +136,8 @@ export type NavigationSnapshot = {
 export type AppTabsSnapshot = {
   tabs: { id: string; viewId: string; params: Record<string, unknown>; seq?: number }[];
   activeTabId: string | null;
+  /** Tabs pinned into the strip across scopes (browser-style coexistence). */
+  stickyTabIds?: string[];
 };
 
 /** A pin in the shell-level (cross-route) side pane. */

@@ -145,7 +145,9 @@ export const AppTabStrip = observer(function AppTabStrip() {
             <AppTab
               tab={tab}
               isActive={tab.id === activeTabId}
-              closeable={!isIndexTab(tab)}
+              // Sticky tabs are closeable even when index-kind: closing just
+              // un-sticks them from the strip.
+              closeable={!isIndexTab(tab) || appState.appTabs.isSticky(tab.id)}
               closeLabel={dismiss.label}
               closeIcon={dismiss.icon}
               closePending={dismiss.pending}

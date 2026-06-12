@@ -137,6 +137,13 @@ export class AppTabsStore implements Snapshottable<AppTabsSnapshot> {
   tabs: AppTabEntry[] = [];
   activeTabId: string | null = null;
   /**
+   * Tabs pinned into the strip across scopes (browser-style coexistence):
+   * they stay visible in every scope's strip, in the background, until
+   * closed. Populated by drag drops whose tab would otherwise land in an
+   * invisible background scope.
+   */
+  stickyTabIds: string[] = [];
+  /**
    * Bumped on every activating openTab — lets the task view re-run its route
    * replay even when the route itself didn't change (clicking the same session
    * again must re-align internal state if a previous alignment was disrupted).
@@ -153,10 +160,12 @@ export class AppTabsStore implements Snapshottable<AppTabsSnapshot> {
     makeObservable(this, {
       tabs: observable,
       activeTabId: observable,
+      stickyTabIds: observable,
       replayNonce: observable,
       visibleTabs: computed,
       start: action,
       openTab: action,
+      stickTab: action,
       activateTab: action,
       closeTab: action,
       restoreSnapshot: action,
@@ -287,13 +296,38 @@ export class AppTabsStore implements Snapshottable<AppTabsSnapshot> {
     return this.tabs.find((tab) => tab.id === this.activeTabId);
   }
 
-  /** The strip's contents: only tabs of the active scope, fixed tabs first. */
+  /**
+   * The strip's contents: tabs of the active scope (fixed tabs first),
+   * followed by sticky tabs from other scopes.
+   */
   get visibleTabs(): AppTabEntry[] {
     const active = this.activeTab;
     if (!active) return [];
     const scope = tabScopeKey(active.viewId, active.params);
     const scoped = this.tabs.filter((tab) => tabScopeKey(tab.viewId, tab.params) === scope);
-    return [...this._fixedTabs(active, scoped), ...scoped.filter((tab) => !isIndexTab(tab))];
+    const base = [...this._fixedTabs(active, scoped), ...scoped.filter((tab) => !isIndexTab(tab))];
+    const seen = new Set(base.map((tab) => tab.id));
+    for (const id of this.stickyTabIds) {
+      const tab = this.tabs.find((entry) => entry.id === id);
+      if (tab && !seen.has(tab.id)) base.push(tab);
+    }
+    return base;
+  }
+
+  /**
+   * Sticks the route's tab into the strip across scopes — the "drop without
+   * activating, but keep it in sight" third option between activating and a
+   * purely background placement. No-op when the route has no stored tab.
+   */
+  stickTab(viewId: ViewId | string, params: Record<string, unknown>): void {
+    const normalized = normalizeTabParams(viewId, toJS(params));
+    const key = routeKey(viewId, normalized);
+    const tab = this.tabs.find((entry) => routeKey(entry.viewId, entry.params) === key);
+    if (tab && !this.stickyTabIds.includes(tab.id)) this.stickyTabIds.push(tab.id);
+  }
+
+  isSticky(tabId: string): boolean {
+    return this.stickyTabIds.includes(tabId);
   }
 
   /**
@@ -469,6 +503,7 @@ export class AppTabsStore implements Snapshottable<AppTabsSnapshot> {
     }
 
     this.tabs.splice(index, 1);
+    this.stickyTabIds = this.stickyTabIds.filter((id) => id !== tabId);
     for (const listener of this.closeListeners) listener(closed);
 
     if (this.activeTabId !== closed.id) return;
@@ -496,6 +531,7 @@ export class AppTabsStore implements Snapshottable<AppTabsSnapshot> {
     return {
       tabs: toJS(this.tabs),
       activeTabId: this.activeTabId,
+      stickyTabIds: [...this.stickyTabIds],
     };
   }
 
@@ -518,6 +554,9 @@ export class AppTabsStore implements Snapshottable<AppTabsSnapshot> {
       });
     if (restored.length === 0) return;
     this.tabs = restored;
+    this.stickyTabIds = (snapshot.stickyTabIds ?? []).filter((id) =>
+      restored.some((tab) => tab.id === id)
+    );
     this.activationSeq = Math.max(0, ...restored.map((tab) => tab.seq ?? 0));
     this.activeTabId = restored.some((tab) => tab.id === snapshot.activeTabId)
       ? (snapshot.activeTabId ?? restored[0].id)
