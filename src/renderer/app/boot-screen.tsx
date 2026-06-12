@@ -558,10 +558,10 @@ export function BootScreen({ ready, onFinished }: BootScreenProps) {
         <span style={{ color: MUTED }}>Emdash</span>
       </motion.div>
 
-      {/* Lower-right, pulled toward center: Yoda conditions (block 2 appends on ready). */}
+      {/* Bottom-right, mirroring the boot log: Yoda conditions (block 2 appends on ready). */}
       <div
-        className="absolute whitespace-pre text-left font-mono text-[10px] leading-[1.6]"
-        style={{ bottom: '14%', right: '12%', letterSpacing: '0.04em' }}
+        className="absolute right-7 bottom-6 font-mono text-[10px] leading-[1.6] whitespace-pre text-left"
+        style={{ letterSpacing: '0.04em' }}
       >
         <CodeLine segments={CODE_BLOCK_1} count={shown1} />
         {done && <CodeLine segments={CODE_BLOCK_2} count={shown2} />}
