@@ -64,7 +64,7 @@ const zones = new Set<DropZone>();
 // Dev-only introspection: the strips live in unrelated subtrees and module
 // duplication (HMR ?t= URLs) is invisible from outside — a window hook is the
 // only reliable way to inspect the live registry when debugging drags.
-if (import.meta.env.DEV) {
+if (import.meta.env.DEV && typeof window !== 'undefined') {
   (window as unknown as Record<string, unknown>).__tabDragDebug = {
     zones,
     active: () => active,
