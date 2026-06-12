@@ -298,125 +298,60 @@ const SkillDetailContent: React.FC<{
                 </Badge>
               </div>
             </div>
-            {/* Actions — one labeled primary (AI revise), icon-only secondaries,
-                state toggles and the destructive uninstall live in the overflow menu */}
+            {/* Actions — everything lives in one overflow menu so new entries
+                (smart checks, exports, …) scale without crowding the header */}
             <div className="flex shrink-0 items-center justify-end gap-2 self-center">
               {skill.installed ? (
-                <>
-                  <div className="hidden items-center gap-2 @xl:flex">
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={t('skills.detail.moreActions')}
+                      >
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    }
+                  />
+                  <DropdownMenuContent align="end" className="min-w-40">
                     {canEditLocally && (
                       <>
-                        <Button size="sm" onClick={handleRevise}>
-                          <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                        <DropdownMenuItem onClick={handleRevise}>
+                          <Sparkles />
                           {t('skills.revise.action')}
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="icon-sm"
-                          onClick={handleFork}
-                          aria-label={t('skills.fork.action')}
-                          title={t('skills.fork.action')}
-                        >
-                          <CopyPlus className="h-3.5 w-3.5" />
-                        </Button>
-                      </>
-                    )}
-                    {skill.localPath && (
-                      <Button
-                        variant="outline"
-                        size="icon-sm"
-                        onClick={handleOpen}
-                        aria-label={t('common.open')}
-                        title={t('common.open')}
-                      >
-                        <FolderOpen className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
-                    <DropdownMenu>
-                      <DropdownMenuTrigger
-                        render={
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-label={t('skills.detail.moreActions')}
-                          >
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        }
-                      />
-                      <DropdownMenuContent align="end" className="min-w-40">
-                        <DropdownMenuItem
-                          disabled={isProcessing}
-                          onClick={() => void handleSetDisabled(!skill.disabled)}
-                        >
-                          {skill.disabled ? <Power /> : <PowerOff />}
-                          {skill.disabled ? t('skills.enable') : t('skills.disable')}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={handleFork}>
+                          <CopyPlus />
+                          {t('skills.fork.action')}
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          variant="destructive"
-                          disabled={isProcessing}
-                          onClick={() => void handleUninstall()}
-                        >
-                          <Trash2 />
-                          {t('skills.uninstall')}
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                  {/* Narrow containers — everything folds into one overflow menu */}
-                  <DropdownMenu>
-                    <DropdownMenuTrigger
-                      render={
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label={t('skills.detail.moreActions')}
-                          className="@xl:hidden"
-                        >
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      }
-                    />
-                    <DropdownMenuContent align="end" className="min-w-40">
-                      {canEditLocally && (
-                        <>
-                          <DropdownMenuItem onClick={handleRevise}>
-                            <Sparkles />
-                            {t('skills.revise.action')}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={handleFork}>
-                            <CopyPlus />
-                            {t('skills.fork.action')}
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                        </>
-                      )}
-                      <DropdownMenuItem
-                        disabled={isProcessing}
-                        onClick={() => void handleSetDisabled(!skill.disabled)}
-                      >
-                        {skill.disabled ? <Power /> : <PowerOff />}
-                        {skill.disabled ? t('skills.enable') : t('skills.disable')}
+                      </>
+                    )}
+                    <DropdownMenuItem
+                      disabled={isProcessing}
+                      onClick={() => void handleSetDisabled(!skill.disabled)}
+                    >
+                      {skill.disabled ? <Power /> : <PowerOff />}
+                      {skill.disabled ? t('skills.enable') : t('skills.disable')}
+                    </DropdownMenuItem>
+                    {skill.localPath && (
+                      <DropdownMenuItem onClick={handleOpen}>
+                        <FolderOpen />
+                        {t('common.open')}
                       </DropdownMenuItem>
-                      {skill.localPath && (
-                        <DropdownMenuItem onClick={handleOpen}>
-                          <FolderOpen />
-                          {t('common.open')}
-                        </DropdownMenuItem>
-                      )}
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        variant="destructive"
-                        disabled={isProcessing}
-                        onClick={() => void handleUninstall()}
-                      >
-                        <Trash2 />
-                        {t('skills.uninstall')}
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </>
+                    )}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      variant="destructive"
+                      disabled={isProcessing}
+                      onClick={() => void handleUninstall()}
+                    >
+                      <Trash2 />
+                      {t('skills.uninstall')}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               ) : (
                 <ConfirmButton
                   size="sm"
