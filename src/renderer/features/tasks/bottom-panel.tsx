@@ -1,6 +1,4 @@
 import {
-  Check,
-  ChevronsUpDown,
   FoldHorizontal,
   MessageSquareText,
   Pause,
@@ -20,12 +18,6 @@ import { SessionHistoryPanel } from '@renderer/features/tasks/conversations/sess
 import { useProvisionedTask, useTaskViewContext } from '@renderer/features/tasks/task-view-context';
 import { rpc } from '@renderer/lib/ipc';
 import { useNavigate } from '@renderer/lib/layout/navigation-provider';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@renderer/lib/ui/dropdown-menu';
 import { isImeComposing } from '@renderer/utils/ime';
 import { cn } from '@renderer/utils/utils';
 import { ScriptsPanel } from './terminals/scripts-panel';
@@ -55,10 +47,11 @@ const ICON_BUTTON_CLASS =
   'flex size-5 shrink-0 items-center justify-center rounded-sm text-foreground-passive transition-colors hover:bg-background-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border';
 
 /**
- * The abstracted bottom drawer, laid out as a tab bar: the mode label sits at
- * the left, the mode's items (terminals / scripts) render as tabs next to it
- * with their "new" action glued after; config-type actions sit at the tail
- * and close is last. All panels stay mounted so PTY state survives switches.
+ * The abstracted bottom drawer, laid out as a tab bar: the mode tabs sit side
+ * by side at the left, the active mode's items (terminals / scripts) render as
+ * tabs after a divider with their "new" action glued after; config-type
+ * actions sit at the tail and close is last. All panels stay mounted so PTY
+ * state survives switches.
  */
 export const BottomPanel = observer(function BottomPanel() {
   const { t } = useTranslation();
@@ -68,7 +61,6 @@ export const BottomPanel = observer(function BottomPanel() {
   const { navigate } = useNavigate();
   const createTerminal = useCreateTerminal();
   const tab = taskView.bottomPanelTab;
-  const current = MODES.find((m) => m.id === tab) ?? MODES[0];
 
   const terminalMgr = provisionedTask.terminals;
   const terminalTabView = taskView.terminalTabs;
@@ -98,33 +90,19 @@ export const BottomPanel = observer(function BottomPanel() {
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
       <div className="flex h-7 shrink-0 items-center gap-1 border-b border-border px-2">
-        {/* Mode switcher: current mode's icon + chevron, leftmost. */}
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <button
-                type="button"
-                className="flex h-5 shrink-0 items-center gap-1 rounded-sm px-1.5 text-foreground-passive transition-colors hover:bg-background-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border"
-                aria-label={t('tasks.bottomPanel.switchMode')}
-                title={`${t(current.labelKey)} — ${t('tasks.bottomPanel.switchMode')}`}
-              >
-                {current.icon}
-                <ChevronsUpDown className="size-2.5" />
-              </button>
-            }
-          />
-          <DropdownMenuContent align="start" className="w-44">
-            {MODES.map(({ id, icon, labelKey }) => (
-              <DropdownMenuItem key={id} onClick={() => taskView.setBottomPanelTab(id)}>
-                <span className="flex size-3.5 shrink-0 items-center justify-center text-foreground-passive">
-                  {icon}
-                </span>
-                <span className="min-w-0 flex-1 truncate">{t(labelKey)}</span>
-                {tab === id ? <Check className="size-3 shrink-0" /> : null}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {/* Mode tabs side by side (same language as the sidebar chip strip),
+            leftmost — no N-choose-1 dropdown. */}
+        <div className="flex shrink-0 items-center gap-0.5">
+          {MODES.map(({ id, icon, labelKey }) => (
+            <ItemTab
+              key={id}
+              icon={icon}
+              label={t(labelKey)}
+              isActive={tab === id}
+              onSelect={() => taskView.setBottomPanelTab(id)}
+            />
+          ))}
+        </div>
         <div aria-hidden className="mx-0.5 h-3.5 w-px shrink-0 bg-border" />
         {/* Mode items as tabs + contextual "new" action glued after. */}
         <div className="flex min-w-0 items-center gap-0.5 overflow-x-auto">
