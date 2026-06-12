@@ -8,7 +8,7 @@ import {
   moveTopTabToShellPane,
 } from '@renderer/app/app-tab-context-menu';
 import { describeTab } from '@renderer/app/app-tab-strip';
-import { openTaskTopTab } from '@renderer/app/open-task-target';
+import { closeTaskTopTab, openTaskTopTab } from '@renderer/app/open-task-target';
 import {
   tabDragSource,
   tabDropIndex,
@@ -45,7 +45,7 @@ import {
 } from '@renderer/lib/layout/navigation-provider';
 import type { SidePanePin } from '@renderer/lib/stores/app-side-pane-store';
 import { appState } from '@renderer/lib/stores/app-state';
-import type { AppTabEntry } from '@renderer/lib/stores/app-tabs-store';
+import { isIndexTab, type AppTabEntry } from '@renderer/lib/stores/app-tabs-store';
 import { ContextMenuItem, ContextMenuSeparator } from '@renderer/lib/ui/context-menu';
 import { cn } from '@renderer/utils/utils';
 
@@ -233,7 +233,8 @@ export const AppSidePane = observer(function AppSidePane() {
   };
 
   // The pane accepts task entities from anywhere (and its own pins for
-  // reorder); non-task tabs land as copy pins, same as their context menu.
+  // reorder); dragging is move semantics throughout — a dropped view tab
+  // leaves the strip (only the scope's fixed index tab stays as a copy).
   const dropZone = useTabDropZone({
     canDrop: (payload) =>
       payload.kind === 'task-entity' || payload.kind === 'view' || payload.kind === 'shell-pin',
@@ -251,6 +252,9 @@ export const AppSidePane = observer(function AppSidePane() {
         } else {
           appState.sidePane.pinView(tab.viewId, tab.params);
         }
+        // The index tab is the scope's identity and never closes — its pin is
+        // a copy; every other view tab moves.
+        if (!isIndexTab(tab)) closeTaskTopTab(tab);
         // pinView/pinTask select the (possibly pre-existing) pin — position it.
         const pinId = appState.sidePane.activePinId;
         if (pinId) appState.sidePane.reorderPin(pinId, index);

@@ -88,14 +88,14 @@ function WorkspaceViewContent() {
   const { TitlebarSlot, MainPanel } = useWorkspaceSlots();
 
   // The whole central column — on every route — accepts a dragged pin (task
-  // sidebar / shell pane): dropping "into the main window" moves the entity
-  // back to the top strip and activates it, without requiring a precise drop
-  // on the strip itself. Inner strips keep priority via the innermost-zone
-  // rule in tab-drag.
+  // sidebar / shell pane): dropping "into the main window" means "show it
+  // here", so the tab returns to its strip AND activates (cross-scope drops
+  // would otherwise vanish from sight). Inner strips keep priority via the
+  // innermost-zone rule in tab-drag.
   const { isOver, dropRef } = useTabDropZone({
     canDrop: (payload) =>
       (payload.kind === 'task-entity' && payload.from !== 'strip') || payload.kind === 'shell-pin',
-    onDrop: moveDraggedTabToStrip,
+    onDrop: (payload) => moveDraggedTabToStrip(payload, true),
   });
 
   return (
