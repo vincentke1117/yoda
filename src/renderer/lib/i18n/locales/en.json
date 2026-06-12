@@ -2246,6 +2246,7 @@
       "logo-generation": "Logo generation",
       "maas-chat": "MaaS chat",
       "interactive-session": "Interactive session",
+      "interactive-turn": "Chat turn",
       "utility": "Utility"
     }
   },
