@@ -382,23 +382,37 @@ export function BootScreen({ ready, onFinished }: BootScreenProps) {
               {letter}
             </motion.span>
           ))}
-          {/* Terminal block cursor. */}
+          {/* Terminal block cursor. Blink swaps fill for a hollow outline (like an
+              unfocused terminal cursor), so the wordmark keeps its visual right
+              edge and the line never feels misaligned. */}
           <motion.span
             className="ml-[0.18em] inline-block w-[0.5ch]"
-            style={{ height: '0.74em', backgroundColor: MINT, transform: 'translateY(0.06em)' }}
+            style={{
+              height: '0.74em',
+              border: `1px solid ${MINT}`,
+              transform: 'translateY(0.06em)',
+            }}
             initial={{ opacity: 0 }}
-            // Blink dims to a faint ghost instead of vanishing, so the wordmark
-            // keeps its visual right edge and the line never feels misaligned.
-            animate={reducedMotion ? { opacity: 1 } : { opacity: [1, 1, 0.22, 0.22] }}
+            animate={
+              reducedMotion
+                ? { opacity: 1, backgroundColor: MINT }
+                : {
+                    opacity: 1,
+                    backgroundColor: [MINT, MINT, 'rgba(127, 224, 167, 0)', 'rgba(127, 224, 167, 0)'],
+                  }
+            }
             transition={
               reducedMotion
                 ? { delay: 0.2 }
                 : {
-                    duration: 1.1,
-                    times: [0, 0.5, 0.5, 1],
-                    repeat: Infinity,
-                    ease: 'linear',
-                    delay: 0.7,
+                    opacity: { duration: 0.3, delay: 0.7 },
+                    backgroundColor: {
+                      duration: 1.1,
+                      times: [0, 0.5, 0.5, 1],
+                      repeat: Infinity,
+                      ease: 'linear',
+                      delay: 0.7,
+                    },
                   }
             }
           />
