@@ -1,0 +1,9 @@
+{
+  "redirects": [
+    {
+      "source": "/yoda/:path*",
+      "destination": "https://github.com/lovstudio/yoda/releases/latest/download/:path*",
+      "permanent": false
+    }
+  ]
+}
