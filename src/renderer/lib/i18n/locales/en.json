@@ -19,7 +19,8 @@
     "copyRelativePath": "Copy relative path",
     "copyAbsolutePath": "Copy absolute path",
     "pathCopied": "Path copied",
-    "openFailed": "Open failed"
+    "openFailed": "Open failed",
+    "currentLabel": "{{label}} (current)"
   },
   "common": {
     "ok": "OK",
