@@ -33,76 +33,76 @@ optional_env:
   - CODEX_APPROVAL_POLICY
 ---
 
-# Yoda Agent Guide
+# Yoda Agent 指南
 
-Start here. Load only the linked `agents/` docs that are relevant to the task.
+从这里开始。只按需加载与当前任务相关的 `agents/` 文档。
 
-## Start Here
+## 入门必读
 
-- Repo map: `agents/README.md`
-- Setup and commands: `agents/quickstart.md`
-- System overview: `agents/architecture/overview.md`
-- Validation flow: `agents/workflows/testing.md`
+- 仓库地图：`agents/README.md`
+- 环境与命令：`agents/quickstart.md`
+- 系统总览：`agents/architecture/overview.md`
+- 校验流程：`agents/workflows/testing.md`
 
-## Read By Task
+## 按任务查阅
 
-- Main-process changes: `agents/architecture/main-process.md`
-- Renderer/UI changes: `agents/architecture/renderer.md`
-- Mobile app or gateway changes: `agents/architecture/mobile.md`
-- Shared types or provider metadata: `agents/architecture/shared.md`
-- Worktree behavior or `.yoda.json`: `agents/workflows/worktrees.md`
-- SSH or remote project work: `agents/workflows/remote-development.md`
-- Provider integration or CLI behavior: `agents/integrations/providers.md`
-- Docs site or landing page (yoda.lovstudio.ai): `agents/workflows/docs-site.md`
-- MCP changes: `agents/integrations/mcp.md`
+- 主进程改动：`agents/architecture/main-process.md`
+- Renderer/UI 改动：`agents/architecture/renderer.md`
+- 移动端或 gateway 改动：`agents/architecture/mobile.md`
+- 共享类型或 provider 元数据：`agents/architecture/shared.md`
+- Worktree 行为或 `.yoda.json`：`agents/workflows/worktrees.md`
+- SSH 或远程项目：`agents/workflows/remote-development.md`
+- Provider 集成或 CLI 行为：`agents/integrations/providers.md`
+- 文档站或落地页（yoda.lovstudio.ai）：`agents/workflows/docs-site.md`
+- MCP 改动：`agents/integrations/mcp.md`
 
-## High-Risk Areas
+## 高危区域
 
-- Database and migrations: `agents/risky-areas/database.md`
-- PTY/session orchestration: `agents/risky-areas/pty.md`
-- SSH and shell escaping: `agents/risky-areas/ssh.md`
-- Auto-update and packaging: `agents/risky-areas/updater.md`
+- 数据库与迁移：`agents/risky-areas/database.md`
+- PTY/会话编排：`agents/risky-areas/pty.md`
+- SSH 与 shell 转义：`agents/risky-areas/ssh.md`
+- 自动更新与打包：`agents/risky-areas/updater.md`
 
-## Conventions
+## 约定
 
-- IPC contract and typing: `agents/conventions/ipc.md`
-- Main process patterns (controllers, services, Result type, events): `agents/conventions/main-patterns.md`
-- Renderer patterns (modals, views, PTY frontend, React Query contexts): `agents/conventions/renderer-patterns.md`
-- TypeScript and React norms: `agents/conventions/typescript.md`
-- Config files and repo rules: `agents/conventions/config-files.md`
-- Never do re exports always import from the original source
+- IPC 契约与类型：`agents/conventions/ipc.md`
+- 主进程模式（controllers、services、Result 类型、事件）：`agents/conventions/main-patterns.md`
+- Renderer 模式（modals、views、PTY 前端、React Query contexts）：`agents/conventions/renderer-patterns.md`
+- TypeScript 与 React 规范：`agents/conventions/typescript.md`
+- 配置文件与仓库规则：`agents/conventions/config-files.md`
+- 禁止 re-export，永远从原始源头 import
 
-### State Guard Conventions (renderer stores)
+### 状态守卫约定（renderer stores）
 
-`ProjectStore` and `TaskStore` are mutable MobX class instances that transition through states. Use the following layers — do not mix them:
+`ProjectStore` 和 `TaskStore` 是会发生状态迁移的可变 MobX 类实例。按以下分层使用，不要混用：
 
-**Selectors** (`task-selectors.ts`, `project-selectors.ts`) — pure functions, safe in observer components, effects, and event handlers:
+**Selectors**（`task-selectors.ts`、`project-selectors.ts`）——纯函数，可安全用于 observer 组件、effects 和事件处理器：
 - `getTaskStore(projectId, taskId)` → `TaskStore | undefined`
-- `asProvisioned(store)` → `ProvisionedTask | undefined` (use with explicit null check, never `!`)
+- `asProvisioned(store)` → `ProvisionedTask | undefined`（配合显式判空，禁止 `!`）
 - `taskViewKind(store, projectId)` → `TaskViewKind`
-- `getTaskManagerStore(projectId)` → `TaskManagerStore | undefined` (use this instead of reaching through project store)
+- `getTaskManagerStore(projectId)` → `TaskManagerStore | undefined`（用它，不要穿透 project store 去拿）
 - `getProjectStore(projectId)` → `ProjectStore | undefined`
-- `asMounted(store)` → `MountedProject | undefined` (use with explicit null check, never `!`)
+- `asMounted(store)` → `MountedProject | undefined`（配合显式判空，禁止 `!`）
 
-**Hooks** (`task-view-context.tsx`) — for `observer` components inside the task view tree:
-- `useTaskViewKind()` — routing/state-gating
-- `useProvisionedTask()` → `ProvisionedTask | null` — when the component handles a non-provisioned state
-- `useRequireProvisionedTask()` → `ProvisionedTask` — when the component must only render when provisioned (throws with a descriptive error if the invariant is violated)
+**Hooks**（`task-view-context.tsx`）——用于 task view 树内的 `observer` 组件：
+- `useTaskViewKind()` —— 路由/状态门控
+- `useProvisionedTask()` → `ProvisionedTask | null` —— 组件需要处理未 provisioned 状态时用
+- `useRequireProvisionedTask()` → `ProvisionedTask` —— 组件只应在 provisioned 时渲染时用（违反不变量会抛出带描述的错误）
 
-**Rules:**
-- Never `asProvisioned(...)!` or `asMounted(...)!` — use the hook or an explicit null check
-- State guards must use `kind !== 'ready'`, never enumerate non-ready states (new states would silently fall through)
-- Access task manager via `getTaskManagerStore(projectId)`, not through `project.taskManager`
-- Access mounted project via `asMounted(getProjectStore(id))`, not via inline `isMountedProject` guards
+**规则：**
+- 禁止 `asProvisioned(...)!` 或 `asMounted(...)!` ——用 hook 或显式判空
+- 状态守卫必须写 `kind !== 'ready'`，禁止枚举非 ready 状态（新增状态会静默漏掉）
+- 拿 task manager 用 `getTaskManagerStore(projectId)`，不要走 `project.taskManager`
+- 拿已挂载项目用 `asMounted(getProjectStore(id))`，不要内联 `isMountedProject` 判断
 
-## Non-Negotiables
+## 铁律
 
-- Run `pnpm run format`, `pnpm run lint`, `pnpm run typecheck`, and `pnpm test` before merging.
-- Do not hand-edit numbered Drizzle migrations or `drizzle/meta/`.
-- New RPC methods go in the appropriate `src/main/core/*/controller.ts` and are auto-registered via `src/main/rpc.ts`.
-- Only use manual IPC in `electron-api.d.ts` for methods requiring `event.sender`.
-- New modals must be registered in `src/renderer/core/modal/registry.ts`.
-- New views must be registered in `src/renderer/core/view/registry.ts`.
-- Treat `src/main/core/pty/`, `src/main/core/ssh/`, `src/main/db/`, and updater code as high risk.
-- Avoid editing `dist/`, `release/`, and `build/` unless the task is explicitly about packaging or updater/signing behavior.
-- The landing page in `docs/` is separate from the Electron renderer and also defaults to port `3000`. The public docs content lives outside this repo — see `agents/workflows/docs-site.md`.
+- 合并前必须跑 `pnpm run format`、`pnpm run lint`、`pnpm run typecheck`、`pnpm test`。
+- 不要手改带编号的 Drizzle 迁移文件或 `drizzle/meta/`。
+- 新 RPC 方法写进对应的 `src/main/core/*/controller.ts`，由 `src/main/rpc.ts` 自动注册。
+- 只有需要 `event.sender` 的方法才在 `electron-api.d.ts` 里走手动 IPC。
+- 新 modal 必须在 `src/renderer/core/modal/registry.ts` 注册。
+- 新视图必须在 `src/renderer/core/view/registry.ts` 注册。
+- `src/main/core/pty/`、`src/main/core/ssh/`、`src/main/db/` 和更新器代码视为高危。
+- 除非任务明确涉及打包或更新器/签名，不要编辑 `dist/`、`release/`、`build/`。
+- `docs/` 里的落地页与 Electron renderer 相互独立，默认端口同为 `3000`。对外文档内容不在本仓库——见 `agents/workflows/docs-site.md`。
