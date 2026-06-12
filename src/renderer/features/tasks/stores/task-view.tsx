@@ -293,6 +293,17 @@ export class TaskViewStore {
     return taskSidebarPreferenceStore.bottomPanelTab;
   }
 
+  /** Mode tabs added to the drawer strip, in user order. */
+  get openBottomPanelTabs(): BottomPanelTab[] {
+    return taskSidebarPreferenceStore.openBottomPanelTabs;
+  }
+
+  /** The selected mode tab, or null when it isn't in the strip (empty state). */
+  get activeBottomPanelTab(): BottomPanelTab | null {
+    const tab = taskSidebarPreferenceStore.bottomPanelTab;
+    return taskSidebarPreferenceStore.openBottomPanelTabs.includes(tab) ? tab : null;
+  }
+
   /** Drawer spans the full window width vs. only the main column. */
   get isBottomPanelFullWidth(): boolean {
     return taskSidebarPreferenceStore.isBottomPanelFullWidth;
@@ -304,23 +315,35 @@ export class TaskViewStore {
 
   setTerminalDrawerOpen(open: boolean): void {
     taskSidebarPreferenceStore.setBottomPanelOpen(open);
-    if (open && this.bottomPanelTab === 'terminals' && this.terminalTabs.tabs.length === 0) {
+    if (open && this.activeBottomPanelTab === 'terminals' && this.terminalTabs.tabs.length === 0) {
       void this.terminalsMgr.createDefaultTerminal();
     }
   }
 
   setBottomPanelTab(tab: BottomPanelTab): void {
     taskSidebarPreferenceStore.setBottomPanelTab(tab);
+    // Activating a mode from anywhere surfaces its tab in the drawer strip.
+    taskSidebarPreferenceStore.openBottomPanelTab(tab);
     // Switching to terminals in an open drawer must not land on an empty pane.
     if (tab === 'terminals' && this.isTerminalDrawerOpen && this.terminalTabs.tabs.length === 0) {
       void this.terminalsMgr.createDefaultTerminal();
     }
   }
 
+  /** Removes a mode tab from the strip; the active one falls back to the next. */
+  closeBottomPanelTab(tab: BottomPanelTab): void {
+    const wasActive = this.activeBottomPanelTab === tab;
+    taskSidebarPreferenceStore.closeBottomPanelTab(tab);
+    if (!wasActive) return;
+    const next = taskSidebarPreferenceStore.openBottomPanelTabs[0];
+    if (next) this.setBottomPanelTab(next);
+  }
+
   /** Opens the terminal drawer in terminals mode and creates a new session. */
   openNewTerminal(): void {
     taskSidebarPreferenceStore.setBottomPanelOpen(true);
     taskSidebarPreferenceStore.setBottomPanelTab('terminals');
+    taskSidebarPreferenceStore.openBottomPanelTab('terminals');
     void this.terminalsMgr.createDefaultTerminal();
   }
 

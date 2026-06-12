@@ -59,6 +59,7 @@ import {
 } from '@shared/agent-command-prefix';
 import type { Agent } from '@shared/agents';
 import { BUILTIN_AGENT_KEYS } from '@shared/builtin-agents';
+import type { ClaudeMemoryFile } from '@shared/conversations';
 import type { Branch } from '@shared/git';
 import { INTERNAL_PROJECT_ID } from '@shared/projects';
 import { getRuntime, RUNTIME_IDS, type RuntimeId } from '@shared/runtime-registry';
@@ -73,6 +74,7 @@ import {
 } from '@renderer/features/projects/stores/project-selectors';
 import { useAppSettingsKey } from '@renderer/features/settings/use-app-settings-key';
 import { recordSkillInvocation } from '@renderer/features/skills/skill-usage-stats';
+import { ContextItem, memoryFileLabel } from '@renderer/features/tasks/components/context-item';
 import type { ConversationStore } from '@renderer/features/tasks/conversations/conversation-manager';
 import { initialConversationTitle } from '@renderer/features/tasks/conversations/conversation-title-utils';
 import { useEffectiveRuntime } from '@renderer/features/tasks/conversations/use-effective-runtime';
@@ -108,10 +110,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@renderer/lib/ui/dropdown-menu';
+import { InfoTooltip } from '@renderer/lib/ui/info-tooltip';
+import { MicroLabel } from '@renderer/lib/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@renderer/lib/ui/popover';
 import { Switch } from '@renderer/lib/ui/switch';
 import { Textarea } from '@renderer/lib/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@renderer/lib/ui/tooltip';
+import { formatBytes } from '@renderer/utils/formatBytes';
 import { isImeComposing } from '@renderer/utils/ime';
 import { cn } from '@renderer/utils/utils';
 import {
@@ -1562,6 +1567,18 @@ export const HomeComposer = observer(function HomeComposer({
     },
     [updateDraft]
   );
+  const { value: promptPrinciplesValue, update: updatePromptPrinciples } =
+    useAppSettingsKey('promptPrinciples');
+  const promptPrinciples = promptPrinciplesValue?.items ?? [];
+  const setPromptPrincipleEnabled = useCallback(
+    (id: string, enabled: boolean) => {
+      const items = promptPrinciplesValue?.items ?? [];
+      updatePromptPrinciples({
+        items: items.map((item) => (item.id === id ? { ...item, enabled } : item)),
+      });
+    },
+    [promptPrinciplesValue, updatePromptPrinciples]
+  );
   const modeCanRunWithoutProject = runMode === 'normal' || runMode === 'brainstorm';
   const modeRequiresWorktree =
     !taskScopedTarget &&
@@ -2883,22 +2900,67 @@ export const HomeComposer = observer(function HomeComposer({
               >
                 <Settings2 className="size-3.5" />
               </PopoverTrigger>
-              <PopoverContent align="end" className="w-80 p-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-sm font-medium text-foreground">
+              <PopoverContent align="end" className="w-96 gap-0 p-2.5">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <span className="text-xs text-foreground">
                       {t('home.attachImagesAsPathsLabel')}
                     </span>
-                    <span className="text-xs text-foreground-muted">
-                      {t('home.attachImagesAsPathsDesc')}
-                    </span>
+                    <InfoTooltip
+                      label={t('home.attachImagesAsPathsLabel')}
+                      content={t('home.attachImagesAsPathsDesc')}
+                    />
                   </div>
                   <Switch
+                    size="sm"
                     checked={attachImagesAsPaths}
                     onCheckedChange={setAttachImagesAsPaths}
-                    className="mt-0.5"
                   />
                 </div>
+                <div className="mt-2 flex flex-col gap-1 border-t border-border/60 pt-2">
+                  <ComposerSettingsHeader
+                    label={t('home.promptPrinciplesLabel')}
+                    action={
+                      <button
+                        type="button"
+                        className="font-mono text-[10px] uppercase tracking-widest text-foreground-passive transition-colors hover:text-foreground"
+                        onClick={() => navigate('settings', { tab: 'prompts' })}
+                      >
+                        {t('home.manage')}
+                      </button>
+                    }
+                  />
+                  {promptPrinciples.length === 0 ? (
+                    <p className="text-xs text-foreground-passive">{t('settings.prompts.empty')}</p>
+                  ) : (
+                    promptPrinciples.map((principle) => (
+                      <div key={principle.id} className="flex items-center justify-between gap-3">
+                        <div className="flex min-w-0 items-center gap-1.5">
+                          <span className="min-w-0 truncate text-xs text-foreground">
+                            {principle.name || t('home.promptPrincipleUnnamed')}
+                          </span>
+                          {principle.text ? (
+                            <InfoTooltip
+                              label={principle.name || t('home.promptPrincipleUnnamed')}
+                              content={
+                                <span className="whitespace-pre-wrap">{principle.text}</span>
+                              }
+                            />
+                          ) : null}
+                        </div>
+                        <Switch
+                          size="sm"
+                          checked={principle.enabled}
+                          onCheckedChange={(checked) =>
+                            setPromptPrincipleEnabled(principle.id, checked)
+                          }
+                          aria-label={t('settings.prompts.toggle')}
+                        />
+                      </div>
+                    ))
+                  )}
+                </div>
+                <InstructionFilesSection projectPath={skillProjectPath} />
               </PopoverContent>
             </Popover>
           </div>
@@ -2907,6 +2969,65 @@ export const HomeComposer = observer(function HomeComposer({
     </div>
   );
 });
+
+/** Quiet micro-header for a composer-settings popover section: label + optional hint + trailing action. */
+function ComposerSettingsHeader({
+  label,
+  hint,
+  action,
+}: {
+  label: string;
+  hint?: string;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <div className="flex min-w-0 items-center gap-1.5">
+        <MicroLabel className="text-[10px]">{label}</MicroLabel>
+        {hint ? <InfoTooltip label={label} content={hint} /> : null}
+      </div>
+      {action}
+    </div>
+  );
+}
+
+/**
+ * Composer-settings view onto the instruction files that will feed the next
+ * session's prompt: the user-global CLAUDE.md (user-level system prompt) and
+ * the project's CLAUDE.md / AGENTS.md (project prompt). View + open-to-edit;
+ * the runtime's built-in system prompt is not editable and only gets a hint.
+ */
+function InstructionFilesSection({ projectPath }: { projectPath?: string }) {
+  const { t } = useTranslation();
+  const { data: files = [] } = useQuery<ClaudeMemoryFile[]>({
+    queryKey: ['instructionFiles', projectPath ?? null],
+    queryFn: () => rpc.conversations.getInstructionFiles(projectPath),
+    refetchOnWindowFocus: false,
+  });
+
+  return (
+    <div className="mt-2 flex flex-col gap-1 border-t border-border/60 pt-2">
+      <ComposerSettingsHeader
+        label={t('home.instructionFilesLabel')}
+        hint={t('home.instructionFilesHint')}
+      />
+      {files.length === 0 ? (
+        <p className="text-xs text-foreground-passive">{t('home.noInstructionFiles')}</p>
+      ) : (
+        files.map((file) => (
+          <ContextItem
+            key={file.path}
+            icon={<FileText className="size-3.5" />}
+            label={memoryFileLabel(file, t)}
+            meta={formatBytes(file.bytes)}
+            text={file.content}
+            sourcePath={file.path}
+          />
+        ))
+      )}
+    </div>
+  );
+}
 
 interface ChipProps {
   icon: ComponentType<{ className?: string }>;

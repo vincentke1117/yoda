@@ -36,6 +36,7 @@ import {
 } from '@renderer/features/tasks/tabs/tab-meta';
 import { useProvisionedTask, useTaskViewContext } from '@renderer/features/tasks/task-view-context';
 import { ChipContextMenu } from '@renderer/lib/components/chip-context-menu';
+import { FeatureCard } from '@renderer/lib/components/feature-card';
 import { FilePathMenuItems } from '@renderer/lib/components/file-path-actions';
 import { SidebarChip } from '@renderer/lib/components/sidebar-chip';
 import { appState } from '@renderer/lib/stores/app-state';
@@ -455,26 +456,15 @@ export const TaskSidebar = observer(function TaskSidebar() {
                     {t('tasks.sidePane.addCard')}
                   </p>
                   {availableGroups.map((group, index) => (
-                    <button
+                    <FeatureCard
                       key={group}
-                      type="button"
-                      className="group/card flex w-full animate-in items-center gap-3 rounded-lg border border-border bg-background-1 px-3 py-2.5 text-left fade-in-0 slide-in-from-bottom-2 fill-mode-backwards transition-colors hover:border-primary/40 hover:bg-background-2"
-                      style={{ animationDelay: `${(index + 1) * 60}ms` }}
-                      onClick={() => selectGroup(group)}
-                    >
-                      <span className="flex size-8 shrink-0 items-center justify-center rounded-md border border-border/70 bg-background-2 text-foreground-muted transition-colors group-hover/card:border-primary/30 group-hover/card:bg-primary/10 group-hover/card:text-primary [&_svg]:size-4">
-                        {groupIcon(group)}
-                      </span>
-                      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                        <span className="text-xs font-medium text-foreground">
-                          {t(groupLabelKey(group))}
-                        </span>
-                        <span className="truncate text-[11px] leading-4 text-foreground-passive">
-                          {t(groupDescKey(group))}
-                        </span>
-                      </span>
-                      <Plus className="size-3.5 shrink-0 text-foreground-passive opacity-0 transition-opacity group-hover/card:opacity-100" />
-                    </button>
+                      className="w-full"
+                      icon={groupIcon(group)}
+                      label={t(groupLabelKey(group))}
+                      description={t(groupDescKey(group))}
+                      index={index}
+                      onSelect={() => selectGroup(group)}
+                    />
                   ))}
                 </div>
               </div>

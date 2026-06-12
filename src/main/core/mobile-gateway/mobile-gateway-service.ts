@@ -70,6 +70,7 @@ import { log } from '@main/lib/logger';
 const MAX_BODY_BYTES = 128 * 1024;
 const MOBILE_METRO_DEFAULT_PORT = 8081;
 const METRO_STATUS_TIMEOUT_MS = 1000;
+const METRO_STOP_TIMEOUT_MS = 3000;
 
 type MetroStatus = 'free' | 'occupied' | 'running';
 
@@ -297,27 +298,61 @@ function compareConversations(a: Conversation, b: Conversation): number {
   return (Number.isNaN(bTime) ? 0 : bTime) - (Number.isNaN(aTime) ? 0 : aTime);
 }
 
+// 198.18.0.0/15 (RFC 2544 benchmark block) is used by proxy TUN interfaces
+// (ClashX/Surge fake-IP) and is unreachable from other devices on the LAN.
+function isUsableLanAddress(address: string): boolean {
+  return !/^198\.(?:18|19)\./.test(address);
+}
+
+// Physical interfaces (en0/eth0/wlan0) are reachable from phones on the same
+// network; VPN/tunnel interfaces (utun/wg/tun) usually are not. Rank instead of
+// filter — a tunnel address can still be right (e.g. both devices on Tailscale).
+function lanInterfaceRank(name: string): number {
+  if (/^(en|eth|wlan|wl)/i.test(name)) return 0;
+  if (/^(utun|tun|tap|wg|zt|ipsec|ppp)/i.test(name)) return 2;
+  return 1;
+}
+
 function lanUrls(port: number): string[] {
-  const urls: string[] = [];
-  for (const iface of Object.values(networkInterfaces())) {
-    for (const entry of iface ?? []) {
-      if (entry.family === 'IPv4' && !entry.internal) {
-        urls.push(`http://${entry.address}:${port}`);
+  const candidates: { name: string; address: string }[] = [];
+  for (const [name, entries] of Object.entries(networkInterfaces())) {
+    for (const entry of entries ?? []) {
+      if (entry.family === 'IPv4' && !entry.internal && isUsableLanAddress(entry.address)) {
+        candidates.push({ name, address: entry.address });
       }
     }
   }
-  return urls;
+  candidates.sort((a, b) => lanInterfaceRank(a.name) - lanInterfaceRank(b.name));
+  return candidates.map((c) => `http://${c.address}:${port}`);
 }
 
 function mobileInstallUrl(): string {
   return process.env.YODA_MOBILE_INSTALL_URL?.trim() || MOBILE_APP_DEFAULT_INSTALL_URL;
 }
 
+function gatewayTokenFilePath(): string {
+  return path.join(app.getPath('userData'), 'mobile-gateway-token');
+}
+
 function mobileGatewayToken(): string {
   const envToken = process.env.YODA_MOBILE_GATEWAY_TOKEN?.trim();
   if (envToken) return envToken;
   if (isDevelopment()) return MOBILE_GATEWAY_DEFAULT_DEV_TOKEN;
-  return randomUUID();
+
+  // Persist the generated token so desktop restarts don't invalidate paired phones.
+  try {
+    const existing = fs.readFileSync(gatewayTokenFilePath(), 'utf8').trim();
+    if (existing) return existing;
+  } catch {
+    // first run: no token file yet
+  }
+  const token = randomUUID();
+  try {
+    fs.writeFileSync(gatewayTokenFilePath(), token, { encoding: 'utf8', mode: 0o600 });
+  } catch (error) {
+    log.warn('MobileGateway: failed to persist gateway token', { error: String(error) });
+  }
+  return token;
 }
 
 function localExpoUrl(primaryUrl: string, token: string): string | null {
@@ -527,6 +562,7 @@ function resolveTaskActivityStatus(
 export class MobileGatewayService {
   private server: http.Server | null = null;
   private metroProcess: ChildProcess | null = null;
+  private metroHost: string | null = null;
   private metroEnsureInFlight: Promise<void> | null = null;
   private token = '';
   private host = '0.0.0.0';
@@ -603,10 +639,21 @@ export class MobileGatewayService {
 
   private async ensureLocalMetro(primaryUrl: string): Promise<void> {
     if (!shouldAutoStartLocalMetro()) return;
-    if (this.metroProcess) return;
 
     const metroHost = metroHostFromGatewayUrl(primaryUrl);
     if (!metroHost) return;
+
+    if (this.metroProcess) {
+      if (this.metroHost === metroHost) return;
+      // Metro bakes REACT_NATIVE_PACKAGER_HOSTNAME into bundle URLs at startup,
+      // so after a network change (e.g. Wi-Fi -> hotspot) it keeps handing out
+      // the old unreachable IP. Restart it with the current host.
+      log.info('MobileGateway: restarting Expo Metro after LAN host change', {
+        from: this.metroHost,
+        to: metroHost,
+      });
+      await this.stopMetroAndWait();
+    }
 
     const status = await getMetroStatus();
     if (status === 'running') {
@@ -638,6 +685,7 @@ export class MobileGatewayService {
     );
 
     this.metroProcess = child;
+    this.metroHost = metroHost;
     if (child.pid) writeMetroPidFile(child.pid);
     pipeMetroLog(child.stdout, 'info', 'MobileGateway: Expo Metro');
     pipeMetroLog(child.stderr, 'warn', 'MobileGateway: Expo Metro');
@@ -657,10 +705,37 @@ export class MobileGatewayService {
     });
   }
 
+  // Stop the owned Metro and wait for it to exit so port 8081 is free before respawning.
+  private async stopMetroAndWait(): Promise<void> {
+    const child = this.metroProcess;
+    this.disposeMetroProcess();
+    if (!child || child.exitCode !== null || child.signalCode !== null) return;
+
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(() => {
+        try {
+          if (process.platform !== 'win32' && child.pid) {
+            process.kill(-child.pid, 'SIGKILL');
+          } else {
+            child.kill('SIGKILL');
+          }
+        } catch {
+          // already gone
+        }
+        resolve();
+      }, METRO_STOP_TIMEOUT_MS);
+      child.once('exit', () => {
+        clearTimeout(timer);
+        resolve();
+      });
+    });
+  }
+
   private disposeMetroProcess(): void {
     const child = this.metroProcess;
     if (!child) return;
     this.metroProcess = null;
+    this.metroHost = null;
 
     try {
       if (process.platform !== 'win32' && child.pid) {

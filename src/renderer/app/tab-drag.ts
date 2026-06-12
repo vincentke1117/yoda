@@ -1,6 +1,7 @@
 import { action, observable } from 'mobx';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { TaskWindowTabTarget } from '@shared/task-window';
+import type { BottomPanelTab } from '@shared/view-state';
 import type { SidebarTabGroup } from '@renderer/features/tasks/types';
 import type { AppTabEntry } from '@renderer/lib/stores/app-tabs-store';
 
@@ -36,11 +37,13 @@ export type TabDragPayload =
   | { kind: 'shell-pin'; pinId: string }
   /** A task-sidebar feature card — reorders within the sidebar strip only. */
   | { kind: 'sidebar-group'; group: SidebarTabGroup }
-  /** A bottom-panel terminal tab — reorders within the bottom strip only. */
+  /** A bottom-panel mode tab — reorders within the bottom strip only. */
+  | { kind: 'bottom-mode'; mode: BottomPanelTab }
+  /** A terminal row in the bottom drawer's list — reorders within it only. */
   | { kind: 'terminal-item'; terminalId: string };
 
 /** What a drop handler receives: the zone element plus the pointer position. */
-export type TabDropEvent = { currentTarget: HTMLElement; clientX: number };
+export type TabDropEvent = { currentTarget: HTMLElement; clientX: number; clientY: number };
 
 export type TabDragSourceProps = { onMouseDown: React.MouseEventHandler<HTMLElement> };
 
@@ -141,6 +144,7 @@ function onMouseUp(event: MouseEvent): void {
     finished.over.onDrop(finished.payload, {
       currentTarget: finished.over.node,
       clientX: event.clientX,
+      clientY: event.clientY,
     });
   }
 }
@@ -240,15 +244,20 @@ export function useTabDropZone({
 /**
  * Raw insertion index at the pointer among the zone's chips carrying
  * `data-tab-drop-marker={marker}` — computed BEFORE any removal, so reorder
- * methods must adjust when the dragged item precedes the index.
+ * methods must adjust when the dragged item precedes the index. Pass `'y'`
+ * for vertical lists (e.g. the bottom drawer's terminal rows).
  */
-export function tabDropIndex(event: TabDropEvent, marker: string): number {
+export function tabDropIndex(event: TabDropEvent, marker: string, axis: 'x' | 'y' = 'x'): number {
   const chips = Array.from(
     event.currentTarget.querySelectorAll<HTMLElement>(`[data-tab-drop-marker="${marker}"]`)
   );
   for (let i = 0; i < chips.length; i++) {
     const rect = chips[i].getBoundingClientRect();
-    if (event.clientX < rect.left + rect.width / 2) return i;
+    const past =
+      axis === 'x'
+        ? event.clientX < rect.left + rect.width / 2
+        : event.clientY < rect.top + rect.height / 2;
+    if (past) return i;
   }
   return chips.length;
 }

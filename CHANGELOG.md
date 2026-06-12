@@ -5,6 +5,29 @@ All notable changes to Yoda will be documented in this file.
 The public Yoda changelog starts at **0.1.0**. Earlier non-Yoda release history
 is preserved in git tags only.
 
+## 0.10.2 — 2026-06-12
+
+### Added
+
+- **Composer principles**: the composer settings popover can toggle individual
+  atomic prompt principles, with instruction-file viewing and management;
+  comments move to icon hover.
+- **Cross-area tab moves**: tab drag-and-drop and right-click move now work
+  across all three tab areas.
+- **Bottom panel modes as tabs**: mode switching is flat tabs aligned with the
+  sidebar chip design; each mode tab can detach independently, and empty
+  states show feature cards matching sidebar interactions.
+- Mobile gateway hardened across desktop restarts and network changes; Expo
+  Metro restarts when the LAN host changes.
+
+### Fixed
+
+- App startup no longer blocks ~4s on login-shell environment capture —
+  `resolveUserEnv` runs as async exec.
+- Update manifests pin versioned URLs, enabling differential downloads.
+- Composer popover ContextItem no longer crashes outside a task view.
+- Boot screen blink cursor falls back to a muted hollow outline.
+
 ## 0.10.1 — 2026-06-12
 
 ### Added

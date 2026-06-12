@@ -139,6 +139,9 @@ export function MobileView({ embedded = false }: { embedded?: boolean } = {}) {
   const { data, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: ['mobileGateway', 'connectionInfo'],
     queryFn: () => rpc.mobileGateway.getConnectionInfo(),
+    // The QR encodes the current LAN IP; poll so a network change while the
+    // panel is open refreshes it (and lets the gateway restart Metro).
+    refetchInterval: 5000,
   });
 
   // The Dev/Prod view is a manual switch; it defaults to the host's real runtime
