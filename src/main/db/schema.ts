@@ -524,6 +524,29 @@ export const appSecrets = sqliteTable(
   })
 );
 
+export const aiInvocationLogs = sqliteTable(
+  'ai_invocation_logs',
+  {
+    id: text('id').primaryKey(),
+    purpose: text('purpose').notNull(), // 'task-naming' | 'session-title' | ... (open set)
+    mode: text('mode').notNull(), // 'cli' | 'api' | 'interactive'
+    runtime: text('runtime').notNull(),
+    model: text('model'),
+    command: text('command'), // CLI command line or API endpoint
+    prompt: text('prompt'), // clipped request payload
+    output: text('output'), // clipped final answer / stdout tail
+    status: text('status').notNull(), // 'running' | 'succeeded' | 'failed'
+    error: text('error'),
+    metadata: text('metadata', { mode: 'json' }).$type<Record<string, string>>(),
+    startedAt: text('started_at').notNull(),
+    finishedAt: text('finished_at'),
+    durationMs: integer('duration_ms'),
+  },
+  (table) => ({
+    startedAtIdx: index('idx_ai_invocation_logs_started_at').on(table.startedAt),
+  })
+);
+
 export const aiLabGenerations = sqliteTable(
   'ai_lab_generations',
   {

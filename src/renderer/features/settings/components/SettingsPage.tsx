@@ -3,6 +3,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { AgentManagerView } from '@renderer/features/agents-config/agent-manager-view';
 import { AgentsView } from '@renderer/features/agents/components/AgentsView';
+import { AiLogsPanel } from '@renderer/features/ai-logs/components/AiLogsPanel';
 import { AutomationMainPanel } from '@renderer/features/automation/automation-view';
 import { MaasView } from '@renderer/features/maas/components/MaasView';
 import { McpView } from '@renderer/features/mcp/components/McpView';
@@ -59,6 +60,7 @@ export type SettingsPageTab =
   | 'agent-manager'
   | 'maas'
   | 'usage'
+  | 'ai-logs'
   | 'automation'
   | 'mobile'
   | 'repository'
@@ -83,6 +85,7 @@ function useSettingsTabGroups(): SettingsTabEntry[][] {
     [
       { id: 'account', label: t('settings.tabs.account') },
       { id: 'usage', label: t('settings.tabs.usage') },
+      { id: 'ai-logs', label: t('settings.tabs.aiLogs') },
     ],
     // App-wide preferences.
     [
@@ -314,6 +317,11 @@ export function SettingsPage({
       title: t('usage.title'),
       description: t('usage.subtitle'),
       sections: [{ id: 'usage', component: <UsageView embedded /> }],
+    },
+    'ai-logs': {
+      title: t('aiLogs.title'),
+      description: t('aiLogs.subtitle'),
+      sections: [{ id: 'ai-logs', component: <AiLogsPanel /> }],
     },
     automation: {
       title: t('automation.title'),

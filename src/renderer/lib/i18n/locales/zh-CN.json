@@ -266,6 +266,7 @@
       "agentManager": "Agent",
       "maas": "MaaS",
       "usage": "用量",
+      "aiLogs": "AI 日志",
       "automation": "自动化",
       "mobile": "移动端",
       "repository": "项目",
@@ -2090,6 +2091,42 @@
       "byRuntime": "口径：按会话所属 runtime 汇总，仅统计可解析的会话。",
       "bySource": "口径：会话启动时记录的账号模式；追踪上线前的历史会话按该 runtime 当前设置归类（估算）。",
       "topTasks": "口径：任务内全部会话 token 求和后排序，取前 10。"
+    }
+  },
+  "aiLogs": {
+    "title": "AI 日志",
+    "subtitle": "记录本应用发起的每一次 AI 调用——后台 CLI、API 请求与交互式会话，含起止时间与完整细节，便于复盘。",
+    "filter": {
+      "all": "全部",
+      "running": "进行中",
+      "succeeded": "成功",
+      "failed": "失败"
+    },
+    "clear": "清空日志",
+    "emptyTitle": "还没有 AI 调用记录",
+    "emptyDescription": "后台 AI 任务（命名、摘要、Logo 生成等）运行时会记录在这里。",
+    "runningSince": "开始于",
+    "started": "开始时间",
+    "finished": "结束时间",
+    "duration": "耗时",
+    "command": "命令",
+    "prompt": "Prompt",
+    "output": "输出",
+    "error": "错误",
+    "mode": {
+      "cli": "CLI",
+      "api": "API",
+      "interactive": "交互式"
+    },
+    "purpose": {
+      "task-naming": "任务命名",
+      "session-title": "会话标题",
+      "session-summary": "会话摘要",
+      "commit-message": "提交信息",
+      "logo-generation": "Logo 生成",
+      "maas-chat": "MaaS 对话",
+      "interactive-session": "交互式会话",
+      "utility": "通用任务"
     }
   },
   "maas": {

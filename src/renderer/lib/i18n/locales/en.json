@@ -266,6 +266,7 @@
       "agentManager": "Agents",
       "maas": "MaaS",
       "usage": "Usage",
+      "aiLogs": "AI Logs",
       "automation": "Automation",
       "mobile": "Mobile",
       "repository": "Project",
@@ -2090,6 +2091,42 @@
       "byRuntime": "How it's counted: grouped by the runtime that ran each session; only sessions with parseable transcripts are included.",
       "bySource": "How it's counted: the account mode recorded when each session was spawned. Sessions from before tracking landed are attributed to the runtime's current setting (estimate).",
       "topTasks": "How it's counted: sum of all session tokens per task, top 10."
+    }
+  },
+  "aiLogs": {
+    "title": "AI Logs",
+    "subtitle": "Every AI invocation the app makes — background CLI runs, API calls, and interactive sessions — with timings and full details for debugging.",
+    "filter": {
+      "all": "All",
+      "running": "Running",
+      "succeeded": "Succeeded",
+      "failed": "Failed"
+    },
+    "clear": "Clear logs",
+    "emptyTitle": "No AI invocations yet",
+    "emptyDescription": "Background AI work (naming, summaries, logo generation, …) will be logged here as it runs.",
+    "runningSince": "started",
+    "started": "Started",
+    "finished": "Finished",
+    "duration": "Duration",
+    "command": "Command",
+    "prompt": "Prompt",
+    "output": "Output",
+    "error": "Error",
+    "mode": {
+      "cli": "CLI",
+      "api": "API",
+      "interactive": "Interactive"
+    },
+    "purpose": {
+      "task-naming": "Task naming",
+      "session-title": "Session title",
+      "session-summary": "Session summary",
+      "commit-message": "Commit message",
+      "logo-generation": "Logo generation",
+      "maas-chat": "MaaS chat",
+      "interactive-session": "Interactive session",
+      "utility": "Utility"
     }
   },
   "maas": {
