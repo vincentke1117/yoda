@@ -1,26 +1,23 @@
-# Docs Site (yoda.lovstudio.ai)
+# 文档站（yoda.lovstudio.ai）
 
-The public site is split across two Vercel projects (scope `lovstudio`). Neither is the in-repo `docs-fumadocs/` stub.
+三个容易混淆的 "docs"：
 
-## Where Things Live
+- `docs/`（本仓库）= 官网落地页（Vite 静态站），**不是文档内容**
+- `/Users/mark/lovstudio/coding/yoda-docs`（仓库外的独立目录）= 真正的文档站（Next.js + Fumadocs）
+- `agents/`（本仓库）= 给 AI 和开发者看的内部文档，不对外发布
 
-| Piece | Location | Stack |
-| --- | --- | --- |
-| Landing page | `docs/` in this repo | Vite static site |
-| Docs content | `/Users/mark/lovstudio/coding/yoda-docs` (separate directory, NOT in this repo) | Next.js + Fumadocs, basePath `/docs` |
-| Agent/dev docs | `agents/` in this repo | Markdown for AI agents and contributors, not published |
+线上架构：域名挂在落地页的 Vercel 项目上，`docs/vercel.json` 把 `/docs/*` 转发到 yoda-docs 项目。
 
-- The domain `yoda.lovstudio.ai` is attached to the `yoda` Vercel project (landing page). `docs/vercel.json` rewrites `/docs/*` to the `yoda-docs` Vercel project.
-- `docs-fumadocs/` in this repo is a leftover stub from the migration; the real content is in the external `yoda-docs` directory.
+## 改文档内容
 
-## Updating Docs Content
+1. 改 `yoda-docs/content/docs/*.mdx`
+2. `env -u NODE_ENV pnpm build`（shell 里有 NODE_ENV=development 会构建崩溃）
+3. `vercel --prod`
 
-1. Edit `yoda-docs/content/docs/*.mdx` (outside this repo).
-2. Build: `env -u NODE_ENV pnpm build` (a `NODE_ENV=development` leaking from the shell breaks React prerender).
-3. Deploy: `vercel --prod` from the `yoda-docs` directory.
+注意：`yoda-docs/content/docs/reference/learn-agent-design/` 是脚本同步生成的，**不要手改**，去改源仓库 `lovstudio/learn-agent-design`。
 
-## Updating the Landing Page
+## 改落地页
 
-1. Edit `docs/` in this repo.
-2. Build locally (`npm run build` inside `docs/`) — the Vercel cloud build fails because `docs/package.json` declares no dependencies.
-3. Deploy the prebuilt output from `docs/dist/`.
+1. 改本仓库 `docs/`
+2. 在 `docs/` 里本地 `npm run build`（云端构建会失败，必须本地预构建）
+3. 从 `docs/dist/` 部署
