@@ -33,6 +33,7 @@ import {
 } from '@renderer/lib/layout/navigation-provider';
 import { useShowModal } from '@renderer/lib/modal/modal-provider';
 import { appState, sidebarStore } from '@renderer/lib/stores/app-state';
+import { Badge } from '@renderer/lib/ui/badge';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -289,6 +290,9 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
                 >
                   <SquareKanban className="h-5 w-5 sm:h-4 sm:w-4" />
                   {t('sidebar.kanban')}
+                  <Badge variant="secondary" className="ml-auto text-[10px]">
+                    Alpha
+                  </Badge>
                 </SidebarMenuButton>
               </GlobalSidePaneTarget>
               <GlobalSidePaneTarget viewId="settings" altHeld={altHeld}>
