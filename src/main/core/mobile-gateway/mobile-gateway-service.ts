@@ -304,27 +304,55 @@ function isUsableLanAddress(address: string): boolean {
   return !/^198\.(?:18|19)\./.test(address);
 }
 
+// Physical interfaces (en0/eth0/wlan0) are reachable from phones on the same
+// network; VPN/tunnel interfaces (utun/wg/tun) usually are not. Rank instead of
+// filter — a tunnel address can still be right (e.g. both devices on Tailscale).
+function lanInterfaceRank(name: string): number {
+  if (/^(en|eth|wlan|wl)/i.test(name)) return 0;
+  if (/^(utun|tun|tap|wg|zt|ipsec|ppp)/i.test(name)) return 2;
+  return 1;
+}
+
 function lanUrls(port: number): string[] {
-  const urls: string[] = [];
-  for (const iface of Object.values(networkInterfaces())) {
-    for (const entry of iface ?? []) {
+  const candidates: { name: string; address: string }[] = [];
+  for (const [name, entries] of Object.entries(networkInterfaces())) {
+    for (const entry of entries ?? []) {
       if (entry.family === 'IPv4' && !entry.internal && isUsableLanAddress(entry.address)) {
-        urls.push(`http://${entry.address}:${port}`);
+        candidates.push({ name, address: entry.address });
       }
     }
   }
-  return urls;
+  candidates.sort((a, b) => lanInterfaceRank(a.name) - lanInterfaceRank(b.name));
+  return candidates.map((c) => `http://${c.address}:${port}`);
 }
 
 function mobileInstallUrl(): string {
   return process.env.YODA_MOBILE_INSTALL_URL?.trim() || MOBILE_APP_DEFAULT_INSTALL_URL;
 }
 
+function gatewayTokenFilePath(): string {
+  return path.join(app.getPath('userData'), 'mobile-gateway-token');
+}
+
 function mobileGatewayToken(): string {
   const envToken = process.env.YODA_MOBILE_GATEWAY_TOKEN?.trim();
   if (envToken) return envToken;
   if (isDevelopment()) return MOBILE_GATEWAY_DEFAULT_DEV_TOKEN;
-  return randomUUID();
+
+  // Persist the generated token so desktop restarts don't invalidate paired phones.
+  try {
+    const existing = fs.readFileSync(gatewayTokenFilePath(), 'utf8').trim();
+    if (existing) return existing;
+  } catch {
+    // first run: no token file yet
+  }
+  const token = randomUUID();
+  try {
+    fs.writeFileSync(gatewayTokenFilePath(), token, { encoding: 'utf8', mode: 0o600 });
+  } catch (error) {
+    log.warn('MobileGateway: failed to persist gateway token', { error: String(error) });
+  }
+  return token;
 }
 
 function localExpoUrl(primaryUrl: string, token: string): string | null {
