@@ -93,7 +93,8 @@ function WorkspaceViewContent() {
   // on the strip itself. Inner strips keep priority via the innermost-zone
   // rule in tab-drag.
   const { isOver, dropRef } = useTabDropZone({
-    canDrop: (payload) => payload.kind === 'task-entity' && payload.from !== 'strip',
+    canDrop: (payload) =>
+      (payload.kind === 'task-entity' && payload.from !== 'strip') || payload.kind === 'shell-pin',
     onDrop: moveDraggedTabToStrip,
   });
 

@@ -140,7 +140,7 @@ export const AppSidePane = observer(function AppSidePane() {
         };
       }
     }
-    return { kind: 'shell-pin', pinId: pin.id };
+    return { kind: 'shell-pin', pinId: pin.id, pin };
   };
 
   // Right-click menu for a moved task entity pin, mirroring the task sidebar's

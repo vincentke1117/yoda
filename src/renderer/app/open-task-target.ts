@@ -48,11 +48,23 @@ export function closeTaskTopTab(tab: AppTabEntry): void {
 }
 
 /**
- * Drop-zone handler shared by the top strip and the task main area: a moved
+ * Drop-zone handler shared by the top strip and the central column: a moved
  * entity (task-sidebar pin or shell-pane pin) returns to the strip and
- * activates — dropping it "into the main window" is a deliberate act.
+ * activates; a copy-semantics shell pin (view / task overview) reopens its
+ * route in the main area and unpins. Dropping "into the main window" is a
+ * deliberate act either way.
  */
 export function moveDraggedTabToStrip(payload: TabDragPayload): void {
+  if (payload.kind === 'shell-pin') {
+    const { pin } = payload;
+    if (pin.kind === 'view') {
+      appState.appTabs.openTab(pin.viewId, pin.params, { activate: true });
+    } else {
+      openTaskTopTab(pin.projectId, pin.taskId, { kind: 'overview' }, { activate: true });
+    }
+    appState.sidePane.unpin(pin.id);
+    return;
+  }
   if (payload.kind !== 'task-entity' || !payload.tabId) return;
   const tabManager = asProvisioned(getTaskStore(payload.projectId, payload.taskId))?.taskView
     .tabManager;

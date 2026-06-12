@@ -122,10 +122,11 @@ export const AppTabStrip = observer(function AppTabStrip() {
   const newSessionLabel = taskId ? t('tasks.tabs.newConversation') : t('sidebar.newTask');
   const newSessionDisabled = Boolean(taskId && !provisionedTask);
 
-  // Dropping a pinned entity (task sidebar / shell pane chip) on the strip
-  // moves it back here and activates it — the inverse of pinning it aside.
+  // Dropping a pinned entity or shell pin on the strip moves/reopens it here
+  // and activates it — the inverse of pinning it aside.
   const dropZone = useTabDropZone({
-    canDrop: (payload) => payload.kind === 'task-entity' && payload.from !== 'strip',
+    canDrop: (payload) =>
+      (payload.kind === 'task-entity' && payload.from !== 'strip') || payload.kind === 'shell-pin',
     onDrop: moveDraggedTabToStrip,
   });
 

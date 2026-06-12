@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { TaskWindowTabTarget } from '@shared/task-window';
 import type { BottomPanelTab } from '@shared/view-state';
 import type { SidebarTabGroup } from '@renderer/features/tasks/types';
+import type { SidePanePin } from '@renderer/lib/stores/app-side-pane-store';
 import type { AppTabEntry } from '@renderer/lib/stores/app-tabs-store';
 
 /**
@@ -33,8 +34,12 @@ export type TabDragPayload =
     }
   /** Any non-entity top-level tab — copy-pinned into the shell pane on drop. */
   | { kind: 'view'; from: 'strip'; appTab: AppTabEntry }
-  /** A copy-semantics shell pin (view / overview) — reorders within the pane only. */
-  | { kind: 'shell-pin'; pinId: string }
+  /**
+   * A copy-semantics shell pin (view / task overview): reorders within the
+   * pane, or — dropped on the main window / top strip — reopens its route
+   * there and unpins.
+   */
+  | { kind: 'shell-pin'; pinId: string; pin: SidePanePin }
   /** A task-sidebar feature card — reorders within the sidebar strip only. */
   | { kind: 'sidebar-group'; group: SidebarTabGroup }
   /** A bottom-panel mode tab — reorders within the bottom strip only. */
