@@ -407,7 +407,7 @@ export function SettingsPage({
         {/* Narrow containers (shell side pane, slim windows) hide the nav
             column; tab switching moves into the content header's dropdown. */}
         <div className="grid min-h-0 flex-1 grid-cols-[auto_minmax(0,1fr)] grid-rows-[minmax(0,1fr)] gap-6 overflow-hidden @max-md:grid-cols-1">
-          <div className="py-10 @max-md:hidden">
+          <div className="flex min-h-0 flex-col py-10 @max-md:hidden">
             <nav className="flex min-h-0 w-max min-w-28 flex-col gap-0.5 overflow-y-auto">
               {tabGroups.map((group, groupIndex) => (
                 <React.Fragment key={group[0]?.id ?? groupIndex}>
