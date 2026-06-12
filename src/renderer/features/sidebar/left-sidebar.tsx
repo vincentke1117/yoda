@@ -128,6 +128,21 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
   const { currentView } = useWorkspaceSlots();
   const altHeld = useAltKeyHeld();
 
+  // The nav section opened by the version anchor behaves like a popover:
+  // clicking anywhere outside the footer block dismisses it.
+  const footerRef = React.useRef<HTMLDivElement>(null);
+  const navSectionVisible = !sidebarStore.navSectionHidden;
+  React.useEffect(() => {
+    if (!navSectionVisible) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (footerRef.current && !footerRef.current.contains(e.target as Node)) {
+        sidebarStore.setNavSectionHidden(true);
+      }
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [navSectionVisible]);
+
   const showCommandPalette = useShowModal('commandPaletteModal');
   const showFeedbackModal = useShowModal('feedbackModal');
   const { count: skillIssueCount, firstIssue: firstSkillIssue } = useSkillValidationIssues();
@@ -271,7 +286,7 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
           </SidebarGroup>
           <SidebarProjectlessTaskList />
         </SidebarContent>
-        <div className="flex flex-col">
+        <div ref={footerRef} className="flex flex-col">
           {/* Single separator for the footer block: sits above the nav section
               when expanded, and directly above the account row when collapsed. */}
           <div className="mx-2 my-1 border-t border-border" />
