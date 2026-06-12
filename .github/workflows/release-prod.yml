@@ -15,8 +15,52 @@ permissions:
   contents: write
 
 jobs:
+  # 先创建 draft release，三个平台 job 把资产传齐后再由 publish-release 发布。
+  # 否则 release 一创建 `releases/latest/download` 就指向它，而 mac 的
+  # v1-stable-mac.yml 要十几分钟后才传上去，期间所有 mac 用户的更新检查
+  # 都会 404（ERR_UPDATER_CHANNEL_FILE_NOT_FOUND）。draft 对 latest 不可见。
+  create-release:
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        if: startsWith(github.ref, 'refs/tags/')
+
+      - name: Prepare release notes
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          if [ -f CHANGELOG.md ]; then
+            awk -v ver="$VERSION" '
+              /^## / { if (found) exit; if ($2 == ver) { found=1; next } }
+              found { print }
+            ' CHANGELOG.md > release-notes.md || true
+          fi
+          if [ ! -s release-notes.md ]; then
+            printf 'Release v%s\n' "$VERSION" > release-notes.md
+          fi
+
+      - name: Create draft release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME already exists, skipping create"
+          else
+            gh release create "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" \
+              --draft --title "$GITHUB_REF_NAME" --notes-file release-notes.md
+          fi
+
   release-linux:
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    needs: create-release
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -61,40 +105,25 @@ jobs:
           r2-secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           r2-bucket: ${{ secrets.R2_BUCKET }}
 
-      - name: Prepare release notes
-        if: startsWith(github.ref, 'refs/tags/')
-        shell: bash
-        run: |
-          set -euo pipefail
-          VERSION="${GITHUB_REF_NAME#v}"
-          if [ -f CHANGELOG.md ]; then
-            awk -v ver="$VERSION" '
-              /^## / { if (found) exit; if ($2 == ver) { found=1; next } }
-              found { print }
-            ' CHANGELOG.md > release-notes.md || true
-          fi
-          if [ ! -s release-notes.md ]; then
-            printf 'Release v%s\n' "$VERSION" > release-notes.md
-          fi
-
       - name: Pin versioned URLs in update manifests
         if: startsWith(github.ref, 'refs/tags/')
         shell: bash
         run: node --experimental-strip-types scripts/release/pin-feed-urls.ts
 
-      - name: Upload to GitHub Release
+      - name: Upload to GitHub Release (draft)
         if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            release/*.AppImage
-            release/*.AppImage.blockmap
-            release/*.deb
-            release/*.rpm
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          gh release upload "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" --clobber \
+            release/*.AppImage \
+            release/*.AppImage.blockmap \
+            release/*.deb \
+            release/*.rpm \
             release/v1-stable-linux*.yml
-          fail_on_unmatched_files: false
-          generate_release_notes: false
-          body_path: release-notes.md
 
   release-win:
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
@@ -173,39 +202,24 @@ jobs:
           r2-secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           r2-bucket: ${{ secrets.R2_BUCKET }}
 
-      - name: Prepare release notes
-        if: startsWith(github.ref, 'refs/tags/')
-        shell: bash
-        run: |
-          set -euo pipefail
-          VERSION="${GITHUB_REF_NAME#v}"
-          if [ -f CHANGELOG.md ]; then
-            awk -v ver="$VERSION" '
-              /^## / { if (found) exit; if ($2 == ver) { found=1; next } }
-              found { print }
-            ' CHANGELOG.md > release-notes.md || true
-          fi
-          if [ ! -s release-notes.md ]; then
-            printf 'Release v%s\n' "$VERSION" > release-notes.md
-          fi
-
       - name: Pin versioned URLs in update manifests
         if: startsWith(github.ref, 'refs/tags/')
         shell: bash
         run: node --experimental-strip-types scripts/release/pin-feed-urls.ts
 
-      - name: Upload to GitHub Release
+      - name: Upload to GitHub Release (draft)
         if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            release/*.exe
-            release/*.exe.blockmap
-            release/*.msi
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          gh release upload "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" --clobber \
+            release/*.exe \
+            release/*.exe.blockmap \
+            release/*.msi \
             release/v1-stable*.yml
-          fail_on_unmatched_files: false
-          generate_release_notes: false
-          body_path: release-notes.md
 
   release-mac:
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
@@ -314,41 +328,42 @@ jobs:
           r2-secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           r2-bucket: ${{ secrets.R2_BUCKET }}
 
-      - name: Prepare release notes
-        if: startsWith(github.ref, 'refs/tags/')
-        shell: bash
-        run: |
-          set -euo pipefail
-          VERSION="${GITHUB_REF_NAME#v}"
-          if [ -f CHANGELOG.md ]; then
-            awk -v ver="$VERSION" '
-              /^## / { if (found) exit; if ($2 == ver) { found=1; next } }
-              found { print }
-            ' CHANGELOG.md > release-notes.md || true
-          fi
-          if [ ! -s release-notes.md ]; then
-            printf 'Release v%s\n' "$VERSION" > release-notes.md
-          fi
-
       - name: Pin versioned URLs in update manifests
         if: startsWith(github.ref, 'refs/tags/')
         shell: bash
         run: node --experimental-strip-types scripts/release/pin-feed-urls.ts
 
-      - name: Upload to GitHub Release
+      - name: Upload to GitHub Release (draft)
         if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            release/*.dmg
-            release/*.dmg.blockmap
-            release/*.zip
-            release/*.zip.blockmap
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          gh release upload "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" --clobber \
+            release/*.dmg \
+            release/*.dmg.blockmap \
+            release/*.zip \
+            release/*.zip.blockmap \
             release/v1-stable-mac*.yml
-          fail_on_unmatched_files: false
-          generate_release_notes: false
-          body_path: release-notes.md
 
       - name: Cleanup keychain
         if: ${{ always() && steps.apple.outputs.has_signing == 'true' }}
         run: security delete-keychain $RUNNER_TEMP/app-signing.keychain-db || true
+
+  # 三个平台全部传完后才发布，保证 latest/download 一翻转就是完整资产。
+  publish-release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [create-release, release-linux, release-win, release-mac]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Publish release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release edit "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" --draft=false --latest
