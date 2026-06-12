@@ -35,7 +35,9 @@ export type TabDragPayload =
   /** A copy-semantics shell pin (view / overview) — reorders within the pane only. */
   | { kind: 'shell-pin'; pinId: string }
   /** A task-sidebar feature card — reorders within the sidebar strip only. */
-  | { kind: 'sidebar-group'; group: SidebarTabGroup };
+  | { kind: 'sidebar-group'; group: SidebarTabGroup }
+  /** A bottom-panel terminal tab — reorders within the bottom strip only. */
+  | { kind: 'terminal-item'; terminalId: string };
 
 /** What a drop handler receives: the zone element plus the pointer position. */
 export type TabDropEvent = { currentTarget: HTMLElement; clientX: number };

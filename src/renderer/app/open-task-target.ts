@@ -2,6 +2,7 @@ import { when } from 'mobx';
 import type { DeepLinkTarget } from '@shared/deep-links';
 import type { TaskWindowTabTarget, TaskWindowTarget } from '@shared/task-window';
 import type { ActiveFile } from '@shared/view-state';
+import type { TabDragPayload } from '@renderer/app/tab-drag';
 import type { ProvisionedTask } from '@renderer/features/tasks/stores/task';
 import { asProvisioned, getTaskStore } from '@renderer/features/tasks/stores/task-selectors';
 import {
@@ -44,6 +45,24 @@ export function closeTaskTopTab(tab: AppTabEntry): void {
     if (tabManager && internalId) tabManager.closeTab(internalId);
   }
   appState.appTabs.closeTab(tab.id);
+}
+
+/**
+ * Drop-zone handler shared by the top strip and the task main area: a moved
+ * entity (task-sidebar pin or shell-pane pin) returns to the strip and
+ * activates — dropping it "into the main window" is a deliberate act.
+ */
+export function moveDraggedTabToStrip(payload: TabDragPayload): void {
+  if (payload.kind !== 'task-entity' || !payload.tabId) return;
+  const tabManager = asProvisioned(getTaskStore(payload.projectId, payload.taskId))?.taskView
+    .tabManager;
+  if (!tabManager) return;
+  if (payload.from === 'taskSidebar') tabManager.moveSidebarTabBack(payload.tabId);
+  if (payload.from === 'shellPane') {
+    tabManager.moveShellPinBack(payload.tabId);
+    if (payload.pinId) appState.sidePane.unpin(payload.pinId);
+  }
+  openTaskTopTab(payload.projectId, payload.taskId, payload.target, { activate: true });
 }
 
 /** Resolves a top-level tab target to the matching internal tab id, if open. */

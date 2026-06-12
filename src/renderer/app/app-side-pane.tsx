@@ -235,7 +235,8 @@ export const AppSidePane = observer(function AppSidePane() {
   // The pane accepts task entities from anywhere (and its own pins for
   // reorder); non-task tabs land as copy pins, same as their context menu.
   const dropZone = useTabDropZone({
-    canDrop: (payload) => payload.kind !== 'sidebar-group',
+    canDrop: (payload) =>
+      payload.kind === 'task-entity' || payload.kind === 'view' || payload.kind === 'shell-pin',
     onDrop: (payload, event) => {
       const index = tabDropIndex(event, 'shell-pin');
       if (payload.kind === 'shell-pin') {

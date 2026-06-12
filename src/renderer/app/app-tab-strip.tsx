@@ -29,7 +29,7 @@ import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TaskWindowTabTarget } from '@shared/task-window';
 import { AppTabContextMenu } from '@renderer/app/app-tab-context-menu';
-import { closeTaskTopTab, openTaskTopTab } from '@renderer/app/open-task-target';
+import { closeTaskTopTab, moveDraggedTabToStrip } from '@renderer/app/open-task-target';
 import {
   tabDragSource,
   useTabDropZone,
@@ -126,18 +126,7 @@ export const AppTabStrip = observer(function AppTabStrip() {
   // moves it back here and activates it — the inverse of pinning it aside.
   const dropZone = useTabDropZone({
     canDrop: (payload) => payload.kind === 'task-entity' && payload.from !== 'strip',
-    onDrop: (payload) => {
-      if (payload.kind !== 'task-entity' || !payload.tabId) return;
-      const tabManager = asProvisioned(getTaskStore(payload.projectId, payload.taskId))?.taskView
-        .tabManager;
-      if (!tabManager) return;
-      if (payload.from === 'taskSidebar') tabManager.moveSidebarTabBack(payload.tabId);
-      if (payload.from === 'shellPane') {
-        tabManager.moveShellPinBack(payload.tabId);
-        if (payload.pinId) appState.sidePane.unpin(payload.pinId);
-      }
-      openTaskTopTab(payload.projectId, payload.taskId, payload.target, { activate: true });
-    },
+    onDrop: moveDraggedTabToStrip,
   });
 
   return (

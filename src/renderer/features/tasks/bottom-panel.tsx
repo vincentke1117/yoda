@@ -16,6 +16,7 @@ import { observer } from 'mobx-react-lite';
 import { Activity, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { BottomPanelTab } from '@shared/view-state';
+import { tabDragSource, tabDropIndex, useTabDropZone } from '@renderer/app/tab-drag';
 import { SessionHistoryPanel } from '@renderer/features/tasks/conversations/session-history-panel';
 import { useProvisionedTask, useTaskViewContext } from '@renderer/features/tasks/task-view-context';
 import { rpc } from '@renderer/lib/ipc';
@@ -95,6 +96,19 @@ export const BottomPanel = observer(function BottomPanel() {
     void rpc.pty.sendInput(activeScript.session.sessionId, '\x03');
   };
 
+  // Terminal tabs reorder by drag within the strip (scripts keep their
+  // config-defined order).
+  const dropZone = useTabDropZone({
+    canDrop: (payload) => payload.kind === 'terminal-item' && tab === 'terminals',
+    onDrop: (payload, event) => {
+      if (payload.kind !== 'terminal-item') return;
+      const raw = tabDropIndex(event, 'terminal-item');
+      const from = terminalTabView.tabOrder.indexOf(payload.terminalId);
+      if (from === -1) return;
+      terminalTabView.reorderTabs(from, raw > from ? raw - 1 : raw);
+    },
+  });
+
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
       <div className="flex h-7 shrink-0 items-center gap-1 border-b border-border px-2">
@@ -127,7 +141,13 @@ export const BottomPanel = observer(function BottomPanel() {
         </DropdownMenu>
         <div aria-hidden className="mx-0.5 h-3.5 w-px shrink-0 bg-border" />
         {/* Mode items as tabs + contextual "new" action glued after. */}
-        <div className="flex min-w-0 items-center gap-0.5 overflow-x-auto">
+        <div
+          ref={dropZone.dropRef}
+          className={cn(
+            'flex min-w-0 items-center gap-0.5 overflow-x-auto rounded-sm',
+            dropZone.isOver && 'bg-primary/10'
+          )}
+        >
           {tab === 'terminals'
             ? terminalTabView.tabs.map((terminal) => (
                 <ItemTab
@@ -137,6 +157,11 @@ export const BottomPanel = observer(function BottomPanel() {
                   isActive={terminalTabView.activeTabId === terminal.data.id}
                   onSelect={() => terminalTabView.setActiveTab(terminal.data.id)}
                   onRename={(name) => void terminalMgr?.renameTerminal(terminal.data.id, name)}
+                  drag={tabDragSource(() => ({
+                    kind: 'terminal-item',
+                    terminalId: terminal.data.id,
+                  }))}
+                  dropMarker="terminal-item"
                   action={
                     <button
                       type="button"
@@ -283,6 +308,8 @@ function ItemTab({
   onSelect,
   onRename,
   action,
+  drag,
+  dropMarker,
 }: {
   icon?: ReactNode;
   label: string;
@@ -290,11 +317,17 @@ function ItemTab({
   onSelect: () => void;
   onRename?: (name: string) => void;
   action?: ReactNode;
+  /** Drag-source props (see app/tab-drag.ts) — tabs stay presentation-only. */
+  drag?: Pick<React.HTMLAttributes<HTMLDivElement>, 'onMouseDown'>;
+  /** Marks the tab for drop-index math in its strip's drop zone. */
+  dropMarker?: string;
 }) {
   const [isEditing, setIsEditing] = useState(false);
 
   return (
     <div
+      data-tab-drop-marker={dropMarker}
+      {...drag}
       className={cn(
         'group/tab flex h-5 shrink-0 cursor-pointer items-center gap-1 rounded-sm px-1.5 text-[11px] transition-colors',
         isActive
