@@ -297,11 +297,17 @@ export class AppTabsStore implements Snapshottable<AppTabsSnapshot> {
    * the visible tab set.
    */
   private _activate(tab: AppTabEntry): void {
-    this.activeTabId = tab.id;
-    tab.seq = ++this.activationSeq;
     if (!this.stickyTabIds.includes(tab.id)) {
       this.stripScope = tabScopeKey(tab.viewId, tab.params);
+    } else if (this.stripScope === null) {
+      // First activation since a restore that predates stripScope: freeze the
+      // strip on the outgoing scope, or visibleTabs would fall back to the
+      // sticky tab's own scope and swap the row anyway.
+      const prev = this.activeTab;
+      if (prev) this.stripScope = tabScopeKey(prev.viewId, prev.params);
     }
+    this.activeTabId = tab.id;
+    tab.seq = ++this.activationSeq;
   }
 
   private _lastActiveInScope(scope: string): AppTabEntry | undefined {
@@ -589,8 +595,13 @@ export class AppTabsStore implements Snapshottable<AppTabsSnapshot> {
     this.stickyTabIds = (snapshot.stickyTabIds ?? []).filter((id) =>
       restored.some((tab) => tab.id === id)
     );
-    // visibleTabs falls back to the active tab's scope when this goes stale.
-    this.stripScope = typeof snapshot.stripScope === 'string' ? snapshot.stripScope : null;
+    // Older snapshots predate stripScope — derive it from the restored active
+    // tab so the first sticky activation doesn't swap the row.
+    const restoredActive = restored.find((tab) => tab.id === snapshot.activeTabId) ?? restored[0];
+    this.stripScope =
+      typeof snapshot.stripScope === 'string'
+        ? snapshot.stripScope
+        : tabScopeKey(restoredActive.viewId, restoredActive.params);
     this.activationSeq = Math.max(0, ...restored.map((tab) => tab.seq ?? 0));
     this.activeTabId = restored.some((tab) => tab.id === snapshot.activeTabId)
       ? (snapshot.activeTabId ?? restored[0].id)
