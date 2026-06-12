@@ -3,6 +3,7 @@ import {
   ExternalLink,
   FileText,
   MoreHorizontal,
+  PanelRight,
   PanelRightOpen,
   TerminalSquare,
 } from 'lucide-react';
@@ -11,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { getAppById, type OpenInAppId } from '@shared/openInApps';
 import { openProjectFileTab } from '@renderer/features/project-file/project-file-session';
 import { useAppSettingsKey } from '@renderer/features/settings/use-app-settings-key';
+import { asProvisioned, getTaskStore } from '@renderer/features/tasks/stores/task-selectors';
 import { toast } from '@renderer/lib/hooks/use-toast';
 import { useOpenInApps } from '@renderer/lib/hooks/useOpenInApps';
 import { rpc } from '@renderer/lib/ipc';
@@ -244,6 +246,20 @@ export function FilePathActionsDropdown({
 type GlobalFileSurface = 'main' | 'globalSidePane';
 
 /**
+ * The provisioned task currently routed in the main area, if any — the target
+ * for "open in (task) sidebar" from global surfaces like a pinned skill view.
+ * Evaluated when the menu renders (on open), so no MobX subscription is needed.
+ */
+function activeRoutedProvisionedTask() {
+  if (appState.navigation.currentViewId !== 'task') return null;
+  const params = appState.navigation.viewParamsStore['task'] as
+    | { projectId?: string; taskId?: string }
+    | undefined;
+  if (!params?.projectId || !params.taskId) return null;
+  return asProvisioned(getTaskStore(params.projectId, params.taskId)) ?? null;
+}
+
+/**
  * Full menu for standalone files outside any project/task (agent-home files:
  * SKILL.md, user CLAUDE.md, …), via injected menu primitives so dropdowns,
  * submenus, and context menus share it. Groups: in-app placement (main area /
@@ -277,6 +293,22 @@ export function GlobalFileMenuItems({
         <FileText className="size-4" />
         {placementLabel(t('fileActions.openInMainArea'), 'main')}
       </Item>
+      {activeRoutedProvisionedTask() ? (
+        <Item
+          className="whitespace-nowrap"
+          onClick={(event) => {
+            event.stopPropagation();
+            const provisioned = activeRoutedProvisionedTask();
+            if (!provisioned) return;
+            provisioned.taskView.tabManager.openFileInSidebar(absolutePath);
+            // Pinning while the sidebar is hidden would silently swallow the tab.
+            provisioned.taskView.setSidebarCollapsed(false);
+          }}
+        >
+          <PanelRight className="size-4" />
+          {t('tasks.tabs.openInSidePane')}
+        </Item>
+      ) : null}
       <Item
         className="whitespace-nowrap"
         onClick={(event) => {
