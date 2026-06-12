@@ -5,6 +5,42 @@ All notable changes to Yoda will be documented in this file.
 The public Yoda changelog starts at **0.1.0**. Earlier non-Yoda release history
 is preserved in git tags only.
 
+## 0.10.0 — 2026-06-12
+
+### Added
+
+- **New brand identity — “The Hood”**: a vectorized mark (rounded-triangle
+  robe, teardrop cowl negative space, one luminous presence inside) drawn from
+  the ygreen theme. Rolled out everywhere: macOS/Windows/Linux app icons (with
+  distinct beta/canary dot colors), in-app lockups (mark + YODA wordmark with
+  outlined type), the boot screen now opens with the breathing mark, the
+  landing page is rethemed to the identity, and a new `/design/` page on
+  yoda.lovstudio.ai documents the full identity system (mark anatomy, lockup
+  sizing rules, icon variants, palette).
+- **AI Lab**: logo/image generation view with dual engines (ZenMux Vertex
+  protocol and Codex CLI).
+- **AI invocation logs**: a settings tab recording every AI call from start to
+  finish — including per-turn prompts of interactive sessions — shown as a
+  table; rows are written at call start (`running`) so hangs are visible.
+- **Markdown Front Matter rendering**: key-value table at the top of rendered
+  Markdown, nested objects flattened to dot-path rows, tolerant of BOM and
+  leading blank lines.
+
+### Changed
+
+- Worktree paths flattened and hash-mode branch names shortened.
+- Task menu assembly extracted into `useTaskMenuActions`; the top overview tab
+  reuses the same task menu.
+- Settings navigation column: breakpoint tuning, fit-content width, and
+  scroll-constraint fixes for the bottom tabs.
+
+### Fixed
+
+- Session panel sections no longer disappear when main-area file tabs close,
+  and the file menu no longer deadlocks after switching panels.
+- Interactive session logs record the actual agent command instead of the
+  tmux wrapper command.
+
 ## 0.9.0 — 2026-06-12
 
 ### Added
