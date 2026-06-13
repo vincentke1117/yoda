@@ -124,6 +124,31 @@ export const appSettings = sqliteTable(
   })
 );
 
+/**
+ * Saved automations: recurring prompts the user can run as agent tasks.
+ * Replaces the legacy `app_settings['automations']` JSON blob; the
+ * AutomationService migrates old entries into this table on first read.
+ * Engine columns (cron/trigger/branch) land in later migrations.
+ */
+export const automations = sqliteTable('automations', {
+  id: text('id').primaryKey(),
+  title: text('title').notNull(),
+  workspaceName: text('workspace_name').notNull().default('Yoda'),
+  prompt: text('prompt').notNull(),
+  runtime: text('runtime').notNull(),
+  scheduleLabel: text('schedule_label').notNull().default(''),
+  status: text('status').notNull().default('active'), // 'active' | 'paused'
+  sortOrder: integer('sort_order').notNull().default(0),
+  lastRunAt: text('last_run_at'),
+  createdAt: text('created_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text('updated_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`)
+    .$onUpdate(() => new Date().toISOString()),
+});
+
 export const tasks = sqliteTable(
   'tasks',
   {
