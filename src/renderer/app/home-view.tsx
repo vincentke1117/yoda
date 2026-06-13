@@ -105,7 +105,14 @@ import {
   ComboboxTrigger,
   ComboboxValue,
 } from '@renderer/lib/ui/combobox';
-import { Dialog, DialogContent, DialogTitle, DialogTrigger } from '@renderer/lib/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@renderer/lib/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -3436,11 +3443,28 @@ interface RunModeSelectorProps {
 function RunModeSelector({ mode, summary, onChange, renderConfiguration }: RunModeSelectorProps) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
+  // The mode change reshapes the whole development paradigm, so we stage it locally
+  // and only commit on explicit confirmation rather than applying on each click.
+  const [pendingMode, setPendingMode] = useState<HomeRunMode>(mode);
   const current = RUN_MODE_OPTIONS.find((option) => option.mode === mode) ?? RUN_MODE_OPTIONS[0];
   const CurrentIcon = current.icon;
+  const pending =
+    RUN_MODE_OPTIONS.find((option) => option.mode === pendingMode) ?? RUN_MODE_OPTIONS[0];
+  const PendingIcon = pending.icon;
+  const dirty = pendingMode !== mode;
+
+  const handleOpenChange = (next: boolean) => {
+    if (next) setPendingMode(mode);
+    setOpen(next);
+  };
+
+  const handleConfirm = () => {
+    if (dirty) onChange(pendingMode);
+    setOpen(false);
+  };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger
         render={
           <button
@@ -3464,10 +3488,14 @@ function RunModeSelector({ mode, summary, onChange, renderConfiguration }: RunMo
       />
       <DialogContent
         showCloseButton={false}
-        className="h-[min(70dvh,40rem)] w-[min(44rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] gap-0 p-0 sm:max-w-[44rem]"
+        className="flex h-[min(70dvh,40rem)] w-[min(44rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] flex-col gap-0 p-0 sm:max-w-[44rem]"
       >
-        <DialogTitle className="sr-only">{t('home.modeAria')}</DialogTitle>
-        <div className="flex min-h-0 flex-1 divide-x divide-border/60">
+        <DialogHeader showCloseButton className="min-w-0 px-4 py-3">
+          <DialogTitle className="truncate text-sm font-semibold text-foreground">
+            {t('home.developmentParadigm')}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="flex min-h-0 flex-1 divide-x divide-border/60 border-t border-border/60">
           <div
             role="tablist"
             aria-label={t('home.modeAria')}
@@ -3487,7 +3515,7 @@ function RunModeSelector({ mode, summary, onChange, renderConfiguration }: RunMo
                 </span>
                 {group.options.map((option) => {
                   const Icon = option.icon;
-                  const active = option.mode === mode;
+                  const active = option.mode === pendingMode;
                   return (
                     <button
                       key={option.mode}
@@ -3495,7 +3523,7 @@ function RunModeSelector({ mode, summary, onChange, renderConfiguration }: RunMo
                       role="tab"
                       aria-selected={active}
                       title={t(option.descKey)}
-                      onClick={() => onChange(option.mode)}
+                      onClick={() => setPendingMode(option.mode)}
                       className={cn(
                         'flex items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm transition-colors',
                         active
@@ -3519,13 +3547,30 @@ function RunModeSelector({ mode, summary, onChange, renderConfiguration }: RunMo
           </div>
           <div className="flex min-w-0 flex-1 flex-col gap-1 overflow-y-auto p-3">
             <div className="flex items-center gap-2">
-              <CurrentIcon className="size-4 shrink-0 text-primary" />
-              <span className="text-sm font-semibold text-foreground">{t(current.labelKey)}</span>
+              <PendingIcon className="size-4 shrink-0 text-primary" />
+              <span className="text-sm font-semibold text-foreground">{t(pending.labelKey)}</span>
             </div>
-            <p className="text-xs text-foreground-muted">{t(current.descKey)}</p>
-            {renderConfiguration(mode)}
+            <p className="text-xs text-foreground-muted">{t(pending.descKey)}</p>
+            {renderConfiguration(pendingMode)}
           </div>
         </div>
+        <DialogFooter className="px-3 py-2.5">
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="flex h-8 items-center justify-center rounded-md border border-border bg-background-1 px-3 text-xs font-medium text-foreground transition-colors hover:bg-background-2"
+          >
+            {t('common.cancel')}
+          </button>
+          <button
+            type="button"
+            onClick={handleConfirm}
+            disabled={!dirty}
+            className="flex h-8 items-center justify-center rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50"
+          >
+            {t('common.confirm')}
+          </button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
