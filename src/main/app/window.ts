@@ -16,6 +16,13 @@ import { APP_ORIGIN } from './protocol';
 let mainWindow: BrowserWindow | null = null;
 /** All full-app windows (the main window plus Window > Duplicate copies). */
 const fullAppWindows = new Set<BrowserWindow>();
+/** Set once a real quit begins so close-to-hide yields to actual teardown. */
+let appQuitting = false;
+
+/** Called from the shutdown path so the last window stops hiding and closes. */
+export function markAppQuitting(): void {
+  appQuitting = true;
+}
 
 export function createMainWindow(): BrowserWindow {
   mainWindow = createFullAppWindow();
@@ -35,6 +42,16 @@ export function duplicateAppWindow(): BrowserWindow {
 function createFullAppWindow(): BrowserWindow {
   const win = createAppWindow();
   fullAppWindows.add(win);
+  win.on('close', (event) => {
+    // macOS: keep the last full-app window alive (hidden) instead of destroying
+    // it, so a dock re-open is instant and skips the boot screen (a fresh window
+    // reboots the whole renderer). Duplicates still close, and a real quit goes
+    // through before-quit → app.exit, which never routes through this handler.
+    if (appQuitting || process.platform !== 'darwin') return;
+    if (fullAppWindows.size > 1) return;
+    event.preventDefault();
+    win.hide();
+  });
   win.on('closed', () => {
     fullAppWindows.delete(win);
     // Promote a surviving duplicate so deep links / notifications keep a target.
