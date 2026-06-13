@@ -5,6 +5,7 @@ import { agentsConfigController } from './core/agents-config/controller';
 import { aiLabController } from './core/ai-lab/controller';
 import { aiLogsController } from './core/ai-logs/controller';
 import { appController } from './core/app/controller';
+import { automationController } from './core/automation/controller';
 import { conversationController } from './core/conversations/controller';
 import { dependenciesController } from './core/dependencies/controller';
 import { editorBufferController } from './core/editor/controller';
@@ -46,6 +47,7 @@ export const rpcRouter = createRPCRouter({
   agentsConfig: agentsConfigController,
   aiLab: aiLabController,
   aiLogs: aiLogsController,
+  automation: automationController,
   legacyPort: legacyPortController,
   app: appController,
   appSettings: appSettingsController,

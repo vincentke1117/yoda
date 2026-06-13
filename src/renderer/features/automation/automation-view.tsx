@@ -11,9 +11,9 @@ import {
   X,
 } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { AutomationEntry } from '@shared/app-settings';
+import type { Automation, AutomationUpdateInput } from '@shared/automation';
 import { INTERNAL_PROJECT_ID } from '@shared/projects';
 import { isValidRuntimeId, RUNTIMES, type RuntimeId } from '@shared/runtime-registry';
 import { ensureUniqueTaskSlug } from '@shared/task-name';
@@ -41,6 +41,12 @@ import {
 import { Textarea } from '@renderer/lib/ui/textarea';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@renderer/lib/ui/tooltip';
 import { cn } from '@renderer/utils/utils';
+import {
+  useAutomations,
+  useCreateAutomation,
+  useDeleteAutomation,
+  useUpdateAutomation,
+} from './use-automations';
 
 type AutomationDraft = {
   title: string;
@@ -48,7 +54,7 @@ type AutomationDraft = {
   runtime: RuntimeId;
   scheduleLabel: string;
   prompt: string;
-  status: AutomationEntry['status'];
+  status: Automation['status'];
 };
 
 const DEFAULT_PROVIDER: RuntimeId = 'codex';
@@ -64,7 +70,7 @@ function makeDraft(runtime: RuntimeId): AutomationDraft {
   };
 }
 
-function draftFromEntry(entry: AutomationEntry): AutomationDraft {
+function draftFromEntry(entry: Automation): AutomationDraft {
   return {
     title: entry.title,
     workspaceName: entry.workspaceName,
@@ -75,19 +81,14 @@ function draftFromEntry(entry: AutomationEntry): AutomationDraft {
   };
 }
 
-function entryFromDraft(draft: AutomationDraft, existing?: AutomationEntry): AutomationEntry {
-  const now = new Date().toISOString();
+function draftToInput(draft: AutomationDraft) {
   return {
-    id: existing?.id ?? crypto.randomUUID(),
     title: draft.title.trim(),
     workspaceName: draft.workspaceName.trim(),
     runtime: draft.runtime,
     scheduleLabel: draft.scheduleLabel.trim(),
     prompt: draft.prompt.trim(),
     status: draft.status,
-    createdAt: existing?.createdAt ?? now,
-    updatedAt: now,
-    lastRunAt: existing?.lastRunAt ?? null,
   };
 }
 
@@ -106,13 +107,16 @@ export const AutomationMainPanel = observer(function AutomationMainPanel({
   const showConfirm = useShowModal('confirmActionModal');
   const autoApproveDefaults = useRuntimeAutoApproveDefaults();
   const { value: defaultRuntime } = useAppSettingsKey('defaultRuntime');
-  const { value: automations, update, isLoading } = useAppSettingsKey('automations');
+  const { data: automationsData, isLoading } = useAutomations();
+  const createAutomation = useCreateAutomation();
+  const updateAutomation = useUpdateAutomation();
+  const deleteAutomation = useDeleteAutomation();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<AutomationDraft>(() => makeDraft(DEFAULT_PROVIDER));
   const [runningId, setRunningId] = useState<string | null>(null);
 
   const defaultProvider = isValidRuntimeId(defaultRuntime) ? defaultRuntime : DEFAULT_PROVIDER;
-  const items = useMemo(() => automations?.items ?? [], [automations?.items]);
+  const items = useMemo(() => automationsData ?? [], [automationsData]);
   const currentItems = useMemo(() => items.filter((item) => item.status === 'active'), [items]);
   const pausedItems = useMemo(() => items.filter((item) => item.status === 'paused'), [items]);
   const editorOpen = editingId !== null;
@@ -121,19 +125,12 @@ export const AutomationMainPanel = observer(function AutomationMainPanel({
     draft.workspaceName.trim().length > 0 &&
     draft.prompt.trim().length > 0;
 
-  const persist = useCallback(
-    (nextItems: AutomationEntry[]) => {
-      update({ items: nextItems });
-    },
-    [update]
-  );
-
   const openCreate = () => {
     setEditingId('new');
     setDraft(makeDraft(defaultProvider));
   };
 
-  const openEdit = (entry: AutomationEntry) => {
+  const openEdit = (entry: Automation) => {
     setEditingId(entry.id);
     setDraft(draftFromEntry(entry));
   };
@@ -147,39 +144,32 @@ export const AutomationMainPanel = observer(function AutomationMainPanel({
     event.preventDefault();
     if (!canSave) return;
 
-    const existing =
-      editingId && editingId !== 'new' ? items.find((item) => item.id === editingId) : undefined;
-    const nextEntry = entryFromDraft(draft, existing);
-    const nextItems = existing
-      ? items.map((item) => (item.id === existing.id ? nextEntry : item))
-      : [nextEntry, ...items];
-
-    persist(nextItems);
+    const input = draftToInput(draft);
+    if (editingId && editingId !== 'new') {
+      updateAutomation.mutate({ id: editingId, patch: input });
+    } else {
+      createAutomation.mutate(input);
+    }
     closeEditor();
   };
 
-  const updateEntry = (entry: AutomationEntry, patch: Partial<AutomationEntry>) => {
-    const now = new Date().toISOString();
-    persist(
-      items.map((item) =>
-        item.id === entry.id ? { ...item, ...patch, updatedAt: patch.updatedAt ?? now } : item
-      )
-    );
+  const updateEntry = (entry: Automation, patch: AutomationUpdateInput) => {
+    updateAutomation.mutate({ id: entry.id, patch });
   };
 
-  const handleDelete = (entry: AutomationEntry) => {
+  const handleDelete = (entry: Automation) => {
     showConfirm({
       title: t('automation.delete.title'),
       description: t('automation.delete.description', { name: entry.title }),
       confirmLabel: t('automation.delete.confirmLabel'),
       onSuccess: () => {
-        persist(items.filter((item) => item.id !== entry.id));
+        deleteAutomation.mutate(entry.id);
         if (editingId === entry.id) closeEditor();
       },
     });
   };
 
-  const handleRun = async (entry: AutomationEntry) => {
+  const handleRun = async (entry: Automation) => {
     if (runningId) return;
     setRunningId(entry.id);
     try {
@@ -430,12 +420,12 @@ function AutomationSection({
 }: {
   title: string;
   emptyLabel: string;
-  items: AutomationEntry[];
+  items: Automation[];
   runningId: string | null;
-  onEdit: (entry: AutomationEntry) => void;
-  onDelete: (entry: AutomationEntry) => void;
-  onRun: (entry: AutomationEntry) => void;
-  onToggle: (entry: AutomationEntry) => void;
+  onEdit: (entry: Automation) => void;
+  onDelete: (entry: Automation) => void;
+  onRun: (entry: Automation) => void;
+  onToggle: (entry: Automation) => void;
 }) {
   return (
     <section>
@@ -471,12 +461,12 @@ const AutomationRow = observer(function AutomationRow({
   onRun,
   onToggle,
 }: {
-  entry: AutomationEntry;
+  entry: Automation;
   isRunning: boolean;
-  onEdit: (entry: AutomationEntry) => void;
-  onDelete: (entry: AutomationEntry) => void;
-  onRun: (entry: AutomationEntry) => void;
-  onToggle: (entry: AutomationEntry) => void;
+  onEdit: (entry: Automation) => void;
+  onDelete: (entry: Automation) => void;
+  onRun: (entry: Automation) => void;
+  onToggle: (entry: Automation) => void;
 }) {
   const { t } = useTranslation();
   const runtime = RUNTIMES.find((item) => item.id === entry.runtime);
