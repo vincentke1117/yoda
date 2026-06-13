@@ -207,3 +207,19 @@ function rendererUrl(target?: TaskWindowTarget, warm?: boolean): string {
 export function getMainWindow(): BrowserWindow | null {
   return mainWindow;
 }
+
+/**
+ * macOS dock click: surface a live full-app window if one exists, ignoring
+ * hidden background windows (the pre-warmed task window). Returns false when
+ * there is no full-app window to show, so the caller knows to create one.
+ */
+export function focusExistingFullAppWindow(): boolean {
+  for (const win of fullAppWindows) {
+    if (win.isDestroyed()) continue;
+    if (win.isMinimized()) win.restore();
+    win.show();
+    win.focus();
+    return true;
+  }
+  return false;
+}

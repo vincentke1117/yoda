@@ -8,7 +8,7 @@ import { deepLinkService } from './app/deep-link';
 import { setupApplicationMenu } from './app/menu';
 import { registerAppScheme, setupAppProtocol } from './app/protocol';
 import { warmTaskWindowPool } from './app/task-window-pool';
-import { createMainWindow } from './app/window';
+import { createMainWindow, focusExistingFullAppWindow } from './app/window';
 import { registerWindowIpc } from './app/window-ipc';
 import { yodaAccountService } from './core/account/services/yoda-account-service';
 import { agentHookService } from './core/agent-hooks/agent-hook-service';
@@ -87,7 +87,10 @@ app.on('window-all-closed', () => {
 });
 
 app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
+  // Surface an existing full-app window if one is alive; the hidden pre-warmed
+  // task window must not count, or closing the main window would leave the dock
+  // click inert (getAllWindows() never reaches 0 while a warm window parks).
+  if (!focusExistingFullAppWindow()) {
     createMainWindowWithDeepLinkReset();
   }
 });
