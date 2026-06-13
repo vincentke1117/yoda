@@ -1,4 +1,4 @@
-import { Settings2, Sparkles } from 'lucide-react';
+import { RefreshCw, Settings2, Sparkles } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import React, { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,8 +13,44 @@ import { useToast } from '@renderer/lib/hooks/use-toast';
 import { rpc } from '@renderer/lib/ipc';
 import { agentMeta } from '@renderer/lib/providers/meta';
 import { appState } from '@renderer/lib/stores/app-state';
+import { Button } from '@renderer/lib/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@renderer/lib/ui/tooltip';
 import { log } from '@renderer/utils/logger';
+
+/**
+ * Re-runs detection for all CLI agents. Surfaced in the settings section header
+ * so a user who just installed a tool — or whose PATH wasn't ready at boot —
+ * can refresh without restarting the app.
+ */
+export const CliAgentsRescanButton: React.FC = observer(() => {
+  const { t } = useTranslation();
+  const [rescanning, setRescanning] = useState(false);
+
+  const handleRescan = useCallback(async () => {
+    if (rescanning) return;
+    setRescanning(true);
+    try {
+      await appState.dependencies.probeAll();
+    } catch (error) {
+      log.error('Failed to rescan CLI agents:', error);
+    } finally {
+      setRescanning(false);
+    }
+  }, [rescanning]);
+
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      onClick={() => void handleRescan()}
+      disabled={rescanning}
+      className="gap-1.5"
+    >
+      <RefreshCw className={`h-3.5 w-3.5 ${rescanning ? 'animate-spin' : ''}`} />
+      {t('settings.agentsTab.rescan')}
+    </Button>
+  );
+});
 
 export const BASE_CLI_AGENTS: CliAgentStatus[] = RUNTIMES.filter(
   (provider) => provider.detectable !== false
@@ -100,7 +136,20 @@ const renderAgentRow = (agent: CliAgentStatus, actions: AgentRowActions) => {
         </span>
       }
       rightExtra={
-        isDetected ? (
+        <span className="flex items-center gap-1">
+          {!isDetected && runtimeId ? (
+            <AgentInstallButton
+              agentId={runtimeId}
+              canInstall={!!agent.installCommand}
+              isInstalled={isDetected}
+              isInstalling={actions.isInstalling(runtimeId)}
+              tooltipSide="top"
+              onInstall={() => actions.onInstallClick(agent)}
+            />
+          ) : null}
+          {/* Execution settings (incl. setting an absolute CLI path) stays
+              reachable even when undetected — that's the escape hatch when a
+              binary lives outside the probed PATH. */}
           <TooltipProvider delay={150}>
             <Tooltip>
               <TooltipTrigger
@@ -120,16 +169,7 @@ const renderAgentRow = (agent: CliAgentStatus, actions: AgentRowActions) => {
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
-        ) : runtimeId ? (
-          <AgentInstallButton
-            agentId={runtimeId}
-            canInstall={!!agent.installCommand}
-            isInstalled={isDetected}
-            isInstalling={actions.isInstalling(runtimeId)}
-            tooltipSide="top"
-            onInstall={() => actions.onInstallClick(agent)}
-          />
-        ) : null
+        </span>
       }
     />
   );

@@ -325,7 +325,8 @@
       "detected": "已检测到",
       "notDetected": "未检测到",
       "executionSettingsAria": "{{name}} 执行设置",
-      "executionSettings": "执行设置"
+      "executionSettings": "执行设置",
+      "rescan": "重新探测"
     },
     "promptsTab": {
       "description": "原子化的运行原则。勾选的原则会在会话启动时追加到 Runtime 的 system prompt 之后。"

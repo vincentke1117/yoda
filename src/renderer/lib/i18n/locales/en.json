@@ -325,7 +325,8 @@
       "detected": "Detected",
       "notDetected": "Not detected",
       "executionSettingsAria": "{{name}} execution settings",
-      "executionSettings": "Execution settings"
+      "executionSettings": "Execution settings",
+      "rescan": "Rescan"
     },
     "promptsTab": {
       "description": "Atomic operating principles. Enabled principles are appended after the runtime's system prompt when a session starts."

@@ -126,7 +126,10 @@ export async function resolveUserEnv(): Promise<void> {
         `${shell} -ilc 'env'`,
         {
           encoding: 'utf8',
-          timeout: 5_000,
+          // Heavy zsh inits (mise/oh-my-zsh/starship) routinely exceed 5s on a
+          // cold start; a timeout here silently drops the user's full PATH and
+          // makes every CLI probe report "missing". 10s buys that headroom.
+          timeout: 10_000,
           // Route through buildExternalToolEnv so AppImage runtime vars (APPIMAGE,
           // APPDIR, ARGV0, ...) and `/tmp/.mount_*` PATH entries don't leak into
           // the probe shell. Otherwise login-shell hooks that resolve a binary by

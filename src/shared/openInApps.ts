@@ -224,7 +224,7 @@ const _OPEN_IN_APPS = {
           'warp://action/new_window?path={{path_url}}',
           'warppreview://action/new_window?path={{path_url}}',
         ],
-        bundleIds: ['dev.warp.Warp-Stable'],
+        bundleIds: ['dev.warp.Warp-Stable', 'dev.warp.Warp-Preview'],
       },
     },
   },

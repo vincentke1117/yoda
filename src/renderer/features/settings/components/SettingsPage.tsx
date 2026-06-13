@@ -29,7 +29,7 @@ import { Separator } from '@renderer/lib/ui/separator';
 import { cn } from '@renderer/utils/utils';
 import { AccountTab } from './AccountTab';
 import ArchivedProjectsCard from './ArchivedProjectsCard';
-import { CliAgentsList } from './CliAgentsList';
+import { CliAgentsList, CliAgentsRescanButton } from './CliAgentsList';
 import DefaultRuntimeSettingsCard from './DefaultRuntimeSettingsCard';
 import GithubSettingsCard from './GithubSettingsCard';
 import IntegrationsCard from './IntegrationsCard';
@@ -307,6 +307,7 @@ export function SettingsPage({
         {
           id: 'cli-agents',
           title: t('settings.agentsTab.cliAgents'),
+          action: <CliAgentsRescanButton />,
           component: (
             <div className="rounded-xl border border-border/60 bg-muted/10 p-2">
               <CliAgentsList />
