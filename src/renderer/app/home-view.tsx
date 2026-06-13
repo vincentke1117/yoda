@@ -84,10 +84,12 @@ import { asProvisioned, getTaskStore } from '@renderer/features/tasks/stores/tas
 import { AgentSelector } from '@renderer/lib/components/agent-selector/agent-selector';
 import { AgentSlotSelector } from '@renderer/lib/components/agent-slot/agent-slot-selector';
 import { ProjectBranchSelector } from '@renderer/lib/components/project-branch-selector';
+import { Titlebar } from '@renderer/lib/components/titlebar/Titlebar';
 import { toast } from '@renderer/lib/hooks/use-toast';
 import { useAccountSession } from '@renderer/lib/hooks/useAccount';
 import { useTheme } from '@renderer/lib/hooks/useTheme';
 import { rpc } from '@renderer/lib/ipc';
+import { useWorkspaceLayoutContext } from '@renderer/lib/layout/layout-provider';
 import { useNavigate, useParams } from '@renderer/lib/layout/navigation-provider';
 import { useShowModal } from '@renderer/lib/modal/modal-provider';
 import { appState } from '@renderer/lib/stores/app-state';
@@ -790,10 +792,16 @@ async function runReviewOrchestration(args: {
   }
 }
 
-/** Home renders no titlebar row — the view owns its full height. */
-export function HomeTitlebar() {
-  return null;
-}
+/**
+ * Home owns its full height when the sidebar is open — nav + toggle live in
+ * the sidebar. When the sidebar is collapsed we fall back to the default
+ * Titlebar so the toggle/back/forward buttons stay reachable.
+ */
+export const HomeTitlebar = observer(function HomeTitlebar() {
+  const { isLeftOpen } = useWorkspaceLayoutContext();
+  if (isLeftOpen) return null;
+  return <Titlebar />;
+});
 
 interface HomeViewWrapperProps {
   children: ReactNode;
