@@ -5,6 +5,39 @@ All notable changes to Yoda will be documented in this file.
 The public Yoda changelog starts at **0.1.0**. Earlier non-Yoda release history
 is preserved in git tags only.
 
+## 0.11.0 — 2026-06-13
+
+### Added
+
+- **Automation engine (P1)**: an in-process scheduler (croner) rebuilt from the
+  DB on boot, with manual / cron triggers, timezone and next-run-time editing, a
+  last-run status dot, and an `automation_runs` history table. Runs execute from
+  the main process via `createTask` (landing in internal Drafts, auto-approved),
+  back-filled by agent session events; overlapping runs are skipped and
+  interrupted runs are swept on startup. (Running against a real project branch
+  is deferred to P1b.)
+- **Split view**: the main content area can show multiple tasks side by side.
+- **Global side pane full-window expand**: the global sidebar can expand to fill
+  the whole window.
+- **Run-mode picker reworked**: a Dialog-based picker with fixed-width agent
+  labels and single-line compact agent cards; "compare" is split into its own
+  group and renamed to "探索" (Explore).
+
+### Changed
+
+- Sidebar reorganized: Automation and Skills move into the task area (alongside
+  each other); Settings moves after Mobile. The Runtime settings page is merged
+  into a single accordion, and the legacy review-prompt setting is removed.
+
+### Fixed
+
+- Team mode workers run as sessions of the same task rather than separate tasks;
+  compare-mode candidates are isolated in their own worktrees with parent/child
+  grouping.
+- Agents account tab: responsive tables and tab strips (icon-only on narrow
+  panels, threshold raised to 820px), accordion details grow with content, and
+  long emails truncate instead of wrapping.
+
 ## 0.10.4 — 2026-06-13
 
 ### Added
