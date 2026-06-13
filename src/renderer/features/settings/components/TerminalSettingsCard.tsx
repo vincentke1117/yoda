@@ -204,7 +204,7 @@ const TerminalSettingsCard: React.FC = () => {
                   <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-70" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent align="start" className="w-[var(--anchor-width)] p-2">
+              <PopoverContent align="start" className="w-[260px] p-2">
                 <div className="grid gap-2">
                   <Input
                     value={search}
