@@ -3412,7 +3412,7 @@ const RUN_MODE_GROUPS: Array<{ labelKey: string; options: RunModeOption[] }> = [
     ],
   },
   {
-    labelKey: 'home.modeGroupCompare',
+    labelKey: 'home.modeGroupExplore',
     options: [
       {
         mode: 'compare',
