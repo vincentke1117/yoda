@@ -60,7 +60,12 @@ export const AgentDetailPanel: React.FC<{ agentId: RuntimeId; hideHeader?: boole
         {/* The accordion row already plays the role of the header, so the
             embedded panel drops its own to avoid a duplicated name+status. */}
         {!hideHeader && <AgentHeader provider={provider} />}
-        <div className="flex shrink-0 items-center gap-1 border-b border-border bg-background-secondary px-4">
+        {/* overflow-x-auto is the safety net; under @max-md the labels collapse
+            so the 7 tabs degrade to icon-only and fit a narrow side-pane. */}
+        <div
+          className="flex shrink-0 items-center gap-1 overflow-x-auto border-b border-border bg-background-secondary px-4 @max-md:px-2"
+          style={{ scrollbarWidth: 'none' }}
+        >
           {TABS.map((tab) => {
             const Icon = tab.icon;
             const isActive = tab.id === activeTab;
@@ -69,15 +74,16 @@ export const AgentDetailPanel: React.FC<{ agentId: RuntimeId; hideHeader?: boole
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
+                title={t(tab.labelKey)}
                 className={cn(
-                  'flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm transition',
+                  'flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm transition @max-md:px-2.5',
                   isActive
                     ? 'border-foreground text-foreground'
                     : 'border-transparent text-muted-foreground hover:text-foreground'
                 )}
               >
-                <Icon className="h-3.5 w-3.5" />
-                {t(tab.labelKey)}
+                <Icon className="h-3.5 w-3.5 shrink-0" />
+                <span className="@max-md:hidden">{t(tab.labelKey)}</span>
               </button>
             );
           })}
