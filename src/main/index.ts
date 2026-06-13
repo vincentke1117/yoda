@@ -8,7 +8,7 @@ import { deepLinkService } from './app/deep-link';
 import { setupApplicationMenu } from './app/menu';
 import { registerAppScheme, setupAppProtocol } from './app/protocol';
 import { warmTaskWindowPool } from './app/task-window-pool';
-import { createMainWindow, focusExistingFullAppWindow } from './app/window';
+import { createMainWindow, focusExistingFullAppWindow, markAppQuitting } from './app/window';
 import { registerWindowIpc } from './app/window-ipc';
 import { yodaAccountService } from './core/account/services/yoda-account-service';
 import { agentHookService } from './core/agent-hooks/agent-hook-service';
@@ -236,6 +236,7 @@ function beginShutdown(mode: TeardownMode): void {
   if (shutdownStarted) return;
 
   shutdownStarted = true;
+  markAppQuitting();
   telemetryService.capture('app_closed');
   void telemetryService.dispose().finally(() => {
     void (async () => {
@@ -274,6 +275,8 @@ app.on('before-quit', (event) => {
 
   const win = BrowserWindow.getAllWindows()[0];
   if (win?.isMinimized()) win.restore();
+  // The main window may be hidden (close-to-hide); surface it for the dialog.
+  if (win && !win.isDestroyed()) win.show();
   win?.focus();
 
   const shutdownDecision = resolveQuitAgentSessionsDecision(summary, (options) => {
