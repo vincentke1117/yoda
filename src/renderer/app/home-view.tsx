@@ -2024,9 +2024,17 @@ export const HomeComposer = observer(function HomeComposer({
 
       if (runMode === 'compare') {
         // Each candidate forks off the same base into its own isolated worktree.
-        // The first becomes the group anchor; the rest hang off it as children so
-        // the alternatives render together in the subtask tree.
-        let groupParentId = parentTarget?.taskId;
+        // A dedicated session-less parent task groups them so the alternatives
+        // render together in the subtask tree; no candidate doubles as the anchor.
+        const parentTaskId = crypto.randomUUID();
+        const parentPromise = mounted.taskManager.createTask({
+          id: parentTaskId,
+          projectId: mounted.data.id,
+          name: reserveTaskName(`${baseName}-compare`),
+          sourceBranch: forkBaseBranch ?? defaultBranch,
+          strategy: { kind: 'no-worktree' },
+          parentTaskId: parentTarget?.taskId,
+        });
         const launches = compareRuntimes.flatMap((provider, index) => {
           const slot = resolveSlot(comparePromptKey(index), provider);
           if (!slot.provider) return [];
@@ -2039,15 +2047,16 @@ export const HomeComposer = observer(function HomeComposer({
             }),
             titlePrompt: trimmed || undefined,
             strategyKind: 'new-branch',
-            parentTaskId: groupParentId,
+            parentTaskId,
           });
-          groupParentId ??= launch.taskId;
           return [launch];
         });
         if (launches.length === 0) return;
         const first = launches[0];
         if (first) goToTask(mounted.data.id, first.taskId);
-        void Promise.allSettled(launches.map((launch) => launch.promise)).then(reportFailures);
+        void Promise.allSettled([parentPromise, ...launches.map((l) => l.promise)]).then(
+          reportFailures
+        );
         resetComposer();
         return;
       }
