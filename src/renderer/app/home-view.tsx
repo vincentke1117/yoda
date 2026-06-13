@@ -1729,22 +1729,65 @@ export const HomeComposer = observer(function HomeComposer({
         }
 
         if (runMode === 'compare') {
+          // Compare modifies files, so candidates must NOT share a worktree.
+          // Spin off one isolated child task per candidate (forked from this
+          // task's branch) instead of conversations that would clobber each
+          // other in the shared worktree.
+          if (!mounted) return;
+          const baseBranch =
+            targetProvisionedTask.workspace.git.branchName ??
+            (taskScopedTaskStore && 'taskBranch' in taskScopedTaskStore.data
+              ? taskScopedTaskStore.data.taskBranch
+              : undefined);
+          const sourceBranch = baseBranch
+            ? ({ type: 'local' as const, branch: baseBranch } as const)
+            : defaultBranch;
+          if (!sourceBranch) return;
+          const compareProjectId = mounted.data.id;
+          const compareBaseName = trimmed
+            ? taskNameFromPrompt(trimmed)
+            : await rpc.tasks.generateTaskName({});
+          const reservedNames = Array.from(
+            mounted.taskManager.tasks.values(),
+            (task) => task.data.name
+          );
           const launches = compareRuntimes.flatMap((provider, index) => {
             const slot = resolveSlot(comparePromptKey(index), provider);
             if (!slot.provider) return [];
-            return [
-              createTaskConversation({
-                provider: slot.provider,
+            const taskName = ensureUniqueTaskDisplayName(
+              `${compareBaseName}-agent-${index + 1}-${slot.provider}`,
+              reservedNames
+            );
+            reservedNames.push(taskName);
+            const taskId = crypto.randomUUID();
+            const conversationId = crypto.randomUUID();
+            const promise = mounted.taskManager.createTask({
+              id: taskId,
+              projectId: compareProjectId,
+              name: taskName,
+              sourceBranch,
+              strategy: { kind: 'new-branch', taskBranch: taskName, pushBranch: false },
+              parentTaskId: taskScopedTarget.taskId,
+              initialConversation: {
+                id: conversationId,
+                projectId: compareProjectId,
+                taskId,
+                runtime: slot.provider,
+                title: initialConversationTitle(slot.provider, trimmed || undefined, []),
                 initialPrompt: buildRequirementPrompt({
                   requirement,
                   systemPrompt: slot.systemPrompt,
                 }),
-                titlePrompt: trimmed || undefined,
-              }),
-            ];
+                imagePaths,
+                autoApprove: autoApproveDefaults.getDefault(slot.provider),
+              },
+            });
+            return [{ taskId, promise }];
           });
           if (launches.length === 0) return;
-          finishTaskConversationSubmit();
+          const first = launches[0];
+          resetComposer();
+          if (first) goToTask(compareProjectId, first.taskId);
           void Promise.allSettled(launches.map((launch) => launch.promise)).then(reportFailures);
           return;
         }
@@ -1916,6 +1959,7 @@ export const HomeComposer = observer(function HomeComposer({
         initialPrompt: string | undefined;
         titlePrompt?: string;
         strategyKind: TaskSubmitStrategyKind;
+        parentTaskId?: string;
       }) => {
         const taskId = crypto.randomUUID();
         const conversationId = crypto.randomUUID();
@@ -1939,7 +1983,7 @@ export const HomeComposer = observer(function HomeComposer({
                   ? { type: 'local', branch: parentBranchName }
                   : defaultBranch,
           strategy,
-          parentTaskId: parentTarget?.taskId,
+          parentTaskId: args.parentTaskId ?? parentTarget?.taskId,
           initialConversation: {
             id: conversationId,
             projectId: mounted.data.id,
@@ -1980,21 +2024,26 @@ export const HomeComposer = observer(function HomeComposer({
       }
 
       if (runMode === 'compare') {
+        // Each candidate forks off the same base into its own isolated worktree.
+        // The first becomes the group anchor; the rest hang off it as children so
+        // the alternatives render together in the subtask tree.
+        let groupParentId = parentTarget?.taskId;
         const launches = compareRuntimes.flatMap((provider, index) => {
           const slot = resolveSlot(comparePromptKey(index), provider);
           if (!slot.provider) return [];
-          return [
-            createProjectTask({
-              provider: slot.provider,
-              nameSeed: `${baseName}-agent-${index + 1}-${slot.provider}`,
-              initialPrompt: buildRequirementPrompt({
-                requirement,
-                systemPrompt: slot.systemPrompt,
-              }),
-              titlePrompt: trimmed || undefined,
-              strategyKind: 'new-branch',
+          const launch = createProjectTask({
+            provider: slot.provider,
+            nameSeed: `${baseName}-agent-${index + 1}-${slot.provider}`,
+            initialPrompt: buildRequirementPrompt({
+              requirement,
+              systemPrompt: slot.systemPrompt,
             }),
-          ];
+            titlePrompt: trimmed || undefined,
+            strategyKind: 'new-branch',
+            parentTaskId: groupParentId,
+          });
+          groupParentId ??= launch.taskId;
+          return [launch];
         });
         if (launches.length === 0) return;
         const first = launches[0];
@@ -2127,6 +2176,7 @@ export const HomeComposer = observer(function HomeComposer({
     canSubmit,
     mounted,
     taskScopedTarget,
+    taskScopedTaskStore,
     parentTarget,
     parentBranchName,
     targetProvisionedTask,
