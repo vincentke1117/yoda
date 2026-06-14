@@ -16,7 +16,11 @@ import {
 } from '@renderer/lib/ui/dropdown-menu';
 import { isImeComposing } from '@renderer/utils/ime';
 import { cn } from '@renderer/utils/utils';
-import { workspaceTaskCounts, type WorkspaceTaskCounts } from './workspace-task-counts';
+import {
+  activeWorkspaceTaskCounts,
+  workspaceTaskCounts,
+  type WorkspaceTaskCounts,
+} from './workspace-task-counts';
 
 /**
  * Current-workspace selector for the sidebar footer. Shows the active workspace
@@ -35,7 +39,6 @@ export const WorkspaceSwitcher = observer(function WorkspaceSwitcher() {
   const currentName =
     activeWorkspace?.name ??
     (activeId === DEFAULT_WORKSPACE_ID ? t('workspaces.defaultTab') : t('workspaces.allTab'));
-  const activeCounts = workspaceTaskCounts(activeId);
 
   async function handleCreate() {
     try {
@@ -100,7 +103,6 @@ export const WorkspaceSwitcher = observer(function WorkspaceSwitcher() {
       >
         <Layers className="h-4 w-4 shrink-0" />
         <span className="truncate">{currentName}</span>
-        <WorkspaceCounts counts={activeCounts} />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" sideOffset={6} className="min-w-56">
         <DropdownMenuRadioGroup value={activeId}>
@@ -189,6 +191,19 @@ function WorkspaceCounts({
     </span>
   );
 }
+
+/**
+ * Far-right footer badge: number of tasks in the active workspace needing the
+ * user's review. Overlaid on the view-options gear (see the sidebar footer) —
+ * shown by default, fades out on row hover so the gear takes its place.
+ */
+export const WorkspaceReviewBadge = observer(function WorkspaceReviewBadge({
+  className,
+}: {
+  className?: string;
+}) {
+  return <WorkspaceCounts counts={activeWorkspaceTaskCounts()} className={className} />;
+});
 
 function WorkspaceNameInput({
   initialValue,

@@ -6,9 +6,10 @@ import { agentRuntimeStore, workspaceStore } from '@renderer/lib/stores/app-stat
 
 export type WorkspaceTaskCounts = {
   /**
-   * Tasks needing attention: agent running/awaiting input, marked "稍后再读"
-   * (needsReview), or with an unseen attention-worthy status. Each task counts
-   * at most once.
+   * Tasks needing the user's review: marked "稍后再读" (needsReview) or with an
+   * unseen attention-worthy status (awaiting input, finished, or errored).
+   * Tasks that are merely running don't count — they don't need the user yet.
+   * Each task counts at most once.
    */
   attention: number;
   /** Active (non-archived) tasks in the workspace. */
@@ -48,13 +49,10 @@ export function workspaceTaskCounts(workspaceId: string): WorkspaceTaskCounts {
       if (!matches(effectiveWorkspaceId, workspaceId)) continue;
 
       total += 1;
-      // Running, "稍后再读" (persisted needsReview flag) or an unseen
-      // attention-worthy status — union, so a task never counts twice.
-      if (
-        agentRuntimeStore.isTaskRunning(data.projectId, data.id) ||
-        data.needsReview ||
-        agentRuntimeStore.isTaskUnread(data.projectId, data.id)
-      ) {
+      // Needs the user's review: "稍后再读" (persisted needsReview flag) or an
+      // unseen attention-worthy status (awaiting input / finished). Running
+      // tasks are excluded — union, so a task never counts twice.
+      if (data.needsReview || agentRuntimeStore.isTaskUnread(data.projectId, data.id)) {
         attention += 1;
       }
     }
