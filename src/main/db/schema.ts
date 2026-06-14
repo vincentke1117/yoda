@@ -178,6 +178,50 @@ export const automationRuns = sqliteTable(
   })
 );
 
+/**
+ * One review-mode orchestration run (implement → review → loop). Persisted so
+ * the loop survives renderer reloads and app restarts: the main-process
+ * orchestrator resumes any row whose `completedAt` is null at startup. Replaces
+ * the old renderer-side in-memory loop, which silently died on reload and could
+ * never recover when the reviewer's turn-end signal was missed.
+ */
+export const reviewOrchestrations = sqliteTable(
+  'review_orchestrations',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    taskId: text('task_id')
+      .notNull()
+      .references(() => tasks.id, { onDelete: 'cascade' }),
+    implementerConversationId: text('implementer_conversation_id').notNull(),
+    requirement: text('requirement').notNull().default(''),
+    reviewerRuntime: text('reviewer_runtime').notNull(),
+    reviewerSystemPrompt: text('reviewer_system_prompt').notNull().default(''),
+    reviewerAutoApprove: integer('reviewer_auto_approve', { mode: 'boolean' })
+      .notNull()
+      .default(false),
+    maxRounds: integer('max_rounds').notNull(),
+    round: integer('round').notNull().default(1),
+    // 'awaiting_impl' | 'reviewing' | 'passed' | 'failed' | 'aborted' | 'error'
+    status: text('status').notNull().default('awaiting_impl'),
+    currentReviewerConversationId: text('current_reviewer_conversation_id'),
+    error: text('error'),
+    createdAt: text('created_at')
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text('updated_at')
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`)
+      .$onUpdate(() => new Date().toISOString()),
+    completedAt: text('completed_at'),
+  },
+  (table) => ({
+    taskIdx: index('idx_review_orchestrations_task_id').on(table.taskId),
+  })
+);
+
 export const tasks = sqliteTable(
   'tasks',
   {

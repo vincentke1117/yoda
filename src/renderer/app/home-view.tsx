@@ -51,16 +51,14 @@ import {
 import { useTranslation } from 'react-i18next';
 import yodaLogoWhite from '@/assets/images/yoda/yoda_logo_white.svg';
 import yodaLogo from '@/assets/images/yoda/yoda_logo.svg';
-import {
-  applyAgentCommandPrefix,
-  buildPromptInjectionPayload,
-  getAgentCommandSubmitDelayMs,
-} from '@shared/agent-command-prefix';
+import { applyAgentCommandPrefix } from '@shared/agent-command-prefix';
 import type { Agent } from '@shared/agents';
 import { BUILTIN_AGENT_KEYS } from '@shared/builtin-agents';
 import type { ClaudeMemoryFile } from '@shared/conversations';
 import type { Branch } from '@shared/git';
 import { INTERNAL_PROJECT_ID } from '@shared/projects';
+import { stripTerminalControlSequences, withSystemPrompt } from '@shared/prompt-format';
+import { REVIEW_MAX_ROUNDS } from '@shared/review-protocol';
 import { getRuntime, RUNTIME_IDS, type RuntimeId } from '@shared/runtime-registry';
 import type { CatalogIndex } from '@shared/skills/types';
 import { ensureUniqueTaskDisplayName, taskNameFromPrompt } from '@shared/task-name';
@@ -202,7 +200,6 @@ interface RunModeInputChrome {
 
 const MIN_COMPARE_AGENTS = 2;
 const MAX_COMPARE_AGENTS = 6;
-const REVIEW_MAX_ROUNDS = 3;
 const CONVERSATION_TURN_TIMEOUT_MS = 30 * 60_000;
 const DEFAULT_COMPARE_RUNTIMES: RuntimeId[] = ['claude', 'codex'];
 const DEFAULT_REVIEWER_RUNTIME: RuntimeId = 'claude';
@@ -545,12 +542,6 @@ function resolveAgentSlot(args: {
   };
 }
 
-function withSystemPrompt(systemPrompt: string, body: string): string {
-  const trimmedSystemPrompt = systemPrompt.trim();
-  if (!trimmedSystemPrompt) return body;
-  return [`System prompt:`, trimmedSystemPrompt, '', body].join('\n');
-}
-
 function buildRequirementPrompt(args: { requirement: string; systemPrompt: string }): string {
   return withSystemPrompt(
     args.systemPrompt,
@@ -568,66 +559,6 @@ function buildSpecPrompt(args: { requirement: string; systemPrompt: string }): s
       `Start the spec session now. Ask only material clarifying questions before drafting final artifacts unless the user explicitly asks you to draft from the current information.`,
     ].join('\n')
   );
-}
-
-function stripTerminalControlSequences(value: string): string {
-  return value
-    .replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '')
-    .replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)/g, '')
-    .replace(/\x1b[=>]/g, '')
-    .replace(/\r/g, '');
-}
-
-function parseReviewResult(output: string): { passed: boolean; feedback: string } {
-  const clean = stripTerminalControlSequences(output).trim();
-  const match = /YODA_REVIEW_RESULT:\s*(PASS|FAIL)/i.exec(clean);
-  const passed = match?.[1]?.toUpperCase() === 'PASS';
-  return {
-    passed,
-    feedback: clean.slice(-12_000),
-  };
-}
-
-function buildReviewPrompt(args: {
-  requirement: string;
-  round: number;
-  systemPrompt: string;
-}): string {
-  return withSystemPrompt(
-    args.systemPrompt,
-    [
-      `Original requirement:`,
-      args.requirement || '(No explicit requirement was provided.)',
-      '',
-      `Round: ${args.round}`,
-      '',
-      `Protocol:`,
-      `- Do not modify files.`,
-      `- End your response with exactly one marker line:`,
-      `YODA_REVIEW_RESULT: PASS`,
-      `or`,
-      `YODA_REVIEW_RESULT: FAIL`,
-      '',
-      `If the result is FAIL, list concrete fixes for implementer agent A before the marker.`,
-    ].join('\n')
-  );
-}
-
-function buildImplementerFeedbackPrompt(args: {
-  requirement: string;
-  reviewFeedback: string;
-}): string {
-  return [
-    `Reviewer agent B found issues in your implementation.`,
-    '',
-    `Original requirement:`,
-    args.requirement || '(No explicit requirement was provided.)',
-    '',
-    `Review feedback:`,
-    args.reviewFeedback,
-    '',
-    `Please address the issues in this same worktree. Keep the existing direction where possible, update tests if needed, and stop when the next implementation round is complete.`,
-  ].join('\n');
 }
 
 function buildTeamCeoPrompt(args: { requirement: string; systemPrompt: string }): string {
@@ -661,27 +592,6 @@ function buildTeamRolePrompt(args: {
       args.ceoPlan,
     ].join('\n')
   );
-}
-
-function sleep(ms: number): Promise<void> {
-  if (ms <= 0) return Promise.resolve();
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function sendPromptToConversation(
-  conversation: ConversationStore,
-  text: string
-): Promise<void> {
-  const payload = buildPromptInjectionPayload(text);
-  if (!payload) return;
-
-  conversation.setWorking({ force: true });
-  const first = await rpc.pty.sendInput(conversation.session.sessionId, payload);
-  if (!first.success) throw new Error('Could not send prompt to agent session.');
-
-  await sleep(getAgentCommandSubmitDelayMs(conversation.data.runtimeId));
-  const submit = await rpc.pty.sendInput(conversation.session.sessionId, '\r');
-  if (!submit.success) throw new Error('Could not submit prompt to agent session.');
 }
 
 function waitForConversationTurn(conversation: ConversationStore): Promise<void> {
@@ -743,60 +653,6 @@ async function waitForInitialConversationOutput(
   const conversation = await getConversationStore(projectId, taskId, conversationId);
   await waitForConversationTurn(conversation);
   return stripTerminalControlSequences(await readConversationOutput(conversation)).trim();
-}
-
-async function runReviewOrchestration(args: {
-  projectId: string;
-  taskId: string;
-  implementationConversationId: string;
-  implementationReady: Promise<unknown>;
-  requirement: string;
-  reviewerRuntime: RuntimeId;
-  reviewerSystemPrompt: string;
-  getAutoApprove: (runtimeId: RuntimeId) => boolean;
-}): Promise<void> {
-  await args.implementationReady;
-  const implementation = await getConversationStore(
-    args.projectId,
-    args.taskId,
-    args.implementationConversationId
-  );
-
-  for (let round = 1; round <= REVIEW_MAX_ROUNDS; round += 1) {
-    await waitForConversationTurn(implementation);
-    const provisioned = asProvisioned(getTaskStore(args.projectId, args.taskId));
-    if (!provisioned) throw new Error('Task is not ready for review.');
-
-    const reviewerId = crypto.randomUUID();
-    const reviewer = await provisioned.conversations.createConversation({
-      id: reviewerId,
-      projectId: args.projectId,
-      taskId: args.taskId,
-      runtime: args.reviewerRuntime,
-      title: initialConversationTitle(args.reviewerRuntime, args.requirement, []),
-      initialPrompt: buildReviewPrompt({
-        requirement: args.requirement,
-        round,
-        systemPrompt: args.reviewerSystemPrompt,
-      }),
-      autoApprove: args.getAutoApprove(args.reviewerRuntime),
-    });
-    const reviewerStore = provisioned.conversations.conversations.get(reviewer.id);
-    if (!reviewerStore) throw new Error('Reviewer conversation was not found.');
-    reviewerStore.setWorking({ force: true });
-    await waitForConversationTurn(reviewerStore);
-
-    const result = parseReviewResult(await readConversationOutput(reviewerStore));
-    if (result.passed) return;
-
-    await sendPromptToConversation(
-      implementation,
-      buildImplementerFeedbackPrompt({
-        requirement: args.requirement,
-        reviewFeedback: result.feedback,
-      })
-    );
-  }
 }
 
 /**
@@ -1811,20 +1667,25 @@ export const HomeComposer = observer(function HomeComposer({
             titlePrompt: trimmed || undefined,
           });
           finishTaskConversationSubmit();
-          void runReviewOrchestration({
-            projectId: taskScopedTarget.projectId,
-            taskId: taskScopedTarget.taskId,
-            implementationConversationId: implementation.conversationId,
-            implementationReady: implementation.promise,
-            requirement,
-            reviewerRuntime: reviewerSlot.provider,
-            reviewerSystemPrompt: reviewerSlot.systemPrompt,
-            getAutoApprove: autoApproveDefaults.getDefault,
-          }).catch((error: unknown) => {
-            toast.error(
-              error instanceof Error ? error.message : 'Review mode orchestration failed.'
-            );
-          });
+          const reviewerProvider = reviewerSlot.provider;
+          const reviewerSystemPrompt = reviewerSlot.systemPrompt;
+          void implementation.promise
+            .then(() =>
+              rpc.reviewOrchestration.start({
+                projectId: taskScopedTarget.projectId,
+                taskId: taskScopedTarget.taskId,
+                implementerConversationId: implementation.conversationId,
+                requirement,
+                reviewerRuntime: reviewerProvider,
+                reviewerSystemPrompt,
+                reviewerAutoApprove: autoApproveDefaults.getDefault(reviewerProvider),
+              })
+            )
+            .catch((error: unknown) => {
+              toast.error(
+                error instanceof Error ? error.message : 'Review mode orchestration failed.'
+              );
+            });
           return;
         }
 
@@ -2083,18 +1944,25 @@ export const HomeComposer = observer(function HomeComposer({
           strategyKind: reviewSubmitKind,
         });
         goToTask(mounted.data.id, implementation.taskId);
-        void runReviewOrchestration({
-          projectId: mounted.data.id,
-          taskId: implementation.taskId,
-          implementationConversationId: implementation.conversationId,
-          implementationReady: implementation.promise,
-          requirement,
-          reviewerRuntime: reviewerSlot.provider,
-          reviewerSystemPrompt: reviewerSlot.systemPrompt,
-          getAutoApprove: autoApproveDefaults.getDefault,
-        }).catch((error: unknown) => {
-          toast.error(error instanceof Error ? error.message : 'Review mode orchestration failed.');
-        });
+        const reviewerProvider = reviewerSlot.provider;
+        const reviewerSystemPrompt = reviewerSlot.systemPrompt;
+        void implementation.promise
+          .then(() =>
+            rpc.reviewOrchestration.start({
+              projectId: mounted.data.id,
+              taskId: implementation.taskId,
+              implementerConversationId: implementation.conversationId,
+              requirement,
+              reviewerRuntime: reviewerProvider,
+              reviewerSystemPrompt,
+              reviewerAutoApprove: autoApproveDefaults.getDefault(reviewerProvider),
+            })
+          )
+          .catch((error: unknown) => {
+            toast.error(
+              error instanceof Error ? error.message : 'Review mode orchestration failed.'
+            );
+          });
         resetComposer();
         return;
       }

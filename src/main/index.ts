@@ -24,6 +24,7 @@ import { ensureInternalProject } from './core/projects/operations/ensureInternal
 import { projectManager } from './core/projects/project-manager';
 import { ptySessionRegistry } from './core/pty/pty-session-registry';
 import { prSyncScheduler } from './core/pull-requests/pr-sync-scheduler';
+import { reviewOrchestrator } from './core/review-orchestration/orchestrator';
 import { searchService } from './core/search/search-service';
 import { runtimeModelCandidatesService } from './core/settings/runtime-model-candidates-service';
 import { appSettingsService } from './core/settings/settings-service';
@@ -197,6 +198,11 @@ void app.whenReady().then(async () => {
   // reload, app crash/quit before the archive completed).
   resumePendingTaskArchives().catch((e) => {
     log.warn('Failed to resume pending task archives:', e);
+  });
+
+  // Resume review-mode orchestrations interrupted mid-flight (reload, crash).
+  reviewOrchestrator.resumePending().catch((e) => {
+    log.warn('Failed to resume pending review orchestrations:', e);
   });
 
   mobileGatewayService.initialize().catch((e) => {

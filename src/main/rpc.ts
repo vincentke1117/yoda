@@ -27,6 +27,7 @@ import { projectController } from './core/projects/controller';
 import { ptyController } from './core/pty/controller';
 import { pullRequestController } from './core/pull-requests/controller';
 import { repositoryController } from './core/repository/controller';
+import { reviewOrchestrationController } from './core/review-orchestration/controller';
 import { searchController } from './core/search/controller';
 import { appSettingsController } from './core/settings/controller';
 import { runtimeSettingsController } from './core/settings/runtime-settings-controller';
@@ -83,6 +84,7 @@ export const rpcRouter = createRPCRouter({
   pullRequests: pullRequestController,
   viewState: viewStateController,
   search: searchController,
+  reviewOrchestration: reviewOrchestrationController,
 });
 
 export type RpcRouter = typeof rpcRouter;
