@@ -271,7 +271,12 @@ export class SidebarStore implements Snapshottable<SidebarSnapshot> {
 
     const unregistered = all
       .filter((p): p is UnregisteredProject => p.state === 'unregistered')
-      .filter((p) => this.matchesActiveWorkspace(p));
+      .filter((p) => this.matchesActiveWorkspace(p))
+      // With the hide filter on, a freshly picked/quick-created project (mode
+      // 'pick') lands empty and the filter will hide it — so don't flash it in
+      // during its brief registering phase only to drop it on mount. Clone/new
+      // keep showing so their long-running progress stays visible.
+      .filter((p) => !this.hideProjectsWithoutActiveTasks || p.mode !== 'pick');
     const real = all
       .filter(isRegisteredProject)
       .filter((p) => !p.data.isInternal)
@@ -925,7 +930,14 @@ export class SidebarStore implements Snapshottable<SidebarSnapshot> {
   }
 
   private shouldShowProjectByTaskPresence(project: ProjectStore): boolean {
-    if (!project.mountedProject) return true;
+    if (!project.mountedProject) {
+      // A project created this session went through `unregistered`, so `mode`
+      // is set. Keep it hidden until it actually has a visible task, so a brand
+      // new empty project never appears then vanishes when it mounts empty.
+      // Startup-loaded projects (mode === null) stay shown while mounting so
+      // they don't pop in after their tasks load.
+      return project.mode === null;
+    }
     // Uses the full visibility predicate so the two hide filters compose: a
     // project whose remaining tasks are all conversation-less hides too.
     return Array.from(project.mountedProject.taskManager.tasks.values()).some((task) =>
