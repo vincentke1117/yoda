@@ -20,6 +20,7 @@ import { ToggleGroup, ToggleGroupItem } from '@renderer/lib/ui/toggle-group';
 import { cn } from '@renderer/utils/utils';
 import { BottomPanel } from './bottom-panel';
 import { FileActionsDropdown, FileActionsOverlay } from './components/file-actions';
+import { TaskProvisionRecovery } from './components/task-provision-recovery';
 import { ConversationsPanel } from './conversations/conversations-panel';
 import { DiffView } from './diff-view/main-panel/diff-view';
 import { EditorMainPanel } from './editor/editor-main-panel';
@@ -82,16 +83,7 @@ export const TaskMainPanel = observer(function TaskMainPanel() {
   }
 
   if (kind === 'provision-error' || kind === 'project-error') {
-    return (
-      <div className="flex h-full w-full flex-col items-center justify-center p-8">
-        <div className="flex max-w-xs flex-col items-center text-center gap-2">
-          <p className="text-sm font-medium font-mono text-foreground-destructive">
-            {t('tasks.failedSetUpWorkspace')}
-          </p>
-          <p className="text-xs font-mono text-foreground-muted">{taskErrorMessage(taskStore)}</p>
-        </div>
-      </div>
-    );
+    return <TaskProvisionRecovery projectId={projectId} taskId={taskId} />;
   }
 
   if (kind === 'idle' || kind === 'teardown') {

@@ -22,6 +22,7 @@ import {
 } from '@renderer/lib/task-window-launch-target';
 import { Toaster } from '@renderer/lib/ui/toaster';
 import { log } from '@renderer/utils/logger';
+import { TaskProvisionRecovery } from './components/task-provision-recovery';
 import { formatConversationTitleForDisplay } from './conversations/conversation-title-utils';
 import { TaskActiveTabContent } from './main-panel';
 import {
@@ -79,6 +80,10 @@ const TaskTabWindowContent = observer(function TaskTabWindowContent({
 }) {
   const taskStore = getTaskStore(target.projectId, target.taskId);
   const kind = taskViewKind(taskStore, target.projectId);
+
+  if (kind === 'provision-error' || kind === 'project-error') {
+    return <TaskProvisionRecovery projectId={target.projectId} taskId={target.taskId} />;
+  }
 
   if (kind !== 'ready') {
     return <TaskTabWindowStatus kind={kind} target={target} />;
@@ -304,14 +309,8 @@ function getTaskTabWindowStatus(
     };
   }
 
-  if (kind === 'provision-error' || kind === 'project-error') {
-    return {
-      title: t('tasks.failedSetUpWorkspace'),
-      description: taskErrorMessage(taskStore),
-      isBusy: false,
-      isError: true,
-    };
-  }
+  // provision-error / project-error are intercepted upstream by
+  // TaskProvisionRecovery (which adds a retry action), so they never reach here.
 
   if (kind === 'teardown-error') {
     return {
