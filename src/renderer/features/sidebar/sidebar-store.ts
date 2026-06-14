@@ -901,8 +901,16 @@ export class SidebarStore implements Snapshottable<SidebarSnapshot> {
       // latest task does not reshuffle the list. Manual DnD order is ignored in
       // this mode — picking "Last used" implies recency should drive layout.
       return [...projects].sort((a, b) => {
-        const ra = this.projectActivityById[a.data.id] ?? '';
-        const rb = this.projectActivityById[b.data.id] ?? '';
+        // Fall back to the project's own timestamp when it has no task-activity
+        // stamp yet (e.g. a freshly created, task-less project). Without this a
+        // brand-new project sinks to mid-list under recency sort, but it was
+        // force-prepended to the top during its `unregistered` phase — so it
+        // visibly jumps from top to middle on mount. Anchoring to createdAt/
+        // updatedAt (≈ now for a new project) keeps it at the top throughout.
+        const ra =
+          this.projectActivityById[a.data.id] || a.data.updatedAt || a.data.createdAt || '';
+        const rb =
+          this.projectActivityById[b.data.id] || b.data.updatedAt || b.data.createdAt || '';
         const d = compareSidebarInstantsDesc(ra, rb);
         if (d !== 0) return d;
         return a.data.id.localeCompare(b.data.id);
