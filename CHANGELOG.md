@@ -5,16 +5,16 @@ All notable changes to Yoda will be documented in this file.
 The public Yoda changelog starts at **0.1.0**. Earlier non-Yoda release history
 is preserved in git tags only.
 
-## 0.11.2 — 2026-06-14
+## 0.12.0 — 2026-06-14
 
 ### Added
 
-- **Quick project creation**: the project selector can create a project on the
-  fly — auto-deriving the path and initializing the repo — via a prompt-titled
-  dialog.
 - **Review workflow**: review orchestration moves into the main process with a
   marker turn-end fallback; new review sessions auto-activate and display side
   by side with the implementer by default.
+- **Quick project creation**: the project selector can create a project on the
+  fly — auto-deriving the path and initializing the repo — via a prompt-titled
+  dialog.
 - Conversations: archived conversations fold into the unified list with
   consistent sorting and a "finished" style; the session-exit banner becomes a
   floating frosted "shutdown" command bar with one-click debug-info copy.
