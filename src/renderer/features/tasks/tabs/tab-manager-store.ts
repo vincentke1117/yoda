@@ -242,6 +242,7 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
       resolvedTabs: computed,
       snapshot: computed,
       openConversation: action,
+      openConversationInSidebar: action,
       openConversationPreview: action,
       openFile: action,
       openFileInSidebar: action,
@@ -555,6 +556,29 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
     this.entries.set(entry.tabId, entry);
     addTabId(this, entry.tabId);
     this.activeTabId = entry.tabId;
+  }
+
+  /**
+   * Open a conversation directly as a sidebar-pinned tab so it shows alongside
+   * the main area (review mode pins the reviewer beside the implementer). An
+   * entry already open in the main strip is moved aside; never forwarded to the
+   * top level — the whole point is the side-by-side layout inside this task.
+   */
+  openConversationInSidebar(conversationId: string): void {
+    const existing = this._findConversationEntry(conversationId);
+    if (existing) {
+      existing.isPreview = false;
+      if (this.sidebarTabIds.includes(existing.tabId)) {
+        this.activeSidebarTabId = existing.tabId;
+      } else {
+        this.moveTabToSidebar(existing.tabId);
+      }
+      return;
+    }
+    const entry = new ConversationTabEntry(conversationId, false);
+    this.entries.set(entry.tabId, entry);
+    this.sidebarTabIds.push(entry.tabId);
+    this.activeSidebarTabId = entry.tabId;
   }
 
   openConversationPreview(conversationId: string): void {

@@ -784,6 +784,13 @@ async function runReviewOrchestration(args: {
     const reviewerStore = provisioned.conversations.conversations.get(reviewer.id);
     if (!reviewerStore) throw new Error('Reviewer conversation was not found.');
     reviewerStore.setWorking({ force: true });
+    // Side-by-side by default: implementer stays in the main area, the new
+    // reviewer session pins into the (expanded) task sidebar as the active tab
+    // so it surfaces automatically instead of running hidden in the background.
+    const { tabManager } = provisioned.taskView;
+    tabManager.openConversation(args.implementationConversationId);
+    tabManager.openConversationInSidebar(reviewer.id);
+    provisioned.taskView.setSidebarCollapsed(false);
     await waitForConversationTurn(reviewerStore);
 
     const result = parseReviewResult(await readConversationOutput(reviewerStore));
