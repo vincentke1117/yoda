@@ -23,7 +23,10 @@ import {
   useSkillValidationIssues,
   type SkillValidationIssueEntry,
 } from '@renderer/features/skills/useSkillValidationIssues';
-import { WorkspaceSwitcher } from '@renderer/features/workspaces/workspace-switcher';
+import {
+  WorkspaceReviewBadge,
+  WorkspaceSwitcher,
+} from '@renderer/features/workspaces/workspace-switcher';
 import { rpc } from '@renderer/lib/ipc';
 import {
   isCurrentView,
@@ -229,7 +232,10 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
           <SidebarMenu>
             <div className="group/ws flex h-8 items-center gap-1 rounded-lg pr-1 text-foreground-tertiary-muted transition-colors hover:bg-background-tertiary-1 hover:text-foreground-tertiary has-data-popup-open:bg-background-tertiary-1 has-data-popup-open:text-foreground-tertiary">
               <WorkspaceSwitcher />
-              <ProjectsSettingsMenu />
+              <div className="relative shrink-0">
+                <ProjectsSettingsMenu />
+                <WorkspaceReviewBadge className="pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity group-hover/ws:opacity-0 group-has-data-popup-open/ws:opacity-0" />
+              </div>
             </div>
             <div className="my-1 border-t border-border" />
             <SidebarMenuButton
