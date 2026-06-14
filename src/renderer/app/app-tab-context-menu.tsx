@@ -31,8 +31,12 @@ import {
   TaskContextMenuItems,
 } from '@renderer/features/tasks/components/task-context-menu';
 import { useTaskMenuActions } from '@renderer/features/tasks/components/use-task-menu-actions';
-import type { ProvisionedTask } from '@renderer/features/tasks/stores/task';
-import { asProvisioned, getTaskStore } from '@renderer/features/tasks/stores/task-selectors';
+import { isUnprovisioned, type ProvisionedTask } from '@renderer/features/tasks/stores/task';
+import {
+  asProvisioned,
+  getTaskManagerStore,
+  getTaskStore,
+} from '@renderer/features/tasks/stores/task-selectors';
 import {
   OVERVIEW_TAB_ID,
   type TabManagerStore,
@@ -146,6 +150,7 @@ const TaskOverviewTabMenu = observer(function TaskOverviewTabMenu({
   const { t } = useTranslation();
   const actions = useTaskMenuActions(projectId, taskId);
   const tabSections: ReactNode[][] = [
+    buildProvisionRetrySection(projectId, taskId, t),
     [
       <ContextMenuItem
         key="global-pin"
@@ -188,6 +193,7 @@ function buildTaskSections(tab: AppTabEntry, t: Translate): ReactNode[][] {
   if (!projectId || !taskId || target.kind === 'overview') return [];
 
   const provisioned = asProvisioned(getTaskStore(projectId, taskId));
+  const retry = buildProvisionRetrySection(projectId, taskId, t);
 
   const placement: ReactNode[] = [];
   if (provisioned) {
@@ -233,7 +239,7 @@ function buildTaskSections(tab: AppTabEntry, t: Translate): ReactNode[][] {
       target.conversationId,
       t
     );
-    return [management ?? [], copy ?? [], placement, buildCloseSection(tab, t)];
+    return [retry, management ?? [], copy ?? [], placement, buildCloseSection(tab, t)];
   }
 
   // file / diff target — path actions based on the task worktree.
@@ -247,7 +253,28 @@ function buildTaskSections(tab: AppTabEntry, t: Translate): ReactNode[][] {
       ]
     : [];
 
-  return [placement, file, buildCloseSection(tab, t)];
+  return [retry, placement, file, buildCloseSection(tab, t)];
+}
+
+/**
+ * "Retry setup" item for a task stuck in `provision-error` — its workspace
+ * never provisioned, so the conversation-management items (which require a
+ * provisioned task) are absent. Re-runs `provisionTask`, mirroring the retry
+ * button on the in-panel TaskProvisionRecovery surface.
+ */
+function buildProvisionRetrySection(projectId: string, taskId: string, t: Translate): ReactNode[] {
+  const store = getTaskStore(projectId, taskId);
+  if (!store || !isUnprovisioned(store) || store.phase !== 'provision-error') return [];
+  return [
+    <ContextMenuItem
+      key="retry-provision"
+      className="whitespace-nowrap"
+      onClick={() => void getTaskManagerStore(projectId)?.provisionTask(taskId)}
+    >
+      <RefreshCw className="size-4" />
+      {t('tasks.retryTaskSetup')}
+    </ContextMenuItem>,
+  ];
 }
 
 /** Scope-wide close actions; items appear only when they have a target. */
