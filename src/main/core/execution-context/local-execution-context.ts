@@ -5,6 +5,25 @@ import type { ExecOptions, ExecResult, IExecutionContext } from './types';
 
 const execFileAsync = promisify(execFile);
 
+/**
+ * Env for git subprocesses that prevents indefinite hangs on credential or
+ * host-key prompts. A GUI-launched Electron app has no controlling TTY (and
+ * often no ssh-agent), so a networked git op — e.g. `git fetch git@github.com`
+ * during worktree provisioning — would block forever waiting for a passphrase
+ * prompt that can never be answered. These vars make git/ssh fail fast instead.
+ * An existing user `GIT_SSH_COMMAND` is preserved (assume the user knows best).
+ */
+function gitHardenedEnv(): NodeJS.ProcessEnv {
+  return {
+    ...process.env,
+    GIT_TERMINAL_PROMPT: '0',
+    GCM_INTERACTIVE: 'never',
+    GIT_SSH_COMMAND:
+      process.env.GIT_SSH_COMMAND ??
+      'ssh -oBatchMode=yes -oConnectTimeout=10 -oStrictHostKeyChecking=accept-new',
+  };
+}
+
 export class LocalExecutionContext implements IExecutionContext {
   readonly root: string;
   readonly supportsLocalSpawn = true;
@@ -27,11 +46,13 @@ export class LocalExecutionContext implements IExecutionContext {
 
   exec(command: string, args: string[] = [], opts: ExecOptions = {}): Promise<ExecResult> {
     const { timeout, maxBuffer } = opts;
-    return execFileAsync(this.resolveCommand(command), args, {
+    const resolved = this.resolveCommand(command);
+    return execFileAsync(resolved, args, {
       cwd: this.root || undefined,
       timeout,
       maxBuffer,
       signal: this._signal(opts.signal),
+      env: resolved === GIT_EXECUTABLE ? gitHardenedEnv() : undefined,
     }) as Promise<ExecResult>;
   }
 

@@ -14,6 +14,15 @@ export type ServeWorktreeError =
   | { type: 'worktree-setup-failed'; cause: unknown }
   | { type: 'branch-not-found'; branch: string };
 
+/**
+ * Hard cap for the best-effort `git fetch` during worktree provisioning. The
+ * env hardening in LocalExecutionContext stops prompt-hangs, but a connection
+ * that opens then stalls mid-transfer still needs a wall-clock backstop so
+ * provisioning never wedges on "Resolving worktree…". Fetch is best-effort —
+ * on timeout we fall through to the local branch.
+ */
+const FETCH_TIMEOUT_MS = 20_000;
+
 export class WorktreeService {
   private gitOpQueue: Promise<unknown> = Promise.resolve();
   private readonly worktreePoolPath: string;
@@ -165,7 +174,9 @@ export class WorktreeService {
     }
 
     const remoteName = sourceBranch.remote.name;
-    await this.ctx.exec('git', ['fetch', remoteName]).catch(() => {});
+    await this.ctx
+      .exec('git', ['fetch', remoteName], { timeout: FETCH_TIMEOUT_MS })
+      .catch(() => {});
     const remoteRef = `refs/remotes/${remoteName}/${sourceBranch.branch}`;
     try {
       await this.ctx.exec('git', ['rev-parse', '--verify', remoteRef]);
@@ -262,7 +273,9 @@ export class WorktreeService {
     try {
       await this.host.mkdirAbsolute(path.dirname(targetPath), { recursive: true });
       for (const remoteName of remoteCandidates) {
-        await this.ctx.exec('git', ['fetch', remoteName]).catch(() => {});
+        await this.ctx
+          .exec('git', ['fetch', remoteName], { timeout: FETCH_TIMEOUT_MS })
+          .catch(() => {});
       }
       let localExists = false;
       try {
