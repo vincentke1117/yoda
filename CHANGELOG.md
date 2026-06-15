@@ -5,6 +5,34 @@ All notable changes to Yoda will be documented in this file.
 The public Yoda changelog starts at **0.1.0**. Earlier non-Yoda release history
 is preserved in git tags only.
 
+## 0.11.4 — 2026-06-15
+
+### Added
+
+- **Compare/team on unborn repos**: an initial commit is seeded so compare and
+  team modes work on empty or non-git project folders; all candidates tile side
+  by side on launch.
+- **Branch rail**: the sidebar shows a per-branch edge bar (tinted by a stable
+  per-branch hue) instead of a suffix in compact mode, and signals
+  worktree-based sessions.
+- Undo toast after archiving a task; Docs is always offered in the "+" menu and
+  guides configuration on open.
+
+### Fixed
+
+- **Per-task chrome state is now scoped per task**: sidebar / bottom-panel /
+  panel-group state and the bottom drawer no longer sync or bleed across tasks;
+  task sidebar state stays runtime-only; statusline scopes to the project root.
+- Split view: hosted panes render their own tab strip (the global app-tab strip
+  is hidden), and PTY sessions resume in extra panes so sending works.
+- PTY: the wheel scrolls scrollback under mouse tracking, with sticky-bottom on
+  return.
+- Compare mode works on a non-git project folder; initial-commit stats no
+  longer block the create action and surface the real git error on failure.
+- Codex: prompt principles are passed as developer instructions.
+- Workspace switcher popup closes after selecting a workspace; only main-branch
+  tasks are marked, not every fork.
+
 ## 0.11.3 — 2026-06-15
 
 ### Added
