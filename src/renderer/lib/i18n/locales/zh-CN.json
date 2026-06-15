@@ -2259,6 +2259,7 @@
     "loadingHint": "首次加载需解析全部会话历史，可能需要一点时间。",
     "loadFailed": "用量数据加载失败",
     "retry": "重试",
+    "refresh": "刷新",
     "cards": {
       "tasksArchived": "已归档任务",
       "tasksTotal": "共 {{count}} 个",

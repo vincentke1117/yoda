@@ -1,4 +1,4 @@
-import { Archive, ArrowUpRight, ChartColumn, Info, Loader2 } from 'lucide-react';
+import { Archive, ArrowUpRight, ChartColumn, Info, Loader2, RefreshCw } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ProjectUsage, TokenBuckets, UsageOverview } from '@shared/stats';
@@ -45,7 +45,7 @@ const BUCKET_SEGMENTS = [
  */
 export function TokenUsageCard({ projectId }: { projectId: string }) {
   const { t } = useTranslation();
-  const { data: overview, isLoading, isError, refetch } = useUsageOverview(projectId);
+  const { data: overview, isLoading, isError, isFetching, refetch } = useUsageOverview(projectId);
 
   return (
     <section className="rounded-lg border border-border bg-background-elevated p-4">
@@ -61,11 +61,23 @@ export function TokenUsageCard({ projectId }: { projectId: string }) {
             <Info className="size-3 text-foreground-passive" />
           </span>
         </h2>
-        {overview && overview.daily.length > 0 && (
-          <span className="text-xs text-foreground-muted">
-            {t('projects.tokenUsage.activeDays', { count: overview.daily.length })}
-          </span>
-        )}
+        <div className="flex items-center gap-3">
+          {overview && overview.daily.length > 0 && (
+            <span className="text-xs text-foreground-muted">
+              {t('projects.tokenUsage.activeDays', { count: overview.daily.length })}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => void refetch()}
+            disabled={isFetching}
+            title={t('usage.refresh')}
+            aria-label={t('usage.refresh')}
+            className="inline-flex shrink-0 text-foreground-passive transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <RefreshCw className={cn('size-3.5', isFetching && 'animate-spin')} />
+          </button>
+        </div>
       </header>
       {isError ? (
         <div className="flex items-center gap-3">

@@ -2259,6 +2259,7 @@
     "loadingHint": "First load parses all session history — this can take a moment.",
     "loadFailed": "Failed to load usage data",
     "retry": "Retry",
+    "refresh": "Refresh",
     "cards": {
       "tasksArchived": "Tasks archived",
       "tasksTotal": "{{count}} total",
