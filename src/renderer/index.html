@@ -18,6 +18,10 @@
                 ? 'ydark'
                 : 'ylight';
           document.documentElement.classList.add(effective);
+          // Returning launches show the logo centered (part 1 only); the first
+          // launch shifts it up to where the full boot screen's hood lands.
+          var entered = localStorage.getItem('yoda:boot-entered') === 'true';
+          document.documentElement.classList.add(entered ? 'boot-returning' : 'boot-first');
         } catch (_) {}
       })();
     </script>
@@ -30,6 +34,14 @@
         50% {
           opacity: 1;
         }
+      }
+      /* First launch: align with the full boot screen's raised hood. */
+      .boot-first #yoda-splash-hood {
+        transform: translateY(-90px);
+      }
+      /* Returning launch: dead-center, matching the React logo-only screen. */
+      .boot-returning #yoda-splash-hood {
+        transform: none;
       }
     </style>
   </head>
@@ -52,7 +64,7 @@
           justify-content: center;
         "
       >
-        <svg viewBox="0 0 240 220" style="width: 72px; transform: translateY(-90px)">
+        <svg id="yoda-splash-hood" viewBox="0 0 240 220" style="width: 72px">
           <defs>
             <radialGradient id="splashDotGlow" cx="0.5" cy="0.5" r="0.5">
               <stop offset="0" stop-color="#7fe0a7" stop-opacity="0.55" />

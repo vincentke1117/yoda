@@ -343,13 +343,33 @@ export function BootScreen({ ready, onFinished }: BootScreenProps) {
       >
         {/* Draggable strip over the hidden titlebar. */}
         <div className="absolute inset-x-0 top-0 h-10 [-webkit-app-region:drag]" />
-        {/* Matches the static splash placement (translateY(-90px)) so the
-            part-1 → part-1 handoff from index.html is seamless. */}
-        <HoodMark
-          className="w-[72px] -translate-y-[90px]"
-          reducedMotion={reducedMotion}
-          animateIn={false}
-        />
+        {/* Hood dead-center — matches the centered static splash, so the
+            index.html → React handoff has no jump. */}
+        <HoodMark className="w-[72px]" reducedMotion={reducedMotion} animateIn={false} />
+        {/* Mac-style progress bar below the mark: creeps while loading, snaps
+            full on ready. Same geometry as the full-boot bar. */}
+        <motion.div
+          className="absolute h-[3px] w-56 overflow-hidden rounded-full"
+          style={{ top: 'calc(50% + 72px)', backgroundColor: FAINT }}
+          initial={reducedMotion ? { opacity: 1 } : { opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.4, delay: 0.15 }}
+        >
+          <motion.div
+            className="h-full origin-left rounded-full"
+            style={{
+              background: `linear-gradient(to right, ${MINT_DIM}, ${MINT})`,
+              boxShadow: `0 0 8px ${MINT_DIM}`,
+            }}
+            initial={{ scaleX: 0 }}
+            animate={{ scaleX: done ? 1 : 0.9 }}
+            transition={
+              done
+                ? { duration: 0.2, ease: 'easeOut' }
+                : { duration: reducedMotion ? 0.3 : MIN_LOGO_MS / 1000, ease: [0.3, 0.1, 0.3, 1] }
+            }
+          />
+        </motion.div>
       </motion.div>
     );
   }
