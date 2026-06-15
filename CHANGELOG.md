@@ -5,6 +5,27 @@ All notable changes to Yoda will be documented in this file.
 The public Yoda changelog starts at **0.1.0**. Earlier non-Yoda release history
 is preserved in git tags only.
 
+## 0.12.1 — 2026-06-16
+
+### Added
+
+- **Review mode, first usable cut**: one reviewer session is reused across
+  rounds, the reviewer's hand-off note is forwarded (not the raw buffer), the
+  reviewer conversation loads into the store before opening side-by-side, and
+  the reviewer sidebar opens at half width.
+- **Team rooms (phase 1)**: rooms / members / messages data layer, domain, and
+  RPC (internal groundwork; not yet user-facing).
+
+### Changed
+
+- tmux detection splits into a Terminal settings tab, with the toggle kept in
+  Sessions; the tmux status row aligns with the dependency-status UI language.
+
+### Fixed
+
+- Review: no more false PASS from the reviewer prompt echo; the prompt-submit
+  delay is floored so injected feedback actually sends.
+
 ## 0.12.0 — 2026-06-15
 
 ### Added
