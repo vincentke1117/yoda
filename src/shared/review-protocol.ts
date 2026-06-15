@@ -12,10 +12,17 @@ export const REVIEW_MAX_ROUNDS = 3;
 export const REVIEW_RESULT_MARKER = /YODA_REVIEW_RESULT:[ \t]*(PASS|FAIL)\b/gi;
 
 export interface ReviewResult {
-  /** True only when an explicit PASS marker is present. */
+  /** True only when the latest marker is PASS. */
   passed: boolean;
-  /** True when either marker (PASS or FAIL) is present in the output. */
+  /** True when at least one marker (PASS or FAIL) is present in the output. */
   hasMarker: boolean;
+  /**
+   * Number of markers in the output. The reviewer reuses a single session across
+   * rounds, so its PTY buffer accumulates every round's verdict — the orchestrator
+   * compares this against a per-round baseline to tell a fresh verdict from a
+   * stale one left over from the previous round.
+   */
+  markerCount: number;
   /** Trailing slice of the cleaned output, used as feedback for the implementer. */
   feedback: string;
 }
@@ -24,16 +31,30 @@ export function parseReviewResult(output: string): ReviewResult {
   const clean = stripTerminalControlSequences(output).trim();
   // Take the LAST verdict: the reviewer is told to end its turn with the marker,
   // so a match earlier in the buffer is at best a restated format and at worst a
-  // stale verdict. (The injected prompt uses a non-matching `<PASS|FAIL>`
-  // placeholder so it can't be mistaken for a real verdict in the first place.)
-  const last = [...clean.matchAll(REVIEW_RESULT_MARKER)].at(-1);
+  // stale verdict from a prior round. (The injected prompt uses a non-matching
+  // `<PASS|FAIL>` placeholder so it can't be mistaken for a real verdict.)
+  const matches = [...clean.matchAll(REVIEW_RESULT_MARKER)];
+  const last = matches.at(-1);
   return {
     passed: last?.[1]?.toUpperCase() === 'PASS',
     hasMarker: last !== undefined,
+    markerCount: matches.length,
     feedback: clean.slice(-12_000),
   };
 }
 
+const REVIEW_PROTOCOL_LINES = [
+  `Protocol:`,
+  `- Do not modify files.`,
+  `- If there are issues, list concrete fixes for implementer agent A first.`,
+  `- Then end your response with a single status line, written exactly in this`,
+  `  format (replace <PASS|FAIL> with the literal word PASS or FAIL):`,
+  `  YODA_REVIEW_RESULT: <PASS|FAIL>`,
+  `  Use PASS only when the implementation fully meets the requirement;`,
+  `  otherwise use FAIL.`,
+];
+
+/** Round 1 review request — seeds the reviewer session with its system prompt. */
 export function buildReviewPrompt(args: {
   requirement: string;
   round: number;
@@ -47,16 +68,25 @@ export function buildReviewPrompt(args: {
       '',
       `Round: ${args.round}`,
       '',
-      `Protocol:`,
-      `- Do not modify files.`,
-      `- If there are issues, list concrete fixes for implementer agent A first.`,
-      `- Then end your response with a single status line, written exactly in this`,
-      `  format (replace <PASS|FAIL> with the literal word PASS or FAIL):`,
-      `  YODA_REVIEW_RESULT: <PASS|FAIL>`,
-      `  Use PASS only when the implementation fully meets the requirement;`,
-      `  otherwise use FAIL.`,
+      ...REVIEW_PROTOCOL_LINES,
     ].join('\n')
   );
+}
+
+/**
+ * Follow-up review request injected into the SAME reviewer session for round > 1
+ * (after the implementer addressed the previous round's feedback). No system
+ * prompt — the session already carries it from round 1.
+ */
+export function buildReviewFollowupPrompt(args: { round: number }): string {
+  return [
+    `Implementer agent A has addressed the previous review feedback.`,
+    `Re-review the current state of the worktree.`,
+    '',
+    `Round: ${args.round}`,
+    '',
+    ...REVIEW_PROTOCOL_LINES,
+  ].join('\n');
 }
 
 export function buildImplementerFeedbackPrompt(args: {

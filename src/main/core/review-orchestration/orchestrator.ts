@@ -9,7 +9,9 @@ import { reviewReviewerStartedChannel } from '@shared/events/reviewEvents';
 import { makePtySessionId } from '@shared/ptySessionId';
 import {
   buildImplementerFeedbackPrompt,
+  buildReviewFollowupPrompt,
   buildReviewPrompt,
+  parseReviewResult,
   REVIEW_MAX_ROUNDS,
 } from '@shared/review-protocol';
 import type { RuntimeId } from '@shared/runtime-registry';
@@ -114,10 +116,15 @@ class ReviewOrchestrator {
       row.implementerConversationId
     );
     const implRuntime = await this.loadRuntime(row.implementerConversationId);
+    const reviewerRuntime = row.reviewerRuntime as RuntimeId;
+
+    // The reviewer reuses ONE conversation/session across every round (created on
+    // first use, follow-up requests injected thereafter), so it keeps context and
+    // the task view shows a single reviewer pane. Persisted on the row so a
+    // restart can keep driving the same session.
+    let reviewerConversationId = row.currentReviewerConversationId;
 
     let round = row.round;
-    // Resume in the middle of a review round by skipping straight to a fresh
-    // reviewer (the prior reviewer's PTY/buffer is gone after a restart).
     let needImplementerWait = row.status !== 'reviewing';
 
     while (round <= row.maxRounds) {
@@ -134,46 +141,24 @@ class ReviewOrchestrator {
       }
       needImplementerWait = true;
 
-      const reviewerConversationId = randomUUID();
-      await this.update(row.id, {
-        status: 'reviewing',
+      const reviewer = await this.ensureReviewerRound(
+        row,
         round,
-        currentReviewerConversationId: reviewerConversationId,
-      });
-      await createConversation({
-        id: reviewerConversationId,
-        projectId: row.projectId,
-        taskId: row.taskId,
-        runtime: row.reviewerRuntime as RuntimeId,
-        title: `Review · round ${round}`,
-        autoApprove: row.reviewerAutoApprove,
-        initialPrompt: buildReviewPrompt({
-          requirement: row.requirement,
-          round,
-          systemPrompt: row.reviewerSystemPrompt,
-        }),
-      });
-      // Surface the reviewer side-by-side in the open task view (best-effort;
-      // the renderer no-ops if the task isn't currently provisioned).
-      events.emit(reviewReviewerStartedChannel, {
-        projectId: row.projectId,
-        taskId: row.taskId,
-        implementerConversationId: row.implementerConversationId,
         reviewerConversationId,
-      });
-
+        reviewerRuntime
+      );
+      reviewerConversationId = reviewer.conversationId;
       const reviewerSession: SessionKey = {
         projectId: row.projectId,
         taskId: row.taskId,
         conversationId: reviewerConversationId,
       };
-      const reviewerSessionId = makePtySessionId(row.projectId, row.taskId, reviewerConversationId);
-      const review = await waitForReviewResult(reviewerSession, reviewerSessionId, {
-        signal,
-        timeoutMs: TURN_TIMEOUT_MS,
-        pollMs: POLL_MS,
-        graceMs: IMPLEMENTER_GRACE_MS,
-      });
+      const review = await waitForReviewResult(
+        reviewerSession,
+        reviewer.sessionId,
+        reviewer.baselineMarkerCount,
+        { signal, timeoutMs: TURN_TIMEOUT_MS, pollMs: POLL_MS, graceMs: IMPLEMENTER_GRACE_MS }
+      );
       if (review.kind === 'aborted') return;
       if (review.result.passed) {
         await this.finish(row.id, 'passed');
@@ -185,11 +170,7 @@ class ReviewOrchestrator {
         await this.finish(row.id, 'failed');
         return;
       }
-      await this.update(row.id, {
-        status: 'awaiting_impl',
-        round,
-        currentReviewerConversationId: null,
-      });
+      await this.update(row.id, { status: 'awaiting_impl', round });
       await this.sendImplementerFeedback(implSessionId, implSession, implRuntime, {
         requirement: row.requirement,
         reviewFeedback: review.result.feedback,
@@ -198,19 +179,99 @@ class ReviewOrchestrator {
     await this.finish(row.id, 'failed');
   }
 
+  /**
+   * Make sure this round has a reviewer session to wait on. Reuses the live
+   * single reviewer session (injecting the next round's request) when it's still
+   * running; otherwise — round 1, or the session died across a restart — creates
+   * a fresh reviewer conversation and surfaces it in the task view. Returns the
+   * session id plus the marker baseline the round's verdict must exceed.
+   */
+  private async ensureReviewerRound(
+    row: Row,
+    round: number,
+    reviewerConversationId: string | null,
+    reviewerRuntime: RuntimeId
+  ): Promise<{ conversationId: string; sessionId: string; baselineMarkerCount: number }> {
+    const existingSessionId = reviewerConversationId
+      ? makePtySessionId(row.projectId, row.taskId, reviewerConversationId)
+      : null;
+    if (
+      reviewerConversationId &&
+      existingSessionId &&
+      ptySessionRegistry.get(existingSessionId) !== undefined
+    ) {
+      // Reuse: inject the next round's request and accept only a verdict beyond
+      // the markers already sitting in this session's buffer from prior rounds.
+      const baselineMarkerCount = parseReviewResult(
+        ptySessionRegistry.snapshot(existingSessionId)
+      ).markerCount;
+      await this.update(row.id, { status: 'reviewing', round });
+      await this.sendPrompt(
+        existingSessionId,
+        { projectId: row.projectId, taskId: row.taskId, conversationId: reviewerConversationId },
+        reviewerRuntime,
+        buildReviewFollowupPrompt({ round })
+      );
+      return {
+        conversationId: reviewerConversationId,
+        sessionId: existingSessionId,
+        baselineMarkerCount,
+      };
+    }
+
+    const newConversationId = randomUUID();
+    const sessionId = makePtySessionId(row.projectId, row.taskId, newConversationId);
+    await this.update(row.id, {
+      status: 'reviewing',
+      round,
+      currentReviewerConversationId: newConversationId,
+    });
+    await createConversation({
+      id: newConversationId,
+      projectId: row.projectId,
+      taskId: row.taskId,
+      runtime: reviewerRuntime,
+      title: 'Review',
+      autoApprove: row.reviewerAutoApprove,
+      initialPrompt: buildReviewPrompt({
+        requirement: row.requirement,
+        round,
+        systemPrompt: row.reviewerSystemPrompt,
+      }),
+    });
+    // Surface the reviewer side-by-side in the open task view (best-effort; the
+    // renderer no-ops if the task isn't currently provisioned).
+    events.emit(reviewReviewerStartedChannel, {
+      projectId: row.projectId,
+      taskId: row.taskId,
+      implementerConversationId: row.implementerConversationId,
+      reviewerConversationId: newConversationId,
+    });
+    return { conversationId: newConversationId, sessionId, baselineMarkerCount: 0 };
+  }
+
   private async sendImplementerFeedback(
     sessionId: string,
     session: SessionKey,
     runtime: RuntimeId,
     args: { requirement: string; reviewFeedback: string }
   ): Promise<void> {
+    await this.sendPrompt(sessionId, session, runtime, buildImplementerFeedbackPrompt(args));
+  }
+
+  /** Inject a prompt into a running agent session and submit it. */
+  private async sendPrompt(
+    sessionId: string,
+    session: SessionKey,
+    runtime: RuntimeId,
+    prompt: string
+  ): Promise<void> {
     const pty = ptySessionRegistry.get(sessionId);
-    if (!pty)
-      throw new Error('Implementer session is not running; cannot deliver review feedback.');
-    const payload = buildPromptInjectionPayload(buildImplementerFeedbackPrompt(args));
+    if (!pty) throw new Error('Target session is not running; cannot deliver prompt.');
+    const payload = buildPromptInjectionPayload(prompt);
     if (!payload) return;
     pty.write(payload);
-    // Seed working so the next implementer-turn wait observes a running session.
+    // Seed working so the next turn-wait observes a running session.
     agentSessionRuntimeStore.setStatus(session, 'working');
     const submitDelay = getAgentCommandSubmitDelayMs(runtime);
     if (submitDelay > 0) await new Promise((resolve) => setTimeout(resolve, submitDelay));

@@ -63,29 +63,37 @@ export async function waitForImplementerTurnEnd(
 export type ReviewTurnOutcome = { kind: 'aborted' } | { kind: 'result'; result: ReviewResult };
 
 /**
- * Resolve with the reviewer's verdict. Primary signal is the
- * `YODA_REVIEW_RESULT` marker in the PTY output — this is independent of
- * provider run-state, so it works even when codex never writes `task_complete`
- * and its status stays pinned at `working`. Secondary signals: the session
- * returning to a terminal state after running, and the watchdog timeout. In
- * both fallbacks the current buffer is parsed best-effort (no marker → not
- * passed → the implementer gets another round).
+ * Resolve with THIS round's reviewer verdict. Primary signal is a fresh
+ * `YODA_REVIEW_RESULT` marker in the PTY output — independent of provider
+ * run-state, so it works even when codex never writes `task_complete` and its
+ * status stays pinned at `working`.
+ *
+ * Because the reviewer reuses one session across rounds, its buffer still holds
+ * the previous round's marker; `baselineMarkerCount` is the marker count taken
+ * right before this round's request was sent, so a verdict only counts once the
+ * total exceeds it. Secondary signals (session returning to a terminal state,
+ * watchdog timeout) resolve as "no fresh verdict" → not passed → another round.
  */
 export async function waitForReviewResult(
   session: SessionKey,
   sessionId: string,
+  baselineMarkerCount: number,
   opts: WaitOpts
 ): Promise<ReviewTurnOutcome> {
   const start = Date.now();
+  const noVerdict = (result: ReviewResult): ReviewTurnOutcome => ({
+    kind: 'result',
+    result: { ...result, passed: false, hasMarker: false },
+  });
   let sawRunning = agentSessionRuntimeStore.isRunning(session);
   for (;;) {
     if (opts.signal.aborted) return { kind: 'aborted' };
     const result = parseReviewResult(ptySessionRegistry.snapshot(sessionId));
-    if (result.hasMarker) return { kind: 'result', result };
+    if (result.markerCount > baselineMarkerCount) return { kind: 'result', result };
     const running = agentSessionRuntimeStore.isRunning(session);
     if (running) sawRunning = true;
-    else if (sawRunning) return { kind: 'result', result };
-    if (Date.now() - start >= opts.timeoutMs) return { kind: 'result', result };
+    else if (sawRunning) return noVerdict(result);
+    if (Date.now() - start >= opts.timeoutMs) return noVerdict(result);
     await delay(opts.pollMs, opts.signal);
   }
 }
