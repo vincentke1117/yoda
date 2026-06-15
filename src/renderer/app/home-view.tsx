@@ -192,10 +192,7 @@ function formatModelLabel(model: string): string {
 }
 
 interface RunModeInputChrome {
-  icon: ComponentType<{ className?: string }>;
-  labelKey: string;
   containerClassName: string;
-  badgeClassName: string;
 }
 
 const MIN_COMPARE_AGENTS = 2;
@@ -235,8 +232,6 @@ function defaultBuiltinKeyForSlot(slotKey: string): string | undefined {
 }
 const ADVANCED_INPUT_CONTAINER_CLASS =
   'border-border bg-background-1 ring-1 ring-sky-500/15 focus-within:border-sky-500/30 focus-within:ring-sky-500/25';
-const ADVANCED_INPUT_BADGE_CLASS =
-  'border-sky-500/25 bg-sky-500/10 text-sky-700 shadow-sm ydark:text-sky-300';
 
 const TEAM_ROLES = [
   {
@@ -473,38 +468,23 @@ function getRunModeInputChrome(mode: HomeRunMode): RunModeInputChrome {
   switch (mode) {
     case 'brainstorm':
       return {
-        icon: Lightbulb,
-        labelKey: 'home.modeBrainstorm',
         containerClassName: ADVANCED_INPUT_CONTAINER_CLASS,
-        badgeClassName: ADVANCED_INPUT_BADGE_CLASS,
       };
     case 'compare':
       return {
-        icon: GitCompare,
-        labelKey: 'home.modeCompare',
         containerClassName: ADVANCED_INPUT_CONTAINER_CLASS,
-        badgeClassName: ADVANCED_INPUT_BADGE_CLASS,
       };
     case 'review':
       return {
-        icon: ShieldCheck,
-        labelKey: 'home.modeReview',
         containerClassName: ADVANCED_INPUT_CONTAINER_CLASS,
-        badgeClassName: ADVANCED_INPUT_BADGE_CLASS,
       };
     case 'team':
       return {
-        icon: Users,
-        labelKey: 'home.modeTeam',
         containerClassName: ADVANCED_INPUT_CONTAINER_CLASS,
-        badgeClassName: ADVANCED_INPUT_BADGE_CLASS,
       };
     case 'normal':
       return {
-        icon: Bot,
-        labelKey: 'home.modeNormal',
         containerClassName: 'border-border bg-background-1',
-        badgeClassName: 'border-border bg-background-2 text-foreground-muted',
       };
   }
 
@@ -2424,8 +2404,6 @@ export const HomeComposer = observer(function HomeComposer({
   );
 
   const promptInputChrome = getRunModeInputChrome(runMode);
-  const PromptInputModeIcon = promptInputChrome.icon;
-  const isNonStandardRunMode = runMode !== 'normal';
 
   return (
     <div className={className}>
@@ -2437,17 +2415,6 @@ export const HomeComposer = observer(function HomeComposer({
       >
         <div className="flex flex-col">
           <div className="relative">
-            {isNonStandardRunMode && (
-              <div
-                className={cn(
-                  'pointer-events-none absolute right-3 top-2 z-10 inline-flex h-6 max-w-[calc(100%-1.5rem)] items-center gap-1.5 rounded-full border px-2 text-[11px] font-medium',
-                  promptInputChrome.badgeClassName
-                )}
-              >
-                <PromptInputModeIcon className="size-3.5 shrink-0" />
-                <span className="truncate">{t(promptInputChrome.labelKey)}</span>
-              </div>
-            )}
             <Textarea
               ref={promptTextareaRef}
               placeholder={t('home.promptPlaceholder')}
@@ -2480,7 +2447,6 @@ export const HomeComposer = observer(function HomeComposer({
               onContextMenu={handlePromptContextMenu}
               className={cn(
                 'min-h-28 resize-none border-0 bg-transparent px-5 py-4 text-base placeholder:text-foreground-muted focus-visible:border-0 focus-visible:ring-0',
-                isNonStandardRunMode && 'pt-10',
                 hoveredTokenId && 'cursor-default'
               )}
             />
@@ -3329,6 +3295,7 @@ function RunModeSelector({ mode, summary, onChange, renderConfiguration }: RunMo
     RUN_MODE_OPTIONS.find((option) => option.mode === pendingMode) ?? RUN_MODE_OPTIONS[0];
   const PendingIcon = pending.icon;
   const dirty = pendingMode !== mode;
+  const isNonStandardMode = mode !== 'normal';
 
   const handleOpenChange = (next: boolean) => {
     if (next) setPendingMode(mode);
@@ -3347,19 +3314,40 @@ function RunModeSelector({ mode, summary, onChange, renderConfiguration }: RunMo
           <button
             type="button"
             aria-label={t('home.modeAria')}
-            className="flex h-7 items-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
+            className={cn(
+              'flex h-7 min-w-0 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium transition-colors',
+              isNonStandardMode
+                ? 'border-sky-500/25 bg-sky-500/10 text-sky-700 shadow-sm ring-1 ring-sky-500/15 hover:bg-sky-500/15 ydark:text-sky-300'
+                : 'border-primary/40 bg-primary/10 text-primary hover:bg-primary/15'
+            )}
           >
-            <CurrentIcon className="size-3.5" />
-            <span>{t(current.labelKey)}</span>
+            <CurrentIcon className="size-3.5 shrink-0" />
+            <span className="shrink-0">{t(current.labelKey)}</span>
             {summary ? (
               <>
-                <span className="text-primary/40">·</span>
-                <span className="max-w-[14rem] truncate font-normal text-primary/80">
+                <span
+                  className={cn(
+                    isNonStandardMode ? 'text-sky-600/45 ydark:text-sky-300/45' : 'text-primary/40'
+                  )}
+                >
+                  ·
+                </span>
+                <span
+                  className={cn(
+                    'min-w-0 max-w-[14rem] truncate font-normal',
+                    isNonStandardMode ? 'text-sky-700/80 ydark:text-sky-300/80' : 'text-primary/80'
+                  )}
+                >
                   {summary}
                 </span>
               </>
             ) : null}
-            <ChevronDown className="size-3 text-primary/70" />
+            <ChevronDown
+              className={cn(
+                'size-3 shrink-0',
+                isNonStandardMode ? 'text-sky-700/70 ydark:text-sky-300/70' : 'text-primary/70'
+              )}
+            />
           </button>
         }
       />
