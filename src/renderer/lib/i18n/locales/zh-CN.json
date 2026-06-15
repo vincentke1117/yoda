@@ -587,6 +587,7 @@
       "preArchiveCommandPlaceholder": "例如 lovstudio-git-commit-with-context"
     },
     "terminal": {
+      "tmux": "tmux",
       "font": "终端字体",
       "fontDescription": "选择终端使用的字体。",
       "searchFontPlaceholder": "搜索或输入自定义字体",

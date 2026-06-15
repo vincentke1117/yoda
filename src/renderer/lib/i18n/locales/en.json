@@ -587,6 +587,7 @@
       "preArchiveCommandPlaceholder": "e.g. lovstudio-git-commit-with-context"
     },
     "terminal": {
+      "tmux": "tmux",
       "font": "Terminal font",
       "fontDescription": "Choose the font family for the terminal.",
       "searchFontPlaceholder": "Search or type custom font",

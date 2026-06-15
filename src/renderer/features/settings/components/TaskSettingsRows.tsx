@@ -196,9 +196,12 @@ export const PreArchiveCommandRow: React.FC = () => {
   );
 };
 
+/**
+ * Sessions tab: the per-session opt-in toggle only. Detection/version/path and
+ * install live in {@link TmuxStatusRow} under the Terminal tab.
+ */
 export const EnableTmuxRow: React.FC = observer(() => {
   const { t } = useTranslation();
-  const installTmux = useInstallTmux();
   const {
     value: projects,
     update,
@@ -209,6 +212,39 @@ export const EnableTmuxRow: React.FC = observer(() => {
   } = useAppSettingsKey('project');
 
   const tmuxByDefault = projects?.tmuxByDefault ?? true;
+
+  return (
+    <SettingRow
+      title={t('settings.tasks.enableTmux')}
+      description={t('settings.tasks.enableTmuxDescription')}
+      control={
+        <>
+          <ResetToDefaultButton
+            visible={isFieldOverridden('tmuxByDefault')}
+            defaultLabel="on"
+            onReset={() => resetField('tmuxByDefault')}
+            disabled={loading || saving}
+          />
+          <Switch
+            checked={tmuxByDefault}
+            disabled={loading || saving}
+            onCheckedChange={(checked) => update({ tmuxByDefault: checked })}
+          />
+        </>
+      }
+    />
+  );
+});
+
+/**
+ * Terminal tab: tmux detection (status / version / path / error), install when
+ * missing, and on-demand re-check. The enable toggle lives in
+ * {@link EnableTmuxRow} under the Sessions tab.
+ */
+export const TmuxStatusRow: React.FC = observer(() => {
+  const { t } = useTranslation();
+  const installTmux = useInstallTmux();
+
   const tmuxState = appState.dependencies.allStatuses['tmux'];
   const tmuxStatus = tmuxState?.status;
   const tmuxMissing = tmuxStatus === 'missing';
@@ -227,7 +263,7 @@ export const EnableTmuxRow: React.FC = observer(() => {
 
   return (
     <SettingRow
-      title={t('settings.tasks.enableTmux')}
+      title={t('settings.terminal.tmux')}
       description={
         <span className="flex flex-col gap-1">
           <span>{t('settings.tasks.enableTmuxDescription')}</span>
@@ -277,17 +313,6 @@ export const EnableTmuxRow: React.FC = observer(() => {
                 : t('settings.tasks.installTmux')}
             </Button>
           )}
-          <ResetToDefaultButton
-            visible={isFieldOverridden('tmuxByDefault')}
-            defaultLabel="on"
-            onReset={() => resetField('tmuxByDefault')}
-            disabled={loading || saving}
-          />
-          <Switch
-            checked={tmuxByDefault}
-            disabled={loading || saving}
-            onCheckedChange={(checked) => update({ tmuxByDefault: checked })}
-          />
         </>
       }
     />
