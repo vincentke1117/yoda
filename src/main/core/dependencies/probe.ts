@@ -21,7 +21,7 @@ const RESOLVE_CMD = process.platform === 'win32' ? 'where' : 'which';
  * `~/.nvm/versions/node/*` is expanded at probe time since the active Node
  * version directory is dynamic.
  */
-function knownBinDirs(): string[] {
+export function knownBinDirs(): string[] {
   const home = os.homedir();
   const dirs = [
     '/opt/homebrew/bin',

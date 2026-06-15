@@ -17,6 +17,7 @@ import { appService } from './core/app/service';
 import { automationScheduler } from './core/automation/automation-scheduler';
 import { agentSessionRuntimeStore } from './core/conversations/agent-session-runtime';
 import { localDependencyManager } from './core/dependencies/dependency-manager';
+import { knownBinDirs } from './core/dependencies/probe';
 import { editorBufferService } from './core/editor/editor-buffer-service';
 import { gitWatcherRegistry } from './core/git/git-watcher-registry';
 import { mobileGatewayService } from './core/mobile-gateway/mobile-gateway-service';
@@ -37,7 +38,7 @@ import { initializeDatabase } from './db/initialize';
 import { log } from './lib/logger';
 import { telemetryService } from './lib/telemetry';
 import { rpcRouter } from './rpc';
-import { resolveUserEnv } from './utils/userEnv';
+import { ensureUserBinDirsInPath, resolveUserEnv } from './utils/userEnv';
 
 if (import.meta.env.DEV) {
   dotenvConfig({ path: '.env.local', override: false });
@@ -104,6 +105,18 @@ void app.whenReady().then(async () => {
   __bootMark('whenReady fired');
   console.log('[BUILD-MARKER] agent-run-state-sync v4 (stateless-derive + claude-awaiting)');
   agentSessionRuntimeStore.initialize();
+
+  // Synchronously seed the common user bin dirs (Homebrew, /usr/local/bin, nvm,
+  // cargo, …) into PATH before anything can spawn. A GUI-launched (launchd /
+  // Finder) Electron process inherits a stunted PATH, and the full login-shell
+  // capture below is async — so during the boot window any bare-name CLI lookup
+  // (`tmux -V`, the tmux session spawn, git, …) would miss Homebrew and report
+  // "not found", even though the dependency probe (which disk-scans these same
+  // dirs) reports it available. Seeding here closes that race for every spawn.
+  const seededBinDirs = ensureUserBinDirsInPath(knownBinDirs());
+  if (seededBinDirs.length > 0) {
+    __bootMark(`seeded PATH bin dirs (${seededBinDirs.length})`);
+  }
 
   // Login-shell env capture (`$SHELL -ilc 'env'`) can take 1-2s when the user
   // has a heavy zsh init (mise/oh-my-zsh/starship). Downstream consumers (PTY,
