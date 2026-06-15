@@ -5,6 +5,25 @@ All notable changes to Yoda will be documented in this file.
 The public Yoda changelog starts at **0.1.0**. Earlier non-Yoda release history
 is preserved in git tags only.
 
+## 0.12.0 — 2026-06-15
+
+### Added
+
+- **Library**: a new top-level nav surface consolidating Prompts, Skills, and
+  Automation, with MCP and Agents moved in alongside them — Settings now keeps
+  only configuration. Atomic prompt principles are surfaced in the Prompts
+  section.
+- **Boot fast-path for returning launches**: returning launches show the
+  logo-only mark and auto-enter, skipping the kernel-boot animation (gated to
+  first run only), with a mac-style progress bar on the centered mark.
+- The Enable-tmux settings row surfaces tmux detection details.
+
+### Fixed
+
+- Boot seeds common bin dirs into PATH before any spawn.
+- Sidebar no longer scroll-snaps back to the active row on row refresh; the
+  caret lands at the end of a prefilled archive command.
+
 ## 0.11.5 — 2026-06-15
 
 ### Added
