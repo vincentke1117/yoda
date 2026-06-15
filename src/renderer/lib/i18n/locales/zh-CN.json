@@ -1466,6 +1466,12 @@
   },
   "promptLibrary": {
     "title": "提示词库",
+    "principles": {
+      "title": "原子原则"
+    },
+    "templates": {
+      "title": "提示词模板"
+    },
     "new": "新建提示词",
     "empty": "还没有保存的提示词。新建一个，下次创建任务时即可复用。",
     "copy": "复制",

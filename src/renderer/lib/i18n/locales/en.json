@@ -1466,6 +1466,12 @@
   },
   "promptLibrary": {
     "title": "Prompts",
+    "principles": {
+      "title": "Atomic principles"
+    },
+    "templates": {
+      "title": "Saved prompts"
+    },
     "new": "New prompt",
     "empty": "No saved prompts yet. Create one to reuse it when composing a task.",
     "copy": "Copy",

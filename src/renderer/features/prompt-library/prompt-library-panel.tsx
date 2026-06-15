@@ -2,6 +2,7 @@ import { Copy, Loader2, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Prompt, PromptCreateInput } from '@shared/prompt-library';
+import PromptsSettingsCard from '@renderer/features/settings/components/PromptsSettingsCard';
 import { useToast } from '@renderer/lib/hooks/use-toast';
 import { useShowModal } from '@renderer/lib/modal/modal-provider';
 import { Button } from '@renderer/lib/ui/button';
@@ -120,126 +121,146 @@ export function PromptLibraryPanel({ embedded = false }: { embedded?: boolean })
       <div
         className={cn('flex w-full flex-col', !embedded && 'mx-auto max-w-[1060px] px-10 py-12')}
       >
-        <div className={cn('flex items-start gap-4', embedded ? 'justify-end' : 'justify-between')}>
-          {!embedded && (
-            <h1 className="text-4xl font-normal tracking-normal">{t('promptLibrary.title')}</h1>
-          )}
-          <Button type="button" variant="outline" size="sm" onClick={openCreate}>
-            <Plus className="size-4" />
-            {t('promptLibrary.new')}
-          </Button>
-        </div>
-
-        {editorOpen && (
-          <form
-            onSubmit={handleSave}
-            className="mt-10 grid gap-4 rounded-lg border border-border bg-background-secondary p-4"
-          >
-            <label className="grid gap-1.5">
-              <span className="text-xs text-foreground-muted">{t('promptLibrary.form.title')}</span>
-              <Input
-                value={draft.title}
-                onChange={(event) =>
-                  setDraft((current) => ({ ...current, title: event.target.value }))
-                }
-                placeholder={t('promptLibrary.form.titlePlaceholder')}
-              />
-            </label>
-            <label className="grid gap-1.5">
-              <span className="text-xs text-foreground-muted">
-                {t('promptLibrary.form.description')}
-              </span>
-              <Input
-                value={draft.description}
-                onChange={(event) =>
-                  setDraft((current) => ({ ...current, description: event.target.value }))
-                }
-                placeholder={t('promptLibrary.form.descriptionPlaceholder')}
-              />
-            </label>
-            <label className="grid gap-1.5">
-              <span className="text-xs text-foreground-muted">
-                {t('promptLibrary.form.content')}
-              </span>
-              <Textarea
-                value={draft.content}
-                onChange={(event) =>
-                  setDraft((current) => ({ ...current, content: event.target.value }))
-                }
-                placeholder={t('promptLibrary.form.contentPlaceholder')}
-                className="min-h-40 resize-y font-mono"
-              />
-            </label>
-            <div className="flex items-center justify-end gap-2">
-              <Button type="button" variant="ghost" size="sm" onClick={closeEditor}>
-                <X className="size-4" />
-                {t('common.cancel')}
-              </Button>
-              <Button type="submit" size="sm" disabled={!canSave}>
-                <Save className="size-4" />
-                {editingId !== 'new' ? t('common.save') : t('common.create')}
-              </Button>
-            </div>
-          </form>
+        {!embedded && (
+          <h1 className="text-4xl font-normal tracking-normal">{t('promptLibrary.title')}</h1>
         )}
 
-        <div className={cn(embedded ? 'mt-8' : 'mt-16')}>
-          {items.length === 0 ? (
-            <p className="text-sm text-foreground-muted">{t('promptLibrary.empty')}</p>
-          ) : (
-            <ul className="grid gap-3">
-              {items.map((entry) => (
-                <li
-                  key={entry.id}
-                  className="group flex items-start gap-3 rounded-lg border border-border bg-background-secondary p-4"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium text-foreground">
-                      {entry.title}
-                    </div>
-                    {entry.description && (
-                      <div className="mt-0.5 truncate text-xs text-foreground-muted">
-                        {entry.description}
-                      </div>
-                    )}
-                    <div className="mt-2 line-clamp-2 whitespace-pre-wrap break-words text-xs text-foreground-passive">
-                      {entry.content}
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={t('promptLibrary.copy')}
-                      onClick={() => handleCopy(entry)}
-                    >
-                      <Copy className="size-4" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={t('common.edit')}
-                      onClick={() => openEdit(entry)}
-                    >
-                      <Pencil className="size-4" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={t('common.delete')}
-                      onClick={() => handleDelete(entry)}
-                    >
-                      <Trash2 className="size-4" />
-                    </Button>
-                  </div>
-                </li>
-              ))}
-            </ul>
+        {/* Atomic principles: always-on, injected into every session. Reuses the
+            settings card so both surfaces edit the same data. */}
+        <section className={cn(embedded ? 'mt-6' : 'mt-12')}>
+          <h2 className="text-sm font-medium text-foreground">
+            {t('promptLibrary.principles.title')}
+          </h2>
+          <div className="mt-3">
+            <PromptsSettingsCard />
+          </div>
+        </section>
+
+        {/* Reusable templates: opt-in prompts the user picks when composing a task. */}
+        <section className={cn(embedded ? 'mt-8' : 'mt-12')}>
+          <div className="flex items-start justify-between gap-4">
+            <h2 className="text-sm font-medium text-foreground">
+              {t('promptLibrary.templates.title')}
+            </h2>
+            <Button type="button" variant="outline" size="sm" onClick={openCreate}>
+              <Plus className="size-4" />
+              {t('promptLibrary.new')}
+            </Button>
+          </div>
+
+          {editorOpen && (
+            <form
+              onSubmit={handleSave}
+              className="mt-10 grid gap-4 rounded-lg border border-border bg-background-secondary p-4"
+            >
+              <label className="grid gap-1.5">
+                <span className="text-xs text-foreground-muted">
+                  {t('promptLibrary.form.title')}
+                </span>
+                <Input
+                  value={draft.title}
+                  onChange={(event) =>
+                    setDraft((current) => ({ ...current, title: event.target.value }))
+                  }
+                  placeholder={t('promptLibrary.form.titlePlaceholder')}
+                />
+              </label>
+              <label className="grid gap-1.5">
+                <span className="text-xs text-foreground-muted">
+                  {t('promptLibrary.form.description')}
+                </span>
+                <Input
+                  value={draft.description}
+                  onChange={(event) =>
+                    setDraft((current) => ({ ...current, description: event.target.value }))
+                  }
+                  placeholder={t('promptLibrary.form.descriptionPlaceholder')}
+                />
+              </label>
+              <label className="grid gap-1.5">
+                <span className="text-xs text-foreground-muted">
+                  {t('promptLibrary.form.content')}
+                </span>
+                <Textarea
+                  value={draft.content}
+                  onChange={(event) =>
+                    setDraft((current) => ({ ...current, content: event.target.value }))
+                  }
+                  placeholder={t('promptLibrary.form.contentPlaceholder')}
+                  className="min-h-40 resize-y font-mono"
+                />
+              </label>
+              <div className="flex items-center justify-end gap-2">
+                <Button type="button" variant="ghost" size="sm" onClick={closeEditor}>
+                  <X className="size-4" />
+                  {t('common.cancel')}
+                </Button>
+                <Button type="submit" size="sm" disabled={!canSave}>
+                  <Save className="size-4" />
+                  {editingId !== 'new' ? t('common.save') : t('common.create')}
+                </Button>
+              </div>
+            </form>
           )}
-        </div>
+
+          <div className="mt-6">
+            {items.length === 0 ? (
+              <p className="text-sm text-foreground-muted">{t('promptLibrary.empty')}</p>
+            ) : (
+              <ul className="grid gap-3">
+                {items.map((entry) => (
+                  <li
+                    key={entry.id}
+                    className="group flex items-start gap-3 rounded-lg border border-border bg-background-secondary p-4"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-medium text-foreground">
+                        {entry.title}
+                      </div>
+                      {entry.description && (
+                        <div className="mt-0.5 truncate text-xs text-foreground-muted">
+                          {entry.description}
+                        </div>
+                      )}
+                      <div className="mt-2 line-clamp-2 whitespace-pre-wrap break-words text-xs text-foreground-passive">
+                        {entry.content}
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={t('promptLibrary.copy')}
+                        onClick={() => handleCopy(entry)}
+                      >
+                        <Copy className="size-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={t('common.edit')}
+                        onClick={() => openEdit(entry)}
+                      >
+                        <Pencil className="size-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={t('common.delete')}
+                        onClick={() => handleDelete(entry)}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </section>
       </div>
     </div>
   );
