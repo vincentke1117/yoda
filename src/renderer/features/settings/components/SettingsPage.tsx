@@ -109,20 +109,16 @@ function useSettingsTabGroups(): SettingsTabEntry[][] {
       { id: 'tasks', label: t('settings.tabs.tasks') },
       { id: 'sessions', label: t('settings.tabs.sessions') },
     ],
-    // Agent execution: runtimes and their capabilities.
+    // Agent execution config: runtimes and model access. Resource management
+    // (prompts, skills, MCP, custom agents, automation) lives in the Library.
     [
       { id: 'maas', label: t('settings.tabs.maas') },
       { id: 'clis-models', label: t('settings.tabs.agents') },
-      { id: 'prompts', label: t('settings.tabs.prompts') },
-      { id: 'skills', label: t('settings.tabs.skills') },
-      { id: 'mcp', label: t('settings.tabs.mcp') },
-      { id: 'agent-manager', label: t('settings.tabs.agentManager') },
     ],
     // Product integrations and companion surfaces.
     [
       { id: 'integrations', label: t('settings.tabs.integrations') },
       { id: 'open-in', label: t('settings.tabs.openIn') },
-      { id: 'automation', label: t('settings.tabs.automation') },
       { id: 'mobile', label: t('settings.tabs.mobile') },
     ],
     // Early previews and outlook.

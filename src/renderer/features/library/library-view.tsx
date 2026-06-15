@@ -1,7 +1,9 @@
-import { FileText, Puzzle, Workflow } from 'lucide-react';
+import { Bot, FileText, Plug, Puzzle, Workflow } from 'lucide-react';
 import { createContext, useCallback, useContext, type ComponentType, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { AgentManagerMainPanel } from '@renderer/features/agents-config/agent-manager-view';
 import { AutomationMainPanel } from '@renderer/features/automation/automation-view';
+import { McpMainPanel } from '@renderer/features/mcp/mcp-view';
 import { PromptLibraryPanel } from '@renderer/features/prompt-library/prompt-library-panel';
 import { SkillsMainPanel } from '@renderer/features/skills/skills-view';
 import { Titlebar } from '@renderer/lib/components/titlebar/Titlebar';
@@ -9,7 +11,7 @@ import { useParams } from '@renderer/lib/layout/navigation-provider';
 import { cn } from '@renderer/utils/utils';
 
 /** The Library groups the user's reusable resources behind one nav entry. */
-export type LibrarySection = 'prompts' | 'skills' | 'automation';
+export type LibrarySection = 'prompts' | 'agents' | 'skills' | 'mcp' | 'automation';
 
 const SECTIONS: {
   id: LibrarySection;
@@ -17,7 +19,9 @@ const SECTIONS: {
   labelKey: string;
 }[] = [
   { id: 'prompts', icon: FileText, labelKey: 'library.sections.prompts' },
+  { id: 'agents', icon: Bot, labelKey: 'library.sections.agents' },
   { id: 'skills', icon: Puzzle, labelKey: 'library.sections.skills' },
+  { id: 'mcp', icon: Plug, labelKey: 'library.sections.mcp' },
   { id: 'automation', icon: Workflow, labelKey: 'library.sections.automation' },
 ];
 
@@ -55,12 +59,16 @@ export function LibraryTitlebar() {
 
 function LibrarySectionContent({ section }: { section: LibrarySection }) {
   switch (section) {
-    case 'skills':
-      return <SkillsMainPanel />;
-    case 'automation':
-      return <AutomationMainPanel />;
     case 'prompts':
       return <PromptLibraryPanel />;
+    case 'agents':
+      return <AgentManagerMainPanel />;
+    case 'skills':
+      return <SkillsMainPanel />;
+    case 'mcp':
+      return <McpMainPanel />;
+    case 'automation':
+      return <AutomationMainPanel />;
   }
 }
 

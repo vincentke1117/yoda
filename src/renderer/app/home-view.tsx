@@ -2889,7 +2889,7 @@ export const HomeComposer = observer(function HomeComposer({
                     <button
                       type="button"
                       className="font-mono text-[10px] uppercase tracking-widest text-foreground-passive transition-colors hover:text-foreground"
-                      onClick={() => navigate('settings', { tab: 'prompts' })}
+                      onClick={() => navigate('library', { section: 'prompts' })}
                     >
                       {t('home.manage')}
                     </button>

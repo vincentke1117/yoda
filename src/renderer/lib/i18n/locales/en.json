@@ -1460,7 +1460,9 @@
   "library": {
     "sections": {
       "prompts": "Prompts",
+      "agents": "Agents",
       "skills": "Skills",
+      "mcp": "MCP",
       "automation": "Automation"
     }
   },
