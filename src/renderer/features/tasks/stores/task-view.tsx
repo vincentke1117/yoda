@@ -61,6 +61,12 @@ export class TaskViewStore {
   focusedRegion: 'main' | 'bottom';
   /** Ephemeral: sidebar expanded over the whole upper main view. */
   isSidebarMaximized = false;
+  /**
+   * Ephemeral bump counter: each increment asks the layout to size the sidebar
+   * to half the upper split (a true side-by-side). Used when review mode opens
+   * the reviewer beside the implementer.
+   */
+  sidebarHalfWidthNonce = 0;
 
   readonly tabManager: TabManagerStore;
   readonly terminalTabs: TerminalTabViewStore;
@@ -267,6 +273,12 @@ export class TaskViewStore {
 
   setSidebarMaximized(maximized: boolean): void {
     this.isSidebarMaximized = maximized;
+  }
+
+  /** Expand the sidebar (uncollapsed) to half the upper split for side-by-side. */
+  requestSidebarHalfWidth(): void {
+    this.setSidebarCollapsed(false);
+    this.sidebarHalfWidthNonce += 1;
   }
 
   setSessionPanelOpenSectionIds(sectionIds: string[]): void {

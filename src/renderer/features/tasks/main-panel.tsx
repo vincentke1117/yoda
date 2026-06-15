@@ -322,6 +322,17 @@ const TaskUpperSplit = observer(function TaskUpperSplit({
   // mounted underneath so editor/Activity state survives the toggle.
   const isSidebarMaximized = taskView.isSidebarMaximized && !isCollapsed;
 
+  // Side-by-side request (review mode): size the sidebar to half the upper split.
+  const halfWidthNonce = taskView.sidebarHalfWidthNonce;
+  useEffect(() => {
+    if (halfWidthNonce === 0) return;
+    const width = containerRef.current?.getBoundingClientRect().width;
+    if (!width) return;
+    const half = Math.round(width / 2);
+    runtimeSidebarPx = half;
+    setSidebarPx(half);
+  }, [halfWidthNonce]);
+
   const endDividerDrag = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!dragRef.current) return;
     dragRef.current = null;

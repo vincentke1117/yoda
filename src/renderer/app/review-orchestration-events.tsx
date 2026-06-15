@@ -27,7 +27,9 @@ export function ReviewOrchestrationEvents() {
         const { tabManager } = provisioned.taskView;
         tabManager.openConversation(payload.implementerConversationId);
         tabManager.openConversationInSidebar(payload.reviewerConversationId);
-        provisioned.taskView.setSidebarCollapsed(false);
+        // Open the reviewer at half width — this is a side-by-side comparison,
+        // not the usual narrow sidebar.
+        provisioned.taskView.requestSidebarHalfWidth();
       })();
     });
   }, []);
