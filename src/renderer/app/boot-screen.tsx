@@ -14,12 +14,12 @@ const FAINT = 'rgba(233, 233, 230, 0.14)';
 const MINT = '#7fe0a7';
 const MINT_DIM = 'rgba(127, 224, 167, 0.45)';
 
-/** Minimum time the boot sequence stays up, so it never flashes. */
+/** Minimum time the full boot sequence stays up, so it never flashes. */
 const MIN_BOOT_MS = 1900;
 
-/** Set once the operator has crossed the boot gate at least once. After that,
- *  later launches auto-enter when the animation finishes — the manual confirm
- *  is a first-run beat, not a tax on every open. */
+/** First run shows the full kernel-boot animation (part 2) and a manual gate.
+ *  Once the operator has seen it, later launches show only the logo (part 1)
+ *  and slip straight into the workspace — the fanfare is a first-run event. */
 const BOOT_ENTERED_KEY = 'yoda:boot-entered';
 
 function hasEnteredBefore(): boolean {
@@ -34,12 +34,14 @@ function markEntered(): void {
   try {
     localStorage.setItem(BOOT_ENTERED_KEY, 'true');
   } catch {
-    // Private mode / disabled storage: degrade to always showing the gate.
+    // Private mode / disabled storage: degrade to always showing the full boot.
   }
 }
 
-/** Beat after the bar fills before an auto-enter, so the completion still reads. */
-const AUTO_ENTER_MS = 650;
+/** Returning launches: how long the logo-only screen holds, and the beat after
+ *  ready before it slips away. Short — it's a graceful handoff, not a show. */
+const MIN_LOGO_MS = 600;
+const LOGO_EXIT_MS = 300;
 
 const WORDMARK = ['Y', 'O', 'D', 'A'];
 
@@ -171,6 +173,63 @@ function CodeLine({ segments, count }: { segments: CodeSegment[]; count: number 
   );
 }
 
+/**
+ * The Hood — brand mark. Hardcoded palette, same contract as the rest of the
+ * boot screen (renders before any theme class exists). Mirrors the static
+ * splash in index.html so the part-1 → part-2 handoff reads as one mark.
+ */
+function HoodMark({
+  className,
+  reducedMotion,
+  animateIn,
+}: {
+  className?: string;
+  reducedMotion: boolean | null;
+  animateIn: boolean;
+}) {
+  return (
+    <motion.svg
+      viewBox="0 0 240 220"
+      className={className}
+      initial={
+        reducedMotion || !animateIn ? { opacity: 1 } : { opacity: 0, y: 18, filter: 'blur(8px)' }
+      }
+      animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+      transition={{ duration: 0.7, delay: 0.05, ease: [0.2, 0.7, 0.3, 1] }}
+    >
+      <defs>
+        <radialGradient id="bootDotGlow" cx="0.5" cy="0.5" r="0.5">
+          <stop offset="0" stopColor={MINT} stopOpacity="0.55" />
+          <stop offset="1" stopColor={MINT} stopOpacity="0" />
+        </radialGradient>
+        <mask id="bootCowl">
+          <rect x="-60" y="-60" width="360" height="380" fill="#fff" />
+          <path fill="#000" d="M 167.2 120.4 A 50 50 0 1 0 72.8 120.4 L 120 256 Z" />
+        </mask>
+      </defs>
+      <path
+        mask="url(#bootCowl)"
+        fill={INK}
+        d="M 156.4 21.3 L 228.2 162.9 A 34 34 0 0 1 200 216 L 40 216 A 34 34 0 0 1 11.8 162.9 L 83.6 21.3 A 44 44 0 0 1 156.4 21.3 Z"
+      />
+      {reducedMotion ? (
+        <circle cx="120" cy="104" r="36" fill="url(#bootDotGlow)" />
+      ) : (
+        <motion.circle
+          cx="120"
+          cy="104"
+          r="36"
+          fill="url(#bootDotGlow)"
+          animate={{ opacity: [0.55, 1, 0.55], scale: [1, 1.16, 1] }}
+          transition={{ duration: 3.6, repeat: Infinity, ease: 'easeInOut' }}
+          style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
+        />
+      )}
+      <circle cx="120" cy="104" r="13" fill={MINT} />
+    </motion.svg>
+  );
+}
+
 interface BootScreenProps {
   /** True once the app has loaded enough to render the real UI. */
   ready: boolean;
@@ -192,19 +251,21 @@ export function BootScreen({ ready, onFinished }: BootScreenProps) {
   }, []);
 
   // Hold the splash for a minimum beat so a fast load doesn't strobe.
+  // Returning launches (logo only) hold a shorter beat than the full boot.
   useEffect(() => {
-    const t = setTimeout(() => setMinElapsed(true), reducedMotion ? 400 : MIN_BOOT_MS);
+    const min = firstRun ? MIN_BOOT_MS : MIN_LOGO_MS;
+    const t = setTimeout(() => setMinElapsed(true), reducedMotion ? 400 : min);
     return () => clearTimeout(t);
-  }, [reducedMotion]);
+  }, [reducedMotion, firstRun]);
 
   // Tick the boot log in line by line.
   useEffect(() => {
-    if (reducedMotion) return;
+    if (reducedMotion || !firstRun) return;
     const timers = BOOT_LOG.map((_, i) =>
       setTimeout(() => setVisibleLogs((n) => Math.max(n, i + 1)), 320 + i * 230)
     );
     return () => timers.forEach(clearTimeout);
-  }, [reducedMotion]);
+  }, [reducedMotion, firstRun]);
 
   const done = ready && minElapsed;
 
@@ -214,7 +275,7 @@ export function BootScreen({ ready, onFinished }: BootScreenProps) {
   const [count2, setCount2] = useState(0);
 
   useEffect(() => {
-    if (reducedMotion) return;
+    if (reducedMotion || !firstRun) return;
     let i = 0;
     let interval: ReturnType<typeof setInterval> | undefined;
     // Hold a beat so the wordmark lands first.
@@ -229,7 +290,7 @@ export function BootScreen({ ready, onFinished }: BootScreenProps) {
       clearTimeout(start);
       if (interval) clearInterval(interval);
     };
-  }, [reducedMotion]);
+  }, [reducedMotion, firstRun]);
 
   const block1Done = reducedMotion || count1 >= CODE_LEN_1;
 
@@ -258,12 +319,40 @@ export function BootScreen({ ready, onFinished }: BootScreenProps) {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [done, exiting, enter]);
 
-  // Returning operators skip the gate: auto-enter once the bar fills.
+  // Returning operators skip part 2 entirely: the logo-only screen slips away
+  // shortly after the app is ready.
   useEffect(() => {
     if (!done || exiting || firstRun) return;
-    const t = setTimeout(enter, AUTO_ENTER_MS);
+    const t = setTimeout(enter, LOGO_EXIT_MS);
     return () => clearTimeout(t);
   }, [done, exiting, firstRun, enter]);
+
+  // Returning launches: part 1 only — just the breathing Hood on the native
+  // background, then a clean fade into the workspace. No kernel-boot fanfare.
+  if (!firstRun) {
+    return (
+      <motion.div
+        className="fixed inset-0 z-[100] flex select-none items-center justify-center overflow-hidden"
+        style={{ backgroundColor: BG }}
+        initial={false}
+        animate={exiting ? { opacity: 0 } : { opacity: 1 }}
+        transition={{ duration: reducedMotion ? 0.15 : 0.4, ease: [0.4, 0, 0.2, 1] }}
+        onAnimationComplete={() => {
+          if (exiting) onFinished();
+        }}
+      >
+        {/* Draggable strip over the hidden titlebar. */}
+        <div className="absolute inset-x-0 top-0 h-10 [-webkit-app-region:drag]" />
+        {/* Matches the static splash placement (translateY(-90px)) so the
+            part-1 → part-1 handoff from index.html is seamless. */}
+        <HoodMark
+          className="w-[72px] -translate-y-[90px]"
+          reducedMotion={reducedMotion}
+          animateIn={false}
+        />
+      </motion.div>
+    );
+  }
 
   return (
     <motion.div
@@ -366,45 +455,7 @@ export function BootScreen({ ready, onFinished }: BootScreenProps) {
         className="absolute inset-0 flex flex-col items-center justify-center"
         style={{ transform: 'translateY(-4%)' }}
       >
-        {/* The Hood — brand mark. Hardcoded palette, same contract as the rest
-            of this screen (renders before any theme class exists). */}
-        <motion.svg
-          viewBox="0 0 240 220"
-          className="mb-7 w-[72px]"
-          initial={reducedMotion ? { opacity: 1 } : { opacity: 0, y: 18, filter: 'blur(8px)' }}
-          animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-          transition={{ duration: 0.7, delay: 0.05, ease: [0.2, 0.7, 0.3, 1] }}
-        >
-          <defs>
-            <radialGradient id="bootDotGlow" cx="0.5" cy="0.5" r="0.5">
-              <stop offset="0" stopColor={MINT} stopOpacity="0.55" />
-              <stop offset="1" stopColor={MINT} stopOpacity="0" />
-            </radialGradient>
-            <mask id="bootCowl">
-              <rect x="-60" y="-60" width="360" height="380" fill="#fff" />
-              <path fill="#000" d="M 167.2 120.4 A 50 50 0 1 0 72.8 120.4 L 120 256 Z" />
-            </mask>
-          </defs>
-          <path
-            mask="url(#bootCowl)"
-            fill={INK}
-            d="M 156.4 21.3 L 228.2 162.9 A 34 34 0 0 1 200 216 L 40 216 A 34 34 0 0 1 11.8 162.9 L 83.6 21.3 A 44 44 0 0 1 156.4 21.3 Z"
-          />
-          {reducedMotion ? (
-            <circle cx="120" cy="104" r="36" fill="url(#bootDotGlow)" />
-          ) : (
-            <motion.circle
-              cx="120"
-              cy="104"
-              r="36"
-              fill="url(#bootDotGlow)"
-              animate={{ opacity: [0.55, 1, 0.55], scale: [1, 1.16, 1] }}
-              transition={{ duration: 3.6, repeat: Infinity, ease: 'easeInOut' }}
-              style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
-            />
-          )}
-          <circle cx="120" cy="104" r="13" fill={MINT} />
-        </motion.svg>
+        <HoodMark className="mb-7 w-[72px]" reducedMotion={reducedMotion} animateIn />
 
         <div
           className="flex items-baseline font-mono font-bold"
