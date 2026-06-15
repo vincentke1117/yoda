@@ -261,28 +261,48 @@ export const TmuxStatusRow: React.FC = observer(() => {
     void appState.dependencies.probeAll().finally(() => setRechecking(false));
   }, []);
 
+  // Mirror the dependency-status language used by RuntimeAccordion: a calm
+  // status dot + muted tabular label, not multi-colored prose lines.
+  const statusLabel = tmuxAvailable
+    ? tmuxState?.version
+      ? `v${tmuxState.version}`
+      : t('settings.agentsTab.detected')
+    : tmuxErrored
+      ? t('settings.tasks.tmuxStatusError')
+      : t('settings.agentsTab.notDetected');
+
   return (
     <SettingRow
-      title={t('settings.terminal.tmux')}
+      title={
+        <span className="flex items-center gap-2">
+          {t('settings.terminal.tmux')}
+          <span
+            className={cn(
+              'h-1.5 w-1.5 shrink-0 rounded-full',
+              tmuxAvailable
+                ? 'bg-emerald-500'
+                : tmuxErrored
+                  ? 'bg-amber-500'
+                  : 'bg-muted-foreground/40'
+            )}
+            aria-hidden="true"
+          />
+          <span className="text-xs font-normal tabular-nums text-foreground-passive">
+            {statusLabel}
+          </span>
+        </span>
+      }
       description={
-        <span className="flex flex-col gap-1">
+        <span className="flex flex-col gap-0.5">
           <span>{t('settings.tasks.enableTmuxDescription')}</span>
-          {tmuxAvailable && (
-            <span className="text-emerald-500">
-              {tmuxState?.version
-                ? t('settings.tasks.tmuxAvailableWithVersion', { version: tmuxState.version })
-                : t('settings.tasks.tmuxAvailable')}
-            </span>
-          )}
           {tmuxAvailable && tmuxState?.path && (
-            <span className="font-mono text-xs break-all text-foreground-passive">
-              {t('settings.tasks.tmuxPathLabel', { path: tmuxState.path })}
+            <span className="truncate font-mono text-foreground-passive" title={tmuxState.path}>
+              {tmuxState.path}
             </span>
           )}
-          {tmuxMissing && <span className="text-amber-500">{t('settings.tasks.tmuxMissing')}</span>}
-          {tmuxErrored && (
+          {tmuxErrored && tmuxState?.error && (
             <span className="text-destructive">
-              {t('settings.tasks.tmuxError', { error: tmuxState?.error ?? '' })}
+              {t('settings.tasks.tmuxError', { error: tmuxState.error })}
             </span>
           )}
         </span>
@@ -293,6 +313,7 @@ export const TmuxStatusRow: React.FC = observer(() => {
             type="button"
             variant="ghost"
             size="sm"
+            className="gap-1.5"
             disabled={rechecking}
             onClick={handleRecheck}
           >
