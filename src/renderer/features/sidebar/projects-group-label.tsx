@@ -80,7 +80,7 @@ export const ProjectsSettingsMenu = observer(function ProjectsSettingsMenu() {
                   size="icon-xs"
                   variant="ghost"
                   data-active={customized || undefined}
-                  className="opacity-0 transition-opacity group-hover/section-header:opacity-100 data-popup-open:opacity-100 data-[active=true]:opacity-100 hover:bg-background-tertiary-2 text-foreground-muted hover:text-foreground data-[active=true]:text-foreground"
+                  className="opacity-0 transition-opacity group-hover/section-header:opacity-100 data-popup-open:opacity-100 hover:bg-background-tertiary-2 text-foreground-muted hover:text-foreground data-[active=true]:text-foreground"
                 />
               }
             />
