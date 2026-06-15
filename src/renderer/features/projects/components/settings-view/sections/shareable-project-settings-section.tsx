@@ -1,3 +1,5 @@
+import { observer } from 'mobx-react-lite';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type {
   ProjectSettingsOverrideState,
@@ -10,7 +12,9 @@ import { Field, FieldDescription, FieldTitle } from '@renderer/lib/ui/field';
 import { Input } from '@renderer/lib/ui/input';
 import { Separator } from '@renderer/lib/ui/separator';
 import { Textarea } from '@renderer/lib/ui/textarea';
+import { cn } from '@renderer/utils/utils';
 import type { FormState, FormUpdate } from '../project-settings-form-model';
+import { settingsFocus } from '../settings-focus';
 import {
   SHAREABLE_FIELD_DESCRIPTORS,
   type ShareableFieldDescriptor,
@@ -71,7 +75,7 @@ function ShareableField({
   );
 }
 
-export function ShareableSettingsSection({
+export const ShareableSettingsSection = observer(function ShareableSettingsSection({
   form,
   update,
   getOverrideSources,
@@ -84,6 +88,24 @@ export function ShareableSettingsSection({
   const docsFields = SHAREABLE_FIELD_DESCRIPTORS.filter(
     (descriptor) => descriptor.group === 'docs'
   );
+
+  // Deep links into settings (e.g. the Docs page's "configure" empty state)
+  // request a focus target; scroll the docs group into view, flash a highlight,
+  // and focus its first input, then consume the one-shot request.
+  const docsRef = useRef<HTMLDivElement>(null);
+  const [docsHighlight, setDocsHighlight] = useState(false);
+  const focusTarget = settingsFocus.target;
+  useEffect(() => {
+    if (focusTarget !== 'docs') return;
+    settingsFocus.consume();
+    const el = docsRef.current;
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.querySelector<HTMLElement>('input, textarea')?.focus({ preventScroll: true });
+    setDocsHighlight(true);
+    const timer = setTimeout(() => setDocsHighlight(false), 1600);
+    return () => clearTimeout(timer);
+  }, [focusTarget]);
 
   return (
     <>
@@ -138,7 +160,13 @@ export function ShareableSettingsSection({
 
       <Separator />
 
-      <div className="flex flex-col gap-4">
+      <div
+        ref={docsRef}
+        className={cn(
+          '-mx-3 flex scroll-mt-6 flex-col gap-4 rounded-lg px-3 py-3 transition-colors duration-500',
+          docsHighlight ? 'bg-primary/5 ring-1 ring-primary/40' : 'ring-1 ring-transparent'
+        )}
+      >
         <div className="flex flex-col gap-1">
           <FieldTitle>{t('projects.settings.docsSection')}</FieldTitle>
           <FieldDescription className="text-foreground-muted">
@@ -158,4 +186,4 @@ export function ShareableSettingsSection({
       </div>
     </>
   );
-}
+});

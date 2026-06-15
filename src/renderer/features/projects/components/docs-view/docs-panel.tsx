@@ -3,6 +3,7 @@ import { Cloud, ExternalLink, FileText, FolderOpen } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { settingsFocus } from '@renderer/features/projects/components/settings-view/settings-focus';
 import { getProjectSettingsStore } from '@renderer/features/projects/stores/project-selectors';
 import { rpc } from '@renderer/lib/ipc';
 import { useNavigate } from '@renderer/lib/layout/navigation-provider';
@@ -45,7 +46,10 @@ export const DocsPanel = observer(function DocsPanel({ projectId }: { projectId:
           <Button
             variant="outline"
             size="sm"
-            onClick={() => navigate('project', { projectId, view: 'settings' })}
+            onClick={() => {
+              settingsFocus.request('docs');
+              navigate('project', { projectId, view: 'settings' });
+            }}
           >
             {t('projects.docs.configure')}
           </Button>
