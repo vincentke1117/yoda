@@ -31,6 +31,7 @@ import { runtimeModelCandidatesService } from './core/settings/runtime-model-can
 import { appSettingsService } from './core/settings/settings-service';
 import { resumePendingTaskArchives } from './core/tasks/operations/archiveTask';
 import { taskManager } from './core/tasks/task-manager';
+import { roomConductor } from './core/team-rooms/conductor';
 import { updateService } from './core/updates/update-service';
 import { viewStateService } from './core/view-state/view-state-service';
 import type { TeardownMode } from './core/workspaces/workspace-registry';
@@ -217,6 +218,9 @@ void app.whenReady().then(async () => {
   reviewOrchestrator.resumePending().catch((e) => {
     log.warn('Failed to resume pending review orchestrations:', e);
   });
+
+  // Team Room @-mention routing engine: subscribe to room message posts.
+  roomConductor.initialize();
 
   mobileGatewayService.initialize().catch((e) => {
     log.error('Failed to start mobile gateway service:', e);
