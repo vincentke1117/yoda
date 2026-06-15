@@ -12,12 +12,23 @@ import { events } from '@renderer/lib/ipc';
 export function ReviewOrchestrationEvents() {
   useEffect(() => {
     return events.on(reviewReviewerStartedChannel, (payload) => {
-      const provisioned = asProvisioned(getTaskStore(payload.projectId, payload.taskId));
-      if (!provisioned) return;
-      const { tabManager } = provisioned.taskView;
-      tabManager.openConversation(payload.implementerConversationId);
-      tabManager.openConversationInSidebar(payload.reviewerConversationId);
-      provisioned.taskView.setSidebarCollapsed(false);
+      void (async () => {
+        const provisioned = asProvisioned(getTaskStore(payload.projectId, payload.taskId));
+        if (!provisioned) return;
+        // The reviewer conversation was just created in the main process and is
+        // not yet in the renderer's store — there is no renderer-side
+        // `conversation:created` bridge. Load it (and the implementer) before
+        // opening tabs, or the tab resolves to no store and the pane is blank.
+        await provisioned.conversations.ensureConversation(payload.implementerConversationId);
+        const reviewerLoaded = await provisioned.conversations.ensureConversation(
+          payload.reviewerConversationId
+        );
+        if (!reviewerLoaded) return;
+        const { tabManager } = provisioned.taskView;
+        tabManager.openConversation(payload.implementerConversationId);
+        tabManager.openConversationInSidebar(payload.reviewerConversationId);
+        provisioned.taskView.setSidebarCollapsed(false);
+      })();
     });
   }, []);
 
