@@ -8,6 +8,7 @@ import {
 import { events, rpc } from '@renderer/lib/ipc';
 import { cssVar } from '@renderer/utils/cssVars';
 import { log } from '@renderer/utils/logger';
+import { getCellMetrics } from './pty-dimensions';
 import { registerOsc52ClipboardHandler } from './terminal-clipboard';
 import { ensureXtermHost } from './xterm-host';
 
@@ -133,6 +134,15 @@ export class FrontendPty {
   private pendingWrites: string[] = [];
   private hasFlushed = false;
   private savedViewportY: number | null = null;
+  /**
+   * Whether the viewport was pinned to the tail (following live output) when
+   * last scrolled. Restored on mount(): a session that was following the
+   * bottom returns to the bottom — not to a now-stale absolute line that
+   * scrolled into history while the session was backgrounded.
+   */
+  private savedAtBottom = true;
+  /** Fractional wheel-scroll carry, so pixel-mode trackpad deltas don't quantize harshly. */
+  private wheelPartialScroll = 0;
   /** Snapshot overlay hiding resize transitions — see commitResize(). */
   private freezeOverlay: HTMLCanvasElement | null = null;
   /** Unfreeze event chain state: idle → await-data → await-render → idle. */
@@ -192,8 +202,10 @@ export class FrontendPty {
 
     this.terminal.open(this.ownedContainer);
     this.loadWebglRenderer();
+    this.attachWheelScrollPolicy();
     this.scrollDisposable = this.terminal.onScroll((viewportY) => {
       this.savedViewportY = viewportY;
+      this.savedAtBottom = viewportY >= this.terminal.buffer.active.baseY;
     });
 
     const el = (this.terminal as unknown as { element?: HTMLElement }).element;
@@ -205,6 +217,50 @@ export class FrontendPty {
 
     ensureXtermHost().appendChild(this.ownedContainer);
     FrontendPty.all.add(this);
+  }
+
+  /**
+   * Make the mouse wheel scroll our scrollback even when the running agent has
+   * enabled mouse tracking.
+   *
+   * Agents like codex/claude run in the NORMAL buffer (a scrolling transcript)
+   * but turn on SGR mouse tracking for click interactions. xterm then sets the
+   * viewport's `handleMouseWheel: false` and forwards wheel events to the app —
+   * which ignores them — so the wheel goes dead and only the scrollbar drags
+   * history. Every mainstream terminal (iTerm2, VS Code, Terminal.app) keeps
+   * the wheel scrolling local history for normal-buffer apps; do the same.
+   *
+   * In the alternate buffer a full-screen TUI legitimately owns the wheel, so
+   * we don't interfere there.
+   */
+  private attachWheelScrollPolicy(): void {
+    this.terminal.attachCustomWheelEventHandler((event) => {
+      // Alternate buffer: full-screen TUI owns the wheel.
+      if (this.terminal.buffer.active.type !== 'normal') return true;
+      // Only vt200/drag/any report the wheel to the app — for those xterm
+      // disables its own viewport wheel handler. For none/x10 the wheel is NOT
+      // forwarded and xterm's viewport still scrolls the scrollback (with
+      // smooth scrolling), so let it; intervening here would double-scroll.
+      const mode = this.terminal.modes.mouseTrackingMode;
+      if (mode === 'none' || mode === 'x10') return true;
+      // App HAS wheel-reporting mouse tracking on: xterm would hand it the wheel. Scroll our
+      // history locally instead, and swallow the event so it never reaches the
+      // app.
+      const cellHeight = getCellMetrics(this.terminal)?.height ?? 0;
+      let lines: number;
+      if (event.deltaMode === WheelEvent.DOM_DELTA_LINE) {
+        lines = event.deltaY;
+      } else if (event.deltaMode === WheelEvent.DOM_DELTA_PAGE) {
+        lines = event.deltaY * this.terminal.rows;
+      } else {
+        lines = event.deltaY / (cellHeight > 0 ? cellHeight : 16);
+      }
+      this.wheelPartialScroll += lines;
+      const amount = Math.trunc(this.wheelPartialScroll);
+      this.wheelPartialScroll -= amount;
+      if (amount !== 0) this.terminal.scrollLines(amount);
+      return false;
+    });
   }
 
   /** Override OSC 8 hyperlink activation (e.g. in-app browser); null restores the system browser. */
@@ -440,6 +496,7 @@ export class FrontendPty {
       try {
         this.terminal.scrollToBottom();
         this.savedViewportY = this.terminal.buffer.active.viewportY;
+        this.savedAtBottom = true;
         this.terminal.refresh(0, this.terminal.rows - 1);
       } catch {}
     });
@@ -463,10 +520,16 @@ export class FrontendPty {
     // Force a Canvas2D repaint after reparenting in the DOM.
     const t = this.terminal;
     const savedViewportY = this.savedViewportY;
+    const savedAtBottom = this.savedAtBottom;
     requestAnimationFrame(() => {
       try {
         if ((t as unknown as { _isDisposed?: boolean })._isDisposed) return;
-        if (savedViewportY !== null) {
+        // A session that was following the tail returns to the tail — output
+        // may have streamed in while it was backgrounded, pushing the old
+        // absolute line into history.
+        if (savedAtBottom) {
+          t.scrollToBottom();
+        } else if (savedViewportY !== null) {
           t.scrollToLine(savedViewportY);
         }
         t.refresh(0, t.rows - 1);
