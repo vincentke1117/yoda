@@ -1,10 +1,5 @@
 import { randomUUID } from 'node:crypto';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
-import {
-  buildPromptInjectionPayload,
-  getAgentCommandSubmitDelayMs,
-  getAgentCommandSubmitInput,
-} from '@shared/agent-command-prefix';
 import { reviewReviewerStartedChannel } from '@shared/events/reviewEvents';
 import { makePtySessionId } from '@shared/ptySessionId';
 import {
@@ -15,8 +10,8 @@ import {
   REVIEW_MAX_ROUNDS,
 } from '@shared/review-protocol';
 import type { RuntimeId } from '@shared/runtime-registry';
-import { agentSessionRuntimeStore } from '@main/core/conversations/agent-session-runtime';
 import { createConversation } from '@main/core/conversations/createConversation';
+import { injectPrompt } from '@main/core/conversations/inject-prompt';
 import { ptySessionRegistry } from '@main/core/pty/pty-session-registry';
 import { db } from '@main/db/client';
 import { conversations, reviewOrchestrations } from '@main/db/schema';
@@ -29,15 +24,6 @@ const POLL_MS = 1_500;
 const TURN_TIMEOUT_MS = 30 * 60_000;
 /** If the implementer is never seen running this soon, assume it already ran. */
 const IMPLEMENTER_GRACE_MS = 20_000;
-/**
- * Floor for the gap between writing a (potentially large, bracketed-paste)
- * prompt and writing the submit key. A runtime's registry delay can be 0 (e.g.
- * Claude Code), which races the Enter ahead of the TUI finishing the paste — the
- * prompt then sits unsent in the input box. Mirrors the image-attachment
- * injector's PROMPT_SUBMIT_DELAY_MS, with extra margin since review feedback can
- * be up to 12k chars.
- */
-const SUBMIT_DELAY_FLOOR_MS = 300;
 
 type Row = typeof reviewOrchestrations.$inferSelect;
 
@@ -274,16 +260,8 @@ class ReviewOrchestrator {
     runtime: RuntimeId,
     prompt: string
   ): Promise<void> {
-    const pty = ptySessionRegistry.get(sessionId);
-    if (!pty) throw new Error('Target session is not running; cannot deliver prompt.');
-    const payload = buildPromptInjectionPayload(prompt);
-    if (!payload) return;
-    pty.write(payload);
-    // Seed working so the next turn-wait observes a running session.
-    agentSessionRuntimeStore.setStatus(session, 'working');
-    const submitDelay = Math.max(getAgentCommandSubmitDelayMs(runtime), SUBMIT_DELAY_FLOOR_MS);
-    await new Promise((resolve) => setTimeout(resolve, submitDelay));
-    pty.write(getAgentCommandSubmitInput(runtime));
+    const ok = await injectPrompt(sessionId, session, runtime, prompt);
+    if (!ok) throw new Error('Target session is not running; cannot deliver prompt.');
   }
 
   private async loadRuntime(conversationId: string): Promise<RuntimeId> {
