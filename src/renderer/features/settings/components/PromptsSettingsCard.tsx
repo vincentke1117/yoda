@@ -10,9 +10,8 @@ import { Textarea } from '@renderer/lib/ui/textarea';
 
 /**
  * Manages the user's atomic prompt principles. Enabled principles are appended
- * after the runtime's system prompt when a session spawns (runtimes with an
- * append-system-prompt flag, e.g. Claude Code) and surface in the session
- * panel's Persona section.
+ * after the runtime's system prompt when a session spawns for runtimes that
+ * support prompt extension, and surface in the session panel's Persona section.
  */
 const PromptsSettingsCard: React.FC = () => {
   const { t } = useTranslation();

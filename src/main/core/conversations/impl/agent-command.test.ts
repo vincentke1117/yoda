@@ -31,6 +31,25 @@ describe('buildAgentCommand', () => {
     });
   });
 
+  it('passes prompt principles to Codex as developer instructions', () => {
+    const command = buildAgentCommand({
+      runtimeId: 'codex',
+      providerConfig: runtimeConfigDefaults.codex,
+      initialPrompt: 'Fix the issue',
+      sessionId: 'session-1',
+      appendSystemPrompt: 'Prefer atomic commits.\nQuote "paths" exactly.',
+    });
+
+    expect(command).toEqual({
+      command: 'codex',
+      args: [
+        '-c',
+        'developer_instructions="Prefer atomic commits.\\nQuote \\"paths\\" exactly."',
+        'Fix the issue',
+      ],
+    });
+  });
+
   it('resumes the requested Codex session by id', () => {
     const command = buildAgentCommand({
       runtimeId: 'codex',

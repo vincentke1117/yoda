@@ -91,6 +91,10 @@ function parseCliPrefix(value: string | undefined, runtimeId: RuntimeId): string
   return parsed.words;
 }
 
+function formatTomlString(value: string): string {
+  return JSON.stringify(value);
+}
+
 export function buildAgentCommand({
   runtimeId,
   providerConfig,
@@ -108,7 +112,7 @@ export function buildAgentCommand({
   sessionId: string;
   isResuming?: boolean;
   workingDirectory?: string;
-  /** Extra text appended after the runtime's system prompt (runtimes with appendSystemPromptFlag only). */
+  /** Extra text appended after the runtime's system prompt when the runtime supports it. */
   appendSystemPrompt?: string;
 }): AgentCommand {
   const providerDef = getRuntime(runtimeId);
@@ -140,7 +144,12 @@ export function buildAgentCommand({
     args.push(...parseArgField(providerConfig.autoApproveFlag));
   }
 
-  if (appendSystemPrompt && providerDef?.appendSystemPromptFlag) {
+  if (appendSystemPrompt && providerDef?.appendSystemPromptConfigKey) {
+    args.push(
+      '-c',
+      `${providerDef.appendSystemPromptConfigKey}=${formatTomlString(appendSystemPrompt)}`
+    );
+  } else if (appendSystemPrompt && providerDef?.appendSystemPromptFlag) {
     args.push(providerDef.appendSystemPromptFlag, appendSystemPrompt);
   }
 

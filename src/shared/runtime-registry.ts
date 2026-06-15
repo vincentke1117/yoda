@@ -71,9 +71,15 @@ export type RuntimeDefinition = {
   /**
    * CLI flag that appends extra text after the runtime's own system prompt,
    * e.g. '--append-system-prompt' for Claude Code. Used to inject the
-   * user-defined prompt principles. Runtimes without this flag run unmodified.
+   * user-defined prompt principles. Runtimes without this flag or a config key
+   * run unmodified.
    */
   appendSystemPromptFlag?: string;
+  /**
+   * Config override key for runtimes that accept developer/system prompt
+   * additions through `-c key=value` instead of a dedicated CLI flag.
+   */
+  appendSystemPromptConfigKey?: string;
   newConversationFlag?: string;
   sessionIdOnResumeOnly?: boolean;
   defaultArgs?: string[];
@@ -205,6 +211,7 @@ export const RUNTIMES: RuntimeDefinition[] = [
     cli: 'codex',
     autoApproveFlag: '--dangerously-bypass-approvals-and-sandbox',
     initialPromptFlag: '',
+    appendSystemPromptConfigKey: 'developer_instructions',
     resumeFlag: 'resume',
     resumeSessionIdArg: true,
     commandPrefix: '$',
