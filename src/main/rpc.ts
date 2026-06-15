@@ -25,6 +25,7 @@ import { mobileGatewayController } from './core/mobile-gateway/controller';
 import { plainController } from './core/plain/controller';
 import { pluginsController } from './core/plugins/controller';
 import { projectController } from './core/projects/controller';
+import { promptLibraryController } from './core/prompt-library/controller';
 import { ptyController } from './core/pty/controller';
 import { pullRequestController } from './core/pull-requests/controller';
 import { repositoryController } from './core/repository/controller';
@@ -70,6 +71,7 @@ export const rpcRouter = createRPCRouter({
   mobileGateway: mobileGatewayController,
   plain: plainController,
   plugins: pluginsController,
+  promptLibrary: promptLibraryController,
   skills: skillsController,
   ssh: sshController,
   projects: projectController,

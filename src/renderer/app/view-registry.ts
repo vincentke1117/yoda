@@ -5,6 +5,7 @@ import { agentsView } from '@renderer/features/agents/agents-view';
 import { aiLabView } from '@renderer/features/ai-lab/ai-lab-view';
 import { automationView } from '@renderer/features/automation/automation-view';
 import { kanbanView } from '@renderer/features/kanban/kanban-view';
+import { libraryView } from '@renderer/features/library/library-view';
 import { maasView } from '@renderer/features/maas/maas-view';
 import { mcpView } from '@renderer/features/mcp/mcp-view';
 import { mobileView } from '@renderer/features/mobile/mobile-view';
@@ -27,6 +28,7 @@ export const views = {
   automation: automationView,
   maas: maasView,
   usage: usageView,
+  library: libraryView,
   skills: skillsView,
   skill: skillDetailView,
   mcp: mcpView,

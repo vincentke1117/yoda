@@ -108,6 +108,7 @@
   "sidebar": {
     "newTask": "New task",
     "searchTasks": "Search tasks",
+    "library": "Library",
     "skills": "Skills",
     "skillIssues": "{{count}} skill issue(s)",
     "automation": "Automation",
@@ -1454,6 +1455,34 @@
       "addEnvVar": "+ Add env var",
       "headers": "Headers",
       "addHeader": "+ Add header"
+    }
+  },
+  "library": {
+    "sections": {
+      "prompts": "Prompts",
+      "skills": "Skills",
+      "automation": "Automation"
+    }
+  },
+  "promptLibrary": {
+    "title": "Prompts",
+    "new": "New prompt",
+    "empty": "No saved prompts yet. Create one to reuse it when composing a task.",
+    "copy": "Copy",
+    "copied": "Prompt copied to clipboard",
+    "saveFailed": "Failed to save prompt",
+    "delete": {
+      "title": "Delete prompt",
+      "description": "Delete \"{{name}}\"? This cannot be undone.",
+      "confirmLabel": "Delete"
+    },
+    "form": {
+      "title": "Title",
+      "titlePlaceholder": "e.g. Bug triage",
+      "description": "Description",
+      "descriptionPlaceholder": "Optional short note about when to use this prompt",
+      "content": "Prompt",
+      "contentPlaceholder": "The prompt text to reuse…"
     }
   },
   "automation": {

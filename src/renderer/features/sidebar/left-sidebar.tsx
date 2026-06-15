@@ -3,15 +3,14 @@ import {
   ExternalLink,
   FolderInput,
   Globe,
+  Library,
   MessageSquareShare,
   PanelRightOpen,
-  Puzzle,
   RefreshCw,
   Search,
   Settings,
   Smartphone,
   SquarePen,
-  Workflow,
 } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import React from 'react';
@@ -167,13 +166,6 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
     skillIssueLabel && firstSkillIssue
       ? `${skillIssueLabel}\n${formatSkillIssueTitle(firstSkillIssue)}`
       : (skillIssueLabel ?? undefined);
-  const handleOpenFirstSkillIssue = React.useCallback(() => {
-    if (!firstSkillIssue) {
-      navigate('skills');
-      return;
-    }
-    navigate('skills', { focusSkillId: firstSkillIssue.skill.id });
-  }, [firstSkillIssue, navigate]);
   const handleNewTask = React.useCallback(() => {
     if (currentProjectId) {
       navigate('home', { projectId: currentProjectId });
@@ -265,47 +257,30 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
               <ShortcutHint settingsKey="commandPaletteTasks" />
             </SidebarMenuButton>
             <GlobalSidePaneTarget
-              viewId="skills"
-              params={firstSkillIssue ? { focusSkillId: firstSkillIssue.skill.id } : undefined}
+              viewId="library"
+              params={skillIssueCount > 0 ? { section: 'skills' } : undefined}
               altHeld={altHeld}
             >
               <SidebarMenuButton
-                isActive={isCurrentView(currentView, 'skills')}
+                isActive={isCurrentView(currentView, 'library')}
                 onClick={(e) =>
                   e.altKey
                     ? appState.sidePane.pinView(
-                        'skills',
-                        firstSkillIssue ? { focusSkillId: firstSkillIssue.skill.id } : {}
+                        'library',
+                        skillIssueCount > 0 ? { section: 'skills' } : {}
                       )
-                    : skillIssueCount > 0
-                      ? handleOpenFirstSkillIssue()
-                      : navigate('skills')
+                    : navigate('library', skillIssueCount > 0 ? { section: 'skills' } : undefined)
                 }
-                aria-label={t('sidebar.skills')}
-                title={skillIssueTitle ?? t('sidebar.skills')}
+                aria-label={t('sidebar.library')}
+                title={skillIssueTitle ?? t('sidebar.library')}
                 className="w-full justify-start"
               >
                 <span className="relative flex items-center gap-2 min-w-0 w-full">
-                  <Puzzle className="h-5 w-5 sm:h-4 sm:w-4 shrink-0" />
-                  <span className="truncate min-w-0">{t('sidebar.skills')}</span>
+                  <Library className="h-5 w-5 sm:h-4 sm:w-4 shrink-0" />
+                  <span className="truncate min-w-0">{t('sidebar.library')}</span>
                   {skillIssueCount > 0 && (
                     <span className="ml-auto size-1.5 shrink-0 rounded-full bg-amber-500" />
                   )}
-                </span>
-              </SidebarMenuButton>
-            </GlobalSidePaneTarget>
-            <GlobalSidePaneTarget viewId="automation" altHeld={altHeld}>
-              <SidebarMenuButton
-                isActive={isCurrentView(currentView, 'automation')}
-                onClick={(e) =>
-                  e.altKey ? appState.sidePane.pinView('automation', {}) : navigate('automation')
-                }
-                aria-label={t('sidebar.automation')}
-                className="w-full justify-start"
-              >
-                <span className="flex items-center gap-2 min-w-0 w-full">
-                  <Workflow className="h-5 w-5 sm:h-4 sm:w-4 shrink-0" />
-                  <span className="truncate min-w-0">{t('sidebar.automation')}</span>
                 </span>
               </SidebarMenuButton>
             </GlobalSidePaneTarget>

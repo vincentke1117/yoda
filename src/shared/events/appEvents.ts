@@ -111,6 +111,9 @@ export const automationsUpdatedChannel = defineEvent<void>('automations:updated'
 /** Emitted whenever an automation run starts or finishes. */
 export const automationRunsUpdatedChannel = defineEvent<void>('automation-runs:updated');
 
+/** Emitted whenever a saved prompt is created, updated, or deleted (CRUD). */
+export const promptsUpdatedChannel = defineEvent<void>('prompts:updated');
+
 /** Emitted after each dependency probe completes (path resolution or version check). */
 export const dependencyStatusUpdatedChannel = defineEvent<DependencyStatusUpdatedEvent>(
   'dependency:status-updated'

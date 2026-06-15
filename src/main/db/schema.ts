@@ -179,6 +179,26 @@ export const automationRuns = sqliteTable(
 );
 
 /**
+ * Reusable prompts saved by the user, surfaced in the Library. Distinct from
+ * the always-on `promptPrinciples` in app settings: these are opt-in templates
+ * the user picks when composing a task.
+ */
+export const prompts = sqliteTable('prompts', {
+  id: text('id').primaryKey(),
+  title: text('title').notNull(),
+  description: text('description').notNull().default(''),
+  content: text('content').notNull(),
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: text('created_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text('updated_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`)
+    .$onUpdate(() => new Date().toISOString()),
+});
+
+/**
  * One review-mode orchestration run (implement → review → loop). Persisted so
  * the loop survives renderer reloads and app restarts: the main-process
  * orchestrator resumes any row whose `completedAt` is null at startup. Replaces
