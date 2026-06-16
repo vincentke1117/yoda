@@ -256,33 +256,33 @@ function MessageRow({
       >
         {monogram(name)}
       </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-baseline gap-2">
+      <div className="group min-w-0 flex-1">
+        <div className="flex items-center gap-2">
           <span className={cn('text-sm font-semibold', ACCENT_TEXT[accent])}>{name}</span>
           {message.kind === 'handoff' && (
             <span className="rounded bg-background-2 px-1.5 py-px text-[10px] text-foreground-muted">
               {t('agentRoom.handoff')}
             </span>
           )}
+          {message.sessionRef && (
+            <button
+              type="button"
+              title={isInspected ? t('agentRoom.hideSession') : t('agentRoom.openSession')}
+              onClick={() => agentRoomStore.setInspectedConversation(message.sessionRef)}
+              className={cn(
+                'flex size-5 items-center justify-center rounded transition-colors',
+                isInspected
+                  ? 'text-primary'
+                  : 'text-foreground-muted/50 opacity-0 hover:text-foreground group-hover:opacity-100'
+              )}
+            >
+              <TerminalSquare className="size-3.5" />
+            </button>
+          )}
         </div>
         <div className="whitespace-pre-wrap break-words text-sm text-foreground">
           {renderBody(message.body, byHandle)}
         </div>
-        {message.sessionRef && (
-          <button
-            type="button"
-            onClick={() => agentRoomStore.setInspectedConversation(message.sessionRef)}
-            className={cn(
-              'mt-1.5 inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] transition-colors',
-              isInspected
-                ? 'border-primary bg-primary/10 text-primary'
-                : 'border-border bg-background-1 text-foreground-muted hover:border-primary hover:text-foreground'
-            )}
-          >
-            <TerminalSquare className="size-3" />
-            {isInspected ? t('agentRoom.hideSession') : t('agentRoom.openSession')}
-          </button>
-        )}
       </div>
     </div>
   );

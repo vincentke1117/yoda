@@ -53,20 +53,11 @@ const REVIEW_REQUEST =
   'List any concrete fixes needed, then end your turn with exactly one line: `YODA_REVIEW_RESULT: PASS` if it fully meets the requirement, or `YODA_REVIEW_RESULT: FAIL` if changes are needed.';
 
 /**
- * Short, first-person lines the conductor posts to the room ON BEHALF of an
- * agent, so the chat reads like teammates talking ("On it — I'll take a look")
- * instead of leaking the raw turn prompt or PTY output. The real work lives in
- * each agent's background session, one click away via "open session".
+ * How many FAIL rounds the review loop runs before escalating to the human,
+ * so a review that never converges (e.g. a degenerate task) can't ping-pong
+ * forever. Reset whenever the lead posts a fresh message.
  */
-const SAY = {
-  implementing: `On it — I'll implement this and hand off for review when it's ready.`,
-  reviewing: `Taking a look at the current changes now.`,
-  fixing: `Got the feedback — I'll address these points and hand back.`,
-  onTask: `On it — I'll take care of this and report back.`,
-  implementedDone: `Implementation done — handing off for review.`,
-  reviewPass: `Looks good — it meets the requirement. Approved.`,
-  reviewFail: (impl: string) => `Found some issues — passing the fixes back to ${impl}.`,
-} as const;
+const REVIEW_ROUND_CAP = 4;
 
 type Session = { projectId: string; taskId: string; conversationId: string };
 
@@ -107,6 +98,7 @@ class RoomConductor {
   private readonly statusWatchers = new Map<string, () => void>(); // memberId -> cancel
   private readonly standups = new Map<string, () => void>(); // roomId -> stop
   private readonly activity = new Map<string, number>(); // memberId -> last PTY-growth ts
+  private readonly reviewRounds = new Map<string, number>(); // roomId -> FAIL rounds so far
 
   /** Subscribe to message posts. Idempotent. */
   initialize(): void {
@@ -143,9 +135,13 @@ class RoomConductor {
       ? members.find((m) => m.id === message.authorMemberId)
       : undefined;
     const fromHuman = !author || !author.runtime;
-    // A fresh human prompt refills the cascade budget; agent-authored messages
-    // spend it so a back-and-forth can't run away.
-    if (fromHuman) this.hops.set(roomId, MAX_HOPS);
+    // A fresh human prompt refills the cascade budget and resets the review
+    // round counter; agent-authored messages spend the budget so a back-and-forth
+    // can't run away.
+    if (fromHuman) {
+      this.hops.set(roomId, MAX_HOPS);
+      this.reviewRounds.set(roomId, 0);
+    }
 
     const wantsAll = message.mentions.includes(ALL_HANDLE);
     const targets = members.filter(
@@ -170,7 +166,6 @@ class RoomConductor {
         fromName,
         body: message.body,
         reviewLoop,
-        chatLine: reviewLoop && member.role === 'leader' ? SAY.implementing : SAY.onTask,
       });
     }
   }
@@ -204,7 +199,7 @@ class RoomConductor {
     roomId: string,
     member: RoomMember,
     roster: RosterEntry[],
-    incoming: { fromName: string; body: string; reviewLoop?: boolean; chatLine?: string }
+    incoming: { fromName: string; body: string; reviewLoop?: boolean }
   ): Promise<void> {
     const runtime = member.runtime as RuntimeId;
     const turnPrompt = buildMemberTurnPrompt({
@@ -267,18 +262,6 @@ class RoomConductor {
       }
 
       await setMemberStatus(roomId, member.id, 'running', conversationId);
-      // The agent "speaks" a short first-person line in the room; its actual work
-      // happens in the background session linked by sessionRef.
-      if (incoming.chatLine) {
-        await postMessage({
-          roomId,
-          authorMemberId: member.id,
-          kind: 'text',
-          body: incoming.chatLine,
-          mentions: [],
-          sessionRef: conversationId,
-        });
-      }
       const review: ReviewWatch | undefined = incoming.reviewLoop
         ? {
             role: member.role === 'leader' ? 'leader' : 'worker',
@@ -471,51 +454,51 @@ class RoomConductor {
     }));
 
     if (finished.id === leader.id) {
-      await this.say(roomId, leader, SAY.implementedDone);
       if (!this.spend(roomId)) return this.pauseRouting(roomId);
+      const round = (this.reviewRounds.get(roomId) ?? 0) + 1;
+      await this.transition(roomId, `${reviewer.displayName} is reviewing (round ${round}).`);
       await this.deliverTo(room.projectId, room.taskId, roomId, reviewer, roster, {
         fromName: leader.displayName,
         body: REVIEW_REQUEST,
         reviewLoop: true,
-        chatLine: SAY.reviewing,
       });
       return;
     }
 
     if (finished.id === reviewer.id) {
       if (verdict?.passed) {
-        await this.say(roomId, reviewer, SAY.reviewPass);
-        await postMessage({
-          roomId,
-          kind: 'system',
-          body: `Review approved — task complete.`,
-          mentions: [],
-        });
+        this.reviewRounds.delete(roomId);
+        await this.transition(roomId, `${reviewer.displayName} approved the work — task complete.`);
         return;
       }
-      await this.say(roomId, reviewer, SAY.reviewFail(leader.displayName));
+      // FAIL — count the round and stop ping-ponging once it clearly won't converge.
+      const rounds = (this.reviewRounds.get(roomId) ?? 0) + 1;
+      this.reviewRounds.set(roomId, rounds);
+      if (rounds >= REVIEW_ROUND_CAP) {
+        await this.transition(
+          roomId,
+          `Still not passing after ${rounds} review rounds — pausing for @you to take a look.`
+        );
+        return;
+      }
       if (!this.spend(roomId)) return this.pauseRouting(roomId);
+      await this.transition(
+        roomId,
+        `${reviewer.displayName} requested changes — back to ${leader.displayName}.`
+      );
       const fixes =
         verdict?.feedback?.trim() || 'Re-check the implementation against the requirement.';
       await this.deliverTo(room.projectId, room.taskId, roomId, leader, roster, {
         fromName: reviewer.displayName,
         body: buildImplementerFeedbackPrompt({ reviewFeedback: fixes }),
         reviewLoop: true,
-        chatLine: SAY.fixing,
       });
     }
   }
 
-  /** Post a short first-person line into the room on a member's behalf. */
-  private async say(roomId: string, member: RoomMember, body: string): Promise<void> {
-    await postMessage({
-      roomId,
-      authorMemberId: member.id,
-      kind: 'text',
-      body,
-      mentions: [],
-      sessionRef: member.conversationId,
-    });
+  /** Post a concise, neutral system transition line into the room. */
+  private async transition(roomId: string, body: string): Promise<void> {
+    await postMessage({ roomId, kind: 'system', body, mentions: [] });
   }
 }
 

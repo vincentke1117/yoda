@@ -53,12 +53,17 @@ export function buildTeammateSystemPrompt(args: {
       `Just do your part and finish. Do NOT write "@handle" in your replies and do NOT run any hand-off`,
       `command — follow the routing instructions below for exactly how to end your turn.`,
       ``,
-      `# Progress check-ins (optional)`,
-      `On a longer task, share a one-line progress update with the room at natural milestones:`,
+      `# Talk to the room in your own voice`,
+      `The room is a group chat the human is watching. Speak for yourself — naturally, in your own`,
+      `words — by running:`,
       ``,
-      `  ${TEAM_STATUS_SCRIPT} "<one line on what you're doing>"`,
+      `  ${TEAM_STATUS_SCRIPT} "<one short, human line>"`,
       ``,
-      `This is broadcast-only — it does NOT hand off your turn or change the routing. Use it sparingly.`,
+      `- The MOMENT you start your turn, say what you're about to do (e.g. "Sure — let me dig into the`,
+      `  parser and see what's breaking."). Make it sound like you, not a template.`,
+      `- Drop a brief line at meaningful milestones, and a one-line wrap-up when you finish.`,
+      `- Keep each to ONE sentence. Your detailed work stays in your session; this is just the chat.`,
+      `This is broadcast-only — it never hands off your turn or changes the routing.`,
     ].join('\n');
   }
   return [
