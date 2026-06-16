@@ -1,6 +1,6 @@
 import { watch, type FSWatcher } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
-import type { RunStateEvent } from '@shared/events/agent-run-state';
+import type { RunStateEvent, RunStatus } from '@shared/events/agent-run-state';
 import { resolveClaudeTranscriptPath } from '@main/core/session-title/claude-title-source';
 import { log } from '@main/lib/logger';
 import { iterateLines } from '@main/utils/text-lines';
@@ -191,6 +191,17 @@ const READY_POLL_MAX_MS = 5 * 60_000;
 
 export type RunStateDispatch = (event: RunStateEvent) => void;
 
+/**
+ * Reads the authoritative reducer status for this conversation. The tailer uses
+ * it to force the awaiting-input → working transition even when it never
+ * classified `awaiting-input` itself: that state can be set by the PreToolUse
+ * hook, and fs.watch read-coalescing can make the tailer jump straight from
+ * `working` to `working` across the user's answer. Without consulting the
+ * authoritative status, the tailer would emit a NON-forced turn-started, which
+ * the reducer ignores while in awaiting-input — pinning the task at "waiting".
+ */
+export type RunStatusReader = () => RunStatus;
+
 export interface ClaudeRunStateWatcher {
   stop(): void;
 }
@@ -211,12 +222,14 @@ export interface ClaudeRunStateContext {
  */
 export function watchClaudeRunState(
   ctx: ClaudeRunStateContext,
-  dispatch: RunStateDispatch
+  dispatch: RunStateDispatch,
+  getStatus?: RunStatusReader
 ): ClaudeRunStateWatcher {
   return new ClaudeTranscriptStateTailer(
     resolveClaudeTranscriptPath(ctx.cwd, ctx.conversationId),
     ctx.conversationId,
-    dispatch
+    dispatch,
+    getStatus
   );
 }
 
@@ -243,7 +256,8 @@ class ClaudeTranscriptStateTailer implements ClaudeRunStateWatcher {
   constructor(
     private readonly filePath: string,
     private readonly conversationId: string,
-    private readonly dispatch: RunStateDispatch
+    private readonly dispatch: RunStateDispatch,
+    private readonly getStatus?: RunStatusReader
   ) {
     this.waitForFile();
   }
@@ -340,14 +354,15 @@ class ClaudeTranscriptStateTailer implements ClaudeRunStateWatcher {
     // first-read `idle` is the steady state and must not fire a spurious
     // `completed` (green dot) for a session that simply isn't running.
     if (first && state === 'idle') return;
-    this.dispatch(eventForClaudeVerdict(state, verdict, previousState));
+    this.dispatch(eventForClaudeVerdict(state, verdict, previousState, this.getStatus?.()));
   }
 }
 
 function eventForClaudeVerdict(
   state: ClaudeTurnState,
   verdict: ClaudeTurnVerdict,
-  previousState?: ClaudeTurnState
+  previousState?: ClaudeTurnState,
+  authoritativeStatus?: RunStatus
 ): RunStateEvent {
   switch (state) {
     case 'working':
@@ -356,7 +371,16 @@ function eventForClaudeVerdict(
       // transition so the reducer's "keep awaiting-input on non-forced starts"
       // guard doesn't pin the stale prompt state when the PostToolUse hook is
       // missed (mirrors the Codex rollout tailer's resolved-call handling).
-      if (previousState === 'awaiting-input') {
+      //
+      // Consult BOTH the tailer's own previous classification AND the
+      // authoritative reducer status: awaiting-input can be set by the
+      // PreToolUse hook without the tailer ever classifying it (fs.watch
+      // read-coalescing can skip the in-between read), in which case
+      // `previousState` is stale `working` and only the authoritative status
+      // reveals that we must force the resume. A `working` classification means
+      // no interactive tool is still pending, so clearing awaiting-input here is
+      // always correct.
+      if (previousState === 'awaiting-input' || authoritativeStatus === 'awaiting-input') {
         return { kind: 'turn-started', at: Date.now(), force: true };
       }
       // NOT forced: the tailer only *observes* that a turn is in progress, so it
