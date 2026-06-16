@@ -1,4 +1,14 @@
+import {
+  teamLeader,
+  teamWorkers,
+  type AgentTeam,
+  type AgentTeamMember,
+  type TeamRouting,
+} from '@shared/agent-team';
 import type { RuntimeId } from '@shared/runtime-registry';
+import type { MemberAccent } from '@shared/team-room';
+import { agentTeamsService } from '@main/core/agent-teams/agent-teams-service';
+import { agentsConfigService } from '@main/core/agents-config/agents-config-service';
 import { addMember, createRoom, postMessage } from './store';
 
 /**
@@ -83,6 +93,142 @@ export async function seedReviewRoom(params: SeedReviewRoomParams): Promise<stri
 
 function joinRolePrompt(base: string, extra?: string): string {
   return extra && extra.trim() ? `${base}\n\n${extra.trim()}` : base;
+}
+
+// ── Generic: instantiate a room from a decoupled Agent Team template ──────────
+
+const TEAM_ACCENTS: MemberAccent[] = ['amber', 'teal', 'violet', 'slate'];
+
+/** Resolve a team member's base system prompt from its agentRef or inline text. */
+async function resolveMemberSystemPrompt(member: AgentTeamMember): Promise<string> {
+  if (member.agentRef) {
+    const agent = member.agentRef.startsWith('builtin:')
+      ? await agentsConfigService.getBySlug(member.agentRef)
+      : await agentsConfigService.get(member.agentRef);
+    if (agent?.systemPrompt) return agent.systemPrompt;
+  }
+  return member.systemPrompt ?? '';
+}
+
+/** The @-routing addendum that turns a generic team into a scripted collaboration. */
+function routingAddendum(
+  routing: TeamRouting,
+  kind: 'leader' | 'worker',
+  ctx: { leaderHandle: string; workerHandles: string[] }
+): string {
+  const workers = ctx.workerHandles.map((h) => `@${h}`).join(' ');
+  if (routing === 'review-loop') {
+    return kind === 'leader'
+      ? [
+          `When your implementation round is complete, hand off in your team message to ${workers || '@you'} for review.`,
+          `When they send back fixes, address them and hand back for another review round.`,
+        ].join('\n')
+      : [
+          `Review the implementer's work against the lead's original requirement — do not implement.`,
+          `In your team message: if there are issues, give @${ctx.leaderHandle} concrete fixes and hand back;`,
+          `if it fully meets the requirement, hand off to @you (the lead) with a one-line PASS.`,
+        ].join('\n');
+  }
+  if (routing === 'fan-out') {
+    return kind === 'leader'
+      ? workers
+        ? `Plan the work, then in your team message @mention each teammate (${workers}) with their part.`
+        : `Complete the work for this requirement.`
+      : `Do your part based on the lead's plan, then hand off to @you (the lead) when done.`;
+  }
+  return ''; // freeform — rely on the generic teammate etiquette
+}
+
+/**
+ * Instantiate a chat room from an Agent Team template: a lead (human) + each
+ * member, with routing-aware role prompts, then kick off by @mentioning the
+ * leader. The conductor drives the iterative @-routing from there.
+ */
+export async function seedRoomFromTeam(args: {
+  team: AgentTeam;
+  projectId: string;
+  taskId: string;
+  requirement: string;
+}): Promise<string> {
+  const { team } = args;
+  const leader = teamLeader(team);
+  if (!leader) throw new Error('Team has no members.');
+  const workers = teamWorkers(team);
+
+  const room = await createRoom({
+    projectId: args.projectId,
+    taskId: args.taskId,
+    name: team.name,
+    preset: team.routing === 'review-loop' ? 'review-loop' : 'freeform',
+  });
+
+  const lead = await addMember({
+    roomId: room.id,
+    handle: 'you',
+    displayName: 'You',
+    role: 'lead',
+    runtime: null,
+    accent: 'terra',
+  });
+
+  // Assign unique handles (reserve 'you' for the lead).
+  const used = new Set<string>(['you']);
+  const ordered = [leader, ...workers];
+  const handles = ordered.map((m, i) => {
+    let h = m.handle.toLowerCase().replace(/[^a-z0-9_-]/g, '') || `member-${i + 1}`;
+    while (used.has(h)) h = `${h}-${i + 1}`;
+    used.add(h);
+    return h;
+  });
+  const leaderHandle = handles[0];
+  const workerHandles = handles.slice(1);
+
+  for (let i = 0; i < ordered.length; i++) {
+    const member = ordered[i];
+    const isLeader = i === 0;
+    const base = await resolveMemberSystemPrompt(member);
+    const addendum = routingAddendum(team.routing, isLeader ? 'leader' : 'worker', {
+      leaderHandle,
+      workerHandles,
+    });
+    await addMember({
+      roomId: room.id,
+      handle: handles[i],
+      displayName: member.displayName,
+      role: isLeader ? 'leader' : 'worker',
+      runtime: member.runtime,
+      systemPrompt: joinRolePrompt(base, addendum),
+      accent: TEAM_ACCENTS[i % TEAM_ACCENTS.length],
+    });
+  }
+
+  await postMessage({
+    roomId: room.id,
+    authorMemberId: lead.id,
+    kind: 'text',
+    body: `@${leaderHandle} ${args.requirement}`,
+  });
+
+  return room.id;
+}
+
+export type CreateRoomFromTeamParams = {
+  projectId: string;
+  taskId: string;
+  teamId: string;
+  requirement: string;
+};
+
+/** Resolve a team template by id, then instantiate a room from it. */
+export async function createRoomFromTeam(params: CreateRoomFromTeamParams): Promise<string> {
+  const team = await agentTeamsService.get(params.teamId);
+  if (!team) throw new Error(`Team ${params.teamId} not found`);
+  return seedRoomFromTeam({
+    team,
+    projectId: params.projectId,
+    taskId: params.taskId,
+    requirement: params.requirement,
+  });
 }
 
 const ACCENT_CYCLE = ['amber', 'teal', 'violet', 'slate'] as const;

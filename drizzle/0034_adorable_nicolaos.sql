@@ -1,0 +1,1 @@
+ALTER TABLE `agent_teams` ADD `routing` text DEFAULT 'freeform' NOT NULL;

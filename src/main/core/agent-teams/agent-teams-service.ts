@@ -6,16 +6,22 @@ import {
   type AgentTeam,
   type AgentTeamDraft,
   type AgentTeamMember,
+  type TeamRouting,
 } from '@shared/agent-team';
 import { isValidRuntimeId } from '@shared/runtime-registry';
 import { db } from '@main/db/client';
 import { agentTeams, type AgentTeamRow } from '@main/db/schema';
+
+const ROUTINGS: TeamRouting[] = ['review-loop', 'fan-out', 'freeform'];
 
 function rowToTeam(row: AgentTeamRow): AgentTeam {
   return {
     id: row.id,
     name: row.name,
     icon: row.icon,
+    routing: ROUTINGS.includes(row.routing as TeamRouting)
+      ? (row.routing as TeamRouting)
+      : 'freeform',
     builtin: false,
     members: Array.isArray(row.members) ? row.members : [],
     createdAt: row.createdAt,
@@ -54,6 +60,7 @@ function sanitizeDraft(draft: AgentTeamDraft): AgentTeamDraft {
   return {
     name: draft.name.trim() || 'Untitled team',
     icon: draft.icon.trim() || '👥',
+    routing: ROUTINGS.includes(draft.routing) ? draft.routing : 'freeform',
     members: sanitizeMembers(draft.members),
   };
 }
@@ -77,7 +84,13 @@ class AgentTeamsService {
     const id = randomUUID();
     await db
       .insert(agentTeams)
-      .values({ id, name: clean.name, icon: clean.icon, members: clean.members })
+      .values({
+        id,
+        name: clean.name,
+        icon: clean.icon,
+        routing: clean.routing,
+        members: clean.members,
+      })
       .execute();
     const created = await this.get(id);
     if (!created) throw new Error('Failed to read back created team');
@@ -90,7 +103,7 @@ class AgentTeamsService {
     const clean = sanitizeDraft(draft);
     await db
       .update(agentTeams)
-      .set({ name: clean.name, icon: clean.icon, members: clean.members })
+      .set({ name: clean.name, icon: clean.icon, routing: clean.routing, members: clean.members })
       .where(eq(agentTeams.id, id))
       .execute();
     const updated = await this.get(id);
@@ -107,7 +120,12 @@ class AgentTeamsService {
   async duplicate(id: string): Promise<AgentTeam> {
     const source = await this.get(id);
     if (!source) throw new Error(`Team ${id} not found`);
-    return this.create({ name: `${source.name} copy`, icon: source.icon, members: source.members });
+    return this.create({
+      name: `${source.name} copy`,
+      icon: source.icon,
+      routing: source.routing,
+      members: source.members,
+    });
   }
 }
 

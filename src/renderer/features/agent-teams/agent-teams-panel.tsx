@@ -1,12 +1,28 @@
 import { Copy, Crown, Plus, Trash2, Users, X } from 'lucide-react';
 import { useState } from 'react';
-import { isBuiltinTeamId, type AgentTeam, type AgentTeamMember } from '@shared/agent-team';
+import {
+  isBuiltinTeamId,
+  type AgentTeam,
+  type AgentTeamMember,
+  type TeamRouting,
+} from '@shared/agent-team';
 import { getRuntime, RUNTIMES } from '@shared/runtime-registry';
 import { useAgents } from '@renderer/features/agents-config/use-agents';
 import { cn } from '@renderer/utils/utils';
 import { useAgentTeams } from './use-agent-teams';
 
-type Editing = { name: string; icon: string; members: AgentTeamMember[] } | null;
+type Editing = {
+  name: string;
+  icon: string;
+  routing: TeamRouting;
+  members: AgentTeamMember[];
+} | null;
+
+const ROUTING_LABELS: Record<TeamRouting, string> = {
+  'review-loop': 'Review loop (iterate until pass)',
+  'fan-out': 'Fan-out (lead plans, team executes once)',
+  freeform: 'Freeform (open @-mention chat)',
+};
 
 export function AgentTeamsMainPanel() {
   const { teams, create, update, remove, duplicate } = useAgentTeams();
@@ -22,11 +38,16 @@ export function AgentTeamsMainPanel() {
 
   const startNew = () => {
     setSelectedId('__new__');
-    setDraft({ name: '', icon: '👥', members: [] });
+    setDraft({ name: '', icon: '👥', routing: 'freeform', members: [] });
   };
   const startEdit = (team: AgentTeam) => {
     setSelectedId(team.id);
-    setDraft({ name: team.name, icon: team.icon, members: team.members.map((m) => ({ ...m })) });
+    setDraft({
+      name: team.name,
+      icon: team.icon,
+      routing: team.routing,
+      members: team.members.map((m) => ({ ...m })),
+    });
   };
 
   const save = async () => {
@@ -131,6 +152,7 @@ export function AgentTeamsMainPanel() {
                 </>
               )}
             </div>
+            <p className="mb-2 text-xs text-foreground-muted">{ROUTING_LABELS[selected.routing]}</p>
             <MemberList members={selected.members} />
             {isBuiltin && (
               <p className="mt-3 text-xs text-foreground-muted">
@@ -226,6 +248,21 @@ function TeamEditor({
             className="flex-1 rounded-md border border-border bg-background-1 px-3 py-2 text-sm outline-none focus:border-primary/60"
           />
         </div>
+
+        <label className="flex flex-col gap-1.5">
+          <span className="text-xs font-medium text-foreground-muted">Collaboration</span>
+          <select
+            value={draft.routing}
+            onChange={(e) => onChange({ ...draft, routing: e.target.value as TeamRouting })}
+            className="rounded-md border border-border bg-background-1 px-3 py-2 text-sm outline-none focus:border-primary/60"
+          >
+            {(Object.keys(ROUTING_LABELS) as TeamRouting[]).map((r) => (
+              <option key={r} value={r}>
+                {ROUTING_LABELS[r]}
+              </option>
+            ))}
+          </select>
+        </label>
 
         <div className="flex flex-col gap-1.5">
           <span className="text-xs font-medium text-foreground-muted">

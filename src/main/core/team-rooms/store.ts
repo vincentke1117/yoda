@@ -111,6 +111,28 @@ export async function getRoomsForProject(projectId: string): Promise<TeamRoom[]>
   return rows.map(mapRoom);
 }
 
+/** The active room backing a task (most recent), if any — drives the task's Room tab. */
+export async function getRoomForTask(
+  projectId: string,
+  taskId: string
+): Promise<RoomSnapshot | null> {
+  const [room] = await db
+    .select()
+    .from(teamRooms)
+    .where(
+      and(
+        eq(teamRooms.projectId, projectId),
+        eq(teamRooms.taskId, taskId),
+        eq(teamRooms.status, 'active')
+      )
+    )
+    .orderBy(desc(teamRooms.createdAt))
+    .limit(1);
+  if (!room) return null;
+  const [members, messages] = await Promise.all([getMembers(room.id), getMessages(room.id)]);
+  return { room: mapRoom(room), members, messages };
+}
+
 export async function getAllRooms(): Promise<TeamRoom[]> {
   const rows = await db
     .select()

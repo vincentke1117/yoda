@@ -724,6 +724,8 @@ export const agentTeams = sqliteTable('agent_teams', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
   icon: text('icon').notNull().default(''),
+  /** TeamRouting: 'review-loop' | 'fan-out' | 'freeform'. */
+  routing: text('routing').notNull().default('freeform'),
   members: text('members', { mode: 'json' })
     .notNull()
     .$type<AgentTeamMember[]>()
