@@ -1471,6 +1471,42 @@
       "automation": "Automation"
     }
   },
+  "agentRoom": {
+    "rooms": "Rooms",
+    "newRoom": "New Agent Room",
+    "noRooms": "No rooms yet. Create one to gather a few agents into a chat.",
+    "empty": "An Agent Room is a group chat where each teammate is an agent. @mention one to assign it a task — it spins up its own session and reports back.",
+    "agentCount": "{{count}} agents",
+    "handoff": "hand-off",
+    "openSession": "open session",
+    "hideSession": "hide session",
+    "composerPlaceholder": "Message the room — @mention a teammate to assign a task…",
+    "preset": { "review": "Review loop", "freeform": "Freeform" },
+    "mode": { "review": "Review loop", "freeform": "Freeform" },
+    "taskExisting": "Existing task",
+    "taskNew": "New worktree",
+    "selectProject": "Select a project",
+    "selectTask": "Select a task",
+    "noAgents": "No agents in your library yet. Create one in the Agents section first.",
+    "creating": "Creating…",
+    "createStart": "Create & start",
+    "field": {
+      "project": "Project",
+      "task": "Task (worktree)",
+      "taskName": "New task name",
+      "roomName": "Room name",
+      "roomNamePlaceholder": "e.g. Auth refactor review",
+      "requirement": "Requirement (the lead's opening ask)",
+      "requirementPlaceholder": "What should the implementer build / fix?",
+      "implementer": "Implementer",
+      "reviewer": "Reviewer",
+      "members": "Members (from your Agents library)"
+    },
+    "errors": {
+      "localOnly": "New worktrees are only supported for local projects.",
+      "taskCreate": "Failed to create the task."
+    }
+  },
   "promptLibrary": {
     "title": "Prompts",
     "principles": {

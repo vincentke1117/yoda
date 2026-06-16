@@ -101,6 +101,27 @@ class AgentRoomStore {
     await this.selectRoom(roomId);
   }
 
+  async createFreeformRoom(params: {
+    projectId: string;
+    taskId: string;
+    name: string;
+    members: { handle: string; displayName: string; runtime: string; systemPrompt?: string }[];
+  }): Promise<void> {
+    const roomId = await rpc.teamRooms.createFreeformRoom({
+      projectId: params.projectId,
+      taskId: params.taskId,
+      name: params.name,
+      members: params.members.map((m) => ({
+        handle: m.handle,
+        displayName: m.displayName,
+        runtime: m.runtime as never,
+        systemPrompt: m.systemPrompt,
+      })),
+    });
+    await this.loadRooms();
+    await this.selectRoom(roomId);
+  }
+
   setInspectedConversation(conversationId: string | null): void {
     this.inspectedConversationId =
       this.inspectedConversationId === conversationId ? null : conversationId;

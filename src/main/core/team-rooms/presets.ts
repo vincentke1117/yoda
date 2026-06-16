@@ -84,3 +84,57 @@ export async function seedReviewRoom(params: SeedReviewRoomParams): Promise<stri
 function joinRolePrompt(base: string, extra?: string): string {
   return extra && extra.trim() ? `${base}\n\n${extra.trim()}` : base;
 }
+
+const ACCENT_CYCLE = ['amber', 'teal', 'violet', 'slate'] as const;
+
+export type FreeformMemberSeed = {
+  handle: string;
+  displayName: string;
+  runtime: RuntimeId;
+  systemPrompt?: string;
+  autoApprove?: boolean;
+};
+
+export type SeedFreeformRoomParams = {
+  projectId: string;
+  taskId: string;
+  name: string;
+  members: FreeformMemberSeed[];
+};
+
+/** Create a freeform room: a lead + the chosen agent members, no auto-routing. */
+export async function seedFreeformRoom(params: SeedFreeformRoomParams): Promise<string> {
+  const room = await createRoom({
+    projectId: params.projectId,
+    taskId: params.taskId,
+    name: params.name,
+    preset: 'freeform',
+  });
+  await addMember({
+    roomId: room.id,
+    handle: 'you',
+    displayName: 'You',
+    role: 'lead',
+    runtime: null,
+    accent: 'terra',
+  });
+  // Dedupe handles so mention routing stays unambiguous within the room.
+  const seen = new Set<string>(['you']);
+  let i = 0;
+  for (const m of params.members) {
+    let handle = m.handle;
+    while (seen.has(handle)) handle = `${m.handle}-${++i}`;
+    seen.add(handle);
+    await addMember({
+      roomId: room.id,
+      handle,
+      displayName: m.displayName,
+      role: 'member',
+      runtime: m.runtime,
+      systemPrompt: m.systemPrompt ?? '',
+      autoApprove: m.autoApprove ?? false,
+      accent: ACCENT_CYCLE[i % ACCENT_CYCLE.length],
+    });
+  }
+  return room.id;
+}

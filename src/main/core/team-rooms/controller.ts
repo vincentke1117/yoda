@@ -1,6 +1,11 @@
 import { createRPCController } from '@shared/ipc/rpc';
 import type { RoomMember, RoomMessage, RoomSnapshot, TeamRoom } from '@shared/team-room';
-import { seedReviewRoom, type SeedReviewRoomParams } from './presets';
+import {
+  seedFreeformRoom,
+  seedReviewRoom,
+  type SeedFreeformRoomParams,
+  type SeedReviewRoomParams,
+} from './presets';
 import {
   addMember,
   createRoom,
@@ -17,6 +22,7 @@ import {
 export const teamRoomController = createRPCController({
   createRoom: (params: CreateRoomParams): Promise<TeamRoom> => createRoom(params),
   createReviewRoom: (params: SeedReviewRoomParams): Promise<string> => seedReviewRoom(params),
+  createFreeformRoom: (params: SeedFreeformRoomParams): Promise<string> => seedFreeformRoom(params),
   getAllRooms: (): Promise<TeamRoom[]> => getAllRooms(),
   getRoomsForProject: (projectId: string): Promise<TeamRoom[]> => getRoomsForProject(projectId),
   getRoom: (roomId: string): Promise<RoomSnapshot | null> => getRoom(roomId),

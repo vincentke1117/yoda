@@ -219,8 +219,12 @@ void app.whenReady().then(async () => {
     log.warn('Failed to resume pending review orchestrations:', e);
   });
 
-  // Team Room @-mention routing engine: subscribe to room message posts.
+  // Team Room @-mention routing engine: subscribe to room message posts, then
+  // recover any room left mid-turn by a previous app lifetime.
   roomConductor.initialize();
+  roomConductor.resumePending().catch((e) => {
+    log.warn('Failed to resume pending team-room turns:', e);
+  });
 
   mobileGatewayService.initialize().catch((e) => {
     log.error('Failed to start mobile gateway service:', e);
