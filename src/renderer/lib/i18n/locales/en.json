@@ -294,6 +294,7 @@
       "github": "GitHub",
       "interface": "Interface",
       "terminal": "Terminal",
+      "tmux": "tmux",
       "keyboardShortcuts": "Keyboard shortcuts",
       "kanban": "Kanban",
       "aiLab": "AI Lab",
@@ -418,7 +419,10 @@
       "keyboardShortcuts": "Keyboard shortcuts"
     },
     "terminalTab": {
-      "description": "Configure terminal font, history, clipboard behavior, and tmux session reuse."
+      "description": "Configure terminal font, history, and clipboard behavior."
+    },
+    "tmuxTab": {
+      "description": "Run agent sessions and terminals in tmux sessions so they survive Yoda restarts."
     },
     "keyboardShortcutsTab": {
       "description": "Customize keyboard shortcuts for app actions."
