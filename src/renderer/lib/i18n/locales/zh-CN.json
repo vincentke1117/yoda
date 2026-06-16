@@ -358,6 +358,7 @@
       "textPlaceholder": "追加到 system prompt 之后的原则内容",
       "toggle": "启用原则",
       "remove": "移除原则",
+      "reorder": "拖动排序",
       "empty": "暂无原则。"
     },
     "statusline": {

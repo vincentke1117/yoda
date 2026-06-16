@@ -1,4 +1,19 @@
-import { Plus, Trash2 } from 'lucide-react';
+import {
+  closestCenter,
+  DndContext,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { GripVertical, Plus, Trash2 } from 'lucide-react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import type { PromptPrinciple } from '@shared/app-settings';
@@ -22,52 +37,36 @@ const PromptsSettingsCard: React.FC = () => {
   const patchItem = (id: string, patch: Partial<PromptPrinciple>) =>
     setItems(items.map((item) => (item.id === id ? { ...item, ...patch } : item)));
 
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+
+  const onDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIdx = items.findIndex((item) => item.id === active.id);
+    const newIdx = items.findIndex((item) => item.id === over.id);
+    if (oldIdx === -1 || newIdx === -1) return;
+    setItems(arrayMove(items, oldIdx, newIdx));
+  };
+
   return (
     <div className="flex flex-col gap-3">
       <p className="text-xs text-foreground-passive">{t('settings.prompts.description')}</p>
       <div className="flex flex-col gap-2">
-        {items.map((item) => (
-          <div
-            key={item.id}
-            className="flex flex-col gap-2 rounded-xl border border-border/60 bg-muted/10 p-2"
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+          <SortableContext
+            items={items.map((item) => item.id)}
+            strategy={verticalListSortingStrategy}
           >
-            <div className="flex items-center gap-2">
-              <Switch
-                size="sm"
-                checked={item.enabled}
-                onCheckedChange={(checked) => patchItem(item.id, { enabled: checked })}
-                aria-label={t('settings.prompts.toggle')}
+            {items.map((item) => (
+              <SortablePrincipleRow
+                key={item.id}
+                item={item}
+                patchItem={patchItem}
+                onRemove={() => setItems(items.filter((entry) => entry.id !== item.id))}
               />
-              <Input
-                className="h-7 min-w-0 flex-1 text-xs"
-                defaultValue={item.name}
-                placeholder={t('settings.prompts.namePlaceholder')}
-                onBlur={(event) => {
-                  const next = event.target.value.trim();
-                  if (next !== item.name) patchItem(item.id, { name: next });
-                }}
-              />
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-7 shrink-0 text-foreground-passive hover:text-foreground"
-                aria-label={t('settings.prompts.remove')}
-                onClick={() => setItems(items.filter((entry) => entry.id !== item.id))}
-              >
-                <Trash2 className="size-3.5" />
-              </Button>
-            </div>
-            <Textarea
-              className="min-h-16 text-xs"
-              defaultValue={item.text}
-              placeholder={t('settings.prompts.textPlaceholder')}
-              onBlur={(event) => {
-                const next = event.target.value;
-                if (next !== item.text) patchItem(item.id, { text: next });
-              }}
-            />
-          </div>
-        ))}
+            ))}
+          </SortableContext>
+        </DndContext>
         {!isLoading && items.length === 0 ? (
           <p className="text-xs text-foreground-passive">{t('settings.prompts.empty')}</p>
         ) : null}
@@ -85,6 +84,88 @@ const PromptsSettingsCard: React.FC = () => {
           {t('settings.prompts.addPrinciple')}
         </Button>
       </div>
+    </div>
+  );
+};
+
+type SortablePrincipleRowProps = {
+  item: PromptPrinciple;
+  patchItem: (id: string, patch: Partial<PromptPrinciple>) => void;
+  onRemove: () => void;
+};
+
+/**
+ * One principle row. Drag listeners live on the grip handle only — spreading
+ * them on the row would swallow pointer events on the switch, inputs, and
+ * textarea inside it.
+ */
+const SortablePrincipleRow: React.FC<SortablePrincipleRowProps> = ({
+  item,
+  patchItem,
+  onRemove,
+}) => {
+  const { t } = useTranslation();
+  const { setNodeRef, transform, transition, isDragging, listeners, attributes } = useSortable({
+    id: item.id,
+  });
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+    zIndex: isDragging ? 1 : 'auto',
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="flex flex-col gap-2 rounded-xl border border-border/60 bg-muted/10 p-2"
+    >
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          className="flex size-7 shrink-0 cursor-grab touch-none items-center justify-center text-foreground-passive hover:text-foreground active:cursor-grabbing"
+          aria-label={t('settings.prompts.reorder')}
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="size-3.5" />
+        </button>
+        <Switch
+          size="sm"
+          checked={item.enabled}
+          onCheckedChange={(checked) => patchItem(item.id, { enabled: checked })}
+          aria-label={t('settings.prompts.toggle')}
+        />
+        <Input
+          className="h-7 min-w-0 flex-1 text-xs"
+          defaultValue={item.name}
+          placeholder={t('settings.prompts.namePlaceholder')}
+          onBlur={(event) => {
+            const next = event.target.value.trim();
+            if (next !== item.name) patchItem(item.id, { name: next });
+          }}
+        />
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-7 shrink-0 text-foreground-passive hover:text-foreground"
+          aria-label={t('settings.prompts.remove')}
+          onClick={onRemove}
+        >
+          <Trash2 className="size-3.5" />
+        </Button>
+      </div>
+      <Textarea
+        className="min-h-16 text-xs"
+        defaultValue={item.text}
+        placeholder={t('settings.prompts.textPlaceholder')}
+        onBlur={(event) => {
+          const next = event.target.value;
+          if (next !== item.text) patchItem(item.id, { text: next });
+        }}
+      />
     </div>
   );
 };

@@ -358,6 +358,7 @@
       "textPlaceholder": "Principle text appended after the system prompt",
       "toggle": "Enable principle",
       "remove": "Remove principle",
+      "reorder": "Drag to reorder",
       "empty": "No principles yet."
     },
     "statusline": {
