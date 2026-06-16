@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Anchor,
   ArrowUp,
@@ -772,6 +772,7 @@ export const HomeComposer = observer(function HomeComposer({
     queryKey: ['agentTeams'],
     queryFn: () => rpc.agentTeams.list(),
   });
+  const queryClient = useQueryClient();
   const selectedTeamId = draft?.selectedTeamId ?? BUILTIN_STARTUP_TEAM_ID;
   const setSelectedTeamId = useCallback(
     (next: string) => updateDraft({ selectedTeamId: next }),
@@ -1537,6 +1538,11 @@ export const HomeComposer = observer(function HomeComposer({
               teamId: activeTeam.id,
               requirement,
             })
+            .then(() =>
+              queryClient.invalidateQueries({
+                queryKey: ['roomForTask', taskScopedTarget.projectId, taskScopedTarget.taskId],
+              })
+            )
             .catch((error: unknown) => {
               toast.error(
                 error instanceof Error ? error.message : 'Agent team orchestration failed.'
@@ -1818,6 +1824,11 @@ export const HomeComposer = observer(function HomeComposer({
               requirement: teamRequirement,
             })
           )
+          .then(() =>
+            queryClient.invalidateQueries({
+              queryKey: ['roomForTask', mounted.data.id, taskId],
+            })
+          )
           .catch((error: unknown) => {
             toast.error(
               error instanceof Error ? error.message : 'Agent team orchestration failed.'
@@ -1870,6 +1881,7 @@ export const HomeComposer = observer(function HomeComposer({
     compareRuntimes,
     reviewerRuntime,
     activeTeam,
+    queryClient,
     userAgents,
     slotAgentId,
     autoApproveDefaults,

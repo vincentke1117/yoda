@@ -98,7 +98,7 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
   );
 }
 
-const RoomChat = observer(function RoomChat({ snapshot }: { snapshot: RoomSnapshot }) {
+export const RoomChat = observer(function RoomChat({ snapshot }: { snapshot: RoomSnapshot }) {
   const { t } = useTranslation();
   const scrollRef = useRef<HTMLDivElement>(null);
   const byId = useMemo(() => new Map(snapshot.members.map((m) => [m.id, m])), [snapshot.members]);
