@@ -126,6 +126,7 @@ export const DEFAULT_WRITE_FIELDS: ShareableProjectSettingsWriteField[] = [
     (descriptor) => descriptor.id
   ),
   'promptPrinciples',
+  'composerDefaults',
 ];
 
 export const SHAREABLE_FIELD_FORM_KEY = Object.fromEntries(

@@ -1,4 +1,5 @@
 import z from 'zod';
+import { RUNTIME_IDS } from './runtime-registry';
 
 export const PROJECT_CONFIG_FILE = '.yoda.json';
 
@@ -76,12 +77,37 @@ export const projectDocsSettingsSchema = z.object({
 
 export type ProjectDocsSettings = z.infer<typeof projectDocsSettingsSchema>;
 
+export const composerRunModeValues = ['normal', 'brainstorm', 'compare', 'review', 'team'] as const;
+export const composerStrategyKindValues = ['new-branch', 'no-worktree'] as const;
+
+/**
+ * A project's overrides for the home composer's run configuration. Every field
+ * is optional: absent means "inherit the user's global homeDraft default",
+ * present means "this project overrides it". Stored in project settings so it
+ * can be committed to `.yoda.json` and shared across the team — the exact same
+ * layering model as {@link projectPromptPrinciplesSchema}.
+ */
+export const composerDefaultsSchema = z.object({
+  runtimeId: z.enum(RUNTIME_IDS).optional(),
+  runMode: z.enum(composerRunModeValues).optional(),
+  baseBranch: z.string().optional(),
+  standardStrategyKind: z.enum(composerStrategyKindValues).optional(),
+  reviewStrategyKind: z.enum(composerStrategyKindValues).optional(),
+  compareRuntimes: z.array(z.enum(RUNTIME_IDS)).optional(),
+  reviewerRuntime: z.enum(RUNTIME_IDS).optional(),
+  teamRuntimes: z.record(z.string(), z.enum(RUNTIME_IDS)).optional(),
+  attachImagesAsPaths: z.boolean().optional(),
+});
+
+export type ComposerDefaults = z.infer<typeof composerDefaultsSchema>;
+
 export const shareableProjectSettingsSchema = z.object({
   preservePatterns: preservePatternsSchema.optional(),
   shellSetup: z.string().optional(),
   scripts: shareableProjectScriptsSettingsSchema.optional(),
   quickActions: z.array(quickActionSchema).optional(),
   promptPrinciples: projectPromptPrinciplesSchema.optional(),
+  composerDefaults: composerDefaultsSchema.optional(),
   docs: projectDocsSettingsSchema.optional(),
 });
 
@@ -152,6 +178,7 @@ export type ShareableProjectSettingsWriteField =
   | 'scripts.teardown'
   | 'quickActions'
   | 'promptPrinciples'
+  | 'composerDefaults'
   | 'docs.localPath'
   | 'docs.cloudUrl';
 
@@ -163,6 +190,7 @@ export const SHAREABLE_PROJECT_SETTINGS_WRITE_FIELDS = [
   'scripts.teardown',
   'quickActions',
   'promptPrinciples',
+  'composerDefaults',
   'docs.localPath',
   'docs.cloudUrl',
 ] as const satisfies ShareableProjectSettingsWriteField[];
@@ -192,6 +220,7 @@ export function emptyProjectSettingsOverrideState(): ProjectSettingsOverrideStat
     'scripts.teardown': [],
     quickActions: [],
     promptPrinciples: [],
+    composerDefaults: [],
     'docs.localPath': [],
     'docs.cloudUrl': [],
   };

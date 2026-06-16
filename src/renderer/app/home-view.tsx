@@ -51,7 +51,7 @@ import type { Agent } from '@shared/agents';
 import { BUILTIN_AGENT_KEYS } from '@shared/builtin-agents';
 import type { ClaudeMemoryFile } from '@shared/conversations';
 import type { Branch } from '@shared/git';
-import type { ProjectPromptPrinciples } from '@shared/project-settings';
+import type { ComposerDefaults, ProjectPromptPrinciples } from '@shared/project-settings';
 import { INTERNAL_PROJECT_ID } from '@shared/projects';
 import { withSystemPrompt } from '@shared/prompt-format';
 import { REVIEW_MAX_ROUNDS } from '@shared/review-protocol';
@@ -128,6 +128,11 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@renderer/lib/ui/toolti
 import { formatBytes } from '@renderer/utils/formatBytes';
 import { isImeComposing } from '@renderer/utils/ime';
 import { cn } from '@renderer/utils/utils';
+import {
+  dualField,
+  withComposerDefault,
+  type ComposerOverrideScope,
+} from './composer-project-overrides';
 import {
   applyMarkdownEnterEdit,
   applyMarkdownTabEdit,
@@ -1263,8 +1268,7 @@ export const HomeComposer = observer(function HomeComposer({
   const reviewSubmitKind: TaskSubmitStrategyKind =
     effectiveReviewStrategyKind === 'new-branch' ? 'new-branch' : inPlaceKind;
   const targetProvisionedTask = asProvisioned(taskScopedTaskStore);
-  const attachImagesAsPaths = draft?.attachImagesAsPaths ?? false;
-  const setAttachImagesAsPaths = useCallback(
+  const setAttachImagesAsPathsGlobal = useCallback(
     (next: boolean) => {
       updateDraft({ attachImagesAsPaths: next });
     },
@@ -1298,6 +1302,30 @@ export const HomeComposer = observer(function HomeComposer({
     },
     [projectSettingsStore, projectSettings]
   );
+  // Project-level composer defaults (run config + attach mode). Same layering
+  // as promptPrinciples: a present field overrides the user's global homeDraft
+  // for this project; an absent field inherits it. Edited into project settings
+  // and shared via `.yoda.json`.
+  const hasProjectOverrideTarget = Boolean(selectedProjectId);
+  const composerDefaults = projectSettings?.composerDefaults;
+  const setComposerDefault = useCallback(
+    <K extends keyof ComposerDefaults>(field: K, value: ComposerDefaults[K] | undefined) => {
+      if (!projectSettingsStore || !projectSettings) return;
+      void projectSettingsStore.save({
+        ...projectSettings,
+        composerDefaults: withComposerDefault(projectSettings.composerDefaults, field, value),
+      });
+    },
+    [projectSettingsStore, projectSettings]
+  );
+  const attachImagesField = dualField<boolean>({
+    override: composerDefaults?.attachImagesAsPaths,
+    globalValue: draft?.attachImagesAsPaths ?? false,
+    setGlobal: setAttachImagesAsPathsGlobal,
+    setOverride: (value) => setComposerDefault('attachImagesAsPaths', value),
+    hasProject: hasProjectOverrideTarget,
+  });
+  const attachImagesAsPaths = attachImagesField.value;
   const setGlobalPrincipleProjectOverride = useCallback(
     (principle: { id: string; enabled: boolean }, enabled: boolean) => {
       saveProjectPromptPrinciples(setGlobalOverride(projectPromptPrinciples, principle, enabled));
@@ -2714,11 +2742,18 @@ export const HomeComposer = observer(function HomeComposer({
                     content={t('home.attachImagesAsPathsDesc')}
                   />
                 </div>
-                <Switch
-                  size="sm"
-                  checked={attachImagesAsPaths}
-                  onCheckedChange={setAttachImagesAsPaths}
-                />
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <ComposerScopeToggle
+                    source={attachImagesField.source}
+                    canOverride={attachImagesField.canOverride}
+                    onChange={attachImagesField.setSource}
+                  />
+                  <Switch
+                    size="sm"
+                    checked={attachImagesAsPaths}
+                    onCheckedChange={attachImagesField.setValue}
+                  />
+                </div>
               </div>
               <div className="mt-2 flex flex-col gap-1 border-t border-border/60 pt-2">
                 <ComposerSettingsHeader
@@ -2807,6 +2842,49 @@ export const HomeComposer = observer(function HomeComposer({
     </div>
   );
 });
+
+/**
+ * Inherit/override pill for a single composer setting. `global` means the row
+ * follows the user's global default; `project` overrides it for the current
+ * project (persisted to project settings / `.yoda.json`). Disabled with a hint
+ * when no project is selected, since there is nothing to override against.
+ */
+function ComposerScopeToggle({
+  source,
+  canOverride,
+  onChange,
+}: {
+  source: ComposerOverrideScope;
+  canOverride: boolean;
+  onChange: (source: ComposerOverrideScope) => void;
+}) {
+  const { t } = useTranslation();
+  const isProject = source === 'project';
+  const disabled = !canOverride && !isProject;
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      title={
+        disabled
+          ? t('home.composerScopeProjectRequired')
+          : isProject
+            ? t('home.composerScopeOverrideTooltip')
+            : t('home.composerScopeInheritTooltip')
+      }
+      onClick={() => onChange(isProject ? 'global' : 'project')}
+      className={cn(
+        'flex h-5 shrink-0 items-center rounded-full border px-1.5 text-[10px] font-medium transition-colors',
+        isProject
+          ? 'border-primary/40 bg-primary/10 text-primary'
+          : 'border-border bg-background-1 text-foreground-passive hover:text-foreground',
+        disabled && 'pointer-events-none opacity-40'
+      )}
+    >
+      {isProject ? t('home.composerScopeProject') : t('home.composerScopeGlobal')}
+    </button>
+  );
+}
 
 /** Quiet micro-header for a composer-settings popover section: label + optional hint + trailing action. */
 function ComposerSettingsHeader({

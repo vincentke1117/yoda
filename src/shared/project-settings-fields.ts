@@ -1,5 +1,6 @@
 import {
   SHAREABLE_PROJECT_SETTINGS_WRITE_FIELDS,
+  type ComposerDefaults,
   type ProjectPromptPrinciples,
   type ProjectSettings,
   type QuickAction,
@@ -140,6 +141,24 @@ export const SHAREABLE_FIELD_ACCESSORS = {
       return lines.length ? lines.join('\n') : null;
     },
   },
+  composerDefaults: {
+    path: ['composerDefaults'],
+    get: (settings) => settings.composerDefaults,
+    set: (settings, value) => {
+      settings.composerDefaults = value as ComposerDefaults | undefined;
+    },
+    clear: (settings) => {
+      delete settings.composerDefaults;
+    },
+    displayValue: (settings) => {
+      const keys = settings.composerDefaults
+        ? (Object.keys(settings.composerDefaults) as (keyof ComposerDefaults)[]).filter(
+            (key) => settings.composerDefaults?.[key] !== undefined
+          )
+        : [];
+      return keys.length ? keys.join(', ') : null;
+    },
+  },
   'docs.localPath': {
     path: ['docs', 'localPath'],
     get: (settings) => settings.docs?.localPath,
@@ -176,6 +195,7 @@ export function clearShareableProjectSettingsFields<T extends ProjectSettings>(
     scripts: settings.scripts ? { ...settings.scripts } : undefined,
     quickActions: settings.quickActions ? [...settings.quickActions] : undefined,
     promptPrinciples: settings.promptPrinciples ? { ...settings.promptPrinciples } : undefined,
+    composerDefaults: settings.composerDefaults ? { ...settings.composerDefaults } : undefined,
     docs: settings.docs ? { ...settings.docs } : undefined,
   };
 
