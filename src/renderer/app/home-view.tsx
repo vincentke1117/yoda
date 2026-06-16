@@ -3,12 +3,9 @@ import {
   Anchor,
   ArrowUp,
   Bot,
-  Briefcase,
   Check,
   ChevronDown,
-  Code2,
   Copy,
-  Crown,
   FileText,
   Folder,
   FolderOpen,
@@ -18,10 +15,8 @@ import {
   Image as ImageIcon,
   Lightbulb,
   Loader2,
-  Megaphone,
   Mic,
   Monitor,
-  Palette,
   Paperclip,
   Plus,
   Repeat2,
@@ -52,6 +47,13 @@ import { useTranslation } from 'react-i18next';
 import yodaLogoWhite from '@/assets/images/yoda/yoda_logo_white.svg';
 import yodaLogo from '@/assets/images/yoda/yoda_logo.svg';
 import { applyAgentCommandPrefix } from '@shared/agent-command-prefix';
+import {
+  BUILTIN_STARTUP_TEAM_ID,
+  teamLeader,
+  teamWorkers,
+  type AgentTeam,
+  type AgentTeamMember,
+} from '@shared/agent-team';
 import type { Agent } from '@shared/agents';
 import { BUILTIN_AGENT_KEYS } from '@shared/builtin-agents';
 import type { ClaudeMemoryFile } from '@shared/conversations';
@@ -162,8 +164,6 @@ type TaskSubmitStrategyKind = TaskStrategyKind | 'checkout-existing';
 type HomeRunMode = 'normal' | 'brainstorm' | 'compare' | 'review' | 'team';
 type RunHostKind = 'local' | 'ssh';
 type SkillShortcutPrefix = '/' | '$';
-type TeamRoleId = 'ceo' | 'product' | 'engineering' | 'uiux' | 'operations';
-type TeamRuntimeSelection = Record<TeamRoleId, RuntimeId>;
 
 type HomeComposerSubmitTarget =
   | { kind: 'new-task'; parentTask?: { projectId: string; taskId: string } }
@@ -201,13 +201,6 @@ const MAX_COMPARE_AGENTS = 6;
 const CONVERSATION_TURN_TIMEOUT_MS = 30 * 60_000;
 const DEFAULT_COMPARE_RUNTIMES: RuntimeId[] = ['claude', 'codex'];
 const DEFAULT_REVIEWER_RUNTIME: RuntimeId = 'claude';
-const DEFAULT_TEAM_PROVIDERS: TeamRuntimeSelection = {
-  ceo: 'claude',
-  product: 'claude',
-  engineering: 'codex',
-  uiux: 'claude',
-  operations: 'codex',
-};
 
 const NORMAL_PROMPT_KEY = 'normal:agent';
 const REVIEW_IMPLEMENTER_PROMPT_KEY = 'review:implementer';
@@ -220,11 +213,6 @@ const SLOT_DEFAULT_BUILTIN_KEY: Record<string, string> = {
   [SPEC_PROMPT_KEY]: BUILTIN_AGENT_KEYS.spec,
   [REVIEW_IMPLEMENTER_PROMPT_KEY]: BUILTIN_AGENT_KEYS.reviewImplementer,
   [REVIEW_REVIEWER_PROMPT_KEY]: BUILTIN_AGENT_KEYS.reviewReviewer,
-  'team:ceo': BUILTIN_AGENT_KEYS.teamCeo,
-  'team:product': BUILTIN_AGENT_KEYS.teamProduct,
-  'team:engineering': BUILTIN_AGENT_KEYS.teamEngineering,
-  'team:uiux': BUILTIN_AGENT_KEYS.teamUiux,
-  'team:operations': BUILTIN_AGENT_KEYS.teamOperations,
 };
 
 function defaultBuiltinKeyForSlot(slotKey: string): string | undefined {
@@ -233,50 +221,6 @@ function defaultBuiltinKeyForSlot(slotKey: string): string | undefined {
 }
 const ADVANCED_INPUT_CONTAINER_CLASS =
   'border-border bg-background-1 ring-1 ring-sky-500/15 focus-within:border-sky-500/30 focus-within:ring-sky-500/25';
-
-const TEAM_ROLES = [
-  {
-    id: 'ceo',
-    icon: Crown,
-    labelKey: 'home.teamRoleCeo',
-    taskSuffix: 'ceo',
-    builtinKey: BUILTIN_AGENT_KEYS.teamCeo,
-  },
-  {
-    id: 'product',
-    icon: Briefcase,
-    labelKey: 'home.teamRoleProduct',
-    taskSuffix: 'product',
-    builtinKey: BUILTIN_AGENT_KEYS.teamProduct,
-  },
-  {
-    id: 'engineering',
-    icon: Code2,
-    labelKey: 'home.teamRoleEngineering',
-    taskSuffix: 'engineering',
-    builtinKey: BUILTIN_AGENT_KEYS.teamEngineering,
-  },
-  {
-    id: 'uiux',
-    icon: Palette,
-    labelKey: 'home.teamRoleUiux',
-    taskSuffix: 'uiux',
-    builtinKey: BUILTIN_AGENT_KEYS.teamUiux,
-  },
-  {
-    id: 'operations',
-    icon: Megaphone,
-    labelKey: 'home.teamRoleOperations',
-    taskSuffix: 'operations',
-    builtinKey: BUILTIN_AGENT_KEYS.teamOperations,
-  },
-] as const satisfies ReadonlyArray<{
-  id: TeamRoleId;
-  icon: ComponentType<{ className?: string }>;
-  labelKey: string;
-  taskSuffix: string;
-  builtinKey: string;
-}>;
 
 interface SkillShortcutOption {
   value: string;
@@ -495,10 +439,6 @@ function getRunModeInputChrome(mode: HomeRunMode): RunModeInputChrome {
 
 function comparePromptKey(index: number): string {
   return `compare:${index}`;
-}
-
-function teamPromptKey(roleId: TeamRoleId): string {
-  return `team:${roleId}`;
 }
 
 /**
@@ -929,17 +869,40 @@ export const HomeComposer = observer(function HomeComposer({
     },
     [updateDraft]
   );
-  const teamRuntimes = useMemo<TeamRuntimeSelection>(
-    () => draft?.teamRuntimes ?? DEFAULT_TEAM_PROVIDERS,
-    [draft?.teamRuntimes]
+  // Agent Teams are reusable, project/task-decoupled templates surfaced as the
+  // `team` paradigm (「多智能体（name）」). Built-ins + user teams come from the list.
+  const { data: teams = [] } = useQuery({
+    queryKey: ['agentTeams'],
+    queryFn: () => rpc.agentTeams.list(),
+  });
+  const selectedTeamId = draft?.selectedTeamId ?? BUILTIN_STARTUP_TEAM_ID;
+  const setSelectedTeamId = useCallback(
+    (next: string) => updateDraft({ selectedTeamId: next }),
+    [updateDraft]
   );
-  const setTeamProvider = useCallback(
-    (roleId: TeamRoleId, next: RuntimeId) => {
-      updateDraft({ teamRuntimes: { ...teamRuntimes, [roleId]: next } });
-    },
-    [teamRuntimes, updateDraft]
+  const activeTeam = useMemo<AgentTeam | undefined>(
+    () =>
+      teams.find((tm) => tm.id === selectedTeamId) ??
+      teams.find((tm) => tm.id === BUILTIN_STARTUP_TEAM_ID) ??
+      teams[0],
+    [teams, selectedTeamId]
   );
   const { agents: userAgents } = useAgents();
+  // Resolve a team member to what it runs with: system prompt from its agentRef
+  // (a built-in agent slug or a user Agent id) or its inline prompt, runtime from
+  // the template (falling back to the agent's preferred runtime).
+  const resolveTeamMember = useCallback(
+    (member: AgentTeamMember): { provider: RuntimeId | null; systemPrompt: string } => {
+      const agent = member.agentRef
+        ? (userAgents.find((a) => a.id === member.agentRef || a.slug === member.agentRef) ?? null)
+        : null;
+      return {
+        provider: member.runtime ?? agent?.preferredRuntime ?? null,
+        systemPrompt: agent?.systemPrompt ?? member.systemPrompt ?? '',
+      };
+    },
+    [userAgents]
+  );
   const selectedAgentIdsByMode = useMemo<Record<string, string[]>>(
     () => draft?.selectedAgentIds ?? {},
     [draft?.selectedAgentIds]
@@ -974,8 +937,7 @@ export const HomeComposer = observer(function HomeComposer({
       return t('home.modeSummaryAgentCount', { count: compareRuntimes.length });
     }
     if (runMode === 'team') {
-      const roleCount = Object.keys(teamRuntimes).length;
-      return t('home.modeSummaryAgentCount', { count: roleCount });
+      return activeTeam?.name ?? null;
     }
 
     // Single-Agent modes (normal / brainstorm / review): the implementer slot's
@@ -995,7 +957,7 @@ export const HomeComposer = observer(function HomeComposer({
     const name = runtimeName(resolved.provider);
     if (!name) return null;
     return `${name} · ${modelLabel(resolved.agent?.model ?? null)}`;
-  }, [runMode, runtimeId, compareRuntimes.length, teamRuntimes, slotAgentId, userAgents, t]);
+  }, [runMode, runtimeId, compareRuntimes.length, activeTeam, slotAgentId, userAgents, t]);
   // Local project root, so the skill picker can surface project-local skills
   // alongside the global ones. SSH projects have no local path to scan.
   const skillProjectPath = projectData?.type === 'local' ? projectData.path : undefined;
@@ -1447,7 +1409,11 @@ export const HomeComposer = observer(function HomeComposer({
       : runMode === 'review'
         ? hasSlotAgent(REVIEW_IMPLEMENTER_PROMPT_KEY) && hasSlotAgent(REVIEW_REVIEWER_PROMPT_KEY)
         : runMode === 'team'
-          ? TEAM_ROLES.every((role) => hasSlotAgent(teamPromptKey(role.id)))
+          ? Boolean(
+              activeTeam &&
+                activeTeam.members.length > 0 &&
+                activeTeam.members.every((m) => resolveTeamMember(m).provider)
+            )
           : runMode === 'brainstorm'
             ? hasSlotAgent(SPEC_PROMPT_KEY)
             : hasSlotAgent(NORMAL_PROMPT_KEY);
@@ -1682,42 +1648,43 @@ export const HomeComposer = observer(function HomeComposer({
         }
 
         if (runMode === 'team') {
-          const ceoRole = TEAM_ROLES[0];
-          const ceoSlot = resolveSlot(teamPromptKey(ceoRole.id), teamRuntimes.ceo);
-          if (!ceoSlot.provider) return;
-          const ceo = createTaskConversation({
-            provider: ceoSlot.provider,
+          if (!activeTeam) return;
+          const leader = teamLeader(activeTeam);
+          const leaderSlot = leader ? resolveTeamMember(leader) : null;
+          if (!leader || !leaderSlot?.provider) return;
+          const leaderProvider = leaderSlot.provider;
+          const leaderConv = createTaskConversation({
+            provider: leaderProvider,
             initialPrompt: buildTeamCeoPrompt({
               requirement,
-              systemPrompt: ceoSlot.systemPrompt,
+              systemPrompt: leaderSlot.systemPrompt,
             }),
             titlePrompt: trimmed || undefined,
           });
+          const workers = teamWorkers(activeTeam);
           finishTaskConversationSubmit();
           void (async () => {
-            await ceo.promise;
-            const ceoOutput = await waitForInitialConversationOutput(
+            await leaderConv.promise;
+            const leaderOutput = await waitForInitialConversationOutput(
               taskScopedTarget.projectId,
               taskScopedTarget.taskId,
-              ceo.conversationId
+              leaderConv.conversationId
             );
-            const workerLaunches = TEAM_ROLES.filter((role) => role.id !== 'ceo').flatMap(
-              (role) => {
-                const slot = resolveSlot(teamPromptKey(role.id), teamRuntimes[role.id]);
-                if (!slot.provider) return [];
-                return [
-                  createTaskConversation({
-                    provider: slot.provider,
-                    initialPrompt: buildTeamRolePrompt({
-                      requirement,
-                      ceoPlan: ceoOutput || '(The CEO agent did not produce captured output.)',
-                      systemPrompt: slot.systemPrompt,
-                    }),
-                    titlePrompt: trimmed || undefined,
+            const workerLaunches = workers.flatMap((member) => {
+              const slot = resolveTeamMember(member);
+              if (!slot.provider) return [];
+              return [
+                createTaskConversation({
+                  provider: slot.provider,
+                  initialPrompt: buildTeamRolePrompt({
+                    requirement,
+                    ceoPlan: leaderOutput || '(The lead agent did not produce captured output.)',
+                    systemPrompt: slot.systemPrompt,
                   }),
-                ];
-              }
-            );
+                  titlePrompt: trimmed || undefined,
+                }),
+              ];
+            });
             reportFailures(
               await Promise.allSettled(workerLaunches.map((launch) => launch.promise))
             );
@@ -1976,31 +1943,33 @@ export const HomeComposer = observer(function HomeComposer({
       }
 
       if (runMode === 'team') {
-        const ceoRole = TEAM_ROLES[0];
-        const ceoSlot = resolveSlot(teamPromptKey(ceoRole.id), teamRuntimes.ceo);
-        if (!ceoSlot.provider) return;
-        const ceoProvider = ceoSlot.provider;
-        const ceo = createProjectTask({
-          provider: ceoProvider,
-          nameSeed: `${baseName}-${ceoRole.taskSuffix}`,
+        if (!activeTeam) return;
+        const leader = teamLeader(activeTeam);
+        const leaderSlot = leader ? resolveTeamMember(leader) : null;
+        if (!leader || !leaderSlot?.provider) return;
+        const leaderProvider = leaderSlot.provider;
+        const leaderConv = createProjectTask({
+          provider: leaderProvider,
+          nameSeed: `${baseName}-${leader.handle}`,
           initialPrompt: buildTeamCeoPrompt({
             requirement,
-            systemPrompt: ceoSlot.systemPrompt,
+            systemPrompt: leaderSlot.systemPrompt,
           }),
           titlePrompt: trimmed || undefined,
           strategyKind: 'new-branch',
         });
-        goToTask(mounted.data.id, ceo.taskId);
+        const workers = teamWorkers(activeTeam);
+        goToTask(mounted.data.id, leaderConv.taskId);
         void (async () => {
-          await ceo.promise;
-          const ceoOutput = await waitForInitialConversationOutput(
+          await leaderConv.promise;
+          const leaderOutput = await waitForInitialConversationOutput(
             mounted.data.id,
-            ceo.taskId,
-            ceo.conversationId
+            leaderConv.taskId,
+            leaderConv.conversationId
           );
-          // Workers run as additional sessions inside the CEO's task (shared
+          // Workers run as additional sessions inside the leader's task (shared
           // worktree), not as separate tasks — same as the task-scoped path.
-          const provisioned = asProvisioned(getTaskStore(mounted.data.id, ceo.taskId));
+          const provisioned = asProvisioned(getTaskStore(mounted.data.id, leaderConv.taskId));
           if (!provisioned) throw new Error('Team task is not ready for workers.');
           const conversationTitleInputs = Array.from(
             provisioned.conversations.conversations.values(),
@@ -2009,8 +1978,8 @@ export const HomeComposer = observer(function HomeComposer({
               title: conversation.data.title,
             })
           );
-          const workerLaunches = TEAM_ROLES.filter((role) => role.id !== 'ceo').flatMap((role) => {
-            const slot = resolveSlot(teamPromptKey(role.id), teamRuntimes[role.id]);
+          const workerLaunches = workers.flatMap((member) => {
+            const slot = resolveTeamMember(member);
             if (!slot.provider) return [];
             const title = initialConversationTitle(
               slot.provider,
@@ -2022,12 +1991,12 @@ export const HomeComposer = observer(function HomeComposer({
               provisioned.conversations.createConversation({
                 id: crypto.randomUUID(),
                 projectId: mounted.data.id,
-                taskId: ceo.taskId,
+                taskId: leaderConv.taskId,
                 runtime: slot.provider,
                 title,
                 initialPrompt: buildTeamRolePrompt({
                   requirement,
-                  ceoPlan: ceoOutput || '(The CEO agent did not produce captured output.)',
+                  ceoPlan: leaderOutput || '(The lead agent did not produce captured output.)',
                   systemPrompt: slot.systemPrompt,
                 }),
                 imagePaths,
@@ -2085,7 +2054,8 @@ export const HomeComposer = observer(function HomeComposer({
     runMode,
     compareRuntimes,
     reviewerRuntime,
-    teamRuntimes,
+    activeTeam,
+    resolveTeamMember,
     userAgents,
     slotAgentId,
     autoApproveDefaults,
@@ -2847,8 +2817,9 @@ export const HomeComposer = observer(function HomeComposer({
                 onRemoveCompareRuntime={removeCompareProvider}
                 reviewerRuntime={reviewerRuntime}
                 onReviewerProviderChange={setReviewerProvider}
-                teamRuntimes={teamRuntimes}
-                onTeamProviderChange={setTeamProvider}
+                teams={teams}
+                selectedTeamId={selectedTeamId}
+                onSelectTeam={setSelectedTeamId}
                 agents={userAgents}
                 slotAgentId={slotAgentId}
                 onSlotAgentChange={setSlotAgent}
@@ -3502,8 +3473,9 @@ interface ModeConfigurationPanelProps {
   onRemoveCompareRuntime: (index: number) => void;
   reviewerRuntime: RuntimeId;
   onReviewerProviderChange: (provider: RuntimeId) => void;
-  teamRuntimes: TeamRuntimeSelection;
-  onTeamProviderChange: (roleId: TeamRoleId, provider: RuntimeId) => void;
+  teams: AgentTeam[];
+  selectedTeamId: string;
+  onSelectTeam: (teamId: string) => void;
   agents: Agent[];
   slotAgentId: (slotKey: string) => string | null;
   onSlotAgentChange: (slotKey: string, agentId: string) => void;
@@ -3521,8 +3493,9 @@ function ModeConfigurationPanel({
   onRemoveCompareRuntime,
   reviewerRuntime,
   onReviewerProviderChange,
-  teamRuntimes,
-  onTeamProviderChange,
+  teams,
+  selectedTeamId,
+  onSelectTeam,
   agents,
   slotAgentId,
   onSlotAgentChange,
@@ -3630,21 +3603,59 @@ function ModeConfigurationPanel({
         </div>
       )}
 
-      {mode === 'team' && (
-        <div className="flex flex-col gap-1.5">
-          {TEAM_ROLES.map((role) => (
-            <Agent
-              key={role.id}
-              icon={role.icon}
-              label={t(role.labelKey)}
-              value={teamRuntimes[role.id]}
-              onChange={(provider) => onTeamProviderChange(role.id, provider)}
-              connectionId={connectionId}
-              {...slotProps(teamPromptKey(role.id))}
-            />
-          ))}
-        </div>
-      )}
+      {mode === 'team' &&
+        (() => {
+          const team = teams.find((tm) => tm.id === selectedTeamId) ?? teams[0];
+          return (
+            <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-1">
+                {teams.map((tm) => {
+                  const active = tm.id === (team?.id ?? selectedTeamId);
+                  return (
+                    <button
+                      key={tm.id}
+                      type="button"
+                      onClick={() => onSelectTeam(tm.id)}
+                      className={cn(
+                        'flex items-center gap-2 rounded-md border px-2.5 py-2 text-left text-sm transition-colors',
+                        active
+                          ? 'border-primary/50 bg-primary/10 text-primary'
+                          : 'border-border text-foreground-muted hover:bg-background-2 hover:text-foreground'
+                      )}
+                    >
+                      <span className="text-base leading-none">{tm.icon}</span>
+                      <span className="min-w-0 flex-1 truncate font-medium">{tm.name}</span>
+                      <span className="shrink-0 text-[11px] text-foreground-muted">
+                        {t('home.teamMemberCount', { count: tm.members.length })}
+                      </span>
+                      {active && <Check className="size-3.5 shrink-0 text-primary" />}
+                    </button>
+                  );
+                })}
+              </div>
+              {team && (
+                <div className="flex flex-col gap-0.5 rounded-md border border-border/60 bg-background-1/40 p-2">
+                  {team.members.map((m) => (
+                    <div key={m.handle} className="flex items-center gap-2 px-1 py-1 text-xs">
+                      <span className="min-w-0 flex-1 truncate text-foreground">
+                        {m.displayName}
+                      </span>
+                      {m.role === 'leader' && (
+                        <span className="shrink-0 rounded bg-primary/15 px-1.5 py-px text-[10px] text-primary">
+                          {t('home.teamLeader')}
+                        </span>
+                      )}
+                      <span className="shrink-0 font-mono text-[10px] text-foreground-muted">
+                        {getRuntime(m.runtime)?.name ?? m.runtime}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p className="px-1 text-xs text-foreground-muted">{t('home.teamManageHint')}</p>
+            </div>
+          );
+        })()}
     </div>
   );
 }

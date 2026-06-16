@@ -366,6 +366,8 @@ export const homeDraftSchema = z.preprocess(
     compareRuntimes: z.array(z.enum(RUNTIME_IDS)),
     reviewReviewerRuntime: z.enum(RUNTIME_IDS),
     teamRuntimes: teamRuntimeSelectionSchema,
+    /** Selected Agent Team template id for the `team` paradigm (built-in or user). */
+    selectedTeamId: z.string().default('builtin:startup'),
     agentSystemPrompts: z.record(z.string(), z.string().nullable()),
     /** Selected user-defined Agent ids per run mode. Keyed by HomeRunMode; the
      *  value is an array (single-element for solo modes, multiple for team). An
