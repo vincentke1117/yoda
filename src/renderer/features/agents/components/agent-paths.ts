@@ -15,6 +15,8 @@ export type AgentPaths = {
  */
 export function resolveAgentPaths(id: RuntimeId): AgentPaths {
   switch (id) {
+    // GLM runs through the Claude Code CLI, so it shares ~/.claude.
+    case 'glm':
     case 'claude':
       return {
         config: '~/.claude',
