@@ -241,6 +241,42 @@ describe('watchClaudeRunState (live tailer)', () => {
     expect(started).toMatchObject({ kind: 'turn-started', force: true });
   });
 
+  it('forces turn-started from authoritative status when the tailer never saw awaiting-input', async () => {
+    // Regression: the PreToolUse hook can set the reducer to awaiting-input while
+    // fs.watch read-coalescing makes the tailer jump working → working across the
+    // user's answer, so `previousState` is never awaiting-input. With the hook's
+    // PostToolUse also missed, only the authoritative status reveals the resume.
+    const askUse = {
+      type: 'assistant',
+      message: {
+        role: 'assistant',
+        content: [{ type: 'tool_use', name: 'AskUserQuestion', id: 'tu_1' }],
+      },
+    };
+    const answer = {
+      type: 'user',
+      message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tu_1' }] },
+      timestamp: '2026-06-10T00:00:05.000Z',
+    };
+    writeTranscript('s7', [stop, userMsg]); // tailer attaches → plain working
+    const events: RunStateEvent[] = [];
+    const w = watchClaudeRunState(
+      { cwd: '/repo', conversationId: 's7' },
+      (e) => events.push(e),
+      () => 'awaiting-input' // hook set awaiting-input; tailer never classified it
+    );
+    await waitFor(() => events.some((e) => e.kind === 'turn-started'));
+    events.length = 0;
+    // Answer lands in one write — tailer goes working → working, but must force.
+    writeTranscript('s7', [stop, userMsg, askUse, answer]);
+    await waitFor(() => events.some((e) => e.kind === 'turn-started'));
+    w.stop();
+    expect(events.find((e) => e.kind === 'turn-started')).toMatchObject({
+      kind: 'turn-started',
+      force: true,
+    });
+  });
+
   it('fires turn-interrupted when a working session later writes an interrupt sentinel', async () => {
     const interrupt = {
       type: 'user',

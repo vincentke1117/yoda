@@ -372,8 +372,10 @@ export class LocalConversationProvider implements ConversationProvider {
           ? { conversationId: conversation.id, cwd: this.taskPath }
           : { conversationId: conversation.id, cwd: this.taskPath, processPid };
       this.runStateWatchers.set(conversation.id, [
-        watchClaudeRunState({ conversationId: conversation.id, cwd: this.taskPath }, (event) =>
-          agentSessionRuntimeStore.dispatch(session, event, 'claude-transcript')
+        watchClaudeRunState(
+          { conversationId: conversation.id, cwd: this.taskPath },
+          (event) => agentSessionRuntimeStore.dispatch(session, event, 'claude-transcript'),
+          () => agentSessionRuntimeStore.getStatus(session)
         ),
         watchClaudeSessionActivity(activityContext, (event) =>
           agentSessionRuntimeStore.dispatch(session, event, 'claude-session-activity')
