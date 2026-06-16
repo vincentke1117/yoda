@@ -407,20 +407,50 @@ function MessageRow({
   const openSession = message.sessionRef
     ? () => agentRoomStore.setInspectedConversation(message.sessionRef)
     : undefined;
+  // Avatar/name open the agent's detail pane — only for real agents (the human
+  // lead has no entity to show).
+  const openDetail = author?.runtime
+    ? () => agentRoomStore.setInspectedMember(author.id)
+    : undefined;
 
   return (
     <div className="flex gap-3 py-2.5">
-      <div
-        className={cn(
-          'flex size-9 shrink-0 items-center justify-center rounded-lg text-sm font-semibold',
-          ACCENT_AVATAR[accent]
-        )}
-      >
-        {monogram(name)}
-      </div>
+      {openDetail ? (
+        <button
+          type="button"
+          onClick={openDetail}
+          title={t('agentRoom.viewAgent')}
+          className={cn(
+            'flex size-9 shrink-0 items-center justify-center rounded-lg text-sm font-semibold transition-opacity hover:opacity-80',
+            ACCENT_AVATAR[accent]
+          )}
+        >
+          {monogram(name)}
+        </button>
+      ) : (
+        <div
+          className={cn(
+            'flex size-9 shrink-0 items-center justify-center rounded-lg text-sm font-semibold',
+            ACCENT_AVATAR[accent]
+          )}
+        >
+          {monogram(name)}
+        </div>
+      )}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className={cn('text-sm font-semibold', ACCENT_TEXT[accent])}>{name}</span>
+          {openDetail ? (
+            <button
+              type="button"
+              onClick={openDetail}
+              title={t('agentRoom.viewAgent')}
+              className={cn('text-sm font-semibold hover:underline', ACCENT_TEXT[accent])}
+            >
+              {name}
+            </button>
+          ) : (
+            <span className={cn('text-sm font-semibold', ACCENT_TEXT[accent])}>{name}</span>
+          )}
           {message.kind === 'handoff' && (
             <span className="rounded bg-background-2 px-1.5 py-px text-[10px] text-foreground-muted">
               {t('agentRoom.handoff')}
