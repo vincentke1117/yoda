@@ -1,9 +1,11 @@
 import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import type { RestoreTaskResult } from '@shared/tasks';
+import { unarchiveConversation } from '@main/core/conversations/unarchiveConversation';
 import { taskEvents } from '@main/core/tasks/task-events';
 import { mapTaskRowToTask } from '@main/core/tasks/utils/utils';
 import { db } from '@main/db/client';
-import { tasks } from '@main/db/schema';
+import { conversations, tasks } from '@main/db/schema';
+import { log } from '@main/lib/logger';
 import { getDescendantTaskIds } from './task-hierarchy';
 
 export async function restoreTask(id: string): Promise<RestoreTaskResult> {
@@ -43,8 +45,36 @@ async function restoreSingleTask(id: string, restoredTaskIds: string[]): Promise
     .where(eq(tasks.id, id))
     .returning();
 
-  if (updatedRow) {
-    restoredTaskIds.push(updatedRow.id);
-    taskEvents._emit('task:updated', mapTaskRowToTask(updatedRow));
+  if (!updatedRow) return;
+
+  restoredTaskIds.push(updatedRow.id);
+  taskEvents._emit('task:updated', mapTaskRowToTask(updatedRow));
+
+  // Symmetric to archiveTask, which cascade-archives every live conversation:
+  // restore must un-archive them too, otherwise a restored task has no active
+  // conversation and the working view shows up empty ("the session vanished").
+  await restoreTaskConversations(updatedRow.projectId, updatedRow.id);
+}
+
+async function restoreTaskConversations(projectId: string, taskId: string): Promise<void> {
+  const archived = await db
+    .select({ id: conversations.id })
+    .from(conversations)
+    .where(
+      and(
+        eq(conversations.projectId, projectId),
+        eq(conversations.taskId, taskId),
+        isNotNull(conversations.archivedAt)
+      )
+    );
+
+  for (const { id } of archived) {
+    await unarchiveConversation(projectId, taskId, id).catch((error: unknown) => {
+      log.warn('restoreTask: conversation unarchive failed', {
+        taskId,
+        conversationId: id,
+        error: String(error),
+      });
+    });
   }
 }

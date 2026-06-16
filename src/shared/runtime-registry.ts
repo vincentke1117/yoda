@@ -27,6 +27,8 @@ export const RUNTIME_IDS = [
   'letta',
   'autohand',
   'antigravity',
+  'grok',
+  'glm',
 ] as const;
 
 export type RuntimeId = (typeof RUNTIME_IDS)[number];
@@ -685,6 +687,50 @@ export const RUNTIMES: RuntimeDefinition[] = [
     alt: 'Antigravity CLI',
     terminalOnly: true,
   },
+  {
+    id: 'grok',
+    name: 'Grok',
+    description:
+      "xAI's terminal coding agent (Grok Build) with plan mode, parallel subagents, and headless automation.",
+    docUrl: 'https://x.ai/cli',
+    installCommand: 'curl -fsSL https://x.ai/cli/install.sh | bash',
+    commands: ['grok'],
+    versionArgs: ['--version'],
+    cli: 'grok',
+    autoApproveFlag: '--always-approve',
+    initialPromptFlag: '',
+    useKeystrokeInjection: true,
+    commandPrefix: '/',
+    icon: 'grok.svg',
+    alt: 'Grok CLI',
+    invertInDark: true,
+    terminalOnly: true,
+  },
+  {
+    id: 'glm',
+    name: 'GLM',
+    description:
+      "Zhipu AI's GLM Coding Plan, driven through the Claude Code CLI against z.ai's Anthropic-compatible endpoint. Set ANTHROPIC_AUTH_TOKEN to your GLM key.",
+    docUrl: 'https://docs.z.ai/scenario-example/develop-tools/claude',
+    // GLM has no standalone agent binary — it rides on the Claude Code CLI.
+    installCommand: 'curl -fsSL https://claude.ai/install.sh | bash',
+    commands: ['claude'],
+    versionArgs: ['--version'],
+    cli: 'claude',
+    autoApproveFlag: '--dangerously-skip-permissions',
+    initialPromptFlag: '',
+    clipboardImagePaste: true,
+    resumeFlag: '--resume',
+    sessionIdFlag: '--session-id',
+    appendSystemPromptFlag: '--append-system-prompt',
+    commandPrefix: '/',
+    planActivateCommand: '/plan',
+    namingCommand: 'claude --print --model {model} --output-format text --no-session-persistence',
+    icon: 'glm.svg',
+    alt: 'GLM (Zhipu AI)',
+    terminalOnly: true,
+    supportsHooks: true,
+  },
 ];
 
 const OPENAI_API_ENV = [
@@ -912,6 +958,36 @@ export const RUNTIME_ACCOUNT_PROFILES = {
     officialSubscription: { supported: true },
     officialApi: { envVars: GOOGLE_API_ENV },
     maas: { supported: true, providerHints: ['google', 'gemini'] },
+  },
+  grok: {
+    officialSubscription: { supported: true },
+    officialApi: {
+      envVars: ['XAI_API_KEY'],
+      probe: {
+        defaultBaseUrl: 'https://api.x.ai/v1',
+        path: '/models',
+        authEnvVars: ['XAI_API_KEY'],
+        auth: 'bearer',
+      },
+    },
+    maas: { supported: true, providerHints: ['xai', 'grok'] },
+  },
+  glm: {
+    // GLM Coding Plan auth is the GLM API key carried in ANTHROPIC_AUTH_TOKEN;
+    // the base URL is forced to z.ai by resolveRuntimeEnv.
+    officialSubscription: { supported: false },
+    officialApi: {
+      envVars: ['ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL'],
+      probe: {
+        defaultBaseUrl: 'https://api.z.ai/api/anthropic',
+        path: '/v1/models',
+        baseUrlEnvVar: 'ANTHROPIC_BASE_URL',
+        authEnvVars: ['ANTHROPIC_AUTH_TOKEN'],
+        auth: 'bearer',
+        headers: { 'anthropic-version': '2023-06-01' },
+      },
+    },
+    maas: { supported: false, providerHints: ['zhipu', 'glm', 'z.ai'] },
   },
 } satisfies Record<RuntimeId, RuntimeAccountProfile>;
 

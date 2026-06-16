@@ -4,6 +4,14 @@ import { getRuntimeAccountProfile, type RuntimeId } from '@shared/runtime-regist
 const ENV_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 export const CLAUDE_DISABLE_ALTERNATE_SCREEN_ENV = 'CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN';
 
+/** GLM rides on the Claude Code CLI pointed at z.ai's Anthropic-compatible endpoint. */
+const GLM_ANTHROPIC_BASE_URL = 'https://api.z.ai/api/anthropic';
+
+/** Runtimes whose underlying binary is Claude Code (and thus share its tmux quirks). */
+function isClaudeBased(runtimeId: RuntimeId | undefined): boolean {
+  return runtimeId === 'claude' || runtimeId === 'glm';
+}
+
 function shouldForwardOfficialApiEnv(providerConfig: RuntimeCustomConfig | undefined): boolean {
   return !providerConfig?.authProvider || providerConfig.authProvider === 'official-api';
 }
@@ -50,8 +58,14 @@ export function resolveRuntimeEnv(
     }
   }
 
+  // Pin GLM to z.ai's Anthropic-compatible endpoint unless the user overrode it
+  // (the GLM API key itself is supplied by the user via ANTHROPIC_AUTH_TOKEN).
+  if (options.runtimeId === 'glm' && env.ANTHROPIC_BASE_URL === undefined) {
+    env.ANTHROPIC_BASE_URL = GLM_ANTHROPIC_BASE_URL;
+  }
+
   if (
-    options.runtimeId === 'claude' &&
+    isClaudeBased(options.runtimeId) &&
     options.tmuxEnabled === true &&
     env[CLAUDE_DISABLE_ALTERNATE_SCREEN_ENV] === undefined
   ) {

@@ -14,7 +14,9 @@ import devinLogo from '../../assets/images/devin.png';
 import factoryLogoSvg from '../../assets/images/droid.svg?raw';
 import geminiLogo from '../../assets/images/gemini.png';
 import copilotLogoSvg from '../../assets/images/gh-copilot.svg?raw';
+import glmLogoSvg from '../../assets/images/glm.svg?raw';
 import gooseLogo from '../../assets/images/goose.png';
+import grokLogoSvg from '../../assets/images/grok.svg?raw';
 import hermesLogo from '../../assets/images/hermesagent.jpg';
 import julesLogoSvg from '../../assets/images/jules.svg?raw';
 import junieLogo from '../../assets/images/junie-color.png';
@@ -43,6 +45,7 @@ export const agentConfig: Record<RuntimeId, AgentInfo> = {
   devin: { name: 'Devin', logo: devinLogo, alt: 'Devin' },
   cursor: { name: 'Cursor', logo: cursorLogoSvg, alt: 'Cursor CLI', isSvg: true },
   gemini: { name: 'Gemini', logo: geminiLogo, alt: 'Gemini CLI' },
+  glm: { name: 'GLM', logo: glmLogoSvg, alt: 'GLM (Zhipu AI)', isSvg: true },
   mistral: { name: 'Mistral Vibe', logo: mistralLogo, alt: 'Mistral Vibe CLI' },
   qwen: { name: 'Qwen Code', logo: qwenLogo, alt: 'Qwen Code' },
   droid: { name: 'Droid', logo: factoryLogoSvg, alt: 'Factory Droid', isSvg: true },
@@ -53,6 +56,7 @@ export const agentConfig: Record<RuntimeId, AgentInfo> = {
   hermes: { name: 'Hermes Agent', logo: hermesLogo, alt: 'Hermes Agent CLI' },
   auggie: { name: 'Auggie', logo: augmentLogoSvg, alt: 'Auggie CLI', isSvg: true },
   goose: { name: 'Goose', logo: gooseLogo, alt: 'Goose CLI' },
+  grok: { name: 'Grok', logo: grokLogoSvg, alt: 'Grok CLI', isSvg: true, invertInDark: true },
   kimi: { name: 'Kimi', logo: kimiLogo, alt: 'Kimi CLI' },
   kilocode: { name: 'Kilocode', logo: kilocodeLogo, alt: 'Kilocode CLI' },
   letta: {
