@@ -117,20 +117,24 @@ function routingAddendum(
   kind: 'leader' | 'worker',
   ctx: { leaderHandle: string; workerHandles: string[] }
 ): string {
-  const reviewer = ctx.workerHandles[0] ?? 'you';
   if (routing === 'review-loop') {
+    // The conductor drives this loop deterministically (it brings in the reviewer
+    // when you finish, and forwards review feedback back to you), so neither side
+    // calls team-at — the reviewer just ends with the verdict marker.
     return kind === 'leader'
       ? [
           `# Your routing`,
-          `When your implementation round is complete, request review:`,
-          `  ${TEAM_AT_SCRIPT} ${reviewer} "<short summary of what you changed>"`,
-          `When the reviewer sends back fixes, address them and hand back the same way for another round.`,
+          `Build what the lead asks for in this worktree. When your round is complete, just finish your`,
+          `turn — the reviewer is brought in automatically. When you receive review feedback, address it`,
+          `in the same worktree and finish again. Keep the existing direction unless a fix requires otherwise.`,
         ].join('\n')
       : [
           `# Your routing`,
           `Review the implementer's work against the lead's original requirement — do NOT modify files.`,
-          `- If there are issues: ${TEAM_AT_SCRIPT} ${ctx.leaderHandle} "<concrete fixes to make>"`,
-          `- If it fully meets the requirement: ${TEAM_AT_SCRIPT} you "PASS — <one-line summary>"`,
+          `End your turn with exactly one line, on its own:`,
+          `  YODA_REVIEW_RESULT: PASS   (only if it fully meets the requirement)`,
+          `  YODA_REVIEW_RESULT: FAIL   (if any changes are needed)`,
+          `When FAIL, list the concrete fixes the implementer should make BEFORE that final line.`,
         ].join('\n');
   }
   if (routing === 'fan-out') {

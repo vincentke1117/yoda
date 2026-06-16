@@ -115,7 +115,7 @@ export const RoomChat = observer(function RoomChat({ snapshot }: { snapshot: Roo
   const inspectedId = agentRoomStore.inspectedConversationId;
 
   return (
-    <section className="flex min-w-0 flex-1 flex-col">
+    <section className="flex h-full min-w-0 flex-1 flex-col">
       <header className="flex items-center gap-3 border-b border-border px-5 py-3">
         <div className="min-w-0">
           <h2 className="truncate text-base font-semibold">{snapshot.room.name}</h2>

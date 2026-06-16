@@ -23,16 +23,31 @@ export function buildTeammateSystemPrompt(args: {
   displayName: string;
   handle: string;
   roster: RosterEntry[];
+  /** Preset-driven loops (e.g. review-loop) where the conductor routes hand-offs, so the member must NOT call team-at. */
+  autoRouted?: boolean;
 }): string {
   const others = args.roster.filter((r) => r.handle !== args.handle);
   const roster = others.length
     ? others.map((r) => `  - @${r.handle} — ${r.displayName} (${r.role})`).join('\n')
     : '  (no other agents)';
-  return [
+  const header = [
     `You are "${args.displayName}", handle @${args.handle}, one member of a team working together in this worktree.`,
     `The human lead is @you. Your teammates:`,
     roster,
     ``,
+  ];
+  if (args.autoRouted) {
+    return [
+      ...header,
+      `# How this team works`,
+      `This team runs an automatic loop. You do NOT message teammates yourself — when you finish your`,
+      `turn, the system automatically hands off to the right teammate and brings their reply back to you.`,
+      `Just do your part and finish. Do NOT write "@handle" in your replies and do NOT run any hand-off`,
+      `command — follow the routing instructions below for exactly how to end your turn.`,
+    ].join('\n');
+  }
+  return [
+    ...header,
     `# Talking to the team`,
     `To send a message to a teammate or the lead, run this command from the worktree root:`,
     ``,
