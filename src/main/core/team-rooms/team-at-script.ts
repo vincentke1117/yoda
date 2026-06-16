@@ -32,7 +32,32 @@ curl -sf -X POST "http://127.0.0.1:$port/hook" \\
 echo "team-at: delivered to $handle"
 `;
 
-/** Idempotently write `.yoda/team-at` into a task's worktree. */
+/**
+ * The bundled `team-status` script: broadcast a short progress update to the
+ * room WITHOUT handing off the turn. It posts a display-only room message (no
+ * @mentions, so the conductor never routes it) — the team's "standup" channel.
+ */
+const STATUS_SCRIPT = `#!/usr/bin/env bash
+# Yoda team-status: share a short progress update with the room (no hand-off).
+# Usage: .yoda/team-status <message...>
+set -euo pipefail
+if [ "$#" -lt 1 ]; then echo "usage: team-status <message>" >&2; exit 2; fi
+ep="$HOME/.yoda/hook-endpoint.json"
+if [ ! -f "$ep" ]; then echo "team-status: Yoda hook endpoint not found" >&2; exit 1; fi
+port=$(sed -n 's/.*"port":\\([0-9]*\\).*/\\1/p' "$ep")
+token=$(sed -n 's/.*"token":"\\([^"]*\\)".*/\\1/p' "$ep")
+msg="$*"
+esc=$(printf '%s' "$msg" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))' 2>/dev/null || printf '"%s"' "$msg")
+curl -sf -X POST "http://127.0.0.1:$port/hook" \\
+  -H "X-Yoda-Token: $token" \\
+  -H "X-Yoda-Pty-Id: \${YODA_PTY_ID:-}" \\
+  -H "X-Yoda-Event-Type: team-status" \\
+  -H "Content-Type: application/json" \\
+  -d "{\\"message\\": $esc}" >/dev/null
+echo "team-status: shared"
+`;
+
+/** Idempotently write `.yoda/team-at` + `.yoda/team-status` into a task's worktree. */
 export async function installTeamAtScript(projectId: string, taskId: string): Promise<void> {
   const worktree = resolveTask(projectId, taskId)?.conversations.taskPath;
   if (!worktree) return;
@@ -40,6 +65,7 @@ export async function installTeamAtScript(projectId: string, taskId: string): Pr
     const dir = join(worktree, '.yoda');
     await mkdir(dir, { recursive: true });
     await writeFile(join(dir, 'team-at'), SCRIPT, { mode: 0o755 });
+    await writeFile(join(dir, 'team-status'), STATUS_SCRIPT, { mode: 0o755 });
   } catch (error) {
     log.warn('installTeamAtScript: failed', { projectId, taskId, error: String(error) });
   }

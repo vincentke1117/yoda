@@ -30,6 +30,14 @@ import { teamRoomEvents } from './team-room-events';
 const STATUS_POLL_MS = 1_500;
 /** A member can be observed idle this long after delivery before we trust it. */
 const TURN_START_GRACE_MS = 20_000;
+/**
+ * A member observed running but producing no new output for this long, while its
+ * run-state is not actively `working`, is treated as stalled — its turn is ended
+ * (fail-forward), so a wedged session can't hang the loop forever.
+ */
+const STALL_MS = 90_000;
+/** Cadence of the conductor's "standup" roster summary while work is in progress. */
+const STANDUP_MS = 120_000;
 /** Max agent deliveries per human prompt, so an @-cascade can't loop forever. */
 const MAX_HOPS = 24;
 /** The reserved broadcast handle. */
@@ -81,6 +89,8 @@ class RoomConductor {
   private started = false;
   private readonly hops = new Map<string, number>(); // roomId -> remaining budget
   private readonly statusWatchers = new Map<string, () => void>(); // memberId -> cancel
+  private readonly standups = new Map<string, () => void>(); // roomId -> stop
+  private readonly activity = new Map<string, number>(); // memberId -> last PTY-growth ts
 
   /** Subscribe to message posts. Idempotent. */
   initialize(): void {
@@ -246,6 +256,7 @@ class RoomConductor {
         { projectId, taskId, conversationId: conversationId! },
         review
       );
+      this.ensureStandup(roomId);
     } catch (error) {
       await setMemberStatus(roomId, member.id, 'error', member.conversationId).catch(() => {});
       await postMessage({
@@ -273,14 +284,25 @@ class RoomConductor {
     review?: ReviewWatch
   ): void {
     this.statusWatchers.get(memberId)?.();
+    const sessionId = makePtySessionId(session.projectId, session.taskId, session.conversationId);
     const start = Date.now();
     let sawRunning = false;
     let last: MemberStatus | null = null;
+    let lastLen = ptySessionRegistry.snapshot(sessionId).length;
+    let lastGrowAt = start;
 
     const timer = setInterval(() => {
+      const snapshot = ptySessionRegistry.snapshot(sessionId);
+      // Heartbeat: output growth means the member is alive and making progress.
+      if (snapshot.length > lastLen) {
+        lastLen = snapshot.length;
+        lastGrowAt = Date.now();
+        this.activity.set(memberId, lastGrowAt);
+      }
+
       // Reviewer's fresh verdict ends the turn even if run-state never goes idle.
       if (review?.role === 'worker') {
-        const result = parseReviewResult(ptySessionRegistry.snapshot(review.sessionId));
+        const result = parseReviewResult(snapshot);
         if (result.markerCount > review.baselineMarkers) {
           stop();
           review.onFinish({ passed: result.passed, feedback: result.feedback });
@@ -293,24 +315,41 @@ class RoomConductor {
       const terminal = raw === 'idle' || raw === 'completed' || raw === 'error';
       // Don't trust an early idle before the agent has actually started.
       if (terminal && !sawRunning && Date.now() - start < TURN_START_GRACE_MS) return;
+      // Stall fail-forward applies ONLY to the reviewer: it's read-only, so a long
+      // silence means a wedged session (e.g. codex pinned at `working`, never
+      // writing task_complete) rather than a slow build. Never on `awaiting-input`
+      // (the agent is waiting on the user) or on the implementer (which can run
+      // legitimately quiet commands and has a reliable run-state turn-end).
+      const stalled =
+        review?.role === 'worker' &&
+        sawRunning &&
+        raw !== 'awaiting-input' &&
+        Date.now() - lastGrowAt > STALL_MS;
 
       const mapped = mapStatus(raw);
       if (mapped !== last) {
         last = mapped;
         void setMemberStatus(roomId, memberId, mapped, session.conversationId).catch(() => {});
       }
-      if (terminal) {
+      if (terminal || stalled) {
         stop();
+        if (stalled && review) {
+          void setMemberStatus(roomId, memberId, 'finished', session.conversationId).catch(
+            () => {}
+          );
+          void postMessage({
+            roomId,
+            kind: 'system',
+            body: `Heartbeat — no progress from this member for a while; moving the loop forward.`,
+            mentions: [],
+          }).catch(() => {});
+        }
         if (review && raw !== 'error') {
-          // Ended on run-state. Reviewer without a fresh marker → treat its tail
+          // Ended (or stalled). Reviewer without a fresh marker → treat its tail
           // as fix notes (FAIL); implementer end → bring in the reviewer.
           const verdict =
             review.role === 'worker'
-              ? {
-                  passed: false,
-                  feedback: parseReviewResult(ptySessionRegistry.snapshot(review.sessionId))
-                    .feedback,
-                }
+              ? { passed: false, feedback: parseReviewResult(snapshot).feedback }
               : undefined;
           review.onFinish(verdict);
         }
@@ -322,6 +361,49 @@ class RoomConductor {
       this.statusWatchers.delete(memberId);
     };
     this.statusWatchers.set(memberId, stop);
+  }
+
+  /**
+   * Periodic "standup": while any agent in the room is running, post a concise
+   * roster summary (with each running member's last-activity age) so the lead can
+   * see progress at a glance — like a team checking in. Conductor-driven and
+   * display-only: it spends no agent tokens and never interrupts a working agent.
+   * Agents can also post their own richer updates via the `team-status` script.
+   */
+  private ensureStandup(roomId: string): void {
+    if (this.standups.has(roomId)) return;
+    let last = '';
+    const tick = async (): Promise<void> => {
+      const snapshot = await getRoom(roomId);
+      if (!snapshot || snapshot.room.status !== 'active') return stop();
+      const agents = snapshot.members.filter((m) => m.runtime);
+      const anyRunning = agents.some(
+        (m) => m.status === 'running' || m.status === 'awaiting-input'
+      );
+      if (!anyRunning) return stop(); // quiet — restarts on the next delivery
+      const now = Date.now();
+      const line = agents
+        .map((m) => {
+          if (m.status === 'running') {
+            const at = this.activity.get(m.id);
+            const age = at ? `, active ${Math.round((now - at) / 1000)}s ago` : '';
+            return `${m.displayName}: working${age}`;
+          }
+          return `${m.displayName}: ${m.status}`;
+        })
+        .join(' · ');
+      if (line === last) return;
+      last = line;
+      await postMessage({ roomId, kind: 'system', body: `Standup — ${line}`, mentions: [] });
+    };
+    const timer = setInterval(() => {
+      void tick().catch(() => {});
+    }, STANDUP_MS);
+    const stop = () => {
+      clearInterval(timer);
+      this.standups.delete(roomId);
+    };
+    this.standups.set(roomId, stop);
   }
 
   /**
@@ -368,7 +450,7 @@ class RoomConductor {
           roomId,
           authorMemberId: reviewer.id,
           kind: 'handoff',
-          body: `@you Review passed ✓${verdict.feedback ? `\n\n${verdict.feedback}` : ''}`,
+          body: `@you Review passed.${verdict.feedback ? `\n\n${verdict.feedback}` : ''}`,
           mentions: ['you'],
         });
         await postMessage({
@@ -416,5 +498,22 @@ export async function handleTeamAt(
     kind: 'handoff',
     body: message.trim() || '(no message)',
     mentions,
+  });
+}
+
+/**
+ * Called when a member runs the `team-status` script: post its progress update
+ * as a display-only room message (no @mentions → the conductor never routes it),
+ * so a member can check in mid-turn without handing off.
+ */
+export async function handleTeamStatus(conversationId: string, message: string): Promise<void> {
+  const found = await getMemberByConversation(conversationId);
+  if (!found) return;
+  await postMessage({
+    roomId: found.roomId,
+    authorMemberId: found.member.id,
+    kind: 'text',
+    body: message.trim(),
+    mentions: [],
   });
 }

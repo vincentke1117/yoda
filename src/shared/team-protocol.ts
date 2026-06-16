@@ -8,6 +8,8 @@
 
 /** Path (relative to the worktree) of the bundled team-at script. */
 export const TEAM_AT_SCRIPT = '.yoda/team-at';
+/** Path (relative to the worktree) of the bundled team-status (progress broadcast) script. */
+export const TEAM_STATUS_SCRIPT = '.yoda/team-status';
 
 export interface RosterEntry {
   handle: string;
@@ -44,6 +46,13 @@ export function buildTeammateSystemPrompt(args: {
       `turn, the system automatically hands off to the right teammate and brings their reply back to you.`,
       `Just do your part and finish. Do NOT write "@handle" in your replies and do NOT run any hand-off`,
       `command — follow the routing instructions below for exactly how to end your turn.`,
+      ``,
+      `# Progress check-ins (optional)`,
+      `On a longer task, share a one-line progress update with the room at natural milestones:`,
+      ``,
+      `  ${TEAM_STATUS_SCRIPT} "<one line on what you're doing>"`,
+      ``,
+      `This is broadcast-only — it does NOT hand off your turn or change the routing. Use it sparingly.`,
     ].join('\n');
   }
   return [
@@ -63,6 +72,10 @@ export function buildTeammateSystemPrompt(args: {
     `- Running it delivers your message straight into that teammate's session (it picks up where you left off).`,
     `- Keep these messages short and concrete — a chat line, not a report. Your full work stays in your own session.`,
     `- When you have finished your part, send the appropriate hand-off with ${TEAM_AT_SCRIPT}, then stop.`,
+    ``,
+    `To share progress without addressing anyone (a standup update), run:`,
+    `  ${TEAM_STATUS_SCRIPT} "<one line on what you're doing>"`,
+    `It's broadcast-only — no hand-off. Use it sparingly on longer tasks.`,
   ].join('\n');
 }
 
