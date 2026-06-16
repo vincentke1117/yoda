@@ -1,14 +1,14 @@
 import { randomUUID } from 'node:crypto';
-import type { AgentSessionRuntimeStatus } from '@shared/events/agentEvents';
-import { teamRoomUpdatedChannel } from '@shared/events/teamRoomEvents';
-import { makePtySessionId } from '@shared/ptySessionId';
-import { parseReviewResult } from '@shared/review-protocol';
-import type { RuntimeId } from '@shared/runtime-registry';
 import {
   buildMemberTurnPrompt,
   buildTeammateSystemPrompt,
   type RosterEntry,
-} from '@shared/team-protocol';
+} from '@shared/agent-communication-protocol';
+import type { AgentSessionRuntimeStatus } from '@shared/events/agentEvents';
+import { teamRoomUpdatedChannel } from '@shared/events/teamRoomEvents';
+import { makePtySessionId } from '@shared/ptySessionId';
+import { buildImplementerFeedbackPrompt, parseReviewResult } from '@shared/review-protocol';
+import type { RuntimeId } from '@shared/runtime-registry';
 import type { MemberStatus, RoomMember, RoomMessage } from '@shared/team-room';
 import { agentSessionRuntimeStore } from '@main/core/conversations/agent-session-runtime';
 import { createConversation } from '@main/core/conversations/createConversation';
@@ -52,6 +52,22 @@ const REVIEW_REQUEST =
   'The implementer just finished a round. Review the current worktree against the original requirement (do NOT modify files). ' +
   'List any concrete fixes needed, then end your turn with exactly one line: `YODA_REVIEW_RESULT: PASS` if it fully meets the requirement, or `YODA_REVIEW_RESULT: FAIL` if changes are needed.';
 
+/**
+ * Short, first-person lines the conductor posts to the room ON BEHALF of an
+ * agent, so the chat reads like teammates talking ("On it — I'll take a look")
+ * instead of leaking the raw turn prompt or PTY output. The real work lives in
+ * each agent's background session, one click away via "open session".
+ */
+const SAY = {
+  implementing: `On it — I'll implement this and hand off for review when it's ready.`,
+  reviewing: `Taking a look at the current changes now.`,
+  fixing: `Got the feedback — I'll address these points and hand back.`,
+  onTask: `On it — I'll take care of this and report back.`,
+  implementedDone: `Implementation done — handing off for review.`,
+  reviewPass: `Looks good — it meets the requirement. Approved.`,
+  reviewFail: (impl: string) => `Found some issues — passing the fixes back to ${impl}.`,
+} as const;
+
 type Session = { projectId: string; taskId: string; conversationId: string };
 
 /** Drives the deterministic review-loop step when a member's turn ends. */
@@ -62,13 +78,6 @@ type ReviewWatch = {
   baselineMarkers: number;
   onFinish: (verdict?: { passed: boolean; feedback: string }) => void;
 };
-
-/** Keep room chat readable — full agent output stays one click away in its session. */
-const CHAT_FEEDBACK_MAX = 800;
-function clip(text: string, max = CHAT_FEEDBACK_MAX): string {
-  const t = text.trim();
-  return t.length > max ? `${t.slice(0, max).trimEnd()}…` : t;
-}
 
 function mapStatus(s: AgentSessionRuntimeStatus): MemberStatus {
   switch (s) {
@@ -154,24 +163,33 @@ class RoomConductor {
     }));
     const fromName = author?.displayName ?? 'the lead';
 
+    const reviewLoop = room.preset === 'review-loop';
     for (const member of targets) {
-      const remaining = this.hops.get(roomId) ?? 0;
-      if (remaining <= 0) {
-        await postMessage({
-          roomId,
-          kind: 'system',
-          body: `Routing paused — hit the ${MAX_HOPS}-message limit for this prompt. @mention a teammate to continue.`,
-          mentions: [],
-        });
-        return;
-      }
-      this.hops.set(roomId, remaining - 1);
+      if (!this.spend(roomId)) return this.pauseRouting(roomId);
       await this.deliverTo(room.projectId, room.taskId, roomId, member, roster, {
         fromName,
         body: message.body,
-        reviewLoop: room.preset === 'review-loop',
+        reviewLoop,
+        chatLine: reviewLoop && member.role === 'leader' ? SAY.implementing : SAY.onTask,
       });
     }
+  }
+
+  /** Spend one delivery from the room's cascade budget. False when exhausted. */
+  private spend(roomId: string): boolean {
+    const remaining = this.hops.get(roomId) ?? 0;
+    if (remaining <= 0) return false;
+    this.hops.set(roomId, remaining - 1);
+    return true;
+  }
+
+  private async pauseRouting(roomId: string): Promise<void> {
+    await postMessage({
+      roomId,
+      kind: 'system',
+      body: `Routing paused — hit the ${MAX_HOPS}-message limit for this prompt. @mention a teammate to continue.`,
+      mentions: [],
+    });
   }
 
   /**
@@ -186,7 +204,7 @@ class RoomConductor {
     roomId: string,
     member: RoomMember,
     roster: RosterEntry[],
-    incoming: { fromName: string; body: string; reviewLoop?: boolean }
+    incoming: { fromName: string; body: string; reviewLoop?: boolean; chatLine?: string }
   ): Promise<void> {
     const runtime = member.runtime as RuntimeId;
     const turnPrompt = buildMemberTurnPrompt({
@@ -249,6 +267,18 @@ class RoomConductor {
       }
 
       await setMemberStatus(roomId, member.id, 'running', conversationId);
+      // The agent "speaks" a short first-person line in the room; its actual work
+      // happens in the background session linked by sessionRef.
+      if (incoming.chatLine) {
+        await postMessage({
+          roomId,
+          authorMemberId: member.id,
+          kind: 'text',
+          body: incoming.chatLine,
+          mentions: [],
+          sessionRef: conversationId,
+        });
+      }
       const review: ReviewWatch | undefined = incoming.reviewLoop
         ? {
             role: member.role === 'leader' ? 'leader' : 'worker',
@@ -415,11 +445,12 @@ class RoomConductor {
 
   /**
    * Deterministic review-loop step, run when a review-loop member's turn ends.
-   * Posts the next routing message (reusing {@link onMessage} for delivery) so
-   * the loop advances without the agent having to run `team-at`:
-   * - implementer finished → bring in the reviewer.
-   * - reviewer PASS → announce completion to the lead and stop.
-   * - reviewer FAIL → forward its fix notes to the implementer for another round.
+   * The agent "speaks" a short first-person line in the room while the routing
+   * prompt is delivered straight into the NEXT agent's session (never shown in
+   * chat) — so the conversation reads like teammates, not raw turn prompts:
+   * - implementer finished → it reports done; the reviewer steps in.
+   * - reviewer PASS → it announces approval; the loop ends.
+   * - reviewer FAIL → it says it's passing fixes back; the implementer resumes.
    */
   private async advanceReviewLoop(
     roomId: string,
@@ -428,58 +459,63 @@ class RoomConductor {
   ): Promise<void> {
     const snapshot = await getRoom(roomId);
     if (!snapshot || snapshot.room.status !== 'active') return;
-    if (snapshot.room.preset !== 'review-loop') return;
-    const { members } = snapshot;
+    const { room, members } = snapshot;
+    if (room.preset !== 'review-loop') return;
     const leader = members.find((m) => m.role === 'leader' && m.runtime);
     const reviewer = members.find((m) => m.role === 'worker' && m.runtime);
     if (!leader || !reviewer) return;
+    const roster: RosterEntry[] = members.map((m) => ({
+      handle: m.handle,
+      displayName: m.displayName,
+      role: m.role,
+    }));
 
     if (finished.id === leader.id) {
-      await postMessage({
-        roomId,
-        kind: 'system',
-        body: `${leader.displayName} finished a round — bringing in ${reviewer.displayName} to review.`,
-        mentions: [],
-      });
-      await postMessage({
-        roomId,
-        authorMemberId: leader.id,
-        kind: 'handoff',
-        body: `@${reviewer.handle} ${REVIEW_REQUEST}`,
-        mentions: [reviewer.handle.toLowerCase()],
-        sessionRef: leader.conversationId,
+      await this.say(roomId, leader, SAY.implementedDone);
+      if (!this.spend(roomId)) return this.pauseRouting(roomId);
+      await this.deliverTo(room.projectId, room.taskId, roomId, reviewer, roster, {
+        fromName: leader.displayName,
+        body: REVIEW_REQUEST,
+        reviewLoop: true,
+        chatLine: SAY.reviewing,
       });
       return;
     }
 
     if (finished.id === reviewer.id) {
-      const note = clip(verdict?.feedback ?? '');
       if (verdict?.passed) {
-        await postMessage({
-          roomId,
-          authorMemberId: reviewer.id,
-          kind: 'handoff',
-          body: `@you Review passed.${note ? `\n\n${note}` : ''}`,
-          mentions: ['you'],
-          sessionRef: reviewer.conversationId,
-        });
+        await this.say(roomId, reviewer, SAY.reviewPass);
         await postMessage({
           roomId,
           kind: 'system',
-          body: `Review loop complete — ${reviewer.displayName} approved the work.`,
+          body: `Review approved — task complete.`,
           mentions: [],
         });
         return;
       }
-      await postMessage({
-        roomId,
-        authorMemberId: reviewer.id,
-        kind: 'handoff',
-        body: `@${leader.handle} ${note || 'Re-check the implementation against the requirement.'}`,
-        mentions: [leader.handle.toLowerCase()],
-        sessionRef: reviewer.conversationId,
+      await this.say(roomId, reviewer, SAY.reviewFail(leader.displayName));
+      if (!this.spend(roomId)) return this.pauseRouting(roomId);
+      const fixes =
+        verdict?.feedback?.trim() || 'Re-check the implementation against the requirement.';
+      await this.deliverTo(room.projectId, room.taskId, roomId, leader, roster, {
+        fromName: reviewer.displayName,
+        body: buildImplementerFeedbackPrompt({ reviewFeedback: fixes }),
+        reviewLoop: true,
+        chatLine: SAY.fixing,
       });
     }
+  }
+
+  /** Post a short first-person line into the room on a member's behalf. */
+  private async say(roomId: string, member: RoomMember, body: string): Promise<void> {
+    await postMessage({
+      roomId,
+      authorMemberId: member.id,
+      kind: 'text',
+      body,
+      mentions: [],
+      sessionRef: member.conversationId,
+    });
   }
 }
 

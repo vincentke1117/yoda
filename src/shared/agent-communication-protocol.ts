@@ -1,9 +1,15 @@
 /**
- * Teammate chat protocol. Agents talk to the room out-of-band by running the
- * `team-at` script (it POSTs to Yoda's hook server), NOT by writing @handles or
- * markers into their normal output. The conductor injects whatever a member is
- * told into that member's live session — so "@ing" a teammate is literally
- * continuing its agent session with new input, which every CLI supports.
+ * Agent Communication Protocol (ACP) — the GENERAL way agents collaborate in a
+ * Team Room, independent of any one workflow. Agents talk to the room out-of-band
+ * by running the `team-at` / `team-status` scripts (they POST to Yoda's hook
+ * server), NOT by writing @handles or markers into their normal output. The
+ * conductor injects whatever a member is told into that member's live session —
+ * so "@ing" a teammate is literally continuing its agent session with new input,
+ * which every CLI supports.
+ *
+ * Specific collaboration MODES build on this: e.g. the review loop (implement ↔
+ * review) lives in `review-protocol.ts`, fan-out and freeform are other modes.
+ * Review is just one typical mode — this protocol is the substrate they share.
  */
 
 /** Path (relative to the worktree) of the bundled team-at script. */

@@ -1,3 +1,4 @@
+import { TEAM_AT_SCRIPT } from '@shared/agent-communication-protocol';
 import {
   teamLeader,
   teamWorkers,
@@ -7,7 +8,6 @@ import {
 } from '@shared/agent-team';
 import { REVIEW_PROTOCOL_LINES } from '@shared/review-protocol';
 import type { RuntimeId } from '@shared/runtime-registry';
-import { TEAM_AT_SCRIPT } from '@shared/team-protocol';
 import type { MemberAccent } from '@shared/team-room';
 import { agentTeamsService } from '@main/core/agent-teams/agent-teams-service';
 import { agentsConfigService } from '@main/core/agents-config/agents-config-service';

@@ -212,7 +212,6 @@ function TeamIntroCard({
               {monogram(m.displayName)}
             </div>
             <span className="text-sm font-medium">{m.displayName}</span>
-            <span className="text-xs text-foreground-muted">{m.role}</span>
             <span className="ml-auto flex items-center gap-1 text-[10px] text-foreground-muted">
               <span className={cn('size-1.5 rounded-full', STATUS_DOT[m.status])} />
               {STATUS_LABEL[m.status]}
@@ -260,7 +259,6 @@ function MessageRow({
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
           <span className={cn('text-sm font-semibold', ACCENT_TEXT[accent])}>{name}</span>
-          {author && <span className="text-[11px] text-foreground-muted">{author.role}</span>}
           {message.kind === 'handoff' && (
             <span className="rounded bg-background-2 px-1.5 py-px text-[10px] text-foreground-muted">
               {t('agentRoom.handoff')}

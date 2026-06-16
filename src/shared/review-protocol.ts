@@ -1,3 +1,7 @@
+// The REVIEW collaboration mode — implement ↔ review until the reviewer signs
+// off. One mode built on the general Agent Communication Protocol (see
+// `agent-communication-protocol.ts`); fan-out and freeform are other modes. Used
+// by both the standalone review-orchestration engine and the Team Room review-loop.
 import { stripTerminalControlSequences, withSystemPrompt } from './prompt-format';
 
 /** Maximum implement→review cycles before the orchestration gives up. */
