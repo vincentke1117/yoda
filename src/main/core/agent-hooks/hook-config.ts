@@ -21,7 +21,16 @@ const CLAUDE_SETTINGS_PATH = '.claude/settings.local.json';
 const PI_YODA_EXTENSION_PATH = '.pi/extensions/yoda-hook.ts';
 const OPENCODE_PLUGIN_PATH = '.opencode/plugins/yoda-notifications.js';
 const GITIGNORE_PATH = '.gitignore';
-type HookConfigWriteOptions = { writeGitIgnoreEntries?: boolean };
+type HookConfigWriteOptions = {
+  writeGitIgnoreEntries?: boolean;
+  /**
+   * Conversation ptyId to expose to the agent's shell as YODA_PTY_ID. Claude's
+   * Bash tool runs in a sanitized shell that does NOT inherit the PTY env, so the
+   * team-* scripts can't read it — writing it into settings.local.json `env` (which
+   * Claude applies to tool execution) is the only way to reach the Bash tool.
+   */
+  ptyId?: string;
+};
 
 /**
  * Tools that block waiting for the user to make a choice. Claude Code does NOT
@@ -59,7 +68,7 @@ export class HookConfigWriter {
     private readonly exec: IExecutionContext
   ) {}
 
-  async writeClaudeHooks(): Promise<boolean> {
+  async writeClaudeHooks(ptyId?: string): Promise<boolean> {
     if (!(await resolveCommandPath('claude', this.exec))) return false;
 
     const config: Record<string, unknown> = (await this.fs.exists(CLAUDE_SETTINGS_PATH))
@@ -68,6 +77,14 @@ export class HookConfigWriter {
           .then((r) => JSON.parse(r.content) ?? {})
           .catch(() => ({}))
       : {};
+
+    // Expose YODA_PTY_ID to the Bash tool (it isn't inherited from the PTY env),
+    // so the team-* scripts can identify the calling member.
+    if (ptyId) {
+      const env =
+        config.env && typeof config.env === 'object' ? (config.env as Record<string, unknown>) : {};
+      config.env = { ...env, YODA_PTY_ID: ptyId };
+    }
 
     const hooks = (config.hooks ?? {}) as Record<string, unknown[]>;
 
@@ -119,7 +136,7 @@ export class HookConfigWriter {
     const writeGitIgnoreEntries = options.writeGitIgnoreEntries ?? true;
 
     if (runtimeId === 'claude') {
-      const wroteConfig = await this.writeClaudeHooks();
+      const wroteConfig = await this.writeClaudeHooks(options.ptyId);
       if (wroteConfig && writeGitIgnoreEntries) {
         await this.ensureGitIgnoreEntries([CLAUDE_SETTINGS_PATH]);
       }

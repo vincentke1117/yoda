@@ -125,7 +125,10 @@ export class LocalConversationProvider implements ConversationProvider {
       cwd: this.taskPath,
       homedir: homedir(),
     });
-    await this.prepareHookConfig(conversation.runtimeId);
+    await this.prepareHookConfig(
+      conversation.runtimeId,
+      makePtyId(conversation.runtimeId, conversation.id)
+    );
     await applyHookOverrides(
       this.taskPath,
       conversation.runtimeId,
@@ -457,7 +460,10 @@ export class LocalConversationProvider implements ConversationProvider {
     return true;
   }
 
-  private async prepareHookConfig(runtimeId: Conversation['runtimeId']): Promise<void> {
+  private async prepareHookConfig(
+    runtimeId: Conversation['runtimeId'],
+    ptyId: string
+  ): Promise<void> {
     try {
       const localProjectSettings = await appSettingsService.get('localProject');
       const writeGitIgnoreEntries = localProjectSettings.writeAgentConfigToGitIgnore ?? true;
@@ -469,6 +475,7 @@ export class LocalConversationProvider implements ConversationProvider {
 
       await this.hookConfigWriter.writeForProvider(runtimeId, {
         writeGitIgnoreEntries,
+        ptyId,
       });
       this.preparedHookProviders.set(runtimeId, writeGitIgnoreEntries);
     } catch (error) {
