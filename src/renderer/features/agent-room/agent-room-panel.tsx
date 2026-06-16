@@ -3,6 +3,7 @@ import { observer } from 'mobx-react-lite';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { RoomMember, RoomMessage, RoomSnapshot } from '@shared/team-room';
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@renderer/lib/ui/resizable';
 import { cn } from '@renderer/utils/utils';
 import { ACCENT_AVATAR, ACCENT_MENTION, ACCENT_TEXT, STATUS_DOT, STATUS_LABEL } from './accent';
 import { agentRoomStore } from './agent-room-store';
@@ -178,31 +179,50 @@ export const RoomChat = observer(function RoomChat({ snapshot }: { snapshot: Roo
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <div className="flex min-w-0 flex-1 flex-col">
-          <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-            <TeamIntroCard agents={agents} preset={snapshot.room.preset} />
-            {snapshot.messages.map((msg) => (
-              <MessageRow
-                key={msg.id}
-                message={msg}
-                byId={byId}
-                byHandle={byHandle}
-                inspectedId={inspectedId}
-              />
-            ))}
-          </div>
-          <Composer members={snapshot.members} />
-        </div>
+        {(() => {
+          const chatColumn = (
+            <div className="flex h-full min-w-0 flex-1 flex-col">
+              <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+                <TeamIntroCard agents={agents} preset={snapshot.room.preset} />
+                {snapshot.messages.map((msg) => (
+                  <MessageRow
+                    key={msg.id}
+                    message={msg}
+                    byId={byId}
+                    byHandle={byHandle}
+                    inspectedId={inspectedId}
+                  />
+                ))}
+              </div>
+              <Composer members={snapshot.members} />
+            </div>
+          );
 
-        {inspectedId && (
-          <RoomSessionInspector
-            projectId={snapshot.room.projectId}
-            taskId={snapshot.room.taskId}
-            conversationId={inspectedId}
-            title={`session · ${inspectedId.slice(0, 8)}`}
-            onClose={() => agentRoomStore.setInspectedConversation(null)}
-          />
-        )}
+          if (!inspectedId) return chatColumn;
+
+          return (
+            <ResizablePanelGroup orientation="horizontal" className="min-h-0 min-w-0">
+              <ResizablePanel id="room-chat" minSize="30%" className="flex min-h-0 min-w-0">
+                {chatColumn}
+              </ResizablePanel>
+              <ResizableHandle />
+              <ResizablePanel
+                id="room-inspector"
+                defaultSize="44%"
+                minSize="24%"
+                className="flex min-h-0 min-w-0"
+              >
+                <RoomSessionInspector
+                  projectId={snapshot.room.projectId}
+                  taskId={snapshot.room.taskId}
+                  conversationId={inspectedId}
+                  title={`session · ${inspectedId.slice(0, 8)}`}
+                  onClose={() => agentRoomStore.setInspectedConversation(null)}
+                />
+              </ResizablePanel>
+            </ResizablePanelGroup>
+          );
+        })()}
       </div>
     </section>
   );
