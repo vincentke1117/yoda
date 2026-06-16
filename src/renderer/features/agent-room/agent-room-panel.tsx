@@ -1,4 +1,4 @@
-import { MessagesSquare, Plus, Send, Sparkles, TerminalSquare, Users } from 'lucide-react';
+import { MessagesSquare, Plus, Send, Sparkles, TerminalSquare, Users, X } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -113,6 +113,8 @@ export const RoomChat = observer(function RoomChat({ snapshot }: { snapshot: Roo
 
   const agents = snapshot.members.filter((m) => m.role !== 'lead');
   const inspectedId = agentRoomStore.inspectedConversationId;
+  const inspectedMemberId = agentRoomStore.inspectedMemberId;
+  const detailMember = inspectedMemberId ? byId.get(inspectedMemberId) : undefined;
 
   return (
     <section className="flex h-full min-w-0 flex-1 flex-col">
@@ -128,25 +130,18 @@ export const RoomChat = observer(function RoomChat({ snapshot }: { snapshot: Roo
         </div>
         <div className="ml-auto flex items-center gap-1.5">
           {agents.map((m) => {
-            const conv = m.conversationId;
-            const isInspected = conv !== null && conv === inspectedId;
+            const isInspected = inspectedMemberId === m.id;
             return (
               <button
                 key={m.id}
                 type="button"
-                disabled={!conv}
-                onClick={() => conv && agentRoomStore.setInspectedConversation(conv)}
-                title={
-                  conv
-                    ? `${m.displayName} · ${STATUS_LABEL[m.status]} — ${t('agentRoom.openSession')}`
-                    : `${m.displayName} · ${STATUS_LABEL[m.status]}`
-                }
+                onClick={() => agentRoomStore.setInspectedMember(m.id)}
+                title={`${m.displayName} · ${STATUS_LABEL[m.status]}`}
                 className={cn(
                   'flex items-center gap-1.5 rounded-lg border px-1.5 py-1 transition-colors',
                   isInspected
                     ? 'border-primary bg-primary/10'
-                    : 'border-transparent hover:border-border hover:bg-background-2',
-                  !conv && 'cursor-default'
+                    : 'border-transparent hover:border-border hover:bg-background-2'
                 )}
               >
                 <div className="relative">
@@ -166,11 +161,6 @@ export const RoomChat = observer(function RoomChat({ snapshot }: { snapshot: Roo
                   />
                 </div>
                 <span className="text-xs font-medium">{m.displayName}</span>
-                {conv && (
-                  <TerminalSquare
-                    className={cn('size-3', isInspected ? 'text-primary' : 'text-foreground-muted')}
-                  />
-                )}
               </button>
             );
           })}
@@ -194,7 +184,7 @@ export const RoomChat = observer(function RoomChat({ snapshot }: { snapshot: Roo
           <Composer members={snapshot.members} />
         </div>
 
-        {inspectedId && (
+        {inspectedId ? (
           <RoomSessionInspector
             projectId={snapshot.room.projectId}
             taskId={snapshot.room.taskId}
@@ -202,7 +192,12 @@ export const RoomChat = observer(function RoomChat({ snapshot }: { snapshot: Roo
             title={`session · ${inspectedId.slice(0, 8)}`}
             onClose={() => agentRoomStore.setInspectedConversation(null)}
           />
-        )}
+        ) : detailMember ? (
+          <AgentDetailPane
+            member={detailMember}
+            onClose={() => agentRoomStore.setInspectedMember(null)}
+          />
+        ) : null}
       </div>
     </section>
   );
@@ -216,7 +211,7 @@ const TeamIntroCard = observer(function TeamIntroCard({
   preset: RoomSnapshot['room']['preset'];
 }) {
   const { t } = useTranslation();
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const inspectedMemberId = agentRoomStore.inspectedMemberId;
   const key = preset === 'review-loop' ? 'review' : 'freeform';
   const impl = agents.find((m) => m.role === 'leader')?.displayName ?? 'Implementer';
   const rev = agents.find((m) => m.role === 'worker')?.displayName ?? 'Reviewer';
@@ -244,54 +239,118 @@ const TeamIntroCard = observer(function TeamIntroCard({
       </p>
       <div className="flex flex-col gap-0.5">
         {agents.map((m) => {
-          const expanded = expandedId === m.id;
+          const isInspected = inspectedMemberId === m.id;
           return (
-            <div key={m.id} className="rounded-lg">
-              <button
-                type="button"
-                onClick={() => setExpandedId(expanded ? null : m.id)}
-                className="flex w-full items-center gap-2.5 rounded-lg px-1.5 py-1 text-left transition-colors hover:bg-background-2"
-              >
-                <div
-                  className={cn(
-                    'flex size-7 shrink-0 items-center justify-center rounded-lg text-xs font-semibold',
-                    ACCENT_AVATAR[m.accent]
-                  )}
-                >
-                  {monogram(m.displayName)}
-                </div>
-                <span className="text-sm font-medium">{m.displayName}</span>
-                <span className="ml-auto flex items-center gap-1 text-[10px] text-foreground-muted">
-                  <span className={cn('size-1.5 rounded-full', STATUS_DOT[m.status])} />
-                  {STATUS_LABEL[m.status]}
-                </span>
-                <span className="font-mono text-[10px] text-foreground-muted">@{m.handle}</span>
-              </button>
-              {expanded && (
-                <div className="mb-1 ml-9 mt-1 flex flex-col gap-1.5 text-xs text-foreground-muted">
-                  <div className="flex items-center gap-2">
-                    <span>{m.role}</span>
-                    {m.runtime && <span className="font-mono opacity-80">{m.runtime}</span>}
-                  </div>
-                  <div className="max-h-32 overflow-y-auto whitespace-pre-wrap rounded-md border border-border bg-background p-2 text-[11px] leading-relaxed">
-                    {m.systemPrompt?.trim() ? m.systemPrompt : t('agentRoom.member.noInstructions')}
-                  </div>
-                  {m.conversationId && (
-                    <button
-                      type="button"
-                      onClick={() => agentRoomStore.setInspectedConversation(m.conversationId)}
-                      className="inline-flex w-fit items-center gap-1 text-[11px] text-foreground-muted transition-colors hover:text-foreground"
-                    >
-                      <TerminalSquare className="size-3" /> {t('agentRoom.openSession')}
-                    </button>
-                  )}
-                </div>
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => agentRoomStore.setInspectedMember(m.id)}
+              title={t('agentRoom.viewAgent')}
+              className={cn(
+                'flex w-full items-center gap-2.5 rounded-lg border px-1.5 py-1 text-left transition-colors',
+                isInspected
+                  ? 'border-primary bg-primary/10'
+                  : 'border-transparent hover:bg-background-2'
               )}
-            </div>
+            >
+              <div
+                className={cn(
+                  'flex size-7 shrink-0 items-center justify-center rounded-lg text-xs font-semibold',
+                  ACCENT_AVATAR[m.accent]
+                )}
+              >
+                {monogram(m.displayName)}
+              </div>
+              <span className="text-sm font-medium">{m.displayName}</span>
+              <span className="ml-auto flex items-center gap-1 text-[10px] text-foreground-muted">
+                <span className={cn('size-1.5 rounded-full', STATUS_DOT[m.status])} />
+                {STATUS_LABEL[m.status]}
+              </span>
+              <span className="font-mono text-[10px] text-foreground-muted">@{m.handle}</span>
+            </button>
           );
         })}
       </div>
     </div>
+  );
+});
+
+/** Side pane: a room member's identity / entity detail (role, runtime, instructions). */
+const AgentDetailPane = observer(function AgentDetailPane({
+  member,
+  onClose,
+}: {
+  member: RoomMember;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <aside className="flex w-[44%] min-w-[320px] shrink-0 flex-col border-l border-border bg-background">
+      <header className="flex items-center gap-2 border-b border-border px-3 py-2">
+        <span className="min-w-0 flex-1 truncate text-xs font-medium">
+          {t('agentRoom.viewAgent')}
+        </span>
+        <button
+          type="button"
+          onClick={onClose}
+          title="Close"
+          className="flex size-6 items-center justify-center rounded-md text-foreground-muted transition-colors hover:bg-background-2 hover:text-foreground"
+        >
+          <X className="size-4" />
+        </button>
+      </header>
+      <div className="min-h-0 flex-1 overflow-y-auto p-4">
+        <div className="flex items-center gap-3">
+          <div
+            className={cn(
+              'flex size-11 shrink-0 items-center justify-center rounded-xl text-base font-semibold',
+              ACCENT_AVATAR[member.accent]
+            )}
+          >
+            {monogram(member.displayName)}
+          </div>
+          <div className="min-w-0">
+            <div className="truncate text-base font-semibold">{member.displayName}</div>
+            <div className="flex items-center gap-2 text-xs text-foreground-muted">
+              <span className="flex items-center gap-1">
+                <span className={cn('size-2 rounded-full', STATUS_DOT[member.status])} />
+                {STATUS_LABEL[member.status]}
+              </span>
+              <span className="font-mono">@{member.handle}</span>
+            </div>
+          </div>
+        </div>
+        <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-xs">
+          <dt className="text-foreground-muted">role</dt>
+          <dd>{member.role}</dd>
+          {member.runtime && (
+            <>
+              <dt className="text-foreground-muted">runtime</dt>
+              <dd className="font-mono">{member.runtime}</dd>
+            </>
+          )}
+        </dl>
+        <div className="mt-4">
+          <div className="mb-1 text-xs font-semibold text-foreground-muted">
+            {t('agentRoom.member.instructions')}
+          </div>
+          <div className="whitespace-pre-wrap rounded-lg border border-border bg-background-1 p-3 text-xs leading-relaxed">
+            {member.systemPrompt?.trim()
+              ? member.systemPrompt
+              : t('agentRoom.member.noInstructions')}
+          </div>
+        </div>
+        {member.conversationId && (
+          <button
+            type="button"
+            onClick={() => agentRoomStore.setInspectedConversation(member.conversationId)}
+            className="mt-4 inline-flex items-center gap-1.5 rounded-md border border-border bg-background-1 px-3 py-1.5 text-xs text-foreground-muted transition-colors hover:border-primary hover:text-foreground"
+          >
+            <TerminalSquare className="size-3.5" /> {t('agentRoom.openSession')}
+          </button>
+        )}
+      </div>
+    </aside>
   );
 });
 

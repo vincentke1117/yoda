@@ -1517,6 +1517,7 @@
         "note": "Each teammate works independently; click a message to watch its session."
       }
     },
+    "viewAgent": "Agent details",
     "member": { "instructions": "Instructions", "noInstructions": "No custom instructions" },
     "preset": { "review": "Review loop", "freeform": "Freeform" },
     "mode": { "review": "Review loop", "freeform": "Freeform" },

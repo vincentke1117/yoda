@@ -18,8 +18,10 @@ class AgentRoomStore {
   snapshot: RoomSnapshot | null = null;
   loadingRooms = false;
   loadingRoom = false;
-  /** Conversation id whose live session is expanded inline, if any. */
+  /** Conversation id whose live session is shown in the side pane, if any. */
   inspectedConversationId: string | null = null;
+  /** Member id whose detail is shown in the side pane, if any. */
+  inspectedMemberId: string | null = null;
 
   private disposers: (() => void)[] = [];
 
@@ -47,6 +49,7 @@ class AgentRoomStore {
     this.activeRoomId = roomId;
     this.snapshot = null;
     this.inspectedConversationId = null;
+    this.inspectedMemberId = null;
     this.resubscribe(roomId);
     await this.refreshSnapshot();
   }
@@ -137,9 +140,17 @@ class AgentRoomStore {
     );
   }
 
+  /** Show a member's live session in the side pane (mutually exclusive with member detail). */
   setInspectedConversation(conversationId: string | null): void {
     this.inspectedConversationId =
       this.inspectedConversationId === conversationId ? null : conversationId;
+    if (this.inspectedConversationId) this.inspectedMemberId = null;
+  }
+
+  /** Show a member's detail in the side pane (mutually exclusive with the session view). */
+  setInspectedMember(memberId: string | null): void {
+    this.inspectedMemberId = this.inspectedMemberId === memberId ? null : memberId;
+    if (this.inspectedMemberId) this.inspectedConversationId = null;
   }
 
   private resubscribe(roomId: string): void {

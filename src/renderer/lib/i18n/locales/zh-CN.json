@@ -1517,6 +1517,7 @@
         "note": "每位队友独立工作；点消息可查看其会话。"
       }
     },
+    "viewAgent": "Agent 详情",
     "member": { "instructions": "指令", "noInstructions": "无自定义指令" },
     "preset": { "review": "评审循环", "freeform": "自由" },
     "mode": { "review": "评审循环", "freeform": "自由" },
