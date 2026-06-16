@@ -15,7 +15,7 @@ import { injectPrompt } from '@main/core/conversations/inject-prompt';
 import { ptySessionRegistry } from '@main/core/pty/pty-session-registry';
 import { events } from '@main/lib/events';
 import { log } from '@main/lib/logger';
-import { getRoom, postMessage, setMemberConversation, setMemberStatus } from './store';
+import { getAllRooms, getRoom, postMessage, setMemberConversation, setMemberStatus } from './store';
 import { teamRoomEvents } from './team-room-events';
 import { waitForMemberTurn } from './turn-wait';
 
@@ -51,6 +51,39 @@ class RoomConductor {
   abortRoom(roomId: string): void {
     this.aborters.get(roomId)?.abort();
     this.aborters.delete(roomId);
+  }
+
+  /**
+   * Recover rooms left mid-turn by a previous app lifetime (reload, crash). The
+   * in-flight PTY turn is gone, so: clear stale 'working'/'thinking' member dots,
+   * then re-drive the last message if it still addresses an agent that never got
+   * to reply (it's the last message, so by definition nothing followed it).
+   */
+  async resumePending(): Promise<void> {
+    const rooms = await getAllRooms();
+    for (const room of rooms) {
+      const snapshot = await getRoom(room.id);
+      if (!snapshot) continue;
+      for (const member of snapshot.members) {
+        if (member.runtime && member.status !== 'idle') {
+          await setMemberStatus(room.id, member.id, 'idle', member.conversationId);
+        }
+      }
+      const last = snapshot.messages.at(-1);
+      if (!last || last.mentions.length === 0) continue;
+      const pending = snapshot.members.some(
+        (m) =>
+          m.runtime &&
+          m.id !== last.authorMemberId &&
+          last.mentions.includes(m.handle.toLowerCase())
+      );
+      if (pending) {
+        this.hops.set(room.id, MAX_HOPS);
+        void this.onMessage(room.id, last).catch((e: unknown) => {
+          log.warn('RoomConductor: resume failed', { roomId: room.id, error: String(e) });
+        });
+      }
+    }
   }
 
   private signal(roomId: string): AbortSignal {

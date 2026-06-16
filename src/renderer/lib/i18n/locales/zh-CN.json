@@ -1473,6 +1473,42 @@
       "automation": "自动化"
     }
   },
+  "agentRoom": {
+    "rooms": "房间",
+    "newRoom": "新建智能体房间",
+    "noRooms": "还没有房间。新建一个，把几个智能体聚到一个聊天里。",
+    "empty": "智能体房间是一个群聊，每位队友都是一个智能体。@ 某个成员派活——它会拉起自己的 session 并把结果回报。",
+    "agentCount": "{{count}} 个智能体",
+    "handoff": "交接",
+    "openSession": "查看 session",
+    "hideSession": "收起 session",
+    "composerPlaceholder": "在房间里发言——@ 某个成员给它派活…",
+    "preset": { "review": "评审循环", "freeform": "自由" },
+    "mode": { "review": "评审循环", "freeform": "自由" },
+    "taskExisting": "已有任务",
+    "taskNew": "新建 worktree",
+    "selectProject": "选择项目",
+    "selectTask": "选择任务",
+    "noAgents": "你的智能体库还是空的，请先到「智能体」里创建。",
+    "creating": "创建中…",
+    "createStart": "创建并启动",
+    "field": {
+      "project": "项目",
+      "task": "任务（worktree）",
+      "taskName": "新任务名称",
+      "roomName": "房间名称",
+      "roomNamePlaceholder": "例如：鉴权重构评审",
+      "requirement": "需求（lead 的开场要求）",
+      "requirementPlaceholder": "实现者要做/修什么？",
+      "implementer": "实现者",
+      "reviewer": "评审者",
+      "members": "成员（来自你的智能体库）"
+    },
+    "errors": {
+      "localOnly": "新建 worktree 仅支持本地项目。",
+      "taskCreate": "创建任务失败。"
+    }
+  },
   "promptLibrary": {
     "title": "提示词库",
     "principles": {
