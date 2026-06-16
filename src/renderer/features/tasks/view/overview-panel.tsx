@@ -1,7 +1,9 @@
+import { useQuery } from '@tanstack/react-query';
 import { ChevronRight, GitBranch, MessageSquarePlus } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useTranslation } from 'react-i18next';
 import type { ConversationUsageSummary } from '@shared/stats';
+import { TaskRoomChat, taskRoomQueryKey } from '@renderer/features/agent-room/task-room-chat';
 import {
   getProjectStore,
   projectDisplayName,
@@ -15,6 +17,7 @@ import {
 } from '@renderer/features/tasks/stores/task-selectors';
 import { useProvisionedTask, useTaskViewContext } from '@renderer/features/tasks/task-view-context';
 import AgentLogo from '@renderer/lib/components/agent-logo';
+import { rpc } from '@renderer/lib/ipc';
 import { useNavigate } from '@renderer/lib/layout/navigation-provider';
 import { useShowModal } from '@renderer/lib/modal/modal-provider';
 import { Button } from '@renderer/lib/ui/button';
@@ -68,6 +71,13 @@ export const OverviewPanel = observer(function OverviewPanel() {
       },
     });
   };
+
+  // A team-room task: the overview tab IS the group chat (multi-agent paradigm).
+  const { data: teamRoom } = useQuery({
+    queryKey: taskRoomQueryKey(projectId, taskId),
+    queryFn: () => rpc.teamRooms.getRoomForTask(projectId, taskId),
+  });
+  if (teamRoom) return <TaskRoomChat projectId={projectId} taskId={taskId} />;
 
   return (
     <div className="flex h-full w-full flex-col overflow-y-auto bg-background">
