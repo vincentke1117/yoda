@@ -1,6 +1,7 @@
-import { Copy, ExternalLink, Loader2, Save } from 'lucide-react';
+import { Copy, ExternalLink, Loader2, Plus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { LeakedPromptMeta } from '@shared/leaked-prompts';
+import { useAppSettingsKey } from '@renderer/features/settings/use-app-settings-key';
 import { useToast } from '@renderer/lib/hooks/use-toast';
 import { rpc } from '@renderer/lib/ipc';
 import { type BaseModalProps } from '@renderer/lib/modal/modal-provider';
@@ -12,7 +13,6 @@ import {
   DialogTitle,
 } from '@renderer/lib/ui/dialog';
 import { useLeakedPromptContent } from './use-leaked-prompts';
-import { useCreatePrompt } from './use-prompts';
 
 export type LeakedPromptViewerModalArgs = {
   meta: LeakedPromptMeta;
@@ -24,7 +24,7 @@ export function LeakedPromptViewerModal({ meta, onClose }: Props) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { data: content, isLoading, isError } = useLeakedPromptContent(meta.id);
-  const createPrompt = useCreatePrompt();
+  const { value: principles, update: updatePrinciples } = useAppSettingsKey('promptPrinciples');
 
   const handleCopy = () => {
     if (!content) return;
@@ -34,27 +34,20 @@ export function LeakedPromptViewerModal({ meta, onClose }: Props) {
     );
   };
 
-  const handleSave = () => {
+  // Adds the prompt as an atomic principle (enabled): the runtime appends
+  // enabled principles to every session's system prompt. This is a backend
+  // injection, not a copy into the composer.
+  const handleAddPrinciple = () => {
     if (!content) return;
-    createPrompt.mutate(
-      {
-        title: meta.title,
-        description: `${meta.vendor}${meta.date ? ` · ${meta.date}` : ''}`,
-        content,
-      },
-      {
-        onSuccess: () => {
-          toast({ title: t('promptLibrary.reference.saved') });
-          onClose();
-        },
-        onError: (error) =>
-          toast({
-            title: t('promptLibrary.saveFailed'),
-            description: error instanceof Error ? error.message : String(error),
-            variant: 'destructive',
-          }),
-      }
-    );
+    const items = principles?.items ?? [];
+    updatePrinciples({
+      items: [
+        ...items,
+        { id: crypto.randomUUID(), name: meta.title, text: content, enabled: true },
+      ],
+    });
+    toast({ title: t('promptLibrary.reference.addedAsPrinciple') });
+    onClose();
   };
 
   return (
@@ -102,9 +95,9 @@ export function LeakedPromptViewerModal({ meta, onClose }: Props) {
             <Copy className="size-4" />
             {t('promptLibrary.copy')}
           </Button>
-          <Button type="button" size="sm" disabled={!content} onClick={handleSave}>
-            <Save className="size-4" />
-            {t('promptLibrary.reference.saveAsTemplate')}
+          <Button type="button" size="sm" disabled={!content} onClick={handleAddPrinciple}>
+            <Plus className="size-4" />
+            {t('promptLibrary.reference.addAsPrinciple')}
           </Button>
         </div>
       </DialogFooter>

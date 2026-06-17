@@ -748,9 +748,6 @@
     "promptPrinciplesLabel": "Prompt principles",
     "promptPrinciplesProjectHeading": "This project",
     "promptPrincipleUnnamed": "Untitled principle",
-    "promptTemplatesLabel": "Prompt templates",
-    "promptTemplatesEmpty": "No saved templates yet.",
-    "promptTemplateInsert": "Insert into prompt",
     "instructionFilesLabel": "Instruction files",
     "instructionFilesHint": "The client's built-in system prompt is not editable. The global CLAUDE.md acts as your user-level system prompt; the project's CLAUDE.md / AGENTS.md are the project-level prompts. Click to expand, hover a row to open and edit.",
     "noInstructionFiles": "No instruction files found",
@@ -1601,8 +1598,8 @@
       "searchPlaceholder": "Search by name or vendor…",
       "count": "{{count}} prompts",
       "openSource": "Open on GitHub",
-      "saveAsTemplate": "Save as template",
-      "saved": "Saved to your prompts",
+      "addAsPrinciple": "Add as principle",
+      "addedAsPrinciple": "Added to prompt principles (enabled)",
       "loadFailed": "Could not load this prompt. Check your connection and try again."
     }
   },

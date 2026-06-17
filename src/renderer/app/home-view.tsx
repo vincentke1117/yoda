@@ -74,7 +74,6 @@ import {
   getRepositoryStore,
   projectDisplayName,
 } from '@renderer/features/projects/stores/project-selectors';
-import { usePrompts } from '@renderer/features/prompt-library/use-prompts';
 import { useAppSettingsKey } from '@renderer/features/settings/use-app-settings-key';
 import { useSkills } from '@renderer/features/skills/components/useSkills';
 import { recordSkillInvocation } from '@renderer/features/skills/skill-usage-stats';
@@ -1339,9 +1338,6 @@ export const HomeComposer = observer(function HomeComposer({
   const { value: promptPrinciplesValue, update: updatePromptPrinciples } =
     useAppSettingsKey('promptPrinciples');
   const promptPrinciples = promptPrinciplesValue?.items ?? [];
-  // Saved prompt templates (opt-in): listed in the composer settings popover so
-  // they can be inserted into the prompt without leaving the home view.
-  const { data: savedPrompts = [] } = usePrompts();
   // Run-defaults section is collapsed by default — it is rarely changed and its
   // eight rows otherwise dominate the popover.
   const [runDefaultsOpen, setRunDefaultsOpen] = useState(false);
@@ -2994,47 +2990,6 @@ export const HomeComposer = observer(function HomeComposer({
                     ))}
                   </>
                 ) : null}
-              </div>
-              <div className="mt-2 flex flex-col gap-1 border-t border-border/60 pt-2">
-                <ComposerSettingsHeader
-                  label={t('home.promptTemplatesLabel')}
-                  action={
-                    <button
-                      type="button"
-                      className="font-mono text-[10px] uppercase tracking-widest text-foreground-passive transition-colors hover:text-foreground"
-                      onClick={() => navigate('library', { section: 'prompts' })}
-                    >
-                      {t('home.manage')}
-                    </button>
-                  }
-                />
-                {savedPrompts.length === 0 ? (
-                  <p className="text-xs text-foreground-passive">
-                    {t('home.promptTemplatesEmpty')}
-                  </p>
-                ) : (
-                  savedPrompts.map((template) => (
-                    <div key={template.id} className="flex items-center justify-between gap-3">
-                      <div className="flex min-w-0 items-center gap-1.5">
-                        <span className="min-w-0 truncate text-xs text-foreground">
-                          {template.title}
-                        </span>
-                        {template.description ? (
-                          <InfoTooltip label={template.title} content={template.description} />
-                        ) : null}
-                      </div>
-                      <button
-                        type="button"
-                        aria-label={t('home.promptTemplateInsert')}
-                        title={t('home.promptTemplateInsert')}
-                        onClick={() => insertPromptSnippet(template.content)}
-                        className="flex size-5 shrink-0 items-center justify-center rounded text-foreground-passive transition-colors hover:bg-background-2 hover:text-foreground"
-                      >
-                        <Plus className="size-3.5" />
-                      </button>
-                    </div>
-                  ))
-                )}
               </div>
               <InstructionFilesSection projectPath={skillProjectPath} />
             </PopoverContent>
