@@ -26,6 +26,26 @@ interface AgentSlotSelectorProps {
 }
 
 /**
+ * Monogram avatar for an Agent. We deliberately do not render the Agent's emoji
+ * here — a brand-tinted initial reads as a real identity anchor and stays
+ * consistent across light/dark themes, where stray emoji look out of place.
+ */
+function AgentAvatar({ name, className }: { name: string; className?: string }) {
+  const initial = Array.from(name.trim())[0]?.toUpperCase() ?? '·';
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        'flex shrink-0 select-none items-center justify-center rounded-lg bg-primary-button-background font-semibold uppercase leading-none text-primary-button-foreground',
+        className
+      )}
+    >
+      {initial}
+    </span>
+  );
+}
+
+/**
  * Slot picker. A slot is an assignment of one **Agent** — the entity that owns a
  * system prompt, skills, and a preferred runtime. The picker therefore lists
  * Agents only; runtime is a field of an Agent, not a peer choice here. When no
@@ -68,23 +88,28 @@ export function AgentSlotSelector({
           <button
             type="button"
             className={cn(
-              'flex h-9 w-full min-w-0 items-center gap-2 rounded-md border border-border bg-transparent px-2.5 py-1 text-sm outline-none transition-colors hover:bg-background-2',
+              'flex h-9 w-full min-w-0 items-center gap-2.5 rounded-md border border-border bg-transparent px-2.5 py-1 text-sm outline-none transition-colors hover:bg-background-2',
               className
             )}
           >
             {selectedAgent ? (
               <>
-                <span className="flex size-4 shrink-0 items-center justify-center text-[13px] leading-none">
-                  {selectedAgent.icon || '🤖'}
+                <AgentAvatar name={selectedAgent.name} className="size-9 text-sm" />
+                <span className="flex-1 truncate text-left text-[13px] font-medium">
+                  {selectedAgent.name}
                 </span>
-                <span className="flex-1 truncate text-left">{selectedAgent.name}</span>
               </>
             ) : (
-              <span className="flex-1 truncate text-left text-foreground-muted">
-                {t('home.slotPickAgent')}
-              </span>
+              <>
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-dashed border-border-1 text-foreground-passive">
+                  <Plus className="size-4" />
+                </span>
+                <span className="flex-1 truncate text-left text-foreground-muted">
+                  {t('home.slotPickAgent')}
+                </span>
+              </>
             )}
-            <ChevronDown className="size-3.5 shrink-0 text-foreground-muted" />
+            <ChevronDown className="size-4 shrink-0 text-foreground-muted" />
           </button>
         }
       />
@@ -124,9 +149,10 @@ export function AgentSlotSelector({
               return (
                 <AgentInfoHover key={agent.id} agent={agent}>
                   <Row active={active} onClick={() => pick(agent.id)}>
-                    <span className="flex size-4 shrink-0 items-center justify-center text-[13px] leading-none">
-                      {agent.icon || '🤖'}
-                    </span>
+                    <AgentAvatar
+                      name={agent.name}
+                      className="size-7 self-start rounded-md text-xs"
+                    />
                     <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                       <span className="truncate">{agent.name}</span>
                       {agent.description && (

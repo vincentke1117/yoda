@@ -4058,14 +4058,15 @@ function Agent({
         {action}
       </div>
 
-      {/* Subject: the agent filling this slot — the one solid, focal control. */}
+      {/* Subject: the agent filling this slot. The monogram avatar carries the
+          focal weight, so the picker itself stays a quiet, ghost control. */}
       <AgentSlotSelector
         selectedAgent={selectedAgent}
         agents={agents}
         onSelectAgent={onSelectAgent}
         onCreateAgent={() => showAgentModal({ onSuccess: (created) => onSelectAgent(created.id) })}
         onManageAgents={() => navigate('agentManager')}
-        className="h-10 min-w-0 rounded-lg border-transparent bg-background-2/70 px-3 hover:bg-background-2"
+        className="h-auto min-w-0 rounded-lg border-transparent bg-transparent py-1.5 pl-1.5 pr-2 hover:bg-background-2/60"
       />
 
       {selectedAgent && (
