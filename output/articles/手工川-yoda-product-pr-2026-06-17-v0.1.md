@@ -18,9 +18,9 @@
 
 有人要说我偏执：做个工具，张口闭口都是 harness。是的，我这些年就认这一件事——harness。我没有别的指望，就一个指望：让它不再是一个被忽略的术语、一句"模型决定一切"的空话，而成为你每天实实在在的工作方式，成为你和你那队 agent 之间牢不可破的默契。
 
-这，就是 Yoda：**Your Orchestra of Delegated Agents**——你那支被妥善指挥的 agent 乐队。我深信，总有一天，"指挥一队 agent 干活"会像今天打开编辑器一样，天经地义。
+这，就是 Yoda：**Your Orchestra of Delegated Agents**——你那支被妥善指挥的 agent 乐队。这名字，也属于那位绝地大师：他从不替你出手，只训练你、点拨你，让你成为真正发号施令的那个人。我深信，总有一天，"指挥一队 agent 干活"会像今天打开编辑器一样，天经地义。
 
-不绑模型，不绑厂商，本地优先。这是潮流，浩浩荡荡——顺之者得心应手，逆之者疲于奔命。这一天，不必再等，就从这里开始：
+不绑模型，不绑厂商，本地优先。路虽远，行则必至——这一天，不必再等。愿原力与你、与你的 agent 乐队同在。就从这里开始：
 
 - macOS / Windows / Linux 安装包：<https://github.com/lovstudio/yoda/releases/latest>
 - 文档与设计语言：<https://yoda.lovstudio.ai/docs>
