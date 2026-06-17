@@ -1720,6 +1720,7 @@ function OverviewSummaryEditor({
           content={displayText}
           variant="compact"
           className="text-xs text-foreground-muted"
+          annotations={Boolean(onAddNote)}
           onAddNote={onAddNote}
         />
       ) : (
