@@ -536,7 +536,7 @@
       "summaryConfigTitle": "会话摘要",
       "summaryConfigDescription": "用于生成会话摘要的 Agent。使用其自身的客户端与模型运行，独立于各会话的运行时。",
       "namingAgentLabel": "命名 Agent",
-      "namingAgentHint": "负责命名任务的 Agent，同时绑定其运行时与模型——命名必须在 Agent 环境中执行。",
+      "namingAgentHint": "负责命名任务的 Agent，同时绑定其客户端与模型——命名必须在 Agent 环境中执行。",
       "summaryAgentLabel": "摘要 Agent",
       "summaryAgentHint": "负责生成会话摘要的 Agent，完全使用其自身的客户端与模型运行；即使当前会话的运行时已不可用，摘要仍可正常生成。",
       "summaryLanguageLabel": "摘要语言",
@@ -1822,15 +1822,15 @@
     "noDescription": "暂无描述",
     "noDescriptionShort": "暂无描述",
     "duplicate": "复制",
-    "anyRuntime": "任意 runtime",
+    "anyRuntime": "任意客户端",
     "skillsCount": "{{count}} 个 skill",
     "icon": "图标",
     "namePlaceholder": "例如：Spec Writer",
     "descPlaceholder": "这个 Agent 用来做什么？",
-    "preferredRuntime": "首选 runtime",
-    "preferredRuntimeHint": "可用时优先使用，否则回退到范式默认 runtime。",
+    "preferredRuntime": "首选客户端",
+    "preferredRuntimeHint": "可用时优先使用，否则回退到范式默认客户端。",
     "model": "模型",
-    "modelPlaceholder": "runtime 默认",
+    "modelPlaceholder": "客户端默认",
     "modelDefault": "默认模型",
     "systemPrompt": "System prompt",
     "systemPromptPlaceholder": "描述这个 Agent 的角色、约束和工作方式。",
@@ -1896,8 +1896,8 @@
     }
   },
   "agents": {
-    "title": "Runtime",
-    "subtitle": "管理已安装的 CLI 运行时，查看检测状态与版本",
+    "title": "客户端",
+    "subtitle": "管理已安装的 CLI 客户端，查看检测状态与版本",
     "detected": "已检测",
     "notDetected": "未检测",
     "notFound": "未找到该代理",
@@ -1906,7 +1906,7 @@
     "unset": "未设置",
     "tabs": {
       "account": "Auth",
-      "maas": "运行时",
+      "maas": "客户端",
       "models": "Models",
       "memory": "记忆",
       "hooks": "Hooks",
@@ -1914,7 +1914,7 @@
       "settings": "设置"
     },
     "maas": {
-      "title": "运行时元信息",
+      "title": "客户端元信息",
       "description": "Yoda 启动该代理时使用的静态 CLI 元信息。",
       "placeholder": "{{name}} 的运行能力与启动详情。",
       "cliFlags": "CLI 调用参数",
@@ -1964,7 +1964,7 @@
       "testOk": "连接正常",
       "testFailed": "连接失败",
       "loadingAccountStatus": "正在加载账号状态…",
-      "noKnownApiEnvVars": "该运行时暂未登记已知的官方 API 环境变量。",
+      "noKnownApiEnvVars": "该客户端暂未登记已知的官方 API 环境变量。",
       "envSourceCustom": "自定义",
       "envSourceInherited": "系统环境",
       "envSourceUnset": "未设置",
@@ -2078,8 +2078,8 @@
       "chapterCount": "{{count}} 章"
     },
     "matrix": {
-      "title": "Runtime 能力矩阵",
-      "desc": "各 Runtime 对每项能力的支持状态。点击行可展开背后的研究备注。",
+      "title": "客户端能力矩阵",
+      "desc": "各客户端对每项能力的支持状态。点击行可展开背后的研究备注。",
       "featureColumn": "能力",
       "upcoming": "下一个"
     },
@@ -2092,7 +2092,7 @@
       "na": "不适用"
     },
     "categories": {
-      "lifecycle": "Runtime 生命周期",
+      "lifecycle": "客户端生命周期",
       "session": "Session",
       "context": "上下文",
       "extensibility": "扩展",
@@ -2110,15 +2110,15 @@
       },
       "install": {
         "name": "安装",
-        "desc": "通过官方安装渠道一键安装 Runtime CLI。"
+        "desc": "通过官方安装渠道一键安装客户端 CLI。"
       },
       "launch": {
         "name": "启动",
-        "desc": "由 Yoda 以正确的参数和环境拉起并编排 Runtime 会话。"
+        "desc": "由 Yoda 以正确的参数和环境拉起并编排客户端会话。"
       },
       "doctor": {
         "name": "配置自诊断",
-        "desc": "对 Runtime 配置做体检：检测错误配置并给出修复建议。"
+        "desc": "对客户端配置做体检：检测错误配置并给出修复建议。"
       },
       "sessionResume": {
         "name": "Resume / Fork / 历史",
@@ -2242,7 +2242,7 @@
       },
       "sessionAutoRename": {
         "name": "Session 自动重命名",
-        "desc": "当 Runtime 自己做不到或做不好时，由 Yoda 自动生成有意义的会话标题。"
+        "desc": "当客户端自己做不到或做不好时，由 Yoda 自动生成有意义的会话标题。"
       },
       "sessionStateSync": {
         "name": "Session 状态同步",
@@ -2250,15 +2250,15 @@
       },
       "authSync": {
         "name": "Auth 信息同步与管理",
-        "desc": "识别各 Runtime 的订阅 / API Key 认证方式，并在一处统一管理凭证。"
+        "desc": "识别各客户端的订阅 / API Key 认证方式，并在一处统一管理凭证。"
       },
       "usageSync": {
         "name": "用量信息同步与管理",
-        "desc": "跨 Runtime 聚合各账户的用量与成本。"
+        "desc": "跨客户端聚合各账户的用量与成本。"
       },
       "systemPrompt": {
         "name": "System Prompt",
-        "desc": "检测、校验、调试与管理 Runtime 的 system prompt 配置。"
+        "desc": "检测、校验、调试与管理客户端的 system prompt 配置。"
       },
       "projectPrompt": {
         "name": "Project Prompt",
@@ -2266,7 +2266,7 @@
       },
       "skills": {
         "name": "Skills",
-        "desc": "跨 Runtime 检测、校验、调试与管理 skills。"
+        "desc": "跨客户端检测、校验、调试与管理 skills。"
       },
       "mcp": {
         "name": "MCP",
@@ -2317,7 +2317,7 @@
     },
     "cta": {
       "title": "影响 Roadmap",
-      "desc": "想让某个 Runtime 或能力被优先支持？告诉我们——反馈会直接决定这张表的推进顺序。",
+      "desc": "想让某个客户端或能力被优先支持？告诉我们——反馈会直接决定这张表的推进顺序。",
       "button": "反馈建议"
     }
   },
@@ -2425,21 +2425,21 @@
     "byProject": "按项目",
     "byModel": "按模型",
     "modelUnknown": "未知模型",
-    "byRuntime": "按运行时",
+    "byRuntime": "按客户端",
     "bySource": "按来源",
     "sessionCount": "{{count}} 个会话",
     "sourceUnknown": "未记录",
     "topTasks": "Token 消耗 Top 任务",
     "caliber": {
       "tasks": "口径：归档时间非空的任务数（归档即完成）；副行为历史创建的全部任务数。",
-      "tokens": "口径：解析本地 Claude / Codex 会话记录逐条累加，含 subagent 记录与项目设置中配置的辅助目录。总量 = 输入 + 输出 + 缓存读 + 缓存写；其他 runtime 暂无解析器，计 0。",
+      "tokens": "口径：解析本地 Claude / Codex 会话记录逐条累加，含 subagent 记录与项目设置中配置的辅助目录。总量 = 输入 + 输出 + 缓存读 + 缓存写；其他客户端暂无解析器，计 0。",
       "lines": "口径：每任务 = 相对源分支的已提交差异（merge-base）+ 工作区未提交变更。活跃任务实时计算，归档任务取归档前快照（本功能上线前归档的任务无快照，计 0）。",
       "activeDays": "口径：会话记录中出现过 token 消耗的本地日历天数。",
       "heatmap": "口径：各会话 token 按实际消耗时刻归入本地日期；色阶按非零日的分位数（25/50/75）划分。",
       "byProject": "口径：每个会话归入其任务所属项目；辅助目录中未被追踪的会话归入配置该路径的项目（已被其他项目追踪的会话留在原项目，全局总量不重复计）。",
       "byModel": "口径：每条记录按 provider 上报的模型 id 归类（Claude 取 message.model；Codex 取当前 turn_context 的 model）；缺失时计入未知。",
-      "byRuntime": "口径：按会话所属 runtime 汇总，仅统计可解析的会话。",
-      "bySource": "口径：会话启动时记录的账号模式；追踪上线前的历史会话按该 runtime 当前设置归类（估算）。",
+      "byRuntime": "口径：按会话所属客户端汇总，仅统计可解析的会话。",
+      "bySource": "口径：会话启动时记录的账号模式；追踪上线前的历史会话按该客户端当前设置归类（估算）。",
       "topTasks": "口径：任务内全部会话 token 求和后排序，取前 10。"
     }
   },
@@ -2457,7 +2457,7 @@
       "status": "状态",
       "purpose": "任务",
       "mode": "模式",
-      "runtime": "运行时",
+      "runtime": "客户端",
       "started": "开始时间",
       "duration": "耗时"
     },
@@ -3091,7 +3091,7 @@
       "openProject": "打开项目",
       "openFailed": "打开失败",
       "memoryTitle": "记忆与提示词",
-      "memoryEmpty": "尚无记忆文件。创建 {{path}} 为该 runtime 提供项目级指令。",
+      "memoryEmpty": "尚无记忆文件。创建 {{path}} 为该客户端提供项目级指令。",
       "skillsTitle": "Skills",
       "skillsEmpty": "尚未安装 skill。在 {{path}} 下添加 SKILL.md 目录。",
       "commandsTitle": "斜杠命令",
