@@ -5,6 +5,56 @@ All notable changes to Yoda will be documented in this file.
 The public Yoda changelog starts at **0.1.0**. Earlier non-Yoda release history
 is preserved in git tags only.
 
+## 0.13.0 — 2026-06-16
+
+### Added
+
+- **Agent Teams — multi-agent collaboration**: a new paradigm where a team of
+  agents collaborates in a shared room. Teams are decoupled templates (data +
+  domain + RPC) managed in the Library, drive the 多智能体 paradigm from the
+  composer, and run as an iterative conductor room. Includes a built-in
+  "Review" team, a game-loop conductor (`@mention` injects into a session,
+  team-@ callbacks), a System referee that auto-routes turns, generic
+  @-mention routing, a persistent clickable roster, an inline/resizable session
+  inspector, heartbeat + standup progress, and the team group chat surfaced in
+  the task Overview tab. Review is surfaced in both the Workflow and
+  Multi-agent sections; Agent Teams get their own Multi-agent sidebar entries.
+- **Annotations**: select text in markdown / session-context docs / file
+  viewers to attach notes, each anchored to its file path and source line, and
+  sync them into the session input.
+- **Prompt library**: a built-in leaked-system-prompts reference gallery;
+  leaked prompts become reusable atomic principles; system + per-project
+  layered prompt principles with drag-to-reorder and an accordion (百叶窗) view.
+- **New runtimes**: GLM (Zhipu, via z.ai), Step (StepFun), and xAI Grok Build
+  CLI — bringing the client lineup to 31.
+- **Composer dual-layer config**: project/global layering for base branch,
+  reviewer, compare, and review strategy; collapsible run-defaults; surfaced
+  saved prompt templates; `attachImagesAsPaths`.
+- Home: redesigned agent slot card (brand monogram avatar, ghost agent picker,
+  compact hierarchy); a docked session-history strip; alt-click pins or hosts a
+  task/project in the global side pane.
+
+### Changed
+
+- **Terminology**: user-facing copy renames Runtime → 客户端 (client) and
+  Agent → 智能体; code symbols are unchanged.
+- **Settings restructured**: iOS-style `SettingRow` (label + control on line 1,
+  full-width description on line 2, normalized control heights); tmux promoted
+  into its own tab / Terminal-tab chapter; Library nav collapses to a dropdown
+  when narrow.
+- The team verdict flows through a structured ACP hook instead of PTY-marker
+  scraping; a shared `AgentCard` is reused across surfaces.
+
+### Fixed
+
+- Team rooms: stop an infinite loop/crash from system lines re-entering
+  routing; deterministic, round-capped review loop; agents post start/finish
+  status in their own voice; `ptyId` baked into per-member scripts.
+- PTY: avoid tmux "command too long" for large system prompts; composer no
+  longer freezes when inserting a large prompt template.
+- Restore archived conversations when un-archiving a task; un-stick Claude
+  awaiting-input via authoritative status.
+
 ## 0.12.1 — 2026-06-16
 
 ### Added
