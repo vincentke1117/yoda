@@ -1,8 +1,25 @@
-import { existsSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { existsSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { log } from '@main/lib/logger';
 import { getWindowsEnvValue } from '@main/utils/windows-env';
 import { buildTmuxShellLine } from './tmux-session-name';
+
+// tmux rejects an over-long command string with "command too long". A large
+// appended system prompt (e.g. a principle carrying a full leaked system
+// prompt) pushes the inlined `new-session` command past that limit, so above
+// this size we stash the command in a temp script and have tmux run that.
+const TMUX_INLINE_COMMAND_LIMIT = 16_384;
+
+/** Writes a one-shot command script and returns its path. Injectable for tests. */
+export type WriteCommandScript = (content: string) => string;
+
+function defaultWriteCommandScript(content: string): string {
+  const file = path.join(tmpdir(), `yoda-cmd-${randomUUID()}.sh`);
+  writeFileSync(file, content, { mode: 0o700 });
+  return file;
+}
 
 export type PtyCommandSpec =
   | { kind: 'argv'; command: string; args: string[] }
@@ -193,7 +210,11 @@ function resolveWindowsSpawn(
   return { command: resolvedCommand, args, cwd: intent.cwd, warnings };
 }
 
-function resolvePosixSpawn(intent: PtySpawnIntent, env: NodeJS.ProcessEnv): ResolvedLocalPtySpawn {
+function resolvePosixSpawn(
+  intent: PtySpawnIntent,
+  env: NodeJS.ProcessEnv,
+  writeScript: WriteCommandScript
+): ResolvedLocalPtySpawn {
   const shell = getPosixShell(env);
 
   if (intent.kind === 'interactive-shell') {
@@ -233,13 +254,19 @@ function resolvePosixSpawn(intent: PtySpawnIntent, env: NodeJS.ProcessEnv): Reso
     : commandLine;
 
   if (intent.tmuxSessionName) {
+    // Keep the tmux command short: stash a large command line in a script and
+    // run that, so tmux never sees the full (possibly multi-KB) line.
+    const tmuxCommandLine =
+      fullCommandLine.length > TMUX_INLINE_COMMAND_LIMIT
+        ? `${quotePosixArg(shell)} ${quotePosixArg(writeScript(`${fullCommandLine}\n`))}`
+        : fullCommandLine;
     return {
       command: shell,
       args: [
         '-c',
         buildTmuxShellLine(
           intent.tmuxSessionName,
-          fullCommandLine,
+          tmuxCommandLine,
           intent.tmuxSize,
           intent.tmuxEnv
         ),
@@ -262,15 +289,17 @@ export function resolveLocalPtySpawn({
   platform,
   env,
   fileExists = existsSync,
+  writeScript = defaultWriteCommandScript,
 }: {
   intent: PtySpawnIntent;
   platform: NodeJS.Platform;
   env: NodeJS.ProcessEnv;
   fileExists?: FileExists;
+  writeScript?: WriteCommandScript;
 }): ResolvedLocalPtySpawn {
   return isWindows(platform)
     ? resolveWindowsSpawn(intent, env, fileExists)
-    : resolvePosixSpawn(intent, env);
+    : resolvePosixSpawn(intent, env, writeScript);
 }
 
 export function logLocalPtySpawnWarnings(
