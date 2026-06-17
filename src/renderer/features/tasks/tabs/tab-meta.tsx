@@ -1,6 +1,7 @@
 import { GitCompare, LayoutDashboard, MessageSquare } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { TaskWindowBounds, TaskWindowTarget } from '@shared/task-window';
+import { roomMemberTabMeta } from '@renderer/features/agent-room/room-member-detail';
 import { formatConversationTitleForDisplay } from '@renderer/features/tasks/conversations/conversation-title-utils';
 import { GitChangeStatusIcon } from '@renderer/features/tasks/diff-view/changes-panel/components/changes-list-item';
 import type { ResolvedDiffTab, ResolvedTab } from '@renderer/features/tasks/tabs/tab-manager-store';
@@ -45,6 +46,11 @@ export function getTabMeta(tab: ResolvedTab): {
       label,
       title: label,
     };
+  }
+
+  if (tab.kind === 'room-member') {
+    const { label, icon } = roomMemberTabMeta(tab.memberId);
+    return { icon, label, title: label };
   }
 
   const { filename, directory } = splitPath(tab.path);
@@ -93,6 +99,8 @@ export function buildTaskWindowTarget(
       return { ...base, tab: { kind: 'overview' } };
     case 'conversation':
       return { ...base, tab: { kind: 'conversation', conversationId: tab.conversationId } };
+    case 'room-member':
+      return { ...base, tab: { kind: 'room-member', memberId: tab.memberId } };
     case 'file':
       return { ...base, tab: { kind: 'file', path: tab.path } };
     case 'diff':

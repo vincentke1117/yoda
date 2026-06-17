@@ -242,6 +242,11 @@ function buildTaskSections(tab: AppTabEntry, t: Translate): ReactNode[][] {
     return [retry, management ?? [], copy ?? [], placement, buildCloseSection(tab, t)];
   }
 
+  // room-member target — identity tab; placement + close only (no path actions).
+  if (target.kind === 'room-member') {
+    return [retry, placement, buildCloseSection(tab, t)];
+  }
+
   // file / diff target — path actions based on the task worktree.
   const file: ReactNode[] = provisioned
     ? [

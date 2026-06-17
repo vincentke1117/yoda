@@ -26,9 +26,17 @@ import { TaskSidebarPreferenceStore } from './task-sidebar-preferences';
  * - `'markdown'`    — markdown files (preview or source; MarkdownEditorPanel owns both)
  * - `'diff'`        — git diff viewer
  * - `'agents'`      — conversation / PTY view
+ * - `'room-member'` — a team-room member's identity / detail
  * - `'other-file'`  — image, svg preview, pdf, binary, too-large, file-error
  */
-export type RendererKind = 'overview' | 'monaco' | 'markdown' | 'diff' | 'agents' | 'other-file';
+export type RendererKind =
+  | 'overview'
+  | 'monaco'
+  | 'markdown'
+  | 'diff'
+  | 'agents'
+  | 'room-member'
+  | 'other-file';
 
 interface TaskViewResources {
   conversations: ConversationManagerStore;
@@ -203,6 +211,7 @@ export class TaskViewStore {
   get activeRenderer(): RendererKind {
     const desc = this.tabManager.activeDescriptor;
     if (desc?.kind === 'overview') return 'overview';
+    if (desc?.kind === 'room-member') return 'room-member';
     if (desc?.kind === 'diff') return 'diff';
     const tab = this.tabManager.activeFileEntry;
     if (!tab) return 'agents';

@@ -3,6 +3,7 @@ import { observer } from 'mobx-react-lite';
 import { Activity, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { usePanelRef, type Layout } from 'react-resizable-panels';
+import { RoomMemberDetail } from '@renderer/features/agent-room/room-member-detail';
 import {
   getTaskManagerStore,
   getTaskStore,
@@ -467,11 +468,22 @@ export const TaskActiveTabContent = observer(function TaskActiveTabContent() {
       <Activity mode={renderer === 'agents' ? 'visible' : 'hidden'}>
         <ConversationsPanel />
       </Activity>
+      <Activity mode={renderer === 'room-member' ? 'visible' : 'hidden'}>
+        <RoomMemberActiveContent />
+      </Activity>
       <Activity mode={renderer === 'other-file' ? 'visible' : 'hidden'}>
         <EditorMainPanel />
       </Activity>
     </div>
   );
+});
+
+/** Main-area body for the active `room-member` tab (resolved from the active descriptor). */
+const RoomMemberActiveContent = observer(function RoomMemberActiveContent() {
+  const { taskView } = useProvisionedTask();
+  const desc = taskView.tabManager.activeDescriptor;
+  if (desc?.kind !== 'room-member') return null;
+  return <RoomMemberDetail memberId={desc.memberId} />;
 });
 
 /**

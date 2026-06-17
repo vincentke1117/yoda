@@ -7,6 +7,7 @@ export type TabViewSnapshot = {
 
 export type TabDescriptor =
   | { kind: 'conversation'; tabId: string; conversationId: string; isPreview: boolean }
+  | { kind: 'room-member'; tabId: string; memberId: string; isPreview: boolean }
   | { kind: 'file'; tabId: string; path: string; isPreview: boolean }
   | {
       kind: 'diff';
