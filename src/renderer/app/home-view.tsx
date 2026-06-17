@@ -3906,7 +3906,7 @@ function ModeConfigurationPanel({
             <button
               type="button"
               onClick={onAddCompareRuntime}
-              className="flex h-9 items-center justify-center gap-1.5 rounded-md border border-dashed border-border/70 bg-background-1 text-xs text-foreground-muted transition-colors hover:bg-background-2 hover:text-foreground"
+              className="flex h-10 items-center justify-center gap-1.5 rounded-lg border border-dashed border-border/60 bg-background-1 text-xs font-medium text-foreground-muted transition-colors hover:border-border hover:bg-background-2 hover:text-foreground"
             >
               <Plus className="size-3.5" />
               <span>{t('home.addCompareAgent')}</span>
@@ -4026,14 +4026,16 @@ function Agent({
     selectedAgent && showAgentModal({ agent: selectedAgent, onSuccess: () => undefined });
 
   return (
-    <div className="flex min-w-0 flex-col gap-2 rounded-lg border border-border/70 bg-background-1 p-2">
-      <div className="flex min-w-0 items-center gap-1.5">
-        <span
-          title={label}
-          className="flex min-w-0 flex-1 items-center gap-1.5 text-foreground-muted"
-        >
-          <Icon className="size-3.5 shrink-0" />
-          <span className="min-w-0 truncate text-[11px] font-medium uppercase tracking-wide">
+    <div className="group flex min-w-0 flex-col gap-2.5 rounded-lg border border-border/60 bg-background-1 p-2.5 transition-colors hover:border-border focus-within:border-border-1">
+      <div className="flex min-w-0 items-center gap-2">
+        {/* Role identity anchor: an icon badge fronts the small-caps role name so
+            the slot's function reads at a glance, distinct from the agent emoji
+            shown inside the picker below. */}
+        <span title={label} className="flex min-w-0 flex-1 items-center gap-2">
+          <span className="flex size-7 shrink-0 items-center justify-center rounded-md border border-border/60 bg-background-2/60 text-foreground-muted transition-colors group-hover:border-border group-hover:text-foreground">
+            <Icon className="size-4" />
+          </span>
+          <span className="min-w-0 truncate text-[10.5px] font-semibold uppercase leading-tight tracking-[0.07em] text-foreground-muted transition-colors group-hover:text-foreground">
             {label}
           </span>
         </span>
@@ -4042,7 +4044,7 @@ function Agent({
             type="button"
             onClick={editAgent}
             aria-label={t('agentManager.editAgent')}
-            className="flex size-6 shrink-0 items-center justify-center rounded-md text-foreground-muted transition-colors hover:bg-background-2 hover:text-foreground"
+            className="flex size-7 shrink-0 items-center justify-center rounded-md text-foreground-muted transition-colors hover:bg-background-2 hover:text-foreground"
           >
             <Settings2 className="size-3.5" />
           </button>
@@ -4056,7 +4058,7 @@ function Agent({
         onSelectAgent={onSelectAgent}
         onCreateAgent={() => showAgentModal({ onSuccess: (created) => onSelectAgent(created.id) })}
         onManageAgents={() => navigate('agentManager')}
-        className="h-9 min-w-0 border-border bg-background-2/40 hover:bg-background-2"
+        className="h-9 min-w-0 border-border/60 bg-background-2/40 hover:bg-background-2"
       />
 
       {selectedAgent && (
@@ -4072,17 +4074,17 @@ function Agent({
               value={runtime}
               onChange={onChange}
               connectionId={connectionId}
-              className="h-8 min-w-0 flex-1 border-border bg-background-2/40 text-sm transition-colors hover:bg-background-2"
+              className="h-8 min-w-0 flex-1 border-border/60 bg-background-2/40 text-sm transition-colors hover:bg-background-2"
             />
             <SlotModelInput key={selectedAgent.id} agent={selectedAgent} />
           </div>
 
           {skillNames.length > 0 && (
-            <div className="flex flex-wrap gap-1 px-0.5">
+            <div className="flex flex-wrap gap-1.5 px-0.5">
               {skillNames.map((name, index) => (
                 <span
                   key={`${name}-${index}`}
-                  className="max-w-40 truncate rounded-sm border border-border bg-background-2/40 px-1.5 py-0.5 text-[11px] text-foreground-muted"
+                  className="max-w-40 truncate rounded-full border border-border/60 bg-background-2/50 px-2 py-0.5 text-[10.5px] font-medium text-foreground-muted"
                 >
                   {name}
                 </span>
@@ -4123,7 +4125,7 @@ function SlotModelInput({ agent }: { agent: Agent }) {
       }}
       placeholder={t('agentManager.modelPlaceholder')}
       title={t('agentManager.model')}
-      className="h-8 w-32 shrink-0 rounded-md border border-border bg-background-2/40 px-2 text-xs text-foreground outline-none transition-colors hover:bg-background-2 focus-visible:ring-1 focus-visible:ring-ring"
+      className="h-8 w-32 shrink-0 rounded-md border border-border/60 bg-background-2/40 px-2 text-xs text-foreground outline-none transition-colors hover:bg-background-2 focus-visible:ring-1 focus-visible:ring-ring"
     />
   );
 }
