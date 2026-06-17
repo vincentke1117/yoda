@@ -20,7 +20,7 @@
 
 这，就是 Yoda：**Your Orchestra of Delegated Agents**——你那支被妥善指挥的 agent 乐队。我深信，总有一天，"指挥一队 agent 干活"会像日常聊天一样，简单自然。
 
-不绑模型，不绑厂商，本地优先。至，必至；路远，何惧——这一天，不必再等。愿原力与你、与你的 agent 乐队同在。就从这里开始：
+不绑模型，不绑厂商，本地优先。路虽远，尤达可至——这一天，不必再等。愿原力与你、与你的 agent 乐队同在。就从这里开始：
 
 - macOS / Windows / Linux 安装包：<https://github.com/lovstudio/yoda/releases/latest>
 - 文档与设计语言：<https://yoda.lovstudio.ai/docs>
