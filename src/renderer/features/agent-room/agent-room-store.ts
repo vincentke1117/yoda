@@ -7,18 +7,14 @@ import {
 import type { RoomSnapshot, TeamRoom } from '@shared/team-room';
 import { events, rpc } from '@renderer/lib/ipc';
 
-/** A side-pane tab: either a member's identity detail or a member's live session. */
-export type RoomPaneTab =
-  | { id: string; kind: 'agent'; memberId: string }
-  | { id: string; kind: 'session'; conversationId: string };
-
-const agentTabId = (memberId: string) => `agent:${memberId}`;
-const sessionTabId = (conversationId: string) => `session:${conversationId}`;
-
 /**
  * Renderer state for the Agent Room (Team Room) chat. Module singleton — the
  * Library section is global, and rooms span projects. Subscribes to the active
  * room's per-room event topics for live message/status updates.
+ *
+ * Member detail / session views are NOT owned here — clicking an agent or a
+ * session opens a normal task tab (room-member / conversation) via the task's
+ * own TabManagerStore, so they behave exactly like every other task tab.
  */
 class AgentRoomStore {
   rooms: TeamRoom[] = [];
@@ -26,13 +22,6 @@ class AgentRoomStore {
   snapshot: RoomSnapshot | null = null;
   loadingRooms = false;
   loadingRoom = false;
-  /**
-   * Open side-pane tabs (member details + live sessions), rendered with the
-   * standard TabBar so they behave like normal app tabs — multiple at once,
-   * switchable, closeable. `activePaneTabId` is the focused one.
-   */
-  paneTabs: RoomPaneTab[] = [];
-  activePaneTabId: string | null = null;
 
   private disposers: (() => void)[] = [];
 
@@ -59,8 +48,6 @@ class AgentRoomStore {
     if (this.activeRoomId === roomId && this.snapshot) return;
     this.activeRoomId = roomId;
     this.snapshot = null;
-    this.paneTabs = [];
-    this.activePaneTabId = null;
     this.resubscribe(roomId);
     await this.refreshSnapshot();
   }
@@ -149,49 +136,6 @@ class AgentRoomStore {
         rpc.conversations.interruptConversation(projectId, taskId, m.conversationId as string)
       )
     );
-  }
-
-  isAgentTabActive(memberId: string): boolean {
-    return this.activePaneTabId === agentTabId(memberId);
-  }
-
-  isSessionTabActive(conversationId: string): boolean {
-    return this.activePaneTabId === sessionTabId(conversationId);
-  }
-
-  /** Open (or focus) a member's identity-detail tab in the side pane. */
-  openAgentTab(memberId: string): void {
-    this.openTab({ id: agentTabId(memberId), kind: 'agent', memberId });
-  }
-
-  /** Open (or focus) a member's live-session tab in the side pane. */
-  openSessionTab(conversationId: string): void {
-    this.openTab({ id: sessionTabId(conversationId), kind: 'session', conversationId });
-  }
-
-  /** Toggle a session tab from a message row — focus it, or close it if already focused. */
-  toggleSessionTab(conversationId: string): void {
-    if (this.isSessionTabActive(conversationId)) this.closePaneTab(sessionTabId(conversationId));
-    else this.openSessionTab(conversationId);
-  }
-
-  setActivePaneTab(id: string): void {
-    this.activePaneTabId = id;
-  }
-
-  closePaneTab(id: string): void {
-    const index = this.paneTabs.findIndex((tab) => tab.id === id);
-    if (index === -1) return;
-    this.paneTabs.splice(index, 1);
-    if (this.activePaneTabId === id) {
-      const next = this.paneTabs[index] ?? this.paneTabs[index - 1];
-      this.activePaneTabId = next?.id ?? null;
-    }
-  }
-
-  private openTab(tab: RoomPaneTab): void {
-    if (!this.paneTabs.some((existing) => existing.id === tab.id)) this.paneTabs.push(tab);
-    this.activePaneTabId = tab.id;
   }
 
   private resubscribe(roomId: string): void {

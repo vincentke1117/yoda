@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useMemo, useRef } from 'react';
+import { RoomMemberDetail } from '@renderer/features/agent-room/room-member-detail';
 import { asMounted, getProjectStore } from '@renderer/features/projects/stores/project-selectors';
 import { FileActionsOverlay } from '@renderer/features/tasks/components/file-actions';
 import type { ConversationStore } from '@renderer/features/tasks/conversations/conversation-manager';
@@ -66,6 +67,10 @@ export const SidebarPinnedContent = observer(function SidebarPinnedContent({
 
   if (entry.kind === 'file') {
     return <SidebarPinnedFile key={entry.tabId} file={entry} />;
+  }
+
+  if (entry.kind === 'room-member') {
+    return <RoomMemberDetail key={entry.tabId} memberId={entry.memberId} />;
   }
 
   return null;

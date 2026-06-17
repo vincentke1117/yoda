@@ -38,6 +38,7 @@ import {
   type TabDragSourceProps,
 } from '@renderer/app/tab-drag';
 import type { ViewId } from '@renderer/app/view-registry';
+import { roomMemberTabMeta } from '@renderer/features/agent-room/room-member-detail';
 import {
   getProjectStore,
   projectDisplayName,
@@ -530,6 +531,8 @@ function describeTaskTab(
         ),
       };
     }
+    case 'room-member':
+      return roomMemberTabMeta(target.memberId);
     case 'file': {
       const filename = basename(target.path);
       return { label: filename, icon: <FileIcon filename={filename} size={13} /> };

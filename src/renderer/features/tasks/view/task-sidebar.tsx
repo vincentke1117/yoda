@@ -161,7 +161,7 @@ export const TaskSidebar = observer(function TaskSidebar() {
   // AppTabContextMenu: placement, then kind-specific actions.
   const pinnedSections = (tab: ResolvedTab): React.ReactNode[][] => {
     const placement: React.ReactNode[] = [];
-    if (tab.kind === 'conversation') {
+    if (tab.kind === 'conversation' || tab.kind === 'room-member') {
       placement.push(
         <ContextMenuItem
           key="move-back"

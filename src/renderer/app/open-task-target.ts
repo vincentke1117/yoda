@@ -114,6 +114,13 @@ export function findInternalTabId(
     ) {
       return resolved.tabId;
     }
+    if (
+      target.kind === 'room-member' &&
+      resolved.kind === 'room-member' &&
+      resolved.memberId === target.memberId
+    ) {
+      return resolved.tabId;
+    }
     if (target.kind === 'file' && resolved.kind === 'file' && resolved.path === target.path) {
       return resolved.tabId;
     }
@@ -214,6 +221,10 @@ export async function openProvisionedTaskTab(
       provisioned.taskView.setFocusedRegion('main');
       return true;
     }
+    case 'room-member':
+      provisioned.taskView.tabManager.openRoomMember(tabTarget.memberId);
+      provisioned.taskView.setFocusedRegion('main');
+      return true;
     case 'file':
       provisioned.taskView.tabManager.openFile(tabTarget.path);
       provisioned.taskView.setFocusedRegion('main');

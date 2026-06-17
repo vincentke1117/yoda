@@ -50,6 +50,33 @@ export class ConversationTabEntry {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Room-member tab entry — a team-room member's identity/detail (memberId only;
+// member data is resolved from the loaded room snapshot at render time)
+// ---------------------------------------------------------------------------
+
+export class RoomMemberTabEntry {
+  readonly kind = 'room-member' as const;
+  readonly tabId: string;
+  memberId: string;
+  isPreview: boolean;
+
+  constructor(memberId: string, isPreview: boolean, tabId?: string) {
+    this.tabId = tabId ?? crypto.randomUUID();
+    this.memberId = memberId;
+    this.isPreview = isPreview;
+    makeObservable(this, {
+      memberId: observable,
+      isPreview: observable,
+      pin: action,
+    });
+  }
+
+  pin(): void {
+    this.isPreview = false;
+  }
+}
+
 /**
  * The fixed task-overview tab. There is at most one, it is always pinned to the
  * first position, cannot be closed/reordered, and is synthesized fresh on each
@@ -64,7 +91,12 @@ export class OverviewTabEntry {
 /** Stable id for the singleton overview tab. */
 export const OVERVIEW_TAB_ID = 'overview';
 
-export type TabEntry = FileTabStore | DiffTabStore | ConversationTabEntry | OverviewTabEntry;
+export type TabEntry =
+  | FileTabStore
+  | DiffTabStore
+  | ConversationTabEntry
+  | RoomMemberTabEntry
+  | OverviewTabEntry;
 
 // ---------------------------------------------------------------------------
 // Resolved tabs — enriched with live store references and derived state
@@ -109,10 +141,19 @@ export type ResolvedOverviewTab = {
   isActive: boolean;
 };
 
+export type ResolvedRoomMemberTab = {
+  kind: 'room-member';
+  tabId: string;
+  memberId: string;
+  isPreview: boolean;
+  isActive: boolean;
+};
+
 export type ResolvedTab =
   | ResolvedConversationTab
   | ResolvedFileTab
   | ResolvedDiffTab
+  | ResolvedRoomMemberTab
   | ResolvedOverviewTab;
 
 interface OpenFileOptions {
@@ -244,6 +285,8 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
       openConversation: action,
       openConversationInSidebar: action,
       openConversationPreview: action,
+      openRoomMember: action,
+      openRoomMemberInSidebar: action,
       openFile: action,
       openFileInSidebar: action,
       openFileInShellPin: action,
@@ -397,6 +440,9 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
     if (!desc || desc.kind === 'overview') return null;
     if (desc.kind === 'conversation') {
       return { kind: 'conversation', conversationId: desc.conversationId };
+    }
+    if (desc.kind === 'room-member') {
+      return { kind: 'room-member', memberId: desc.memberId };
     }
     if (desc.kind === 'diff') {
       return {
@@ -601,6 +647,43 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
     this.entries.set(entry.tabId, entry);
     addTabId(this, entry.tabId);
     this.activeTabId = entry.tabId;
+  }
+
+  /** Open (or focus) a room member's detail as a main-strip tab. */
+  openRoomMember(memberId: string): void {
+    if (this._forwardToTopLevel({ kind: 'room-member', memberId })) return;
+    const existing = this._findRoomMemberEntry(memberId);
+    if (existing) {
+      existing.isPreview = false;
+      this._activateExisting(existing.tabId);
+      return;
+    }
+    const entry = new RoomMemberTabEntry(memberId, false);
+    this.entries.set(entry.tabId, entry);
+    addTabId(this, entry.tabId);
+    this.activeTabId = entry.tabId;
+  }
+
+  /**
+   * Open a room member's detail directly as a sidebar-pinned tab, so it shows
+   * alongside the room chat (the chat stays put in the main area). Mirrors
+   * `openConversationInSidebar`; never forwarded to the top level.
+   */
+  openRoomMemberInSidebar(memberId: string): void {
+    const existing = this._findRoomMemberEntry(memberId);
+    if (existing) {
+      existing.isPreview = false;
+      if (this.sidebarTabIds.includes(existing.tabId)) {
+        this.activeSidebarTabId = existing.tabId;
+      } else {
+        this.moveTabToSidebar(existing.tabId);
+      }
+      return;
+    }
+    const entry = new RoomMemberTabEntry(memberId, false);
+    this.entries.set(entry.tabId, entry);
+    this.sidebarTabIds.push(entry.tabId);
+    this.activeSidebarTabId = entry.tabId;
   }
 
   // ---------------------------------------------------------------------------
@@ -1134,6 +1217,15 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
         isActive,
       };
     }
+    if (entry.kind === 'room-member') {
+      return {
+        kind: 'room-member',
+        tabId: entry.tabId,
+        memberId: entry.memberId,
+        isPreview: entry.isPreview,
+        isActive,
+      };
+    }
     if (entry.kind === 'diff') {
       return {
         kind: 'diff',
@@ -1171,6 +1263,14 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
         isPreview: entry.isPreview,
       };
     }
+    if (entry.kind === 'room-member') {
+      return {
+        kind: 'room-member',
+        tabId: entry.tabId,
+        memberId: entry.memberId,
+        isPreview: entry.isPreview,
+      };
+    }
     if (entry.kind === 'diff') {
       return {
         kind: 'diff',
@@ -1190,9 +1290,19 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
   private _entryFromDescriptor(t: TabDescriptor): TabEntry | null {
     // Tolerate stale descriptors from retired tab kinds (e.g. the short-lived
     // pinned 'browser' tabs) — skip instead of mis-restoring as a file tab.
-    if (t.kind !== 'conversation' && t.kind !== 'diff' && t.kind !== 'file') return null;
+    if (
+      t.kind !== 'conversation' &&
+      t.kind !== 'diff' &&
+      t.kind !== 'file' &&
+      t.kind !== 'room-member'
+    ) {
+      return null;
+    }
     if (t.kind === 'conversation') {
       return new ConversationTabEntry(t.conversationId, t.isPreview, t.tabId);
+    }
+    if (t.kind === 'room-member') {
+      return new RoomMemberTabEntry(t.memberId, t.isPreview, t.tabId);
     }
     if (t.kind === 'diff') {
       return new DiffTabStore(
@@ -1226,6 +1336,14 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
     for (const id of this.tabOrder) {
       const entry = this.entries.get(id);
       if (entry?.kind === 'conversation' && entry.isPreview) return entry;
+    }
+    return undefined;
+  }
+
+  private _findRoomMemberEntry(memberId: string): RoomMemberTabEntry | undefined {
+    for (const id of this._allTabIds()) {
+      const entry = this.entries.get(id);
+      if (entry?.kind === 'room-member' && entry.memberId === memberId) return entry;
     }
     return undefined;
   }

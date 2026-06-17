@@ -20,6 +20,7 @@ export type TaskWindowBounds = {
 export type TaskWindowTabTarget =
   | { kind: 'overview' }
   | { kind: 'conversation'; conversationId: string }
+  | { kind: 'room-member'; memberId: string }
   | { kind: 'file'; path: string }
   | {
       kind: 'diff';
@@ -110,6 +111,8 @@ function isTaskWindowTabTarget(value: unknown): value is TaskWindowTabTarget {
       return true;
     case 'conversation':
       return isNonEmptyString(value.conversationId);
+    case 'room-member':
+      return isNonEmptyString(value.memberId);
     case 'file':
       return isNonEmptyString(value.path);
     case 'diff':

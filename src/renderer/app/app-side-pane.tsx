@@ -86,7 +86,11 @@ export const AppSidePane = observer(function AppSidePane() {
       const provisioned = asProvisioned(getTaskStore(pin.projectId, pin.taskId));
       const { tabManager } = provisioned?.taskView ?? {};
       const resolved = tabManager?.resolveTab(pin.tabId);
-      if (tabManager && resolved && resolved.kind === 'conversation') {
+      if (
+        tabManager &&
+        resolved &&
+        (resolved.kind === 'conversation' || resolved.kind === 'room-member')
+      ) {
         tabManager.moveShellPinBack(pin.tabId);
         openTaskTopTab(
           pin.projectId,
@@ -210,6 +214,9 @@ export const AppSidePane = observer(function AppSidePane() {
       );
       return [management ?? [], copy ?? [], placement];
     }
+
+    // room-member — placement only (no path actions).
+    if (resolved.kind === 'room-member') return [placement];
 
     // file / diff — path actions plus the plain close.
     return [

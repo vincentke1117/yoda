@@ -22,6 +22,7 @@ import {
 } from '@renderer/lib/task-window-launch-target';
 import { Toaster } from '@renderer/lib/ui/toaster';
 import { log } from '@renderer/utils/logger';
+import { roomMemberTabMeta } from '../agent-room/room-member-detail';
 import { TaskProvisionRecovery } from './components/task-provision-recovery';
 import { formatConversationTitleForDisplay } from './conversations/conversation-title-utils';
 import { TaskActiveTabContent } from './main-panel';
@@ -188,6 +189,8 @@ function resolvedTabMatchesTarget(tab: ResolvedTab, target: TaskWindowTabTarget)
       return tab.kind === 'overview';
     case 'conversation':
       return tab.kind === 'conversation' && tab.conversationId === target.conversationId;
+    case 'room-member':
+      return tab.kind === 'room-member' && tab.memberId === target.memberId;
     case 'file':
       return tab.kind === 'file' && tab.path === target.path;
     case 'diff':
@@ -204,6 +207,8 @@ function formatTaskWindowTabTitle(tab: ResolvedTab): string {
         formatConversationTitleForDisplay(tab.store.data.runtimeId, tab.store.data.title).trim() ||
         tab.store.data.runtimeId
       );
+    case 'room-member':
+      return roomMemberTabMeta(tab.memberId).label;
     case 'file':
     case 'diff':
       return tab.path;
@@ -216,6 +221,8 @@ function fallbackTaskWindowTabTitle(target: TaskWindowTarget): string {
       return i18n.t('tasks.tabs.overview');
     case 'conversation':
       return target.tab.conversationId;
+    case 'room-member':
+      return roomMemberTabMeta(target.tab.memberId).label;
     case 'file':
     case 'diff':
       return target.tab.path;
