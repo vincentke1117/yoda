@@ -26,9 +26,15 @@ interface MarkdownRendererProps {
    */
   resolveImage?: (src: string) => Promise<string | null>;
   /**
-   * When provided, enables select-text → add-note annotations over the rendered
-   * document. Called whenever the user saves a note. Consumers wire this to, e.g.,
-   * sync the note into the originating session's input box.
+   * Enables select-text → add-note annotations. Defaults to `true` for the
+   * `full` variant (real documents) and `false` for `compact` (tooltips,
+   * previews). Set explicitly to override.
+   */
+  annotations?: boolean;
+  /**
+   * Called whenever the user saves a note. Wire this to sync the note into the
+   * originating session's input box; omit for read-only docs (notes still
+   * render locally). Has no effect unless annotations are enabled.
    */
   onAddNote?: (note: MarkdownNoteDraft) => void;
 }
@@ -404,11 +410,13 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   variant = 'full',
   className,
   resolveImage,
+  annotations,
   onAddNote,
 }) => {
   const { effectiveTheme } = useTheme();
   const isDark = effectiveTheme === 'ydark';
   const containerRef = useRef<HTMLDivElement>(null);
+  const annotationsEnabled = annotations ?? variant === 'full';
 
   const fullComponents = useFullComponents(isDark, resolveImage);
   const compactComponents = useCompactComponents();
@@ -427,7 +435,9 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
       <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={rehypePlugins} components={components}>
         {body}
       </Markdown>
-      {onAddNote && <MarkdownAnnotations containerRef={containerRef} onAddNote={onAddNote} />}
+      {annotationsEnabled && (
+        <MarkdownAnnotations containerRef={containerRef} onAddNote={onAddNote} />
+      )}
     </div>
   );
 };

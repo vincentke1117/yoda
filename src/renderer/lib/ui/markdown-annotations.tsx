@@ -17,9 +17,27 @@ export interface MarkdownNote {
 /** Payload handed to the consumer when a note is saved. */
 export type MarkdownNoteDraft = Pick<MarkdownNote, 'quote' | 'comment'>;
 
+type Captured = { quote: string; rect: DOMRect };
+
 /** Collapses selection whitespace so quotes stay readable in compact UI. */
 function normalizeQuote(text: string): string {
   return text.replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Reads the current window selection and, when it is a non-empty range that
+ * starts inside `container`, returns the normalized quote plus the range's
+ * viewport rect. Returns `null` otherwise. Exported for testing.
+ */
+export function detectSelectionInside(container: HTMLElement): Captured | null {
+  const selection = window.getSelection();
+  if (!selection || selection.isCollapsed || selection.rangeCount === 0) return null;
+  const quote = normalizeQuote(selection.toString());
+  if (!quote) return null;
+  // The anchor can be a text node; `contains` covers nodes and their parents.
+  if (!container.contains(selection.anchorNode)) return null;
+  const rect = selection.getRangeAt(0).getBoundingClientRect();
+  return { quote, rect };
 }
 
 /** Anchored floating action shown right after a non-empty text selection. */
@@ -148,8 +166,6 @@ function NotesList({ notes, onRemove }: { notes: MarkdownNote[]; onRemove: (id: 
   );
 }
 
-type Captured = { quote: string; rect: DOMRect };
-
 /**
  * Adds select-text → add-note behavior over a rendered markdown container.
  * Selecting text surfaces a floating action; saving a note appends it to the
@@ -162,7 +178,9 @@ export function MarkdownAnnotations({
   className,
 }: {
   containerRef: React.RefObject<HTMLElement | null>;
-  onAddNote: (note: MarkdownNoteDraft) => void;
+  /** Called when a note is saved. Omit when there is no sync target (e.g. a
+   *  read-only doc not opened from a session) — notes still render locally. */
+  onAddNote?: (note: MarkdownNoteDraft) => void;
   className?: string;
 }) {
   const [toolbar, setToolbar] = useState<Captured | null>(null);
@@ -176,18 +194,7 @@ export function MarkdownAnnotations({
     const onMouseUp = () => {
       // Don't steal focus from the open composer with a fresh toolbar.
       if (composing) return;
-      const selection = window.getSelection();
-      if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
-        setToolbar(null);
-        return;
-      }
-      const quote = normalizeQuote(selection.toString());
-      if (!quote || !container.contains(selection.anchorNode)) {
-        setToolbar(null);
-        return;
-      }
-      const rect = selection.getRangeAt(0).getBoundingClientRect();
-      setToolbar({ quote, rect });
+      setToolbar(detectSelectionInside(container));
     };
 
     document.addEventListener('mouseup', onMouseUp);
@@ -205,7 +212,7 @@ export function MarkdownAnnotations({
       if (!composing) return;
       const note: MarkdownNote = { id: crypto.randomUUID(), quote: composing.quote, comment };
       setNotes((prev) => [...prev, note]);
-      onAddNote({ quote: note.quote, comment: note.comment });
+      onAddNote?.({ quote: note.quote, comment: note.comment });
       setComposing(null);
     },
     [composing, onAddNote]
