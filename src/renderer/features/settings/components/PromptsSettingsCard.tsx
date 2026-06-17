@@ -1,7 +1,7 @@
 import {
-  closestCenter,
   DndContext,
   PointerSensor,
+  pointerWithin,
   useSensor,
   useSensors,
   type DragEndEvent,
@@ -52,7 +52,7 @@ const PromptsSettingsCard: React.FC = () => {
     <div className="flex flex-col gap-3">
       <p className="text-xs text-foreground-passive">{t('settings.prompts.description')}</p>
       <div className="flex flex-col gap-2">
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+        <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragEnd={onDragEnd}>
           <SortableContext
             items={items.map((item) => item.id)}
             strategy={verticalListSortingStrategy}
