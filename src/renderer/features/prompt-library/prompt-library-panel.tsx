@@ -9,6 +9,7 @@ import { Button } from '@renderer/lib/ui/button';
 import { Input } from '@renderer/lib/ui/input';
 import { Textarea } from '@renderer/lib/ui/textarea';
 import { cn } from '@renderer/utils/utils';
+import { LeakedPromptsReference } from './leaked-prompts-reference';
 import { useCreatePrompt, useDeletePrompt, usePrompts, useUpdatePrompt } from './use-prompts';
 
 type PromptDraft = {
@@ -261,6 +262,9 @@ export function PromptLibraryPanel({ embedded = false }: { embedded?: boolean })
             )}
           </div>
         </section>
+
+        {/* Reference: read-only gallery of community-leaked system prompts. */}
+        <LeakedPromptsReference />
       </div>
     </div>
   );

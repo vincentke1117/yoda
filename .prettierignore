@@ -18,3 +18,6 @@
 **/*.md
 **/*.yaml
 **/*.yml
+
+# generated snapshot (single-line, multi-MB; regenerated via scripts/generate-leaked-prompts-snapshot.ts)
+src/main/core/leaked-prompts/leaked-prompts-snapshot.json

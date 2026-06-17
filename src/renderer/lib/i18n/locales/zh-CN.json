@@ -1495,6 +1495,17 @@
       "descriptionPlaceholder": "可选：简述何时使用这个提示词",
       "content": "提示词内容",
       "contentPlaceholder": "要复用的提示词文本…"
+    },
+    "reference": {
+      "title": "泄露的系统提示词",
+      "description": "只读参考库，来源",
+      "refresh": "刷新",
+      "searchPlaceholder": "按名称或厂商搜索…",
+      "count": "共 {{count}} 条",
+      "openSource": "在 GitHub 打开",
+      "saveAsTemplate": "另存为我的模板",
+      "saved": "已保存到你的提示词",
+      "loadFailed": "无法加载该提示词，请检查网络后重试。"
     }
   },
   "automation": {

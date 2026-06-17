@@ -12,6 +12,7 @@ import { ManageRunScriptsModal } from '@renderer/features/projects/components/ma
 import { ManageQuickActionsModal } from '@renderer/features/projects/components/overview-view/manage-quick-actions-modal';
 import { RenameProjectModal } from '@renderer/features/projects/components/rename-project-modal';
 import { ShareProjectConfigModal } from '@renderer/features/projects/components/settings-view/share-project-config-modal';
+import { LeakedPromptViewerModal } from '@renderer/features/prompt-library/leaked-prompt-viewer-modal';
 import { CreateSkillModal } from '@renderer/features/skills/components/CreateSkillModal';
 import { ForkSkillModal } from '@renderer/features/skills/components/ForkSkillModal';
 import { ReviseSkillModal } from '@renderer/features/skills/components/ReviseSkillModal';
@@ -80,6 +81,7 @@ export const modalRegistry = {
   setParentTaskModal: createModal(SetParentTaskModal, { size: 'sm' }),
   createParentTaskModal: createModal(CreateParentTaskModal, { size: 'xs' }),
   sessionPromptsModal: createModal(SessionPromptsModal, { size: 'lg' }),
+  leakedPromptViewerModal: createModal(LeakedPromptViewerModal, { size: 'lg' }),
   renameProjectModal: createModal(RenameProjectModal, { size: 'xs' }),
   createWorkspaceModal: createModal(CreateWorkspaceModal, { size: 'xs' }),
   projectWorkspaceConflictModal: createModal(ProjectWorkspaceConflictModal, { size: 'sm' }),

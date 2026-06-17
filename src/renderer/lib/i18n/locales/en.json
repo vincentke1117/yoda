@@ -1495,6 +1495,17 @@
       "descriptionPlaceholder": "Optional short note about when to use this prompt",
       "content": "Prompt",
       "contentPlaceholder": "The prompt text to reuse…"
+    },
+    "reference": {
+      "title": "Leaked system prompts",
+      "description": "Read-only reference collection from",
+      "refresh": "Refresh",
+      "searchPlaceholder": "Search by name or vendor…",
+      "count": "{{count}} prompts",
+      "openSource": "Open on GitHub",
+      "saveAsTemplate": "Save as template",
+      "saved": "Saved to your prompts",
+      "loadFailed": "Could not load this prompt. Check your connection and try again."
     }
   },
   "automation": {
