@@ -51,6 +51,7 @@ import { displaySessionPromptText } from '@renderer/features/tasks/context-panel
 import { useTaskStats } from '@renderer/features/tasks/hooks/useTaskStats';
 import { buildPromptPreviewItems } from '@renderer/features/tasks/session-prompts-preview';
 import { useProvisionedTask, useTaskViewContext } from '@renderer/features/tasks/task-view-context';
+import { syncNoteToSessionInput } from '@renderer/features/tasks/use-session-note-sync';
 import { toast } from '@renderer/lib/hooks/use-toast';
 import { events, rpc } from '@renderer/lib/ipc';
 import { useShowModal } from '@renderer/lib/modal/modal-provider';
@@ -1602,8 +1603,7 @@ const SessionOverviewContent = observer(function SessionOverviewContent({
       const sessionId = provisionedTask.conversations.conversations.get(conversation.id)?.session
         .sessionId;
       if (!sessionId) return;
-      const payload = `关于「${note.quote}」：${note.comment} `.replace(/\r?\n/g, ' ');
-      void rpc.pty.sendInput(sessionId, payload);
+      syncNoteToSessionInput(sessionId, note);
     },
     [conversation.id, provisionedTask]
   );

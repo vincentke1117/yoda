@@ -6,6 +6,7 @@ import {
 } from '@renderer/features/tasks/components/file-actions';
 import { PersistedDetails } from '@renderer/features/tasks/components/persisted-disclosure';
 import { useProvisionedTaskOrNull } from '@renderer/features/tasks/task-view-context';
+import { useSessionNoteSync } from '@renderer/features/tasks/use-session-note-sync';
 import { GlobalFileActionsDropdown } from '@renderer/lib/components/file-path-actions';
 import { MarkdownRenderer } from '@renderer/lib/ui/markdown-renderer';
 import { cn } from '@renderer/utils/utils';
@@ -70,10 +71,15 @@ export function MarkdownContextContent({
   content: string;
   className?: string;
 }) {
+  // Opened from a session's context → enable annotations and sync notes into
+  // that session's input box. Off in non-session surfaces (composer popover).
+  const syncNote = useSessionNoteSync();
   return (
     <MarkdownRenderer
       content={content}
       variant="compact"
+      annotations={syncNote !== undefined}
+      onAddNote={syncNote}
       className={cn(
         'overflow-auto break-words text-[11px] leading-relaxed text-foreground-passive [&>*:last-child]:mb-0 [&_pre]:max-w-full',
         className
