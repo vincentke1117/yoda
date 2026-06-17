@@ -49,7 +49,7 @@ export const RoomMemberDetail = observer(function RoomMemberDetail({
 }) {
   const { t } = useTranslation();
   const { projectId, taskId } = useTaskViewContext();
-  const { taskView } = useProvisionedTask();
+  const { taskView, conversations } = useProvisionedTask();
 
   // Ensure the room is loaded even when the tab is restored without the chat
   // ever being opened (mirrors TaskRoomChat's load).
@@ -115,9 +115,18 @@ export const RoomMemberDetail = observer(function RoomMemberDetail({
         <button
           type="button"
           onClick={() => {
-            if (!member.conversationId) return;
-            taskView.tabManager.openConversationInSidebar(member.conversationId);
-            taskView.setSidebarCollapsed(false);
+            const conversationId = member.conversationId;
+            if (!conversationId) return;
+            void (async () => {
+              // The agent's session was created in the main process and may not
+              // be in the renderer store yet — there is no `conversation:created`
+              // bridge. Load it first, or the tab resolves to no store and the
+              // pane is blank.
+              const loaded = await conversations.ensureConversation(conversationId);
+              if (!loaded) return;
+              taskView.tabManager.openConversationInSidebar(conversationId);
+              taskView.setSidebarCollapsed(false);
+            })();
           }}
           className="mt-4 inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border bg-background-1 px-3 py-1.5 text-xs text-foreground-muted transition-colors hover:border-primary hover:text-foreground"
         >

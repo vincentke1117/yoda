@@ -20,7 +20,7 @@ type OpenTab = (id: string) => void;
  */
 export const RoomChat = observer(function RoomChat({ snapshot }: { snapshot: RoomSnapshot }) {
   const { t } = useTranslation();
-  const { taskView } = useProvisionedTask();
+  const { taskView, conversations } = useProvisionedTask();
   const { tabManager } = taskView;
   const scrollRef = useRef<HTMLDivElement>(null);
   const byId = useMemo(() => new Map(snapshot.members.map((m) => [m.id, m])), [snapshot.members]);
@@ -41,8 +41,15 @@ export const RoomChat = observer(function RoomChat({ snapshot }: { snapshot: Roo
     taskView.setSidebarCollapsed(false);
   };
   const openSession: OpenTab = (conversationId) => {
-    tabManager.openConversationInSidebar(conversationId);
-    taskView.setSidebarCollapsed(false);
+    void (async () => {
+      // The session was created in the main process and may not be in the
+      // renderer store yet — there is no `conversation:created` bridge. Load it
+      // first, or the tab resolves to no store and the pane is blank.
+      const loaded = await conversations.ensureConversation(conversationId);
+      if (!loaded) return;
+      tabManager.openConversationInSidebar(conversationId);
+      taskView.setSidebarCollapsed(false);
+    })();
   };
 
   const agents = snapshot.members.filter((m) => m.role !== 'lead');
