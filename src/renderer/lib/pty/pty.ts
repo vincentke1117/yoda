@@ -145,6 +145,10 @@ export class FrontendPty {
   private wheelPartialScroll = 0;
   /** Snapshot overlay hiding resize transitions — see commitResize(). */
   private freezeOverlay: HTMLCanvasElement | null = null;
+  /** Whether freezeOverlay holds a usable captured frame (see captureFreezeSnapshot). */
+  private hasFreezeSnapshot = false;
+  /** Per-render snapshot capture into freezeOverlay; disposed with the terminal. */
+  private freezeSnapshotDisposable: IDisposable | null = null;
   /** Unfreeze event chain state: idle → await-data → await-render → idle. */
   private unfreezePhase: 'idle' | 'await-data' | 'await-render' = 'idle';
   private unfreezeRenderDisposable: IDisposable | null = null;
@@ -207,6 +211,7 @@ export class FrontendPty {
       this.savedViewportY = viewportY;
       this.savedAtBottom = viewportY >= this.terminal.buffer.active.baseY;
     });
+    this.freezeSnapshotDisposable = this.terminal.onRender(() => this.captureFreezeSnapshot());
 
     const el = (this.terminal as unknown as { element?: HTMLElement }).element;
     if (el) {
@@ -270,10 +275,15 @@ export class FrontendPty {
 
   private loadWebglRenderer(): void {
     try {
-      // preserveDrawingBuffer so the freeze-frame overlay (see
-      // resizeNow/freezeFrameDuringResize) can reliably drawImage() the WebGL
-      // canvas at any moment.
-      const webglAddon = new WebglAddon(true);
+      // Default (preserveDrawingBuffer: false) — the drawing buffer is cleared
+      // on every composite, so the WebGL renderer never accumulates stale
+      // frames. preserveDrawingBuffer: true caused duplicate/ghost rows during
+      // scroll (anti-aliased glyph fringes from prior frames were not fully
+      // overwritten). The freeze-frame overlay no longer reads the live canvas
+      // at resize time; it replays a snapshot captured during onRender (see
+      // captureFreezeSnapshot), which is the only moment the buffer holds valid
+      // pixels under the default attribute.
+      const webglAddon = new WebglAddon();
       const contextLossDisposable = webglAddon.onContextLoss(() => {
         log.warn('FrontendPty: WebGL renderer context lost; falling back to DOM renderer', {
           sessionId: this.sessionId,
@@ -282,6 +292,9 @@ export class FrontendPty {
         this.webglContextLossDisposable = null;
         this.webglAddon?.dispose();
         this.webglAddon = null;
+        // DOM renderer has no WebGL canvas to snapshot — drop the stale frame
+        // so commitResize resizes bare instead of masking with a dead capture.
+        this.hasFreezeSnapshot = false;
         this.terminal.refresh(0, Math.max(0, this.terminal.rows - 1));
       });
       this.terminal.loadAddon(webglAddon);
@@ -414,15 +427,7 @@ export class FrontendPty {
     );
   }
 
-  /**
-   * Snapshot the current frame onto the overlay so it covers the terminal.
-   * Returns false when no usable snapshot could be taken (DOM renderer
-   * fallback, zero-sized canvas, context lost) — the caller then resizes
-   * bare instead of arming an unfreeze that has nothing to reveal.
-   */
-  private freezeFrame(): boolean {
-    const gl = this.getWebglCanvas();
-    if (!gl || gl.width === 0 || gl.height === 0) return false;
+  private ensureFreezeOverlay(): HTMLCanvasElement {
     let overlay = this.freezeOverlay;
     if (!overlay) {
       overlay = document.createElement('canvas');
@@ -433,25 +438,54 @@ export class FrontendPty {
         top: '0',
         pointerEvents: 'none',
         zIndex: '10',
+        display: 'none',
       });
       this.ownedContainer.style.position = 'relative';
       this.freezeOverlay = overlay;
     }
-    try {
-      overlay.width = gl.width;
-      overlay.height = gl.height;
-      const ctx = overlay.getContext('2d');
-      if (!ctx) return false;
-      ctx.drawImage(gl, 0, 0);
-    } catch {
-      return false;
-    }
-    overlay.style.width = gl.style.width || `${gl.width}px`;
-    overlay.style.height = gl.style.height || `${gl.height}px`;
-    overlay.style.display = 'block';
     if (overlay.parentElement !== this.ownedContainer) {
       this.ownedContainer.appendChild(overlay);
     }
+    return overlay;
+  }
+
+  /**
+   * Mirror the just-rendered frame onto the (hidden) freeze overlay. Runs on
+   * every onRender because the WebGL canvas — created with the default
+   * preserveDrawingBuffer:false — only exposes valid pixels inside the render
+   * frame, before the next composite clears it. commitResize then replays this
+   * snapshot without touching the live canvas. Skipped while a freeze is active
+   * so the masking snapshot is never overwritten by mid-resize garbage.
+   */
+  private captureFreezeSnapshot(): void {
+    if (this.unfreezePhase !== 'idle') return;
+    const gl = this.getWebglCanvas();
+    if (!gl || gl.width === 0 || gl.height === 0) return;
+    const overlay = this.ensureFreezeOverlay();
+    try {
+      if (overlay.width !== gl.width) overlay.width = gl.width;
+      if (overlay.height !== gl.height) overlay.height = gl.height;
+      const ctx = overlay.getContext('2d');
+      if (!ctx) return;
+      ctx.clearRect(0, 0, overlay.width, overlay.height);
+      ctx.drawImage(gl, 0, 0);
+    } catch {
+      return;
+    }
+    overlay.style.width = gl.style.width || `${gl.width}px`;
+    overlay.style.height = gl.style.height || `${gl.height}px`;
+    this.hasFreezeSnapshot = true;
+  }
+
+  /**
+   * Reveal the last captured frame so it covers the terminal during a resize.
+   * Returns false when no usable snapshot exists yet (DOM renderer fallback,
+   * nothing rendered, context lost) — the caller then resizes bare instead of
+   * arming an unfreeze that has nothing to reveal.
+   */
+  private freezeFrame(): boolean {
+    if (!this.hasFreezeSnapshot || !this.freezeOverlay) return false;
+    this.freezeOverlay.style.display = 'block';
     return true;
   }
 
@@ -559,6 +593,8 @@ export class FrontendPty {
     this.offData?.();
     this.offData = null;
     this.scrollDisposable.dispose();
+    this.freezeSnapshotDisposable?.dispose();
+    this.freezeSnapshotDisposable = null;
     this.webglContextLossDisposable?.dispose();
     this.webglContextLossDisposable = null;
     this.webglAddon?.dispose();
