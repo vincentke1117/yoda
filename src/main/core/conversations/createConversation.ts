@@ -55,7 +55,8 @@ export async function createConversation(params: CreateConversationParams): Prom
     false,
     params.initialPrompt,
     undefined,
-    params.imagePaths
+    params.imagePaths,
+    params.model
   );
   telemetryService.capture('conversation_created', {
     runtime: params.runtime,

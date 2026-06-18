@@ -279,4 +279,6 @@ export type CreateConversationParams = {
   initialPrompt?: string;
   /** Absolute local paths of image attachments to deliver with the initial prompt. */
   imagePaths?: string[];
+  /** Agent's configured model for this new session (passed via the runtime's modelFlag). */
+  model?: string | null;
 };

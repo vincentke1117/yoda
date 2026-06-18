@@ -1472,6 +1472,7 @@ export const HomeComposer = observer(function HomeComposer({
           provider: RuntimeId;
           initialPrompt: string | undefined;
           titlePrompt?: string;
+          model?: string | null;
         }) => {
           const conversationId = crypto.randomUUID();
           const title = initialConversationTitle(
@@ -1490,6 +1491,7 @@ export const HomeComposer = observer(function HomeComposer({
             initialPrompt: args.initialPrompt,
             imagePaths,
             autoApprove: autoApproveDefaults.getDefault(args.provider),
+            model: args.model,
           });
           return { conversationId, runtime: args.provider, promise };
         };
@@ -1516,6 +1518,7 @@ export const HomeComposer = observer(function HomeComposer({
               systemPrompt: slot.systemPrompt,
             }),
             titlePrompt: trimmed || undefined,
+            model: slot.agent?.model,
           });
           finishTaskConversationSubmit();
           void launch.promise.catch(() => {
@@ -1576,6 +1579,7 @@ export const HomeComposer = observer(function HomeComposer({
                 }),
                 imagePaths,
                 autoApprove: autoApproveDefaults.getDefault(slot.provider),
+                model: slot.agent?.model,
               },
             });
             return [{ taskId, promise }];
@@ -1603,6 +1607,7 @@ export const HomeComposer = observer(function HomeComposer({
               systemPrompt: implementerSlot.systemPrompt,
             }),
             titlePrompt: trimmed || undefined,
+            model: implementerSlot.agent?.model,
           });
           finishTaskConversationSubmit();
           const reviewerProvider = reviewerSlot.provider;
@@ -1662,6 +1667,7 @@ export const HomeComposer = observer(function HomeComposer({
             ? buildRequirementPrompt({ requirement, systemPrompt: normalSystemPrompt })
             : requirement || undefined,
           titlePrompt: trimmed || undefined,
+          model: normalSlot.agent?.model,
         });
         finishTaskConversationSubmit();
         void launch.promise.catch(() => {
@@ -1717,6 +1723,7 @@ export const HomeComposer = observer(function HomeComposer({
               initialPrompt,
               imagePaths,
               autoApprove: autoApproveDefaults.getDefault(draftRuntime),
+              model: draftSlot.agent?.model,
             },
           })
           .catch(() => {
@@ -1755,6 +1762,7 @@ export const HomeComposer = observer(function HomeComposer({
         titlePrompt?: string;
         strategyKind: TaskSubmitStrategyKind;
         parentTaskId?: string;
+        model?: string | null;
       }) => {
         const taskId = crypto.randomUUID();
         const conversationId = crypto.randomUUID();
@@ -1792,6 +1800,7 @@ export const HomeComposer = observer(function HomeComposer({
             initialPrompt: args.initialPrompt,
             imagePaths,
             autoApprove: autoApproveDefaults.getDefault(args.provider),
+            model: args.model,
           },
         });
         return { taskId, taskName, conversationId, runtime: args.provider, promise };
@@ -1809,6 +1818,7 @@ export const HomeComposer = observer(function HomeComposer({
           }),
           titlePrompt: trimmed || undefined,
           strategyKind: 'no-worktree',
+          model: slot.agent?.model,
         });
         goToTask(mounted.data.id, task.taskId);
         void task.promise.catch(() => {
@@ -1844,6 +1854,7 @@ export const HomeComposer = observer(function HomeComposer({
             titlePrompt: trimmed || undefined,
             strategyKind: 'new-branch',
             parentTaskId,
+            model: slot.agent?.model,
           });
           return [launch];
         });
@@ -1874,6 +1885,7 @@ export const HomeComposer = observer(function HomeComposer({
           }),
           titlePrompt: trimmed || undefined,
           strategyKind: reviewSubmitKind,
+          model: implementerSlot.agent?.model,
         });
         goToTask(mounted.data.id, implementation.taskId);
         const reviewerProvider = reviewerSlot.provider;
@@ -1950,6 +1962,7 @@ export const HomeComposer = observer(function HomeComposer({
           : requirement || undefined,
         titlePrompt: trimmed || undefined,
         strategyKind: standardSubmitKind,
+        model: normalSlot.agent?.model,
       });
       goToTask(mounted.data.id, task.taskId);
       void task.promise.catch(() => {

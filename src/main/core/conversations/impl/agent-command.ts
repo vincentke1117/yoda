@@ -104,6 +104,7 @@ export function buildAgentCommand({
   isResuming,
   workingDirectory,
   appendSystemPrompt,
+  model,
 }: {
   runtimeId: RuntimeId;
   providerConfig: RuntimeCustomConfig | undefined;
@@ -114,6 +115,8 @@ export function buildAgentCommand({
   workingDirectory?: string;
   /** Extra text appended after the runtime's system prompt when the runtime supports it. */
   appendSystemPrompt?: string;
+  /** Agent's configured model; passed via the runtime's modelFlag on a new session. */
+  model?: string | null;
 }): AgentCommand {
   const providerDef = getRuntime(runtimeId);
   const [command, ...args] = parseCliPrefix(providerConfig?.cli, runtimeId);
@@ -151,6 +154,12 @@ export function buildAgentCommand({
     );
   } else if (appendSystemPrompt && providerDef?.appendSystemPromptFlag) {
     args.push(providerDef.appendSystemPromptFlag, appendSystemPrompt);
+  }
+
+  // Model selection applies to a NEW session only — on resume the CLI session
+  // already carries its model, and --model alongside --resume is often rejected.
+  if (!isResuming && model?.trim() && providerDef?.modelFlag) {
+    args.push(...parseArgField(providerDef.modelFlag), model.trim());
   }
 
   if (!isResuming && initialPrompt && !providerDef?.useKeystrokeInjection) {

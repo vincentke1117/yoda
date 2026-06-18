@@ -110,7 +110,8 @@ export class LocalConversationProvider implements ConversationProvider {
     isResuming: boolean = false,
     initialPrompt?: string,
     tmuxOverride?: boolean,
-    imagePaths?: string[]
+    imagePaths?: string[],
+    model?: string | null
   ): Promise<void> {
     const sessionId = makePtySessionId(
       conversation.projectId,
@@ -172,6 +173,7 @@ export class LocalConversationProvider implements ConversationProvider {
       appendSystemPrompt: await getEnabledPromptPrinciplesText(
         await this.resolveProjectPromptPrinciples?.()
       ),
+      model,
     });
     const args = withCodexRuntimeNotifyArgs(conversation.runtimeId, baseArgs, port);
 

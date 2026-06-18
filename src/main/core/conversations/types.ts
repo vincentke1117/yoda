@@ -23,7 +23,9 @@ export interface ConversationProvider {
     /** Override the provider's default tmux behavior for this session only. */
     tmuxOverride?: boolean,
     /** Absolute local paths of image attachments to deliver with the initial prompt. */
-    imagePaths?: string[]
+    imagePaths?: string[],
+    /** Agent's configured model for a new session (ignored on resume). */
+    model?: string | null
   ): Promise<void>;
   stopSession(conversationId: string): Promise<void>;
   sendInput(conversationId: string, data: string): Promise<boolean>;

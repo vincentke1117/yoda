@@ -96,7 +96,8 @@ export class SshConversationProvider implements ConversationProvider {
     isResuming: boolean = false,
     initialPrompt?: string,
     tmuxOverride?: boolean,
-    imagePaths?: string[]
+    imagePaths?: string[],
+    model?: string | null
   ): Promise<void> {
     const sessionId = makePtySessionId(
       conversation.projectId,
@@ -129,6 +130,7 @@ export class SshConversationProvider implements ConversationProvider {
       appendSystemPrompt: await getEnabledPromptPrinciplesText(
         await this.resolveProjectPromptPrinciples?.()
       ),
+      model,
     });
 
     const tmuxSessionName = await this.resolveTmuxSessionName(sessionId, tmuxOverride);
