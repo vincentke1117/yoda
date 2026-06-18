@@ -80,6 +80,42 @@ describe('terminal file links', () => {
     ]);
   });
 
+  it('extracts trailing-slash directory paths', () => {
+    const line = '产物目录：output/slide-deck/moments-chronicle/';
+    const expected = 'output/slide-deck/moments-chronicle/';
+    expect(extractTerminalFileLinkCandidates(line)).toEqual([
+      { text: expected, index: line.indexOf(expected) },
+    ]);
+  });
+
+  it('extracts a single-segment directory after a command', () => {
+    expect(extractTerminalFileLinkCandidates('cd src/ && ls')).toEqual([
+      { text: 'src/', index: 'cd '.length },
+    ]);
+  });
+
+  it('does not match a multi-segment path without an extension or trailing slash', () => {
+    expect(extractTerminalFileLinkCandidates('see src/main here')).toEqual([]);
+  });
+
+  it('resolves a workspace-relative directory to its folder (no filePath)', () => {
+    expect(
+      resolveTerminalFileLinkTarget('output/slide-deck/moments-chronicle/', '/Users/mark/project')
+    ).toEqual({
+      originalText: 'output/slide-deck/moments-chronicle/',
+      isDirectory: true,
+      absolutePath: '/Users/mark/project/output/slide-deck/moments-chronicle',
+    });
+  });
+
+  it('resolves an absolute directory outside the workspace', () => {
+    expect(resolveTerminalFileLinkTarget('/tmp/outside/', '/Users/mark/project')).toEqual({
+      originalText: '/tmp/outside/',
+      isDirectory: true,
+      absolutePath: '/tmp/outside',
+    });
+  });
+
   it('normalizes workspace-relative paths', () => {
     expect(resolveTerminalFileLinkTarget('./poster/../poster/index.html')).toEqual({
       originalText: './poster/../poster/index.html',

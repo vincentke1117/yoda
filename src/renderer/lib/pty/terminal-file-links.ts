@@ -16,8 +16,14 @@ const PATH_TRAILING = `\\s"')\\]}>,，。；;!?！？.(（）「」『』【】�
 // File extension: 1–32 path chars after a dot, but the final char may not be a
 // dot so a trailing sentence period (`foo.md.`) is left out of the link.
 const PATH_EXT = `[^${PATH_SEG_EXCLUDED}\\/]{0,31}[^${PATH_SEG_EXCLUDED}\\/.]`;
+// A path is either a file (one or more `dir/` segments + a `name.ext`, optional
+// `:line:col`) OR a directory (one or more `dir/` segments ending in a slash,
+// no filename). Making the filename tail optional lets a trailing-slash run
+// like `output/slide-deck/moments-chronicle/` match as a folder; without a
+// trailing slash a path still needs an extension to count (so `src/main` is
+// not a link but `src/main/` and `src/main/index.ts` are).
 const FILE_PATH_CANDIDATE_REGEX = new RegExp(
-  `(^|[${PATH_LEADING}])(@?(?:(?:~|\\.{1,2})\\/|\\/)?(?:[^${PATH_SEG_EXCLUDED}]+\\/)+[^${PATH_SEG_EXCLUDED}\\/]*\\.${PATH_EXT}(?::\\d+(?::\\d+)?)?)(?=$|[${PATH_TRAILING}])`,
+  `(^|[${PATH_LEADING}])(@?(?:(?:~|\\.{1,2})\\/|\\/)?(?:[^${PATH_SEG_EXCLUDED}]+\\/)+(?:[^${PATH_SEG_EXCLUDED}\\/]*\\.${PATH_EXT}(?::\\d+(?::\\d+)?)?)?)(?=$|[${PATH_TRAILING}])`,
   'gu'
 );
 
@@ -37,6 +43,13 @@ export interface TerminalFileLinkTarget {
   absolutePath?: string;
   line?: number;
   column?: number;
+  /**
+   * True when the link points at a directory (the matched text ended in `/`).
+   * Directory targets carry only `absolutePath` (no `filePath`/`line`/`column`)
+   * so clicking opens the folder in the OS file manager instead of routing to
+   * the in-app file editor, which can only show files.
+   */
+  isDirectory?: boolean;
 }
 
 export interface TerminalFileLinkOptions {
@@ -308,6 +321,7 @@ export function resolveTerminalFileLinkTarget(
 
   let rawPath = parsed.path.replace(/\\/g, '/');
   if (rawPath.startsWith('@')) rawPath = rawPath.slice(1);
+  const isDirectory = rawPath.endsWith('/');
   const normalizedRoot = workspaceRoot?.replace(/\\/g, '/').replace(/\/+$/g, '');
   const normalizedHome = homeDir?.replace(/\\/g, '/').replace(/\/+$/g, '');
 
@@ -317,6 +331,25 @@ export function resolveTerminalFileLinkTarget(
     rawPath = `${normalizedHome}/${rawPath.slice(2)}`;
   }
 
+  const base = resolveFileTarget(text, rawPath, parsed, normalizedRoot);
+  if (!base) return null;
+  if (!isDirectory) return base;
+
+  // Directories have no in-app editor view: collapse to the absolute folder
+  // path (slashes stripped) so the click/menu opens it in the OS file manager.
+  return {
+    originalText: text,
+    isDirectory: true,
+    absolutePath: base.absolutePath?.replace(/\/+$/g, ''),
+  };
+}
+
+function resolveFileTarget(
+  text: string,
+  rawPath: string,
+  parsed: { line?: number; column?: number },
+  normalizedRoot?: string
+): TerminalFileLinkTarget | null {
   // Absolute path: try to slot into the workspace; otherwise keep as absolute.
   if (rawPath.startsWith('/')) {
     const inWorkspace =
