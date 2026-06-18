@@ -3,6 +3,7 @@ import type { DeepLinkTarget } from '@shared/deep-links';
 import type { TaskWindowTabTarget, TaskWindowTarget } from '@shared/task-window';
 import type { ActiveFile } from '@shared/view-state';
 import type { TabDragPayload } from '@renderer/app/tab-drag';
+import { getProjectManagerStore } from '@renderer/features/projects/stores/project-selectors';
 import type { ProvisionedTask } from '@renderer/features/tasks/stores/task';
 import { asProvisioned, getTaskStore } from '@renderer/features/tasks/stores/task-selectors';
 import {
@@ -150,9 +151,23 @@ export function openTaskTarget(
   const { projectId, taskId, conversationId, promptId, promptIndex } = target;
   if (!taskId) {
     navigate('project', { projectId });
+    void getProjectManagerStore()
+      .mountProject(projectId)
+      .catch((error: unknown) => {
+        log.warn('openTaskTarget: failed to mount project', { projectId, error });
+      });
     return;
   }
   navigate('task', { projectId, taskId });
+  // A deep link / notification can target a task whose project isn't mounted
+  // yet; navigate() only sets the route, so mount here. mountProject auto-
+  // provisions the task that the current nav route points at (no-op if the
+  // project is already mounted), which is what `when()` below waits for.
+  void getProjectManagerStore()
+    .mountProject(projectId)
+    .catch((error: unknown) => {
+      log.warn('openTaskTarget: failed to mount project', { projectId, taskId, error });
+    });
   const targetTab: TaskWindowTabTarget | null =
     tabTarget ?? (conversationId ? { kind: 'conversation', conversationId } : null);
   if (!targetTab) return;
