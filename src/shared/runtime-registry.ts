@@ -84,6 +84,12 @@ export type RuntimeDefinition = {
    * additions through `-c key=value` instead of a dedicated CLI flag.
    */
   appendSystemPromptConfigKey?: string;
+  /**
+   * CLI flag that selects the model for a new session, e.g. '--model' for Claude
+   * Code and Codex. Set when an Agent's configured model should drive the run.
+   * Runtimes without it ignore the Agent's model (the CLI's own default applies).
+   */
+  modelFlag?: string;
   newConversationFlag?: string;
   sessionIdOnResumeOnly?: boolean;
   defaultArgs?: string[];
@@ -215,6 +221,7 @@ export const RUNTIMES: RuntimeDefinition[] = [
     cli: 'codex',
     autoApproveFlag: '--dangerously-bypass-approvals-and-sandbox',
     initialPromptFlag: '',
+    modelFlag: '--model',
     appendSystemPromptConfigKey: 'developer_instructions',
     resumeFlag: 'resume',
     resumeSessionIdArg: true,
@@ -240,6 +247,7 @@ export const RUNTIMES: RuntimeDefinition[] = [
     cli: 'claude',
     autoApproveFlag: '--dangerously-skip-permissions',
     initialPromptFlag: '',
+    modelFlag: '--model',
     clipboardImagePaste: true,
     resumeFlag: '--resume',
     sessionIdFlag: '--session-id',
@@ -720,6 +728,7 @@ export const RUNTIMES: RuntimeDefinition[] = [
     cli: 'claude',
     autoApproveFlag: '--dangerously-skip-permissions',
     initialPromptFlag: '',
+    modelFlag: '--model',
     clipboardImagePaste: true,
     resumeFlag: '--resume',
     sessionIdFlag: '--session-id',
@@ -745,6 +754,7 @@ export const RUNTIMES: RuntimeDefinition[] = [
     cli: 'claude',
     autoApproveFlag: '--dangerously-skip-permissions',
     initialPromptFlag: '',
+    modelFlag: '--model',
     clipboardImagePaste: true,
     resumeFlag: '--resume',
     sessionIdFlag: '--session-id',
