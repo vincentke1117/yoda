@@ -4,7 +4,7 @@ import { agentSessionExitedChannel } from '@shared/events/agentEvents';
 import type { ProjectPromptPrinciples } from '@shared/project-settings';
 import { makePtyId } from '@shared/ptyId';
 import { makePtySessionId } from '@shared/ptySessionId';
-import { getRuntime } from '@shared/runtime-registry';
+import { getRuntime, type RuntimeId } from '@shared/runtime-registry';
 import { agentHookService } from '@main/core/agent-hooks/agent-hook-service';
 import { makeCodexNotifyCommand } from '@main/core/agent-hooks/agent-notify-command';
 import { wireAgentClassifier } from '@main/core/agent-hooks/classifier-wiring';
@@ -52,6 +52,22 @@ import { resolveAgentApiEnvVars, resolveRuntimeEnv, resolveRuntimeTmuxEnv } from
 
 const DEFAULT_COLS = 80;
 const DEFAULT_ROWS = 24;
+
+/**
+ * Runtimes that ship a deterministic, hook-independent run-state source — the
+ * transcript/rollout tailers wired in {@link LocalConversationProvider.startRunStateWatcher}
+ * (Claude reads its own `~/.claude/projects/**.jsonl`, Codex its rollout file).
+ *
+ * For these the PTY keyword classifier is not just redundant but actively
+ * harmful: its heuristic tail-scan fires a false `awaiting-input` on a FINISHED
+ * turn (e.g. the assistant's last message ended with a question mark, or the
+ * output contained "confirm"/"permission"/"allow"). Once the turn is over no
+ * further transcript change re-triggers the authoritative tailer, so nothing
+ * reconciles the false state away and the session is pinned at "awaiting input"
+ * forever. The classifier is only a fallback for providers WITHOUT such a
+ * source, so skip it entirely here.
+ */
+const RUNTIMES_WITH_DETERMINISTIC_RUN_STATE = new Set<RuntimeId>(['claude', 'codex']);
 
 type RunStateWatcher = { stop(): void };
 
@@ -238,8 +254,14 @@ export class LocalConversationProvider implements ConversationProvider {
 
     const hookActive = port > 0;
     const useHooksOnly = hookActive && providerDef?.supportsHooks;
+    // Skip the heuristic PTY classifier when an authoritative run-state source
+    // exists: hooks (useHooksOnly), OR a deterministic transcript/rollout tailer
+    // (Claude/Codex). See RUNTIMES_WITH_DETERMINISTIC_RUN_STATE — wiring the
+    // classifier for those pins a false `awaiting-input` after a finished turn.
+    const hasAuthoritativeRunState =
+      useHooksOnly || RUNTIMES_WITH_DETERMINISTIC_RUN_STATE.has(conversation.runtimeId);
 
-    if (!useHooksOnly) {
+    if (!hasAuthoritativeRunState) {
       wireAgentClassifier({
         pty,
         runtimeId: conversation.runtimeId,
