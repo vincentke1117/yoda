@@ -5,6 +5,23 @@ All notable changes to Yoda will be documented in this file.
 The public Yoda changelog starts at **0.1.0**. Earlier non-Yoda release history
 is preserved in git tags only.
 
+## 0.13.4 — 2026-06-19
+
+### Added
+
+- **Multi-config comparison**: a "+对比" button under the composer adds variant
+  rows that each override project, runtime/model, branch strategy, or prompt.
+  Submitting spawns one task per config and tiles them side by side in a
+  detached window with a columns/rows toggle; closing the window leaves every
+  task in its project sidebar.
+
+### Changed
+
+- The agent-only "compare" run mode is replaced by the general multi-config
+  comparison above (persisted `compare` run mode is coerced for back-compat).
+- Compare controls: the 对比 button sits after the settings gear, the gear is
+  labeled, and chip labels collapse responsively when space is tight.
+
 ## 0.13.3 — 2026-06-18
 
 ### Added
