@@ -2574,6 +2574,22 @@ export const HomeComposer = observer(function HomeComposer({
     </Popover>
   );
 
+  // "+ 对比" sits at the end of the first config row (the base row in normal
+  // mode, the first config row in compare mode), never on its own line.
+  const renderAddCompareButton = (): ReactNode => (
+    <button
+      type="button"
+      aria-label={t('home.addCompareVariant')}
+      title={t('home.addCompareVariantTooltip')}
+      onClick={addVariant}
+      disabled={compareVariants.length >= MAX_COMPARE_VARIANTS}
+      className="flex h-7 items-center gap-1.5 rounded-md border border-border bg-background-1 px-2.5 text-xs text-foreground transition-colors hover:bg-background-2 disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      <GitCompare className="size-3.5 text-foreground-muted" />
+      <span className="hidden @lg/composer:inline">{t('home.addCompareVariant')}</span>
+    </button>
+  );
+
   return (
     <div className={className}>
       <div
@@ -2875,7 +2891,7 @@ export const HomeComposer = observer(function HomeComposer({
             hidden while comparing. */}
         {!taskScopedTarget && mounted && runMode === 'normal' && compareVariants.length > 0 && (
           <div className="flex flex-col gap-2">
-            {compareVariants.map((variant) => (
+            {compareVariants.map((variant, index) => (
               <CompareVariantRow
                 key={variant.id}
                 variant={variant}
@@ -2889,6 +2905,7 @@ export const HomeComposer = observer(function HomeComposer({
                 }
                 modelLabel={compareModelLabel}
                 renderSettings={renderComposerSettingsButton}
+                trailing={index === 0 ? renderAddCompareButton() : undefined}
                 onChange={(patch) => updateVariant(variant.id, patch)}
                 onRemove={() => removeVariant(variant.id)}
                 onReorder={reorderVariant}
@@ -3011,23 +3028,7 @@ export const HomeComposer = observer(function HomeComposer({
               )}
             />
             {renderComposerSettingsButton()}
-          </div>
-        )}
-        {/* Trailing action row: "+ 对比" is always the last row. The per-row config
-            gear lives on each config row, not here. */}
-        {!taskScopedTarget && mounted && runMode === 'normal' && (
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              aria-label={t('home.addCompareVariant')}
-              title={t('home.addCompareVariantTooltip')}
-              onClick={addVariant}
-              disabled={compareVariants.length >= MAX_COMPARE_VARIANTS}
-              className="flex h-7 items-center gap-1.5 rounded-md border border-border bg-background-1 px-2.5 text-xs text-foreground transition-colors hover:bg-background-2 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <GitCompare className="size-3.5 text-foreground-muted" />
-              <span className="hidden @lg/composer:inline">{t('home.addCompareVariant')}</span>
-            </button>
+            {runMode === 'normal' && renderAddCompareButton()}
           </div>
         )}
       </div>
@@ -3050,6 +3051,7 @@ function CompareVariantRow({
   runHostKind,
   modelLabel,
   renderSettings,
+  trailing,
   onChange,
   onRemove,
   onReorder,
@@ -3059,6 +3061,7 @@ function CompareVariantRow({
   runHostKind: RunHostKind;
   modelLabel: string;
   renderSettings: () => ReactNode;
+  trailing?: ReactNode;
   onChange: (patch: Partial<CompareVariant>) => void;
   onRemove: () => void;
   onReorder: (fromId: string, toId: string) => void;
@@ -3134,6 +3137,7 @@ function CompareVariantRow({
         onChange={(id) => onChange({ runtimeId: id })}
       />
       {renderSettings()}
+      {trailing}
       <button
         type="button"
         aria-label={t('home.removeCompareVariant')}
