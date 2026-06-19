@@ -809,6 +809,7 @@
     "addCompareVariant": "对比",
     "addCompareVariantTooltip": "新增一个对比配置——让任务在多个环境里并排运行对比",
     "removeCompareVariant": "移除对比配置",
+    "reorderCompareVariant": "拖拽以排序",
     "promptOverrideLabel": "提示词",
     "promptOverrideActive": "提示词 ·",
     "promptOverridePlaceholder": "为该配置覆盖提示词——留空则沿用基础提示词。",
