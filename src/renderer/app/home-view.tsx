@@ -12,6 +12,7 @@ import {
   GitBranch,
   GitCompare,
   GitFork,
+  GripVertical,
   Image as ImageIcon,
   Lightbulb,
   Loader2,
@@ -183,6 +184,8 @@ type CompareVariant = {
   projectId: string | null;
   runtimeId: RuntimeId | null;
   strategyKind: TaskStrategyKind;
+  /** Fork/in-place base branch; null = the project's default branch. */
+  baseBranch: Branch | null;
   promptOverride: string | null;
 };
 type SkillShortcutPrefix = '/' | '$';
@@ -772,6 +775,19 @@ export const HomeComposer = observer(function HomeComposer({
   const removeVariant = useCallback((id: string) => {
     setCompareVariants((prev) => prev.filter((v) => v.id !== id));
   }, []);
+  // Drag-handle reorder: drop the dragged variant in front of the target row.
+  const reorderVariant = useCallback((fromId: string, toId: string) => {
+    if (fromId === toId) return;
+    setCompareVariants((prev) => {
+      const fromIndex = prev.findIndex((v) => v.id === fromId);
+      const toIndex = prev.findIndex((v) => v.id === toId);
+      if (fromIndex < 0 || toIndex < 0) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(fromIndex, 1);
+      if (moved) next.splice(toIndex, 0, moved);
+      return next;
+    });
+  }, []);
   const reviewerOverridden = composerDefaults?.reviewerRuntime !== undefined;
   const reviewerRuntime =
     composerDefaults?.reviewerRuntime ?? draft?.reviewReviewerRuntime ?? DEFAULT_REVIEWER_RUNTIME;
@@ -854,6 +870,20 @@ export const HomeComposer = observer(function HomeComposer({
     if (!name) return null;
     return `${name} · ${modelLabel(resolved.agent?.model ?? null)}`;
   }, [runMode, runtimeId, activeTeam, slotAgentId, userAgents, t]);
+  // Variants reuse the base agent (NORMAL_PROMPT_KEY) with only a runtime
+  // override, so their model label mirrors the base config's model.
+  const compareModelLabel = useMemo(() => {
+    const model =
+      userAgents.find((agent) => agent.id === slotAgentId(NORMAL_PROMPT_KEY))?.model ?? null;
+    return model ? formatModelLabel(model) : t('home.modelDefault');
+  }, [userAgents, slotAgentId, t]);
+  // Mount every variant's project so its branch picker can list branches and its
+  // host kind resolves (variants default to the already-mounted base project).
+  useEffect(() => {
+    for (const variant of compareVariants) {
+      if (variant.projectId) void projectManager.mountProject(variant.projectId).catch(() => {});
+    }
+  }, [compareVariants, projectManager]);
   // Local project root, so the skill picker can surface project-local skills
   // alongside the global ones. SSH projects have no local path to scan.
   const skillProjectPath = projectData?.type === 'local' ? projectData.path : undefined;
@@ -1286,11 +1316,12 @@ export const HomeComposer = observer(function HomeComposer({
               projectId: selectedProjectId ?? null,
               runtimeId,
               strategyKind: effectiveStandardStrategyKind,
+              baseBranch: forkBaseBranch ?? null,
               promptOverride: null,
             },
           ]
     );
-  }, [selectedProjectId, runtimeId, effectiveStandardStrategyKind]);
+  }, [selectedProjectId, runtimeId, effectiveStandardStrategyKind, forkBaseBranch]);
   const targetProvisionedTask = asProvisioned(taskScopedTaskStore);
   const setAttachImagesAsPathsGlobal = useCallback(
     (next: boolean) => {
@@ -1752,6 +1783,7 @@ export const HomeComposer = observer(function HomeComposer({
           systemPrompt: string;
           requirement: string;
           strategyKind: TaskStrategyKind;
+          baseBranch: Branch | null;
           nameSeed: string;
         };
 
@@ -1761,10 +1793,12 @@ export const HomeComposer = observer(function HomeComposer({
           await projectManager.mountProject(spec.projectId).catch(() => {});
           const target = asMounted(projectManager.projects.get(spec.projectId));
           if (!target) return null;
-          // Fork base: the routed project reuses the already-resolved value; other
-          // projects fork from their own current branch.
+          // Fork base: an explicit per-config branch wins; otherwise the routed
+          // project reuses the already-resolved default and other projects fork
+          // from their own current branch.
           const source =
-            spec.projectId === mounted.data.id
+            spec.baseBranch ??
+            (spec.projectId === mounted.data.id
               ? (forkBaseBranch ?? baseDefaultBranch)
               : await rpc.repository
                   .getLocalBranches(spec.projectId)
@@ -1772,7 +1806,7 @@ export const HomeComposer = observer(function HomeComposer({
                     local.currentBranch
                       ? ({ type: 'local' as const, branch: local.currentBranch } as const)
                       : undefined
-                  );
+                  ));
           if (!source) return null;
           const taskName = ensureUniqueTaskDisplayName(
             spec.nameSeed,
@@ -1820,6 +1854,7 @@ export const HomeComposer = observer(function HomeComposer({
             systemPrompt: baseSlot.systemPrompt,
             requirement,
             strategyKind: standardSubmitKind === 'new-branch' ? 'new-branch' : 'no-worktree',
+            baseBranch: forkBaseBranch ?? null,
             nameSeed: `${baseName}-base`,
           },
           ...compareVariants.flatMap((variant, index): CompareSpec[] => {
@@ -1834,6 +1869,7 @@ export const HomeComposer = observer(function HomeComposer({
                 systemPrompt: slot.systemPrompt,
                 requirement: variant.promptOverride?.trim() || requirement,
                 strategyKind: variant.strategyKind,
+                baseBranch: variant.baseBranch,
                 nameSeed: `${baseName}-alt-${index + 1}`,
               },
             ];
@@ -2974,15 +3010,23 @@ export const HomeComposer = observer(function HomeComposer({
           )}
         </div>
         {!taskScopedTarget && mounted && runMode === 'normal' && compareVariants.length > 0 && (
-          <div className="flex flex-col gap-2 border-l-2 border-primary/30 pl-3">
-            {compareVariants.map((variant, index) => (
+          <div className="flex flex-col gap-2 border-l-2 border-primary/30 pl-1">
+            {compareVariants.map((variant) => (
               <CompareVariantRow
                 key={variant.id}
-                index={index + 2}
                 variant={variant}
                 strategyLabels={strategyLabels}
+                runHostKind={
+                  asMounted(
+                    variant.projectId ? projectManager.projects.get(variant.projectId) : undefined
+                  )?.data.type === 'ssh'
+                    ? 'ssh'
+                    : 'local'
+                }
+                modelLabel={compareModelLabel}
                 onChange={(patch) => updateVariant(variant.id, patch)}
                 onRemove={() => removeVariant(variant.id)}
+                onReorder={reorderVariant}
               />
             ))}
           </div>
@@ -2992,33 +3036,69 @@ export const HomeComposer = observer(function HomeComposer({
   );
 });
 
+/** DnD payload type for reordering comparison variant rows by drag handle. */
+const VARIANT_DND_TYPE = 'application/x-yoda-compare-variant';
+
 /**
- * One extra comparison environment under the base composer row: pick its
- * project, runtime, branch strategy, and an optional prompt override. Empty
- * fields fall back to the base config at submit time.
+ * One extra comparison environment under the base composer row. Mirrors the base
+ * row's config chips (project · host · base branch · fork · runtime/model) plus a
+ * per-variant prompt override, and a left drag handle to reorder the variants.
+ * Empty fields fall back to the base config at submit time.
  */
 function CompareVariantRow({
-  index,
   variant,
   strategyLabels,
+  runHostKind,
+  modelLabel,
   onChange,
   onRemove,
+  onReorder,
 }: {
-  index: number;
   variant: CompareVariant;
   strategyLabels: StrategyChipLabels;
+  runHostKind: RunHostKind;
+  modelLabel: string;
   onChange: (patch: Partial<CompareVariant>) => void;
   onRemove: () => void;
+  onReorder: (fromId: string, toId: string) => void;
 }) {
   const { t } = useTranslation();
+  const [dragOver, setDragOver] = useState(false);
+  const forking = variant.strategyKind === 'new-branch';
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-background-2 text-[10px] font-medium text-foreground-muted">
-        {index}
-      </span>
+    <div
+      onDragOver={(event) => {
+        if (!event.dataTransfer.types.includes(VARIANT_DND_TYPE)) return;
+        event.preventDefault();
+        setDragOver(true);
+      }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={(event) => {
+        const fromId = event.dataTransfer.getData(VARIANT_DND_TYPE);
+        setDragOver(false);
+        if (fromId) onReorder(fromId, variant.id);
+      }}
+      className={cn(
+        'flex flex-wrap items-center gap-2 rounded-md',
+        dragOver && 'ring-1 ring-primary/40'
+      )}
+    >
+      <button
+        type="button"
+        draggable
+        onDragStart={(event) => {
+          event.dataTransfer.effectAllowed = 'move';
+          event.dataTransfer.setData(VARIANT_DND_TYPE, variant.id);
+        }}
+        aria-label={t('home.reorderCompareVariant')}
+        title={t('home.reorderCompareVariant')}
+        className="flex size-7 shrink-0 cursor-grab items-center justify-center rounded-md text-foreground-passive transition-colors hover:bg-background-2 hover:text-foreground active:cursor-grabbing"
+      >
+        <GripVertical className="size-3.5" />
+      </button>
       <ProjectSelector
         value={variant.projectId ?? undefined}
-        onChange={(id) => onChange({ projectId: id ?? null })}
+        onChange={(id) => onChange({ projectId: id ?? null, baseBranch: null })}
         initializeGitRepositoryOnPick
         trigger={
           <ComboboxTrigger className="flex h-7 items-center gap-1.5 rounded-md border border-border bg-background-1 px-2.5 text-xs text-foreground transition-colors hover:bg-background-2">
@@ -3027,13 +3107,30 @@ function CompareVariantRow({
           </ComboboxTrigger>
         }
       />
-      <RuntimePickerChip value={variant.runtimeId} onChange={(id) => onChange({ runtimeId: id })} />
+      {variant.projectId && <RunHostSelector kind={runHostKind} />}
+      {variant.projectId && (
+        <BaseBranchChip
+          projectId={variant.projectId}
+          forking={forking}
+          locked={false}
+          value={variant.baseBranch ?? undefined}
+          label=""
+          inPlace={!forking}
+          onChange={(branch) => onChange({ baseBranch: branch })}
+          ariaLabel={t('home.baseBranchAria')}
+        />
+      )}
       <ForkSwitchChip
-        checked={variant.strategyKind === 'new-branch'}
+        checked={forking}
         disabled={false}
         onChange={(forked) => onChange({ strategyKind: forked ? 'new-branch' : 'no-worktree' })}
         ariaLabel={t('home.strategyAria')}
         labels={strategyLabels}
+      />
+      <RuntimePickerChip
+        value={variant.runtimeId}
+        modelLabel={modelLabel}
+        onChange={(id) => onChange({ runtimeId: id })}
       />
       <PromptOverrideChip
         value={variant.promptOverride}
@@ -3052,22 +3149,24 @@ function CompareVariantRow({
   );
 }
 
-/** Compact runtime picker for a comparison variant (runtime override only). */
+/** Compact runtime · model picker for a comparison variant (runtime override). */
 function RuntimePickerChip({
   value,
+  modelLabel,
   onChange,
 }: {
   value: RuntimeId | null;
+  modelLabel: string;
   onChange: (id: RuntimeId) => void;
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
-  const label = value ? (getRuntime(value)?.name ?? value) : t('home.agentLabel');
+  const runtimeName = value ? (getRuntime(value)?.name ?? value) : t('home.agentLabel');
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger className="flex h-7 items-center gap-1.5 rounded-md border border-border bg-background-1 px-2.5 text-xs text-foreground transition-colors hover:bg-background-2">
         <Bot className="size-3.5 text-foreground-muted" />
-        <span>{label}</span>
+        <span>{`${runtimeName} · ${modelLabel}`}</span>
         <ChevronDown className="size-3 text-foreground-muted" />
       </PopoverTrigger>
       <PopoverContent align="start" className="w-44 p-1">
