@@ -13,6 +13,7 @@ import {
   type CreateTaskError,
   type CreateTaskParams,
   type CreateTaskWarning,
+  type MoveTaskToProjectError,
   type Task,
   type TaskLifecycleStatus,
 } from '@shared/tasks';
@@ -611,6 +612,47 @@ export class TaskManagerStore {
     const task = this.tasks.get(taskId);
     if (!task) return;
     await task.setPinned(isPinned);
+  }
+
+  /**
+   * Re-home this task under another project (move / "promote" a Default task).
+   * Tears down any live session, persists the move, then hands the task to the
+   * destination project's manager so both sidebars reflect it without a reload.
+   * Returns the error on failure, or null on success.
+   */
+  async moveTaskToProject(
+    taskId: string,
+    targetProjectId: string
+  ): Promise<MoveTaskToProjectError | null> {
+    const task = this.tasks.get(taskId);
+    if (!task) return { type: 'task-not-found' };
+
+    // Stop a running/booting session before the rows move; the main process
+    // also tears down defensively, but doing it here keeps this store's view in
+    // sync (the task leaves as unprovisioned).
+    if (isProvisioned(task) || (isUnprovisioned(task) && task.phase !== 'idle')) {
+      await this.teardownTask(taskId).catch(() => {});
+    }
+
+    const result = await rpc.tasks.moveTaskToProject(taskId, targetProjectId);
+    if (!result.success) return result.error;
+
+    const store = this.tasks.get(taskId);
+    runInAction(() => {
+      this.tasks.delete(taskId);
+    });
+    store?.dispose();
+
+    await getProjectManagerStore().mountProject(targetProjectId);
+    const targetManager =
+      getProjectManagerStore().projects.get(targetProjectId)?.mountedProject?.taskManager;
+    if (targetManager) {
+      await targetManager.loadTasks();
+      runInAction(() => {
+        targetManager.tasks.set(result.data.id, createUnprovisionedTask(result.data));
+      });
+    }
+    return null;
   }
 
   /**
