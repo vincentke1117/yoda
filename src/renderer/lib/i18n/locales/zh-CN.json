@@ -1364,8 +1364,18 @@
       "createSubtask": "新建子任务",
       "setParent": "设置父任务…",
       "createParent": "增设父任务（分组）",
+      "moveToProject": "移动到项目",
+      "moveToProjectEmpty": "没有其他项目",
       "showSessionHistoryDock": "显示底部会话记录",
       "hideSessionHistoryDock": "隐藏底部会话记录"
+    },
+    "moveToProject": {
+      "confirmTitle": "移动任务到其他项目？",
+      "confirmHistoryWarning": "该任务已有会话历史。历史保存在当前工作目录、不会随任务迁移——任务将在新项目中重新开始。",
+      "confirmLabel": "移动",
+      "errorHasWorktree": "只有没有 git worktree 的任务才能移动。",
+      "errorHasSubtasks": "请先移动或移除该任务的子任务。",
+      "errorGeneric": "无法移动该任务。"
     },
     "sessionPanel": {
       "title": "会话",

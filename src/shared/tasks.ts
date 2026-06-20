@@ -115,6 +115,15 @@ export type SetTaskParentError =
   | { type: 'parent-archived' }
   | { type: 'cycle-detected' };
 
+export type MoveTaskToProjectError =
+  | { type: 'task-not-found' }
+  | { type: 'project-not-found' }
+  | { type: 'same-project' }
+  /** The task owns a git worktree/branch — only no-worktree tasks can be re-homed. */
+  | { type: 'has-worktree' }
+  /** The task has subtasks — moving would split a cross-project parent/child tree. */
+  | { type: 'has-subtasks' };
+
 export type ArchiveTaskResult = {
   /** The requested task plus all cascaded descendants, in archive order. */
   archivedTaskIds: string[];

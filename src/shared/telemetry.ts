@@ -98,6 +98,7 @@ export type TelemetryEventProperties = {
     hook_count: number;
   };
   task_deleted: EmptyProps;
+  task_moved_to_project: EmptyProps;
 
   conversation_created: { provider: RuntimeId; is_first_in_task: boolean };
   conversation_archived: EmptyProps;

@@ -1364,8 +1364,18 @@
       "createSubtask": "New subtask",
       "setParent": "Set parent task...",
       "createParent": "Add parent task (group)",
+      "moveToProject": "Move to project",
+      "moveToProjectEmpty": "No other projects",
       "showSessionHistoryDock": "Show session history dock",
       "hideSessionHistoryDock": "Hide session history dock"
+    },
+    "moveToProject": {
+      "confirmTitle": "Move task to another project?",
+      "confirmHistoryWarning": "This task already has session history. The history stays at its current working directory and won't follow the task — it re-runs fresh in the new project.",
+      "confirmLabel": "Move",
+      "errorHasWorktree": "Only tasks without a git worktree can be moved.",
+      "errorHasSubtasks": "Move or remove this task's subtasks first.",
+      "errorGeneric": "Could not move the task."
     },
     "sessionPanel": {
       "title": "Session",

@@ -46,6 +46,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@renderer/lib/ui/dropdown-menu';
+import {
+  MoveToProjectContextSubmenu,
+  MoveToProjectDropdownSubmenu,
+} from './move-to-project-submenu';
 import { buildTaskBasicInfo, type TaskBasicInfoFields } from './task-menu-basic-info';
 
 interface TaskSessionInfoFields {
@@ -111,6 +115,11 @@ export interface TaskMenuActions extends TaskMenuInfoFields {
   onOpenBeside?: () => void;
   /** Tile all of this task's children (compare candidates) side by side. */
   onTileCandidates?: () => void;
+  /**
+   * Re-home this task under another project (move / "promote" a Default task).
+   * Only set for eligible tasks (no worktree, no subtasks).
+   */
+  onMoveToProject?: (targetProjectId: string) => void;
 }
 
 interface MenuItemDescriptor {
@@ -514,6 +523,12 @@ export function TaskContextMenuItems(actions: TaskMenuActions) {
           </React.Fragment>
         );
       })}
+      {actions.onMoveToProject && actions.projectId && (
+        <MoveToProjectContextSubmenu
+          currentProjectId={actions.projectId}
+          onMove={actions.onMoveToProject}
+        />
+      )}
       {actions.onAssignWorkspace && (
         <WorkspaceAssignContextSubmenu
           currentWorkspaceId={actions.currentWorkspaceId ?? null}
@@ -576,6 +591,12 @@ export function TaskActionsMenu({
             </React.Fragment>
           );
         })}
+        {actions.onMoveToProject && actions.projectId && (
+          <MoveToProjectDropdownSubmenu
+            currentProjectId={actions.projectId}
+            onMove={actions.onMoveToProject}
+          />
+        )}
         {actions.onAssignWorkspace && (
           <WorkspaceAssignDropdownSubmenu
             currentWorkspaceId={actions.currentWorkspaceId ?? null}
