@@ -76,4 +76,32 @@ describe('pty env Windows shell handling', () => {
     expect(env.YODA_PTY_ID).toBe('claude:conv-1');
     expect(env.YODA_HOOK_TOKEN).toBe('real-token');
   });
+
+  it('keeps network proxy variables when API env passthrough is disabled', async () => {
+    process.env.HTTP_PROXY = 'http://localhost:7890';
+    process.env.HTTPS_PROXY = 'http://localhost:7890';
+    process.env.NO_PROXY = 'localhost,127.0.0.1';
+    process.env.ANTHROPIC_API_KEY = 'secret';
+
+    const { buildAgentEnv } = await loadPtyEnv();
+    const env = buildAgentEnv({ agentApiVars: false });
+
+    expect(env.HTTP_PROXY).toBe('http://localhost:7890');
+    expect(env.HTTPS_PROXY).toBe('http://localhost:7890');
+    expect(env.NO_PROXY).toBe('localhost,127.0.0.1');
+    expect(env.ANTHROPIC_API_KEY).toBeUndefined();
+  });
+
+  it('keeps network proxy variables when API env passthrough is scoped', async () => {
+    process.env.HTTP_PROXY = 'http://localhost:7890';
+    process.env.ANTHROPIC_API_KEY = 'secret';
+    process.env.OPENAI_API_KEY = 'other-secret';
+
+    const { buildAgentEnv } = await loadPtyEnv();
+    const env = buildAgentEnv({ agentApiVars: ['ANTHROPIC_API_KEY'] });
+
+    expect(env.HTTP_PROXY).toBe('http://localhost:7890');
+    expect(env.ANTHROPIC_API_KEY).toBe('secret');
+    expect(env.OPENAI_API_KEY).toBeUndefined();
+  });
 });

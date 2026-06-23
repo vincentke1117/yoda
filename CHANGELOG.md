@@ -5,6 +5,15 @@ All notable changes to Yoda will be documented in this file.
 The public Yoda changelog starts at **0.1.0**. Earlier non-Yoda release history
 is preserved in git tags only.
 
+## 0.13.7 — 2026-06-20
+
+### Fixed
+
+- PTY: network proxy variables (`HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`) are
+  now always passed to the agent environment, independent of the API-key
+  passthrough setting — so agents still reach the network through your proxy
+  even when API-key passthrough is disabled or scoped to specific keys.
+
 ## 0.13.6 — 2026-06-20
 
 ### Added

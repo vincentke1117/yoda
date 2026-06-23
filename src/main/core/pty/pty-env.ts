@@ -2,7 +2,7 @@ import os from 'node:os';
 import { detectSshAuthSock } from '@main/utils/shellEnv';
 import { getWindowsEnvValue } from '@main/utils/windows-env';
 
-export const AGENT_ENV_VARS = [
+const AGENT_AUTH_ENV_VARS = [
   'AMP_API_KEY',
   'ANTHROPIC_API_KEY',
   'AUTOHAND_API_KEY',
@@ -28,17 +28,18 @@ export const AGENT_ENV_VARS = [
   'GOOGLE_APPLICATION_CREDENTIALS',
   'GOOGLE_CLOUD_LOCATION',
   'GOOGLE_CLOUD_PROJECT',
-  'HTTP_PROXY',
-  'HTTPS_PROXY',
   'KIMI_API_KEY',
   'MISTRAL_API_KEY',
   'MOONSHOT_API_KEY',
-  'NO_PROXY',
   'OPENAI_API_KEY',
   'OPENAI_BASE_URL',
   'OPENROUTER_API_KEY',
   'OPENROUTER_BASE_URL',
 ] as const;
+
+const AGENT_NETWORK_ENV_VARS = ['HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY'] as const;
+
+export const AGENT_ENV_VARS = [...AGENT_AUTH_ENV_VARS, ...AGENT_NETWORK_ENV_VARS] as const;
 
 const DISPLAY_ENV_VARS = [
   'DISPLAY', // X11 display server
@@ -206,9 +207,14 @@ export function buildAgentEnv(options: AgentEnvOptions = {}): Record<string, str
     env.SHELL = process.env.SHELL;
   }
 
+  for (const key of AGENT_NETWORK_ENV_VARS) {
+    const val = process.env[key];
+    if (val) env[key] = val;
+  }
+
   if (agentApiVars) {
-    const apiEnvVars = Array.isArray(agentApiVars) ? agentApiVars : AGENT_ENV_VARS;
-    for (const key of apiEnvVars) {
+    const authEnvVars = Array.isArray(agentApiVars) ? agentApiVars : AGENT_AUTH_ENV_VARS;
+    for (const key of authEnvVars) {
       const val = process.env[key];
       if (val) env[key] = val;
     }
