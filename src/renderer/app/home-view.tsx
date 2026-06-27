@@ -1438,10 +1438,17 @@ export const HomeComposer = observer(function HomeComposer({
       // the main process expands per runtime (native clipboard paste for TUIs
       // that support it, @path substitution for the rest). Ordering always
       // follows the text.
-      const serialized = serializePromptWithTokens(trimmed, promptTokens, {
+      //
+      // Serialize the RAW prompt, not `trimmed`: token sentinels are wrapped in
+      // en-space (U+2002) delimiters, which `String.trim()` strips — so a
+      // boundary token (paste-only, or an image at the very end) would lose its
+      // delimiters, fail the sentinel regex, and leak as bare label text with no
+      // image attached. Trim the serialized text afterwards, where tokens are
+      // already non-whitespace markers/paths and safe to trim around.
+      const serialized = serializePromptWithTokens(prompt, promptTokens, {
         imagesAsPaths: attachImagesAsPaths,
       });
-      const requirement = serialized.text;
+      const requirement = serialized.text.trim();
       const imagePaths = serialized.imagePaths.length > 0 ? serialized.imagePaths : undefined;
       const resetComposer = () => {
         setPrompt('');
@@ -1995,6 +2002,7 @@ export const HomeComposer = observer(function HomeComposer({
     clearPromptTokens,
     reviewSubmitKind,
     standardSubmitKind,
+    prompt,
     trimmed,
     submitting,
     runMode,
