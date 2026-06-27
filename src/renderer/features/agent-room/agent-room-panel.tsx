@@ -491,7 +491,7 @@ const Composer = observer(function Composer({ members }: { members: RoomMember[]
               send();
             }
           }}
-          className="max-h-40 min-h-[24px] flex-1 resize-none bg-transparent text-sm text-foreground outline-none placeholder:text-foreground-muted"
+          className="max-h-40 min-h-[24px] flex-1 resize-none overflow-y-auto bg-transparent text-sm text-foreground outline-none field-sizing-content placeholder:text-foreground-muted"
         />
         <button
           type="button"
