@@ -10,7 +10,9 @@ import {
   OVERVIEW_TAB_ID,
   type TabManagerStore,
 } from '@renderer/features/tasks/tabs/tab-manager-store';
+import { rpc } from '@renderer/lib/ipc';
 import type { NavigateFnTyped } from '@renderer/lib/layout/navigation-provider';
+import { showModal } from '@renderer/lib/modal/modal-provider';
 import { appState } from '@renderer/lib/stores/app-state';
 import { tabScopeKey, type AppTabEntry } from '@renderer/lib/stores/app-tabs-store';
 import { log } from '@renderer/utils/logger';
@@ -231,7 +233,7 @@ export async function openProvisionedTaskTab(
       return true;
     case 'conversation': {
       const found = await provisioned.conversations.ensureConversation(tabTarget.conversationId);
-      if (!found) return false;
+      if (!found) return openArchivedConversationFallback(provisioned, tabTarget.conversationId);
       provisioned.taskView.tabManager.openConversation(tabTarget.conversationId);
       provisioned.taskView.setFocusedRegion('main');
       return true;
@@ -249,6 +251,24 @@ export async function openProvisionedTaskTab(
       provisioned.taskView.setFocusedRegion('main');
       return true;
   }
+}
+
+async function openArchivedConversationFallback(
+  provisioned: ProvisionedTask,
+  conversationId: string
+): Promise<boolean> {
+  const archived = await rpc.conversations.getArchivedConversationsForTask(
+    provisioned.projectId,
+    provisioned.taskId
+  );
+  const conversation = archived.find((row) => row.id === conversationId);
+  if (!conversation) return false;
+
+  provisioned.taskView.setSidebarCollapsed(false);
+  provisioned.taskView.setSidebarTab('conversations');
+  provisioned.taskView.setFocusedRegion('main');
+  showModal('archivedSessionTranscriptModal', { conversation });
+  return true;
 }
 
 function diffTargetToActiveFile(
