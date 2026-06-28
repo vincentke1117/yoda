@@ -5,6 +5,19 @@ All notable changes to Yoda will be documented in this file.
 The public Yoda changelog starts at **0.1.0**. Earlier non-Yoda release history
 is preserved in git tags only.
 
+## 0.13.9 — 2026-06-27
+
+### Fixed
+
+- Conversations: Claude's TUI theme now follows the embedded terminal
+  background, keeping its menus readable on a light terminal.
+- Agent rooms: the composer auto-sizes to its content.
+- Home: attached boundary images no longer degrade to plain text after the
+  message is sent.
+- Deep links: archived-conversation deep links are handled, and a running dev
+  build no longer steals Yoda deep links from the installed app.
+- Codex: untitled sessions resolve correctly on resume.
+
 ## 0.13.8 — 2026-06-23
 
 ### Added
