@@ -28,9 +28,8 @@ export async function runProjectCommand(args: {
   action: QuickAction;
   runtimeId: RuntimeId | null;
   defaultBranch: Branch | undefined;
-  autoApprove: boolean | undefined;
 }): Promise<string | null> {
-  const { project, action, runtimeId, defaultBranch, autoApprove } = args;
+  const { project, action, runtimeId, defaultBranch } = args;
   const command = runtimeId ? applyAgentCommandPrefix(runtimeId, action.command) : '';
   if (!command || !runtimeId || !defaultBranch) return null;
 
@@ -51,7 +50,6 @@ export async function runProjectCommand(args: {
       taskId,
       runtime: runtimeId,
       title: action.label || command,
-      autoApprove,
       initialPrompt: command,
     },
   });

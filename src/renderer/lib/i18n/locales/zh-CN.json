@@ -728,6 +728,13 @@
       "taskCountPlural": "{{count}} 个任务"
     }
   },
+  "permissionMode": {
+    "default": "默认（先询问）",
+    "plan": "计划模式",
+    "acceptEdits": "自动接受编辑",
+    "fullAuto": "全自动",
+    "bypass": "跳过权限（危险）"
+  },
   "home": {
     "greeting": {
       "earlyMorning": "起得真早，{{name}}，趁安静创造点什么",
@@ -746,6 +753,8 @@
     "composerSettingsLabel": "配置",
     "attachImagesAsPathsLabel": "图片以文件路径发送",
     "attachImagesAsPathsDesc": "以 @路径 形式引用图片，而不是把图片原生粘贴进 agent 终端。",
+    "permissionModeLabel": "权限模式",
+    "permissionModeDesc": "所选 agent 无需询问可执行的范围。每个 agent CLI 会套用各自对应的参数（如 Claude --permission-mode、Codex 沙箱）。Bypass 为完全无沙箱运行。",
     "composerScopeGlobal": "全局",
     "composerScopeProject": "本项目",
     "composerScopeInheritTooltip": "继承全局默认。点击改为仅本项目覆盖。",
@@ -1211,6 +1220,7 @@
       "createTaskBranchAndWorktree": "创建任务分支和 worktree",
       "initialCommitRequired": "请先创建初始提交。",
       "dangerouslySkipPermissions": "跳过权限检查（危险）",
+      "permissionMode": "权限模式",
       "initialPromptPlaceholder": "描述你希望代理完成的工作。",
       "pushBranchToRemote": "将分支 push 到远端",
       "selectAnotherIssue": "选择其他 Issue",

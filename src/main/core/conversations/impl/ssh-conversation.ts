@@ -122,6 +122,7 @@ export class SshConversationProvider implements ConversationProvider {
       runtimeId: conversation.runtimeId,
       providerConfig,
       autoApprove: conversation.autoApprove,
+      permissionMode: conversation.permissionMode,
       sessionId: conversation.id,
       isResuming,
       // Clipboard paste is local-only; remote sessions get @path mentions.

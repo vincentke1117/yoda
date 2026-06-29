@@ -1,11 +1,13 @@
 import { type Conversation } from '@shared/conversations';
 import { type RuntimeId } from '@shared/runtime-registry';
 import { type ConversationRow } from '@main/db/schema';
+import { type ConversationConfig } from './types';
 
 export function mapConversationRowToConversation(
   row: ConversationRow,
   resume: boolean = false
 ): Conversation {
+  const config: ConversationConfig | undefined = row.config ? JSON.parse(row.config) : undefined;
   return {
     id: row.id,
     title: row.title,
@@ -15,7 +17,8 @@ export function mapConversationRowToConversation(
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     archivedAt: row.archivedAt,
-    autoApprove: row.config ? JSON.parse(row.config).autoApprove : undefined,
+    autoApprove: config?.autoApprove,
+    permissionMode: config?.permissionMode,
     resume: resume,
     lastInteractedAt: row.lastInteractedAt ?? null,
     isInitialConversation: row.isInitialConversation,

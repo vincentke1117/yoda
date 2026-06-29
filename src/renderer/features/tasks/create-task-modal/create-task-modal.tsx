@@ -11,7 +11,6 @@ import {
 } from '@renderer/features/projects/stores/project-selectors';
 import { initialConversationTitle } from '@renderer/features/tasks/conversations/conversation-title-utils';
 import { ProjectSelector } from '@renderer/features/tasks/create-task-modal/project-selector';
-import { useRuntimeAutoApproveDefaults } from '@renderer/features/tasks/hooks/useRuntimeAutoApproveDefaults';
 import { useFeatureFlag } from '@renderer/lib/hooks/useFeatureFlag';
 import { useNavigate } from '@renderer/lib/layout/navigation-provider';
 import { type BaseModalProps } from '@renderer/lib/modal/modal-provider';
@@ -81,7 +80,6 @@ export const CreateTaskModal = observer(function CreateTaskModal({
   const connectionId = projectData?.type === 'ssh' ? projectData.connectionId : undefined;
 
   const initialConversation = useInitialConversationState(connectionId);
-  const autoApproveDefaults = useRuntimeAutoApproveDefaults();
 
   useEffect(() => setUseBYOI(false), [selectedProjectId]);
   useEffect(() => {
@@ -148,7 +146,6 @@ export const CreateTaskModal = observer(function CreateTaskModal({
             []
           ),
           initialPrompt: initialConversation.prompt.trim() || undefined,
-          autoApprove: autoApproveDefaults.getDefault(initialConversation.runtime),
         }
       : undefined;
     const taskManager = projectStore.mountedProject!.taskManager;
@@ -239,7 +236,6 @@ export const CreateTaskModal = observer(function CreateTaskModal({
     isUnborn,
     useBYOI,
     initialConversation,
-    autoApproveDefaults,
     navigate,
     onClose,
   ]);

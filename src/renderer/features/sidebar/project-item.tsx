@@ -28,7 +28,6 @@ import { useArchiveTask } from '@renderer/features/tasks/archive-task';
 import { copyTaskLink } from '@renderer/features/tasks/components/task-context-menu';
 import { nextDefaultConversationTitle } from '@renderer/features/tasks/conversations/conversation-title-utils';
 import { useEffectiveRuntime } from '@renderer/features/tasks/conversations/use-effective-runtime';
-import { useRuntimeAutoApproveDefaults } from '@renderer/features/tasks/hooks/useRuntimeAutoApproveDefaults';
 import { isRegistered } from '@renderer/features/tasks/stores/task';
 import { ConnectionStatusDot } from '@renderer/lib/components/connection-status-dot';
 import { rpc } from '@renderer/lib/ipc';
@@ -109,7 +108,6 @@ export const SidebarProjectItem = observer(function SidebarProjectItem({
   const expressConnectionId =
     mountedProject?.data?.type === 'ssh' ? mountedProject.data.connectionId : undefined;
   const { runtimeId: expressProviderId } = useEffectiveRuntime(expressConnectionId);
-  const expressAutoApproveDefaults = useRuntimeAutoApproveDefaults();
 
   const currentProjectId =
     currentView === 'task'
@@ -165,14 +163,12 @@ export const SidebarProjectItem = observer(function SidebarProjectItem({
         taskId,
         runtime: expressProviderId,
         title: nextDefaultConversationTitle(expressProviderId, []),
-        autoApprove: expressAutoApproveDefaults.getDefault(expressProviderId),
       },
     });
     navigate('task', { projectId: mounted.data.id, taskId });
   }, [
     expressMode,
     expressProviderId,
-    expressAutoApproveDefaults,
     homeDraft?.strategyKind,
     mountedProject,
     navigate,

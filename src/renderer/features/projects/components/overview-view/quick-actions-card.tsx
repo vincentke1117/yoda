@@ -12,7 +12,6 @@ import {
 } from '@renderer/features/projects/stores/project-selectors';
 import { useAppSettingsKey } from '@renderer/features/settings/use-app-settings-key';
 import { useEffectiveRuntime } from '@renderer/features/tasks/conversations/use-effective-runtime';
-import { useRuntimeAutoApproveDefaults } from '@renderer/features/tasks/hooks/useRuntimeAutoApproveDefaults';
 import { useNavigate } from '@renderer/lib/layout/navigation-provider';
 import { useShowModal } from '@renderer/lib/modal/modal-provider';
 import { Button } from '@renderer/lib/ui/button';
@@ -33,7 +32,6 @@ export const QuickActionsCard = observer(function QuickActionsCard({
   const { value: homeDraft } = useAppSettingsKey('homeDraft');
   const connectionId = project?.data?.type === 'ssh' ? project.data.connectionId : undefined;
   const { runtimeId } = useEffectiveRuntime(connectionId);
-  const autoApproveDefaults = useRuntimeAutoApproveDefaults();
 
   const projectActions = settingsStore?.settings?.quickActions;
   const globalDefaults = homeDraft?.defaultQuickActions ?? [];
@@ -54,7 +52,6 @@ export const QuickActionsCard = observer(function QuickActionsCard({
         action,
         runtimeId,
         defaultBranch: repo?.defaultBranch,
-        autoApprove: autoApproveDefaults.getDefault(runtimeId),
       });
       if (taskId) navigate('task', { projectId, taskId });
     } catch (err) {

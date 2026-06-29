@@ -34,6 +34,29 @@ export const RUNTIME_IDS = [
 
 export type RuntimeId = (typeof RUNTIME_IDS)[number];
 
+/**
+ * A selectable permission tier for an agent CLI. The composer's permission-mode
+ * selector lists these; the chosen mode's `args` are appended to the spawn
+ * command. Tiers are CLI-specific because each agent exposes its own
+ * sandbox/approval flags.
+ */
+export type RuntimePermissionMode = {
+  /** Stable id, persisted in settings and conversation config. */
+  id: string;
+  /** i18n key for the label, under the `permissionMode.*` namespace. */
+  labelKey: string;
+  /** Explicit CLI args appended for this mode. Empty/omitted = the CLI's own default. */
+  args?: string[];
+  /**
+   * Synthesized bypass tier: append the runtime's (possibly user-overridden)
+   * `autoApproveFlag` instead of fixed `args`, parsed at spawn time so a custom
+   * flag keeps working.
+   */
+  usesAutoApproveFlag?: boolean;
+  /** Fully-unsandboxed / auto-approve tier — drives danger styling and maps to legacy autoApprove. */
+  danger?: boolean;
+};
+
 export type RuntimeDefinition = {
   id: RuntimeId;
   name: string;
@@ -46,6 +69,14 @@ export type RuntimeDefinition = {
   detectable?: boolean;
   cli?: string;
   autoApproveFlag?: string;
+  /**
+   * Ordered permission/run-mode tiers exposed for this CLI in the composer's
+   * permission-mode selector. Set only for CLIs with richer-than-binary modes
+   * (e.g. Claude's plan/acceptEdits, Codex's full-auto). CLIs without it get a
+   * synthesized default/bypass pair derived from `autoApproveFlag` — see
+   * `getRuntimePermissionModes`.
+   */
+  permissionModes?: RuntimePermissionMode[];
   initialPromptFlag?: string;
   /**
    * When true, the initial prompt is delivered via keystroke injection
@@ -208,6 +239,35 @@ export type AgentSubscriptionAccount = {
   error: string | null;
 };
 
+/** Permission tiers for the Claude CLI, shared by its API-compatible clones. */
+const CLAUDE_PERMISSION_MODES: RuntimePermissionMode[] = [
+  { id: 'default', labelKey: 'permissionMode.default', args: [] },
+  { id: 'plan', labelKey: 'permissionMode.plan', args: ['--permission-mode', 'plan'] },
+  {
+    id: 'accept-edits',
+    labelKey: 'permissionMode.acceptEdits',
+    args: ['--permission-mode', 'acceptEdits'],
+  },
+  {
+    id: 'bypass',
+    labelKey: 'permissionMode.bypass',
+    args: ['--dangerously-skip-permissions'],
+    danger: true,
+  },
+];
+
+/** Permission tiers for the Codex CLI (sandbox + approval policy). */
+const CODEX_PERMISSION_MODES: RuntimePermissionMode[] = [
+  { id: 'default', labelKey: 'permissionMode.default', args: [] },
+  { id: 'full-auto', labelKey: 'permissionMode.fullAuto', args: ['--full-auto'] },
+  {
+    id: 'bypass',
+    labelKey: 'permissionMode.bypass',
+    args: ['--dangerously-bypass-approvals-and-sandbox'],
+    danger: true,
+  },
+];
+
 export const RUNTIMES: RuntimeDefinition[] = [
   {
     id: 'codex',
@@ -220,6 +280,7 @@ export const RUNTIMES: RuntimeDefinition[] = [
     versionArgs: ['--version'],
     cli: 'codex',
     autoApproveFlag: '--dangerously-bypass-approvals-and-sandbox',
+    permissionModes: CODEX_PERMISSION_MODES,
     initialPromptFlag: '',
     modelFlag: '--model',
     appendSystemPromptConfigKey: 'developer_instructions',
@@ -246,6 +307,7 @@ export const RUNTIMES: RuntimeDefinition[] = [
     versionArgs: ['--version'],
     cli: 'claude',
     autoApproveFlag: '--dangerously-skip-permissions',
+    permissionModes: CLAUDE_PERMISSION_MODES,
     initialPromptFlag: '',
     modelFlag: '--model',
     clipboardImagePaste: true,
@@ -727,6 +789,7 @@ export const RUNTIMES: RuntimeDefinition[] = [
     versionArgs: ['--version'],
     cli: 'claude',
     autoApproveFlag: '--dangerously-skip-permissions',
+    permissionModes: CLAUDE_PERMISSION_MODES,
     initialPromptFlag: '',
     modelFlag: '--model',
     clipboardImagePaste: true,
@@ -753,6 +816,7 @@ export const RUNTIMES: RuntimeDefinition[] = [
     versionArgs: ['--version'],
     cli: 'claude',
     autoApproveFlag: '--dangerously-skip-permissions',
+    permissionModes: CLAUDE_PERMISSION_MODES,
     initialPromptFlag: '',
     modelFlag: '--model',
     clipboardImagePaste: true,
@@ -1079,4 +1143,88 @@ export function getDocUrlForRuntime(id: RuntimeId): string | null {
 
 export function listDetectableRuntimes(): RuntimeDefinition[] {
   return RUNTIMES.filter((provider) => provider.detectable !== false && provider.commands?.length);
+}
+
+const DEFAULT_PERMISSION_MODE: RuntimePermissionMode = {
+  id: 'default',
+  labelKey: 'permissionMode.default',
+  args: [],
+};
+
+/**
+ * Ordered permission tiers available for a runtime. CLIs with an explicit
+ * `permissionModes` list use it verbatim; everyone else gets a synthesized
+ * `default` tier plus, when the CLI has an auto-approve flag, a danger `bypass`
+ * tier. `autoApproveFlagOverride` lets callers pass a user-customized flag from
+ * RuntimeCustomConfig so the synthesized bypass tier still appears.
+ */
+export function getRuntimePermissionModes(
+  id: RuntimeId,
+  autoApproveFlagOverride?: string
+): RuntimePermissionMode[] {
+  const def = PROVIDER_MAP.get(id);
+  if (def?.permissionModes?.length) return def.permissionModes;
+  const flag = autoApproveFlagOverride ?? def?.autoApproveFlag;
+  const modes: RuntimePermissionMode[] = [DEFAULT_PERMISSION_MODE];
+  if (flag) {
+    modes.push({
+      id: 'bypass',
+      labelKey: 'permissionMode.bypass',
+      usesAutoApproveFlag: true,
+      danger: true,
+    });
+  }
+  return modes;
+}
+
+export function getDefaultPermissionModeId(
+  id: RuntimeId,
+  autoApproveFlagOverride?: string
+): string {
+  return (
+    getRuntimePermissionModes(id, autoApproveFlagOverride)[0]?.id ?? DEFAULT_PERMISSION_MODE.id
+  );
+}
+
+export function findRuntimePermissionMode(
+  id: RuntimeId,
+  modeId: string | undefined,
+  autoApproveFlagOverride?: string
+): RuntimePermissionMode | undefined {
+  if (!modeId) return undefined;
+  return getRuntimePermissionModes(id, autoApproveFlagOverride).find((m) => m.id === modeId);
+}
+
+export function isDangerPermissionMode(
+  id: RuntimeId,
+  modeId: string | undefined,
+  autoApproveFlagOverride?: string
+): boolean {
+  return Boolean(findRuntimePermissionMode(id, modeId, autoApproveFlagOverride)?.danger);
+}
+
+/**
+ * Effective permission-mode id for a runtime: explicit value wins, then the
+ * per-runtime selection, then a migration from the legacy
+ * `runtimeAutoApproveDefaults` boolean (true → the danger/bypass tier), else the
+ * runtime's default tier.
+ */
+export function resolveRuntimePermissionModeId(opts: {
+  explicit?: string;
+  selections?: Partial<Record<RuntimeId, string>>;
+  legacyAutoApprove?: Partial<Record<RuntimeId, boolean>>;
+  runtimeId: RuntimeId;
+  autoApproveFlagOverride?: string;
+}): string {
+  const { explicit, selections, legacyAutoApprove, runtimeId, autoApproveFlagOverride } = opts;
+  if (explicit) return explicit;
+  const selected = selections?.[runtimeId];
+  if (selected) return selected;
+  if (legacyAutoApprove?.[runtimeId]) {
+    const danger = getRuntimePermissionModes(runtimeId, autoApproveFlagOverride).find(
+      (m) => m.danger
+    );
+    if (danger) return danger.id;
+  }
+  return getDefaultPermissionModeId(runtimeId, autoApproveFlagOverride);
 }

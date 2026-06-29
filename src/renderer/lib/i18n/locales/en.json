@@ -728,6 +728,13 @@
       "taskCountPlural": "{{count}} tasks"
     }
   },
+  "permissionMode": {
+    "default": "Default (ask first)",
+    "plan": "Plan mode",
+    "acceptEdits": "Auto-accept edits",
+    "fullAuto": "Full auto",
+    "bypass": "Bypass permissions"
+  },
   "home": {
     "greeting": {
       "earlyMorning": "Early start, {{name}} — quiet hours, perfect for creating",
@@ -746,6 +753,8 @@
     "composerSettingsLabel": "Config",
     "attachImagesAsPathsLabel": "Send images as file paths",
     "attachImagesAsPathsDesc": "Reference images as @path mentions instead of pasting them natively into the agent terminal.",
+    "permissionModeLabel": "Permission mode",
+    "permissionModeDesc": "How much the selected agent can do without asking. Each agent CLI gets its matching flag (e.g. Claude --permission-mode, Codex sandbox). Bypass runs fully unsandboxed.",
     "composerScopeGlobal": "Global",
     "composerScopeProject": "Project",
     "composerScopeInheritTooltip": "Inheriting the global default. Click to override just for this project.",
@@ -1211,6 +1220,7 @@
       "createTaskBranchAndWorktree": "Create task branch and worktree",
       "initialCommitRequired": "Create an initial commit first.",
       "dangerouslySkipPermissions": "Dangerously skip permissions",
+      "permissionMode": "Permission mode",
       "initialPromptPlaceholder": "Describe what you want the agent to do.",
       "pushBranchToRemote": "Push branch to remote",
       "selectAnotherIssue": "Select another issue",

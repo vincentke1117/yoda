@@ -78,10 +78,11 @@ import { useAppSettingsKey } from '@renderer/features/settings/use-app-settings-
 import { useSkills } from '@renderer/features/skills/components/useSkills';
 import { recordSkillInvocation } from '@renderer/features/skills/skill-usage-stats';
 import { ContextItem, memoryFileLabel } from '@renderer/features/tasks/components/context-item';
+import { PermissionModeSelect } from '@renderer/features/tasks/components/permission-mode-select';
 import { initialConversationTitle } from '@renderer/features/tasks/conversations/conversation-title-utils';
 import { useEffectiveRuntime } from '@renderer/features/tasks/conversations/use-effective-runtime';
 import { ProjectSelector } from '@renderer/features/tasks/create-task-modal/project-selector';
-import { useRuntimeAutoApproveDefaults } from '@renderer/features/tasks/hooks/useRuntimeAutoApproveDefaults';
+import { useRuntimePermissionModes } from '@renderer/features/tasks/hooks/useRuntimePermissionModes';
 import { asProvisioned, getTaskStore } from '@renderer/features/tasks/stores/task-selectors';
 import { AgentSelector } from '@renderer/lib/components/agent-selector/agent-selector';
 import { AgentSlotSelector } from '@renderer/lib/components/agent-slot/agent-slot-selector';
@@ -841,7 +842,7 @@ export const HomeComposer = observer(function HomeComposer({
     },
     [selectedAgentIdsByMode, updateDraft]
   );
-  const autoApproveDefaults = useRuntimeAutoApproveDefaults();
+  const permissionModes = useRuntimePermissionModes();
   const runModeSummary = useMemo(() => {
     const runtimeName = (id: RuntimeId | null) => (id ? (getRuntime(id)?.name ?? id) : null);
     const modelLabel = (model: string | null) =>
@@ -1508,7 +1509,6 @@ export const HomeComposer = observer(function HomeComposer({
             title,
             initialPrompt: args.initialPrompt,
             imagePaths,
-            autoApprove: autoApproveDefaults.getDefault(args.provider),
             model: args.model,
           });
           return { conversationId, runtime: args.provider, promise };
@@ -1570,7 +1570,7 @@ export const HomeComposer = observer(function HomeComposer({
                 requirement,
                 reviewerRuntime: reviewerProvider,
                 reviewerSystemPrompt,
-                reviewerAutoApprove: autoApproveDefaults.getDefault(reviewerProvider),
+                reviewerAutoApprove: permissionModes.isDanger(reviewerProvider),
               })
             )
             .catch((error: unknown) => {
@@ -1671,7 +1671,6 @@ export const HomeComposer = observer(function HomeComposer({
               title: initialConversationTitle(draftRuntime, trimmed || undefined, []),
               initialPrompt,
               imagePaths,
-              autoApprove: autoApproveDefaults.getDefault(draftRuntime),
               model: draftSlot.agent?.model,
             },
           })
@@ -1748,7 +1747,6 @@ export const HomeComposer = observer(function HomeComposer({
             ),
             initialPrompt: args.initialPrompt,
             imagePaths,
-            autoApprove: autoApproveDefaults.getDefault(args.provider),
             model: args.model,
           },
         });
@@ -1844,7 +1842,6 @@ export const HomeComposer = observer(function HomeComposer({
                 ? buildRequirementPrompt({ requirement, systemPrompt })
                 : requirement || undefined,
               imagePaths,
-              autoApprove: autoApproveDefaults.getDefault(spec.provider),
               model: spec.model,
             },
           });
@@ -1913,7 +1910,7 @@ export const HomeComposer = observer(function HomeComposer({
               requirement,
               reviewerRuntime: reviewerProvider,
               reviewerSystemPrompt,
-              reviewerAutoApprove: autoApproveDefaults.getDefault(reviewerProvider),
+              reviewerAutoApprove: permissionModes.isDanger(reviewerProvider),
             })
           )
           .catch((error: unknown) => {
@@ -2012,7 +2009,7 @@ export const HomeComposer = observer(function HomeComposer({
     queryClient,
     userAgents,
     slotAgentId,
-    autoApproveDefaults,
+    permissionModes,
     navigate,
     onSubmitted,
     projectManager,
@@ -2408,6 +2405,18 @@ export const HomeComposer = observer(function HomeComposer({
             />
           </div>
         </div>
+        {runtimeId && (
+          <div className="mt-2 flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-1.5">
+              <span className="text-xs text-foreground">{t('home.permissionModeLabel')}</span>
+              <InfoTooltip
+                label={t('home.permissionModeLabel')}
+                content={t('home.permissionModeDesc')}
+              />
+            </div>
+            <PermissionModeSelect runtimeId={runtimeId} className="shrink-0" />
+          </div>
+        )}
         <Collapsible
           open={runDefaultsOpen}
           onOpenChange={setRunDefaultsOpen}

@@ -183,6 +183,7 @@ export class LocalConversationProvider implements ConversationProvider {
       runtimeId: conversation.runtimeId,
       providerConfig,
       autoApprove: conversation.autoApprove,
+      permissionMode: conversation.permissionMode,
       sessionId: agentSessionId,
       isResuming,
       initialPrompt: useClipboardImagePaste ? undefined : effectiveInitialPrompt,

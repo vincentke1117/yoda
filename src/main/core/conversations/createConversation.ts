@@ -1,12 +1,49 @@
 import { randomUUID } from 'node:crypto';
 import { eq, sql } from 'drizzle-orm';
 import { type Conversation, type CreateConversationParams } from '@shared/conversations';
+import { isDangerPermissionMode, resolveRuntimePermissionModeId } from '@shared/runtime-registry';
+import { appSettingsService } from '@main/core/settings/settings-service';
 import { db } from '@main/db/client';
 import { conversations, tasks } from '@main/db/schema';
 import { telemetryService } from '@main/lib/telemetry';
 import { resolveTask } from '../projects/utils';
 import { conversationEvents } from './conversation-events';
 import { mapConversationRowToConversation } from './utils';
+
+/**
+ * Resolves the conversation's permission tier. An explicit `permissionMode`
+ * wins; an explicit legacy `autoApprove` boolean (e.g. the reviewer path) keeps
+ * the boolean flag path; otherwise we resolve the user's per-runtime selection
+ * (migrating the legacy `runtimeAutoApproveDefaults` boolean). The stored
+ * `autoApprove` mirrors the mode's danger tier so non-mode-aware consumers stay
+ * correct.
+ */
+async function resolveConversationPermission(
+  params: CreateConversationParams
+): Promise<{ permissionMode?: string; autoApprove?: boolean }> {
+  if (params.permissionMode !== undefined) {
+    return {
+      permissionMode: params.permissionMode,
+      autoApprove: isDangerPermissionMode(params.runtime, params.permissionMode),
+    };
+  }
+  if (params.autoApprove !== undefined) {
+    return { autoApprove: params.autoApprove };
+  }
+  const [selections, legacyAutoApprove] = await Promise.all([
+    appSettingsService.get('runtimePermissionModes'),
+    appSettingsService.get('runtimeAutoApproveDefaults'),
+  ]);
+  const permissionMode = resolveRuntimePermissionModeId({
+    selections,
+    legacyAutoApprove,
+    runtimeId: params.runtime,
+  });
+  return {
+    permissionMode,
+    autoApprove: isDangerPermissionMode(params.runtime, permissionMode),
+  };
+}
 
 export async function createConversation(params: CreateConversationParams): Promise<Conversation> {
   const id = params.id ?? randomUUID();
@@ -16,10 +53,11 @@ export async function createConversation(params: CreateConversationParams): Prom
     .where(eq(conversations.taskId, params.taskId))
     .limit(1);
 
+  const { permissionMode, autoApprove } = await resolveConversationPermission(params);
   const config =
-    params.autoApprove === undefined
+    autoApprove === undefined && permissionMode === undefined
       ? undefined
-      : JSON.stringify({ autoApprove: params.autoApprove });
+      : JSON.stringify({ autoApprove, permissionMode });
   const lastInteractedAt = new Date().toISOString();
 
   const [row] = await db

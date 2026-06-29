@@ -1,5 +1,4 @@
 import { eq, sql } from 'drizzle-orm';
-import { resolveAgentAutoApprove } from '@shared/agent-auto-approve-defaults';
 import { taskRenamedChannel } from '@shared/events/taskEvents';
 import type { CreateBranchError } from '@shared/git';
 import { err, ok, type Result } from '@shared/result';
@@ -322,10 +321,9 @@ export async function createTask(
 ): Promise<Result<CreateTaskSuccess, CreateTaskError>> {
   const { strategy } = params;
   const suffix = Math.random().toString(36).slice(2, 7);
-  const [projectSettings, taskSettings, runtimeAutoApproveDefaults] = await Promise.all([
+  const [projectSettings, taskSettings] = await Promise.all([
     appSettingsService.get('project'),
     appSettingsService.get('tasks'),
-    appSettingsService.get('runtimeAutoApproveDefaults'),
   ]);
   const branchPrefix = projectSettings.branchPrefix ?? '';
   let warning: CreateTaskWarning | undefined;
@@ -530,11 +528,6 @@ export async function createTask(
     await createConversation({
       ...params.initialConversation,
       isInitialConversation: true,
-      autoApprove: resolveAgentAutoApprove(
-        params.initialConversation.autoApprove,
-        runtimeAutoApproveDefaults,
-        params.initialConversation.runtime
-      ),
     });
   }
   if (namingPromise) {
@@ -607,13 +600,11 @@ export async function retryTaskSetup(
     projectId,
     name: row.name,
   };
-  const [projectSettings, taskSettings, runtimeAutoApproveDefaults, configuredRemote] =
-    await Promise.all([
-      appSettingsService.get('project'),
-      appSettingsService.get('tasks'),
-      appSettingsService.get('runtimeAutoApproveDefaults'),
-      project.repository.getConfiguredRemote(),
-    ]);
+  const [projectSettings, taskSettings, configuredRemote] = await Promise.all([
+    appSettingsService.get('project'),
+    appSettingsService.get('tasks'),
+    project.repository.getConfiguredRemote(),
+  ]);
   const branchPrefix = projectSettings.branchPrefix ?? '';
   const suffix = Math.random().toString(36).slice(2, 7);
   let warning: CreateTaskWarning | undefined;
@@ -709,11 +700,6 @@ export async function retryTaskSetup(
     await createConversation({
       ...params.initialConversation,
       isInitialConversation: true,
-      autoApprove: resolveAgentAutoApprove(
-        params.initialConversation.autoApprove,
-        runtimeAutoApproveDefaults,
-        params.initialConversation.runtime
-      ),
     });
   }
 

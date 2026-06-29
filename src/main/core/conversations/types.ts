@@ -36,4 +36,5 @@ export interface ConversationProvider {
 
 export type ConversationConfig = {
   autoApprove?: boolean;
+  permissionMode?: string;
 };

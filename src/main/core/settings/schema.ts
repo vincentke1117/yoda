@@ -100,6 +100,11 @@ export const runtimeAutoApproveDefaultsSchema = z
   .partialRecord(z.enum(RUNTIME_IDS), z.boolean())
   .default({});
 
+/** Per-runtime selected permission-mode id (see runtime-registry permissionModes). */
+export const runtimePermissionModesSchema = z
+  .partialRecord(z.enum(RUNTIME_IDS), z.string())
+  .default({});
+
 export const automationStatusSchema = z.enum(['active', 'paused']);
 
 export const automationEntrySchema = z.object({
@@ -449,6 +454,7 @@ export const APP_SETTINGS_SCHEMA_MAP = {
   project: projectSettingsSchema,
   tasks: taskSettingsSchema,
   runtimeAutoApproveDefaults: runtimeAutoApproveDefaultsSchema,
+  runtimePermissionModes: runtimePermissionModesSchema,
   automations: automationsSettingsSchema,
   kanban: kanbanSettingsSchema,
   maas: maasSettingsSchema,
@@ -474,6 +480,7 @@ export const appSettingsSchema = z.object({
   project: projectSettingsSchema,
   tasks: taskSettingsSchema,
   runtimeAutoApproveDefaults: runtimeAutoApproveDefaultsSchema,
+  runtimePermissionModes: runtimePermissionModesSchema,
   automations: automationsSettingsSchema,
   kanban: kanbanSettingsSchema,
   maas: maasSettingsSchema,

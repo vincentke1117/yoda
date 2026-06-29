@@ -16,6 +16,7 @@ import {
   type runtimeAutoApproveDefaultsSchema,
   type runtimeCustomConfigEntrySchema,
   type runtimeModelCandidatesSettingsSchema,
+  type runtimePermissionModesSchema,
   type statuslineSettingsSchema,
   type statuslineTemplateSchema,
   type systemThemesSchema,
@@ -30,6 +31,7 @@ export type ProjectSettings = z.infer<typeof projectSettingsSchema>;
 export type NotificationSettings = z.infer<typeof notificationSettingsSchema>;
 export type TaskSettings = z.infer<typeof taskSettingsSchema>;
 export type RuntimeAutoApproveDefaults = z.infer<typeof runtimeAutoApproveDefaultsSchema>;
+export type RuntimePermissionModes = z.infer<typeof runtimePermissionModesSchema>;
 export type AutomationEntry = z.infer<typeof automationEntrySchema>;
 export type AutomationsSettings = z.infer<typeof automationsSettingsSchema>;
 export type KanbanHookAction = z.infer<typeof kanbanHookActionSchema>;

@@ -13,6 +13,8 @@ export type Conversation = {
   lastInteractedAt: string | null;
   resume?: boolean;
   autoApprove?: boolean;
+  /** Selected permission-mode id for this runtime (see runtime-registry permissionModes). */
+  permissionMode?: string;
   isInitialConversation: boolean | null;
 };
 
@@ -274,6 +276,8 @@ export type CreateConversationParams = {
   runtime: RuntimeId;
   title: string;
   autoApprove?: boolean;
+  /** Selected permission-mode id; resolved server-side from settings when omitted. */
+  permissionMode?: string;
   isInitialConversation?: boolean;
   initialSize?: { cols: number; rows: number };
   initialPrompt?: string;

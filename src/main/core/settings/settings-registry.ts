@@ -52,6 +52,7 @@ export const SETTINGS_DEFAULTS = {
     autoTrustWorktrees: true,
   },
   runtimeAutoApproveDefaults: {},
+  runtimePermissionModes: {},
   automations: {
     items: [],
   },

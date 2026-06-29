@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { RuntimeId } from '@shared/runtime-registry';
+import { PermissionModeSelect } from '@renderer/features/tasks/components/permission-mode-select';
 import { useEffectiveRuntime } from '@renderer/features/tasks/conversations/use-effective-runtime';
-import { useRuntimeAutoApproveDefaults } from '@renderer/features/tasks/hooks/useRuntimeAutoApproveDefaults';
 import { AgentSelector } from '@renderer/lib/components/agent-selector/agent-selector';
 import { Field, FieldLabel } from '@renderer/lib/ui/field';
-import { Switch } from '@renderer/lib/ui/switch';
 import { Textarea } from '@renderer/lib/ui/textarea';
 
 export type InitialConversationState = {
@@ -28,7 +27,6 @@ interface InitialConversationFieldProps {
 
 export function InitialConversationField({ state, connectionId }: InitialConversationFieldProps) {
   const { t } = useTranslation();
-  const autoApproveDefaults = useRuntimeAutoApproveDefaults();
 
   return (
     <>
@@ -50,15 +48,9 @@ export function InitialConversationField({ state, connectionId }: InitialConvers
         </div>
       </Field>
       <Field>
-        <div className="flex items-center gap-2">
-          <Switch
-            checked={state.runtime ? autoApproveDefaults.getDefault(state.runtime) : false}
-            disabled={!state.runtime || autoApproveDefaults.loading || autoApproveDefaults.saving}
-            onCheckedChange={(checked) => {
-              if (state.runtime) autoApproveDefaults.setDefault(state.runtime, checked);
-            }}
-          />
-          <FieldLabel>{t('tasks.create.dangerouslySkipPermissions')}</FieldLabel>
+        <div className="flex items-center justify-between gap-2">
+          <FieldLabel>{t('tasks.create.permissionMode')}</FieldLabel>
+          <PermissionModeSelect runtimeId={state.runtime} />
         </div>
       </Field>
     </>

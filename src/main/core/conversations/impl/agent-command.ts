@@ -1,5 +1,5 @@
 import type { RuntimeCustomConfig } from '@shared/app-settings';
-import { getRuntime, type RuntimeId } from '@shared/runtime-registry';
+import { findRuntimePermissionMode, getRuntime, type RuntimeId } from '@shared/runtime-registry';
 
 export type AgentCommand = {
   command: string;
@@ -99,6 +99,7 @@ export function buildAgentCommand({
   runtimeId,
   providerConfig,
   autoApprove,
+  permissionMode,
   initialPrompt,
   sessionId,
   isResuming,
@@ -110,6 +111,12 @@ export function buildAgentCommand({
   runtimeId: RuntimeId;
   providerConfig: RuntimeCustomConfig | undefined;
   autoApprove?: boolean;
+  /**
+   * Selected permission-mode id. When set, its CLI args are applied and the
+   * legacy `autoApprove` flag is ignored; the synthesized `bypass` tier falls
+   * back to the runtime's autoApproveFlag.
+   */
+  permissionMode?: string;
   initialPrompt?: string;
   sessionId: string;
   isResuming?: boolean;
@@ -150,7 +157,19 @@ export function buildAgentCommand({
     args.push(providerDef.newConversationFlag);
   }
 
-  if (autoApprove && providerConfig?.autoApproveFlag) {
+  const permission = findRuntimePermissionMode(
+    runtimeId,
+    permissionMode,
+    providerConfig?.autoApproveFlag
+  );
+  if (permission) {
+    if (permission.usesAutoApproveFlag) {
+      if (providerConfig?.autoApproveFlag)
+        args.push(...parseArgField(providerConfig.autoApproveFlag));
+    } else if (permission.args?.length) {
+      args.push(...permission.args);
+    }
+  } else if (autoApprove && providerConfig?.autoApproveFlag) {
     args.push(...parseArgField(providerConfig.autoApproveFlag));
   }
 
