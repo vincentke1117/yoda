@@ -2961,64 +2961,42 @@ export const HomeComposer = observer(function HomeComposer({
               <Chip icon={GitFork}>{t('home.teamBranchPolicy')}</Chip>
             )}
             {!taskScopedTarget && mounted && runMode === 'normal' && (
-              <>
-                <BaseBranchChip
-                  projectId={mounted.data.id}
-                  forking={effectiveStandardStrategyKind === 'new-branch'}
-                  locked={Boolean(parentBranchName)}
-                  value={
-                    effectiveStandardStrategyKind === 'new-branch' ? forkBaseBranch : inPlaceValue
-                  }
-                  label={
-                    effectiveStandardStrategyKind === 'new-branch'
-                      ? forkBaseLabel
-                      : inPlaceBranchLabel
-                  }
-                  inPlace={
-                    effectiveStandardStrategyKind !== 'new-branch' && inPlaceKind === 'no-worktree'
-                  }
-                  onChange={setBaseBranch}
-                  ariaLabel={t('home.baseBranchAria')}
-                />
-                <ForkSwitchChip
-                  checked={effectiveStandardStrategyKind === 'new-branch'}
-                  disabled={isUnborn}
-                  onChange={(forked) => setStrategyKind(forked ? 'new-branch' : 'no-worktree')}
-                  ariaLabel={t('home.strategyAria')}
-                  labels={strategyLabels}
-                />
-              </>
+              <BranchStrategyChips
+                projectId={mounted.data.id}
+                strategyKind={effectiveStandardStrategyKind}
+                locked={Boolean(parentBranchName)}
+                forkDisabled={isUnborn}
+                forkBaseValue={forkBaseBranch}
+                forkBaseLabel={forkBaseLabel}
+                inPlaceValue={inPlaceValue}
+                inPlaceLabel={inPlaceBranchLabel}
+                inPlaceIsNoWorktree={inPlaceKind === 'no-worktree'}
+                onBranchChange={setBaseBranch}
+                onForkChange={(forked) => setStrategyKind(forked ? 'new-branch' : 'no-worktree')}
+                forkLabels={strategyLabels}
+                baseBranchAriaLabel={t('home.baseBranchAria')}
+                forkAriaLabel={t('home.strategyAria')}
+              />
             )}
             {!taskScopedTarget && mounted && runMode === 'review' && (
-              <>
-                <BaseBranchChip
-                  projectId={mounted.data.id}
-                  forking={effectiveReviewStrategyKind === 'new-branch'}
-                  locked={Boolean(parentBranchName)}
-                  value={
-                    effectiveReviewStrategyKind === 'new-branch' ? forkBaseBranch : inPlaceValue
-                  }
-                  label={
-                    effectiveReviewStrategyKind === 'new-branch'
-                      ? forkBaseLabel
-                      : inPlaceBranchLabel
-                  }
-                  inPlace={
-                    effectiveReviewStrategyKind !== 'new-branch' && inPlaceKind === 'no-worktree'
-                  }
-                  onChange={setBaseBranch}
-                  ariaLabel={t('home.baseBranchAria')}
-                />
-                <ForkSwitchChip
-                  checked={effectiveReviewStrategyKind === 'new-branch'}
-                  disabled={isUnborn}
-                  onChange={(forked) =>
-                    setReviewStrategyKind(forked ? 'new-branch' : 'no-worktree')
-                  }
-                  ariaLabel={t('home.reviewStrategyAria')}
-                  labels={reviewStrategyLabels}
-                />
-              </>
+              <BranchStrategyChips
+                projectId={mounted.data.id}
+                strategyKind={effectiveReviewStrategyKind}
+                locked={Boolean(parentBranchName)}
+                forkDisabled={isUnborn}
+                forkBaseValue={forkBaseBranch}
+                forkBaseLabel={forkBaseLabel}
+                inPlaceValue={inPlaceValue}
+                inPlaceLabel={inPlaceBranchLabel}
+                inPlaceIsNoWorktree={inPlaceKind === 'no-worktree'}
+                onBranchChange={setBaseBranch}
+                onForkChange={(forked) =>
+                  setReviewStrategyKind(forked ? 'new-branch' : 'no-worktree')
+                }
+                forkLabels={reviewStrategyLabels}
+                baseBranchAriaLabel={t('home.baseBranchAria')}
+                forkAriaLabel={t('home.reviewStrategyAria')}
+              />
             )}
             <RunModeSelector
               mode={runMode}
@@ -4336,6 +4314,75 @@ function RunHostSelector({ kind }: RunHostSelectorProps) {
         })}
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+interface BranchStrategyChipsProps {
+  projectId: string;
+  /** Effective strategy: `new-branch` forks, anything else runs on the picked branch. */
+  strategyKind: TaskStrategyKind;
+  /** Parent-task subtasks lock the base to the parent branch. */
+  locked: boolean;
+  /** Unborn repos can't fork — disable the switch. */
+  forkDisabled: boolean;
+  /** Branch shown/used as the base when forking. */
+  forkBaseValue: Branch | undefined;
+  forkBaseLabel: string;
+  /** Branch shown/used when not forking (run in place / checkout-existing). */
+  inPlaceValue: Branch | undefined;
+  inPlaceLabel: string;
+  /** True when not-forking means run-in-place (anchor icon) vs checkout-existing. */
+  inPlaceIsNoWorktree: boolean;
+  onBranchChange: (next: Branch) => void;
+  onForkChange: (forked: boolean) => void;
+  forkLabels: StrategyChipLabels;
+  baseBranchAriaLabel: string;
+  forkAriaLabel: string;
+}
+
+/**
+ * The base-branch picker and the fork switch are two axes of one decision —
+ * which branch this task's work lives on. They share derived state (which
+ * branch/label/icon to show, and that not-forking restricts to local branches),
+ * so they're composed here rather than wired independently at every call site.
+ */
+function BranchStrategyChips({
+  projectId,
+  strategyKind,
+  locked,
+  forkDisabled,
+  forkBaseValue,
+  forkBaseLabel,
+  inPlaceValue,
+  inPlaceLabel,
+  inPlaceIsNoWorktree,
+  onBranchChange,
+  onForkChange,
+  forkLabels,
+  baseBranchAriaLabel,
+  forkAriaLabel,
+}: BranchStrategyChipsProps) {
+  const forking = strategyKind === 'new-branch';
+  return (
+    <>
+      <BaseBranchChip
+        projectId={projectId}
+        forking={forking}
+        locked={locked}
+        value={forking ? forkBaseValue : inPlaceValue}
+        label={forking ? forkBaseLabel : inPlaceLabel}
+        inPlace={!forking && inPlaceIsNoWorktree}
+        onChange={onBranchChange}
+        ariaLabel={baseBranchAriaLabel}
+      />
+      <ForkSwitchChip
+        checked={forking}
+        disabled={forkDisabled}
+        onChange={onForkChange}
+        ariaLabel={forkAriaLabel}
+        labels={forkLabels}
+      />
+    </>
   );
 }
 
