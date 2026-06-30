@@ -1309,6 +1309,8 @@
       "persona": "Persona",
       "promptPrinciples": "Prompt principles",
       "promptPrincipleUntitled": "Untitled principle",
+      "contextItemEmpty": "This item has no displayable content. The source file may be empty, moved, or only recorded as a path for this session.",
+      "contextItemNoSource": "This item has no displayable content and no linked source file.",
       "instructionFiles": "Instruction files",
       "noInstructionFiles": "No CLAUDE.md or AGENTS.md found",
       "memory": "Memory",

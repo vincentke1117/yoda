@@ -406,6 +406,7 @@ async function copyFileContent(
   sshConnectionId: string | null,
   t: (key: string) => string
 ): Promise<void> {
+  let failureDescription: string | undefined;
   try {
     const read = await rpc.fs.readAbsoluteFile(absolutePath, { sshConnectionId });
     if (read.success) {
@@ -418,11 +419,22 @@ async function copyFileContent(
         });
         return;
       }
+    } else {
+      failureDescription = resultErrorMessage(read.error);
     }
-  } catch {
-    // handled below
+  } catch (error) {
+    failureDescription = error instanceof Error ? error.message : String(error);
   }
-  toast({ title: t('common.copyFailed'), variant: 'destructive' });
+  toast({ title: t('common.copyFailed'), description: failureDescription, variant: 'destructive' });
+}
+
+function resultErrorMessage(error: unknown): string | undefined {
+  if (error == null) return undefined;
+  if (typeof error !== 'object') return String(error);
+  const record = error as Record<string, unknown>;
+  if (typeof record.message === 'string') return record.message;
+  if (typeof record.detail === 'string') return record.detail;
+  return undefined;
 }
 
 async function openIn(

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import type { ClaudeMemoryFile, CodexMemoryFile } from '@shared/conversations';
 import {
   FileActionsContextMenu,
@@ -50,7 +51,9 @@ export function ContextItem({
         </summary>
       }
     >
-      {renderMode === 'markdown' ? (
+      {text.trim().length === 0 ? (
+        <EmptyContextContent sourcePath={sourcePath} />
+      ) : renderMode === 'markdown' ? (
         <MarkdownContextContent
           content={text}
           documentPath={sourcePath}
@@ -66,6 +69,22 @@ export function ContextItem({
 
   if (!sourcePath || !taskScoped) return item;
   return <FileActionsContextMenu sourcePath={sourcePath}>{item}</FileActionsContextMenu>;
+}
+
+function EmptyContextContent({ sourcePath }: { sourcePath?: string }) {
+  const { t } = useTranslation();
+  return (
+    <div className="mt-1.5 rounded-sm border border-dashed border-border/70 bg-background-2/40 px-2 py-2 text-[11px] leading-relaxed text-foreground-passive">
+      <div>
+        {t(sourcePath ? 'tasks.panel.contextItemEmpty' : 'tasks.panel.contextItemNoSource')}
+      </div>
+      {sourcePath ? (
+        <div className="mt-1 truncate font-mono text-[10px]" title={sourcePath}>
+          {sourcePath}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 export function MarkdownContextContent({

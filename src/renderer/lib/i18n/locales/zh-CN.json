@@ -1309,6 +1309,8 @@
       "persona": "人设",
       "promptPrinciples": "运行原则",
       "promptPrincipleUntitled": "未命名原则",
+      "contextItemEmpty": "该条目没有可展示内容。源文件可能为空、已移动，或当前会话只记录了路径。",
+      "contextItemNoSource": "该条目没有可展示内容，也没有关联的源文件。",
       "instructionFiles": "指令文件",
       "noInstructionFiles": "未找到 CLAUDE.md 或 AGENTS.md",
       "memory": "记忆",
