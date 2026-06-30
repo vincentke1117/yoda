@@ -655,6 +655,9 @@
       "namingAgentHint": "Provides additional system prompt context for auto-naming; the actual Client, access method, and model come from the LLM Profile.",
       "summaryAgentLabel": "Summary agent",
       "summaryAgentHint": "The agent that generates session summaries. It runs entirely on its own client and model, so summaries keep working even if the session's own runtime is unavailable.",
+      "inputPromptLanguageLabel": "Input prompt language",
+      "inputPromptLanguageDescription": "Rewrite the user's prompt into the target language before sending. Prompt language keeps it as written.",
+      "sessionTitleLanguageLabel": "Session title language",
       "summaryLanguageLabel": "Summary language",
       "summaryContext": {
         "recentLabel": "Recent summary inputs",
@@ -861,6 +864,7 @@
     "attachAria": "Attach files",
     "attachSshUnsupported": "Local attachments are not supported for SSH projects",
     "attachPasteFailedToast": "Could not attach the pasted image",
+    "promptRewriteFailed": "Prompt rewrite failed. The agent was not started.",
     "composerSettingsAria": "Input settings",
     "composerSettingsLabel": "Config",
     "attachImagesAsPathsLabel": "Send images as file paths",
@@ -2069,6 +2073,10 @@
     "summary": {
       "name": "Summary",
       "description": "Summarizes a coding session from its messages."
+    },
+    "prompt-rewrite": {
+      "name": "Prompt Rewrite",
+      "description": "Rewrites user prompts into a target language before sending."
     }
   },
   "agents": {

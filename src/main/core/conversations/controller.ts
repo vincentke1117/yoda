@@ -27,6 +27,7 @@ import { interruptConversation } from './interruptConversation';
 import { renameConversation } from './renameConversation';
 import { restartConversation } from './restartConversation';
 import { resumeConversation } from './resumeConversation';
+import { rewritePrompt } from './rewritePrompt';
 import { getSessionSummarySnapshot } from './session-summary-snapshot';
 import { touchConversation } from './touchConversation';
 import {
@@ -47,6 +48,7 @@ export const conversationController = createRPCController({
   getConversationNamingSnapshot,
   renameConversation,
   restartConversation,
+  rewritePrompt,
   resumeConversation,
   interruptConversation,
   getConversationRuntimeStatuses,

@@ -1,3 +1,4 @@
+import type { TaskOutputLanguage } from '@shared/project-settings';
 import {
   DEFAULT_SUMMARY_CONTEXT_GLOBAL,
   DEFAULT_SUMMARY_CONTEXT_RECENT,
@@ -12,11 +13,12 @@ export interface TaskSettingsModel {
   branchNaming: 'hash' | 'ai';
   namingAgentId: string;
   summaryAgentId: string;
-  summaryLanguage: 'app' | 'prompt' | 'en' | 'zh-CN';
+  inputPromptLanguage: TaskOutputLanguage;
+  summaryLanguage: TaskOutputLanguage;
   summaryContextRecent: SummaryContext;
   summaryContextGlobal: SummaryContext;
   namingModel: string;
-  namingLanguage: 'app' | 'prompt' | 'en' | 'zh-CN';
+  namingLanguage: TaskOutputLanguage;
   namingContext: {
     prompt: boolean;
     project: boolean;
@@ -33,6 +35,7 @@ export interface TaskSettingsModel {
       | 'autoGenerateName'
       | 'initTaskNameFromSession'
       | 'branchNaming'
+      | 'inputPromptLanguage'
       | 'namingAgentId'
       | 'namingModel'
       | 'namingLanguage'
@@ -46,9 +49,10 @@ export interface TaskSettingsModel {
   updateBranchNaming: (next: 'hash' | 'ai') => void;
   updateNamingAgentId: (next: string) => void;
   updateSummaryAgentId: (next: string) => void;
-  updateSummaryLanguage: (next: 'app' | 'prompt' | 'en' | 'zh-CN') => void;
+  updateInputPromptLanguage: (next: TaskOutputLanguage) => void;
+  updateSummaryLanguage: (next: TaskOutputLanguage) => void;
   updateSummaryContext: (scope: 'recent' | 'global', next: Partial<SummaryContext>) => void;
-  updateNamingLanguage: (next: 'app' | 'prompt' | 'en' | 'zh-CN') => void;
+  updateNamingLanguage: (next: TaskOutputLanguage) => void;
   updateNamingContext: (next: Partial<TaskSettingsModel['namingContext']>) => void;
   updateNamingRecentTaskLimit: (next: number) => void;
   updateNamingRequestTimeoutMs: (next: number) => void;
@@ -56,6 +60,7 @@ export interface TaskSettingsModel {
   resetAutoGenerateName: () => void;
   resetInitTaskNameFromSession: () => void;
   resetBranchNaming: () => void;
+  resetInputPromptLanguage: () => void;
   resetAutoTrustWorktrees: () => void;
 }
 
@@ -75,6 +80,7 @@ export function useTaskSettings(): TaskSettingsModel {
     branchNaming: tasks?.branchNaming ?? 'hash',
     namingAgentId: tasks?.namingAgentId ?? '',
     summaryAgentId: tasks?.summaryAgentId ?? '',
+    inputPromptLanguage: tasks?.inputPromptLanguage ?? 'prompt',
     summaryLanguage: tasks?.summaryLanguage ?? 'app',
     summaryContextRecent: tasks?.summaryContextRecent ?? DEFAULT_SUMMARY_CONTEXT_RECENT,
     summaryContextGlobal: tasks?.summaryContextGlobal ?? DEFAULT_SUMMARY_CONTEXT_GLOBAL,
@@ -97,6 +103,7 @@ export function useTaskSettings(): TaskSettingsModel {
     updateBranchNaming: (next) => update({ branchNaming: next }),
     updateNamingAgentId: (next) => update({ namingAgentId: next }),
     updateSummaryAgentId: (next) => update({ summaryAgentId: next }),
+    updateInputPromptLanguage: (next) => update({ inputPromptLanguage: next }),
     updateSummaryLanguage: (next) => update({ summaryLanguage: next }),
     updateSummaryContext: (scope, next) => {
       const key = scope === 'recent' ? 'summaryContextRecent' : 'summaryContextGlobal';
@@ -123,6 +130,7 @@ export function useTaskSettings(): TaskSettingsModel {
     resetAutoGenerateName: () => resetField('autoGenerateName'),
     resetInitTaskNameFromSession: () => resetField('initTaskNameFromSession'),
     resetBranchNaming: () => resetField('branchNaming'),
+    resetInputPromptLanguage: () => resetField('inputPromptLanguage'),
     resetAutoTrustWorktrees: () => resetField('autoTrustWorktrees'),
   };
 }

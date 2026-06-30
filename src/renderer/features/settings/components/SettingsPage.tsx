@@ -49,6 +49,7 @@ import {
   BranchNamingRow,
   EnableTmuxRow,
   InitTaskNameFromSessionRow,
+  InputPromptLanguageRow,
   PreArchiveCommandRow,
   TmuxSettingsChapter,
 } from './TaskSettingsRows';
@@ -254,6 +255,10 @@ export function SettingsPage({
       title: t('settings.tabs.sessions'),
       description: t('settings.sessionsTab.description'),
       sections: [
+        {
+          id: 'input-prompt-language',
+          component: <InputPromptLanguageRow />,
+        },
         {
           id: 'auto-generate-task-names',
           component: <AutoGenerateTaskNamesRow />,
