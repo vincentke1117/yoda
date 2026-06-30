@@ -1,4 +1,4 @@
-import { Archive, ArrowUpRight, ChartColumn, Info, Loader2, RefreshCw } from 'lucide-react';
+import { Archive, ArrowUpRight, ChartColumn, Loader2, RefreshCw } from 'lucide-react';
 import { useCallback, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ProjectUsage, TokenBuckets, UsageOverview } from '@shared/stats';
@@ -6,6 +6,7 @@ import { useUsageOverview } from '@renderer/features/usage/useUsageOverview';
 import AgentLogo from '@renderer/lib/components/agent-logo';
 import { useNavigate } from '@renderer/lib/layout/navigation-provider';
 import { Button } from '@renderer/lib/ui/button';
+import { InfoTooltip } from '@renderer/lib/ui/info-tooltip';
 import { agentConfig, type AgentInfo } from '@renderer/utils/agentConfig';
 import {
   formatCompactNumber,
@@ -66,13 +67,7 @@ export function TokenUsageCard({ projectId }: { projectId: string }) {
         <h2 className="text-sm font-medium text-foreground inline-flex items-center gap-2">
           <ChartColumn className="size-3.5" />
           {t('projects.tokenUsage.title')}
-          <span
-            title={t('usage.caliber.tokens')}
-            aria-label={t('usage.caliber.tokens')}
-            className="inline-flex shrink-0 cursor-help"
-          >
-            <Info className="size-3 text-foreground-passive" />
-          </span>
+          <InfoTooltip label={t('usage.caliber.tokens')} content={t('usage.caliber.tokens')} />
         </h2>
         <div className="flex items-center gap-3">
           {overview && overview.daily.length > 0 && (

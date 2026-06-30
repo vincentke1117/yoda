@@ -1,4 +1,4 @@
-import { Archive, ChartColumn, Info, Loader2 } from 'lucide-react';
+import { Archive, ChartColumn, Loader2 } from 'lucide-react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AgentAccountProviderId } from '@shared/runtime-registry';
@@ -8,6 +8,7 @@ import { useNavigate } from '@renderer/lib/layout/navigation-provider';
 import { Badge } from '@renderer/lib/ui/badge';
 import { Button } from '@renderer/lib/ui/button';
 import { EmptyState } from '@renderer/lib/ui/empty-state';
+import { InfoTooltip } from '@renderer/lib/ui/info-tooltip';
 import { agentConfig, type AgentInfo } from '@renderer/utils/agentConfig';
 import {
   formatCompactNumber,
@@ -206,11 +207,7 @@ function UsageContent({ overview }: { overview: UsageOverview }) {
 
 /** Hover hint explaining exactly how a number is computed. */
 function CaliberHint({ text }: { text: string }) {
-  return (
-    <span title={text} className="inline-flex shrink-0 cursor-help" aria-label={text}>
-      <Info className="size-3 text-foreground-passive" />
-    </span>
-  );
+  return <InfoTooltip label={text} content={text} />;
 }
 
 function StatCard({
