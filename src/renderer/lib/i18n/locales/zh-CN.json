@@ -2595,6 +2595,7 @@
       "save": "保存",
       "saving": "保存中",
       "disconnect": "断开连接",
+      "disconnectHint": "移除本机保存的 API Key，停止使用这个平台连接；不会删除平台侧日志或账单数据。",
       "openDocs": "文档",
       "apiKeyRequired": "首次连接需要输入 API Key。",
       "keyFingerprint": "Key {{fingerprint}}",

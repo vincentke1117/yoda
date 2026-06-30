@@ -355,6 +355,8 @@ const ConnectionPanel: React.FC<{
   const saving = connectMutation.isPending;
   const disconnecting = disconnectMutation.isPending;
   const hasStoredKey = connection.connected && !!connection.keyFingerprint;
+  const disconnectLabel = t('maas.connection.disconnect');
+  const disconnectHint = t('maas.connection.disconnectHint');
   const apiKeyLabel =
     connection.platformId === 'zenmux'
       ? t('maas.connection.managementApiKey')
@@ -478,8 +480,8 @@ const ConnectionPanel: React.FC<{
                     size="icon-sm"
                     disabled={disconnecting}
                     onClick={handleDisconnect}
-                    aria-label={t('maas.connection.disconnect')}
-                    title={t('maas.connection.disconnect')}
+                    aria-label={`${disconnectLabel}: ${disconnectHint}`}
+                    title={disconnectHint}
                   >
                     {disconnecting ? (
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -489,7 +491,10 @@ const ConnectionPanel: React.FC<{
                   </Button>
                 }
               />
-              <TooltipContent>{t('maas.connection.disconnect')}</TooltipContent>
+              <TooltipContent className="max-w-64 text-left leading-relaxed">
+                <span className="block font-medium">{disconnectLabel}</span>
+                <span className="mt-1 block">{disconnectHint}</span>
+              </TooltipContent>
             </Tooltip>
           )}
         </div>
