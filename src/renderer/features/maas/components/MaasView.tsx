@@ -357,6 +357,9 @@ const ConnectionPanel: React.FC<{
   const hasStoredKey = connection.connected && !!connection.keyFingerprint;
   const disconnectLabel = t('maas.connection.disconnect');
   const disconnectHint = t('maas.connection.disconnectHint');
+  const keyHelper = hasStoredKey
+    ? t('maas.connection.savedKeyHelper')
+    : t('maas.connection.newKeyHelper');
   const apiKeyLabel =
     connection.platformId === 'zenmux'
       ? t('maas.connection.managementApiKey')
@@ -397,124 +400,150 @@ const ConnectionPanel: React.FC<{
 
   return (
     <section className={cn('@container bg-background px-4 py-4', className)}>
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <h2 className="text-base font-semibold">{platform.name}</h2>
-            <Badge
-              variant="outline"
+      <form onSubmit={handleSubmit} className="grid gap-4">
+        <div className="grid min-w-0 gap-3 @3xl:grid-cols-[minmax(0,1fr)_auto] @3xl:items-start">
+          <div className="flex min-w-0 items-start gap-3">
+            <span
               className={cn(
+                'mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md border',
                 connection.connected
                   ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-                  : 'bg-background text-muted-foreground'
+                  : 'border-border bg-background-secondary text-muted-foreground'
               )}
             >
-              {connection.connected ? t('maas.connected') : t('maas.notConnected')}
-            </Badge>
+              {connection.connected ? <Plug className="h-4 w-4" /> : <Unplug className="h-4 w-4" />}
+            </span>
+            <div className="min-w-0">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <h2 className="text-base font-semibold">{platform.name}</h2>
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    connection.connected
+                      ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                      : 'bg-background text-muted-foreground'
+                  )}
+                >
+                  {connection.connected ? t('maas.connected') : t('maas.notConnected')}
+                </Badge>
+              </div>
+              <p className="mt-1 max-w-2xl text-xs leading-relaxed text-muted-foreground">
+                {t(`maas.platforms.${connection.platformId}.description`)}
+              </p>
+              <p className="mt-0.5 max-w-2xl text-xs leading-relaxed text-foreground-muted">
+                {connection.connected
+                  ? t('maas.connection.connectedSummary')
+                  : t('maas.connection.notConnectedSummary')}
+              </p>
+            </div>
           </div>
-          <p className="mt-1 max-w-2xl text-xs leading-relaxed text-muted-foreground">
-            {t(`maas.platforms.${connection.platformId}.description`)}
-          </p>
+
+          <div className="flex flex-wrap items-center gap-2 @3xl:justify-end">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => void rpc.app.openExternal(platform.docsUrl)}
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              {t('maas.connection.openDocs')}
+            </Button>
+            {connection.connected && (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      disabled={disconnecting}
+                      onClick={handleDisconnect}
+                      aria-label={`${disconnectLabel}: ${disconnectHint}`}
+                    >
+                      {disconnecting ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Unplug className="h-3.5 w-3.5" />
+                      )}
+                      {t('maas.connection.removeKey')}
+                    </Button>
+                  }
+                />
+                <TooltipContent className="block w-72 max-w-[calc(100vw-2rem)] text-left leading-relaxed">
+                  <span className="block whitespace-nowrap font-medium">{disconnectLabel}</span>
+                  <span className="mt-1 block">{disconnectHint}</span>
+                </TooltipContent>
+              </Tooltip>
+            )}
+          </div>
         </div>
 
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => void rpc.app.openExternal(platform.docsUrl)}
-        >
-          <ExternalLink className="h-3.5 w-3.5" />
-          {t('maas.connection.openDocs')}
-        </Button>
-      </div>
+        <div className="grid gap-3 @3xl:grid-cols-[minmax(10rem,0.9fr)_minmax(16rem,1.4fr)]">
+          <label className="grid gap-1.5">
+            <span className="text-xs font-medium text-muted-foreground">
+              {t('maas.connection.displayName')}
+            </span>
+            <Input value={displayName} onChange={(event) => setDisplayName(event.target.value)} />
+          </label>
+          <label className="grid gap-1.5">
+            <span className="text-xs font-medium text-muted-foreground">
+              {t('maas.connection.endpoint')}
+            </span>
+            <Input value={endpoint} onChange={(event) => setEndpoint(event.target.value)} />
+          </label>
+          <label className="grid gap-1.5 @3xl:col-span-2">
+            <span className="text-xs font-medium text-muted-foreground">{apiKeyLabel}</span>
+            <Input
+              type="password"
+              value={apiKey}
+              autoComplete="new-password"
+              placeholder={
+                hasStoredKey
+                  ? t('maas.connection.apiKeyStoredPlaceholder', {
+                      fingerprint: connection.keyFingerprint,
+                    })
+                  : apiKeyPlaceholder
+              }
+              onChange={(event) => setApiKey(event.target.value)}
+            />
+            <span className="text-xs leading-relaxed text-foreground-muted">{keyHelper}</span>
+          </label>
+        </div>
 
-      <form onSubmit={handleSubmit} className="mt-4 grid gap-3 @2xl:grid-cols-[1fr_1fr_1fr_auto]">
-        <label className="grid gap-1.5">
-          <span className="text-xs font-medium text-muted-foreground">
-            {t('maas.connection.displayName')}
-          </span>
-          <Input value={displayName} onChange={(event) => setDisplayName(event.target.value)} />
-        </label>
-        <label className="grid gap-1.5">
-          <span className="text-xs font-medium text-muted-foreground">
-            {t('maas.connection.endpoint')}
-          </span>
-          <Input value={endpoint} onChange={(event) => setEndpoint(event.target.value)} />
-        </label>
-        <label className="grid gap-1.5">
-          <span className="text-xs font-medium text-muted-foreground">{apiKeyLabel}</span>
-          <Input
-            type="password"
-            value={apiKey}
-            autoComplete="new-password"
-            placeholder={
-              hasStoredKey
-                ? t('maas.connection.apiKeyStoredPlaceholder', {
-                    fingerprint: connection.keyFingerprint,
+        {formError && <p className="text-xs text-destructive">{formError}</p>}
+
+        <div className="flex flex-col gap-3 border-t border-border/50 pt-3 @3xl:flex-row @3xl:items-center @3xl:justify-between">
+          <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <span className="inline-flex min-h-7 items-center gap-1.5 rounded-md border border-border/60 bg-background-1 px-2">
+              <Key className="h-3.5 w-3.5" />
+              {connection.keyFingerprint
+                ? t('maas.connection.keyFingerprint', { fingerprint: connection.keyFingerprint })
+                : t('maas.connection.noKey')}
+            </span>
+            <span className="inline-flex min-h-7 items-center gap-1.5 rounded-md border border-border/60 bg-background-1 px-2">
+              <RefreshCw className="h-3.5 w-3.5" />
+              {connection.lastCheckedAt
+                ? t('maas.connection.lastChecked', {
+                    time: formatDateTime(connection.lastCheckedAt),
                   })
-                : apiKeyPlaceholder
-            }
-            onChange={(event) => setApiKey(event.target.value)}
-          />
-        </label>
-        <div className="flex items-end gap-2">
+                : t('maas.connection.neverChecked')}
+            </span>
+          </div>
           <Button
             type="submit"
+            size="sm"
             disabled={saving || (!apiKey.trim() && !hasStoredKey)}
-            className="min-w-28"
+            className="w-full @3xl:w-auto"
           >
             {saving ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
               <Plug className="h-3.5 w-3.5" />
             )}
-            {saving ? t('maas.connection.saving') : t('maas.connection.save')}
+            {saving ? t('maas.connection.saving') : t('maas.connection.saveChanges')}
           </Button>
-          {connection.connected && (
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    size="icon-sm"
-                    disabled={disconnecting}
-                    onClick={handleDisconnect}
-                    aria-label={`${disconnectLabel}: ${disconnectHint}`}
-                  >
-                    {disconnecting ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Unplug className="h-3.5 w-3.5" />
-                    )}
-                  </Button>
-                }
-              />
-              <TooltipContent className="block w-72 max-w-[calc(100vw-2rem)] text-left leading-relaxed">
-                <span className="block whitespace-nowrap font-medium">{disconnectLabel}</span>
-                <span className="mt-1 block">{disconnectHint}</span>
-              </TooltipContent>
-            </Tooltip>
-          )}
         </div>
       </form>
-
-      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-        <span className="inline-flex items-center gap-1">
-          <Key className="h-3.5 w-3.5" />
-          {connection.keyFingerprint
-            ? t('maas.connection.keyFingerprint', { fingerprint: connection.keyFingerprint })
-            : t('maas.connection.noKey')}
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <RefreshCw className="h-3.5 w-3.5" />
-          {connection.lastCheckedAt
-            ? t('maas.connection.lastChecked', { time: formatDateTime(connection.lastCheckedAt) })
-            : t('maas.connection.neverChecked')}
-        </span>
-      </div>
-
-      {formError && <p className="mt-2 text-xs text-destructive">{formError}</p>}
     </section>
   );
 };
