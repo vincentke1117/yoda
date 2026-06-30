@@ -1,10 +1,12 @@
+import { useLayoutEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { DailyTokenUsage } from '@shared/stats';
 import { formatCompactNumber } from '@renderer/utils/format-compact-number';
 import { cn } from '@renderer/utils/utils';
 
-const WEEKS = 52;
+const HEATMAP_MONTHS = 3;
 const DAY_MS = 24 * 60 * 60 * 1000;
+const WEEK_MS = 7 * DAY_MS;
 
 // GitHub-familiar green ramp built on the theme's diff-added token so it
 // adapts to dark mode. (`accent` maps to a background tint in this theme and
@@ -24,13 +26,14 @@ export type DayCell = {
 };
 
 /**
- * GitHub-style activity grid of daily token burn over the last year.
- * Pure CSS grid — columns are weeks (Monday-first), month labels appear on
- * the week that contains the 1st. Intensity uses quantiles of non-zero days
- * so one monster day doesn't flatten the rest of the year.
+ * GitHub-style activity grid of daily token burn over the last three months.
+ * Pure CSS grid — columns are weeks (Monday-first), and month labels appear on
+ * the week that contains the month's 1st. Intensity uses quantiles of non-zero
+ * days so one monster day doesn't flatten the rest of the window.
  */
 export function TokenHeatmap({ daily }: { daily: DailyTokenUsage[] }) {
   const { t, i18n } = useTranslation();
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const thresholds = quantileThresholds(
     daily.map((day) => day.tokens.total).filter((total) => total > 0)
@@ -46,8 +49,14 @@ export function TokenHeatmap({ daily }: { daily: DailyTokenUsage[] }) {
     weekdayFormatter.format(new Date(gridStart.getTime() + day * DAY_MS))
   );
 
+  useLayoutEffect(() => {
+    const element = scrollRef.current;
+    if (!element) return;
+    element.scrollLeft = element.scrollWidth - element.clientWidth;
+  }, [weeks.length]);
+
   return (
-    <div className="flex flex-col gap-1.5 overflow-x-auto">
+    <div ref={scrollRef} className="flex flex-col gap-1.5 overflow-x-auto">
       <div className="flex gap-[3px] pl-6 text-[9px] leading-none text-foreground-passive">
         {monthLabels.map((label, index) => (
           <span key={index} className="w-2.5 shrink-0 overflow-visible whitespace-nowrap">
@@ -103,12 +112,14 @@ export function TokenHeatmap({ daily }: { daily: DailyTokenUsage[] }) {
 export function buildTokenHeatmapWeeks(daily: DailyTokenUsage[], today: Date): DayCell[][] {
   const totalsByDate = new Map(daily.map((day) => [day.date, day.tokens.total]));
   const todayStart = startOfLocalDay(today);
-  // Back up to the Monday that starts the first of the WEEKS columns.
-  const mondayOffset = (todayStart.getDay() + 6) % 7;
-  const gridStart = new Date(todayStart.getTime() - (mondayOffset + (WEEKS - 1) * 7) * DAY_MS);
+  const windowStart = startOfCalendarMonthWindow(todayStart);
+  // Back up to the Monday that starts the first column.
+  const mondayOffset = (windowStart.getDay() + 6) % 7;
+  const gridStart = new Date(windowStart.getTime() - mondayOffset * DAY_MS);
+  const weekCount = Math.floor((todayStart.getTime() - gridStart.getTime()) / WEEK_MS) + 1;
 
   const weeks: DayCell[][] = [];
-  for (let week = 0; week < WEEKS; week++) {
+  for (let week = 0; week < weekCount; week++) {
     const cells: DayCell[] = [];
     for (let day = 0; day < 7; day++) {
       const date = new Date(gridStart.getTime() + (week * 7 + day) * DAY_MS);
@@ -135,17 +146,12 @@ export function buildTokenHeatmapMonthLabels(
     year: '2-digit',
   });
 
-  return weeks.map((cells, index) => {
-    const first = dateFromLocalDateKey(cells[0]!.key);
-    if (index > 0) {
-      const previous = dateFromLocalDateKey(weeks[index - 1]![0]!.key);
-      if (
-        first.getMonth() === previous.getMonth() &&
-        first.getFullYear() === previous.getFullYear()
-      ) {
-        return null;
-      }
-    }
+  return weeks.map((cells) => {
+    const markerCell = cells.find(
+      (cell) => !cell.inFuture && dateFromLocalDateKey(cell.key).getDate() === 1
+    );
+    if (!markerCell) return null;
+    const first = dateFromLocalDateKey(markerCell.key);
     const formatter =
       first.getFullYear() === currentYear ? monthFormatter : crossYearMonthFormatter;
     return formatter.format(first);
@@ -182,4 +188,8 @@ function dateFromLocalDateKey(key: string): Date {
 
 function startOfLocalDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function startOfCalendarMonthWindow(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth() - (HEATMAP_MONTHS - 1), 1);
 }

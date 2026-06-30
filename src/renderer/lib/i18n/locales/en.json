@@ -2490,7 +2490,7 @@
       "tokens": "How it's counted: parsed from local Claude / Codex session transcripts, including subagent transcripts and any auxiliary directories configured in project settings. Total = input + output + cache read + cache write. Other clients have no transcript reader and count as zero.",
       "lines": "How it's counted: per task = committed diff vs source branch (merge-base) + uncommitted working-tree changes. Live for active tasks; archived tasks use their last snapshot (tasks archived before this feature shipped have none and count as zero).",
       "activeDays": "How it's counted: local calendar days with any token usage in session transcripts.",
-      "heatmap": "How it's counted: the grid shows the last 52 weeks. Each session's tokens are bucketed into the local date they were consumed. Color levels are quantiles (25/50/75) of non-zero days.",
+      "heatmap": "How it's counted: the grid shows the current calendar month plus the previous two. Each session's tokens are bucketed into the local date they were consumed. Color levels are quantiles (25/50/75) of non-zero days.",
       "byProject": "How it's counted: each session is attributed to its task's project; untracked auxiliary-directory sessions go to the project that configured the path (sessions tracked by another project stay there — the global total never double-counts).",
       "byModel": "How it's counted: each transcript row is attributed to its provider-reported model id (Claude: message.model; Codex: the active turn_context model). Rows without one count as unknown.",
       "byRuntime": "How it's counted: grouped by the client that ran each session; only sessions with parseable transcripts are included.",
