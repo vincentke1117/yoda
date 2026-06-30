@@ -798,6 +798,10 @@ function formatLlmDebugDetails(result: GlobalLlmDebugResult, prompt: string): st
     `error: ${result.error ?? '-'}`,
   ];
 
+  if (result.rawError && result.rawError !== result.error) {
+    lines.push('', 'rawError:', result.rawError);
+  }
+
   if (prompt) {
     lines.push('', 'prompt:', prompt);
   }

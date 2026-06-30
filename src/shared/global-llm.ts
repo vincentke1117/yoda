@@ -53,6 +53,7 @@ export type GlobalLlmDebugResult = {
   output: string;
   durationMs: number;
   error?: string;
+  rawError?: string;
 };
 
 export const GLOBAL_LLM_MODEL_DISCOVERY_SOURCE_IDS = ['aiGateway', 'runtimeCatalog'] as const;
