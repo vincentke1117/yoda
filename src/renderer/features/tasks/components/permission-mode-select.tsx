@@ -21,10 +21,12 @@ export function PermissionModeSelect({
   runtimeId,
   className,
   contentPortaled = true,
+  alignContentWithTrigger = true,
 }: {
   runtimeId: RuntimeId | null | undefined;
   className?: string;
   contentPortaled?: boolean;
+  alignContentWithTrigger?: boolean;
 }) {
   const { t } = useTranslation();
   const permissionModes = useRuntimePermissionModes();
@@ -54,7 +56,7 @@ export function PermissionModeSelect({
       >
         <SelectValue>{(value: string | null) => labelFor(value)}</SelectValue>
       </SelectTrigger>
-      <SelectContent portaled={contentPortaled}>
+      <SelectContent portaled={contentPortaled} alignItemWithTrigger={alignContentWithTrigger}>
         {modes.map((mode) => (
           <SelectItem
             key={mode.id}

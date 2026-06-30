@@ -2422,6 +2422,7 @@ export const HomeComposer = observer(function HomeComposer({
               runtimeId={runtimeId}
               className="shrink-0"
               contentPortaled={false}
+              alignContentWithTrigger={false}
             />
           </div>
         )}

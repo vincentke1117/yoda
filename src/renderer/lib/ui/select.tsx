@@ -72,16 +72,18 @@ function SelectContent({
   alignOffset = 0,
   alignItemWithTrigger = true,
   portaled = true,
+  positionMethod = portaled ? 'absolute' : 'fixed',
   ...props
 }: SelectPrimitive.Popup.Props &
   Pick<
     SelectPrimitive.Positioner.Props,
-    'align' | 'alignOffset' | 'side' | 'sideOffset' | 'alignItemWithTrigger'
+    'align' | 'alignOffset' | 'side' | 'sideOffset' | 'alignItemWithTrigger' | 'positionMethod'
   > & {
     portaled?: boolean;
   }) {
   const content = (
     <SelectPrimitive.Positioner
+      positionMethod={positionMethod}
       side={side}
       sideOffset={sideOffset}
       align={align}
