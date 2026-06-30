@@ -34,10 +34,11 @@ export const maasQueryKeys = {
     ] as const,
 };
 
-export function useMaasConnections() {
+export function useMaasConnections(enabled = true) {
   return useQuery({
     queryKey: maasQueryKeys.connections,
     queryFn: () => rpc.maas.listConnections(),
+    enabled,
     staleTime: 30_000,
   });
 }

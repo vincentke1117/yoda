@@ -7,7 +7,11 @@ import { AiLabView } from '@renderer/features/ai-lab/components/AiLabView';
 import { AiLogsPanel } from '@renderer/features/ai-logs/components/AiLogsPanel';
 import { AutomationMainPanel } from '@renderer/features/automation/automation-view';
 import { KanbanBoard } from '@renderer/features/kanban/components/KanbanBoard';
-import { MaasView } from '@renderer/features/maas/components/MaasView';
+import {
+  MaasConnectedCountBadge,
+  MaasView,
+  useZenmuxUsageSettingsSection,
+} from '@renderer/features/maas/components/MaasView';
 import { McpView } from '@renderer/features/mcp/components/McpView';
 import { MobileView } from '@renderer/features/mobile/mobile-view';
 import { RoadmapView } from '@renderer/features/roadmap/components/RoadmapView';
@@ -80,6 +84,7 @@ export type SettingsPageTab =
 interface SectionConfig {
   id: string;
   title?: string;
+  description?: React.ReactNode;
   action?: React.ReactNode;
   component: React.ReactNode;
 }
@@ -191,6 +196,10 @@ export function SettingsPage({
   const tabGroups = useSettingsTabGroups();
   // In the side pane the chip-strip row hosts the tab picker — don't double it.
   const isPinHosted = useIsPinHosted();
+  const zenmuxUsageSection = useZenmuxUsageSettingsSection({
+    embedded: true,
+    enabled: activeTab === 'maas',
+  });
 
   const tabContent: Record<
     string,
@@ -315,7 +324,21 @@ export function SettingsPage({
     maas: {
       title: t('maas.title'),
       description: t('maas.subtitle'),
-      sections: [{ id: 'maas', component: <MaasView embedded /> }],
+      sections: [
+        {
+          id: 'maas-platforms',
+          title: t('maas.platformsTitle'),
+          action: <MaasConnectedCountBadge />,
+          component: <MaasView embedded showSectionChrome={false} />,
+        },
+        {
+          id: 'maas-usage',
+          title: t('maas.records.title'),
+          description: zenmuxUsageSection.description,
+          action: zenmuxUsageSection.action,
+          component: zenmuxUsageSection.component,
+        },
+      ],
     },
     usage: {
       title: t('usage.title'),
@@ -497,10 +520,19 @@ export function SettingsPage({
                 </div>
                 {currentContent.sections.map((section) => (
                   <div key={section.id} className="flex flex-col gap-3">
-                    {section.title && (
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-sm font-normal text-foreground">{section.title}</h3>
-                        {section.action && <div>{section.action}</div>}
+                    {(section.title || section.description || section.action) && (
+                      <div className="flex min-w-0 items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          {section.title && (
+                            <h3 className="text-sm font-normal text-foreground">{section.title}</h3>
+                          )}
+                          {section.description && (
+                            <p className="mt-1 text-xs text-foreground-muted">
+                              {section.description}
+                            </p>
+                          )}
+                        </div>
+                        {section.action && <div className="shrink-0">{section.action}</div>}
                       </div>
                     )}
                     {section.component}
