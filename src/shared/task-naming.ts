@@ -71,7 +71,7 @@ export type TaskNamingContextSnapshot = {
   estimatedTokens: number;
   estimatedCharacters: number;
   sourceCount: number;
-  generationMethod?: 'agent-cli';
+  generationMethod?: 'agent-cli' | 'maas-chat';
   debugTrace?: TaskNamingDebugTrace;
   sources: TaskNamingContextSource[];
 };

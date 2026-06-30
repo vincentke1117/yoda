@@ -1,5 +1,6 @@
 import z from 'zod';
 import { customThemeSelectionSchema, customThemesSettingsSchema } from '@shared/custom-theme';
+import { GLOBAL_LLM_PROVIDER_IDS } from '@shared/global-llm';
 import { KANBAN_STATUSES } from '@shared/kanban';
 import { MAAS_PLATFORM_IDS } from '@shared/maas';
 import { openInAppIdSchema } from '@shared/openInApps';
@@ -162,6 +163,16 @@ export const maasConnectionSchema = z.object({
 export const maasSettingsSchema = z.object({
   selectedPlatformId: maasPlatformIdSchema,
   connections: z.array(maasConnectionSchema),
+});
+
+export const globalLlmSettingsSchema = z.object({
+  maasEnabled: z.boolean().catch(false),
+  maasModel: z.string().catch(''),
+  agentEnabled: z.boolean().catch(true),
+  agentId: z.string().catch(''),
+  preferredProvider: z.enum(GLOBAL_LLM_PROVIDER_IDS).catch('maas'),
+  promptTranslationEnabled: z.boolean().catch(false),
+  promptTranslationShowOriginal: z.boolean().catch(true),
 });
 
 export const runtimeModelCandidateCacheEntrySchema = z.object({
@@ -452,6 +463,7 @@ export const APP_SETTINGS_SCHEMA_MAP = {
   automations: automationsSettingsSchema,
   kanban: kanbanSettingsSchema,
   maas: maasSettingsSchema,
+  llm: globalLlmSettingsSchema,
   runtimeModelCandidates: runtimeModelCandidatesSettingsSchema,
   defaultRuntime: defaultRuntimeSchema,
   keyboard: keyboardSettingsSchema,
@@ -477,6 +489,7 @@ export const appSettingsSchema = z.object({
   automations: automationsSettingsSchema,
   kanban: kanbanSettingsSchema,
   maas: maasSettingsSchema,
+  llm: globalLlmSettingsSchema,
   runtimeModelCandidates: runtimeModelCandidatesSettingsSchema,
   defaultRuntime: defaultRuntimeSchema,
   keyboard: keyboardSettingsSchema,

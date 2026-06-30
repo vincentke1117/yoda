@@ -35,6 +35,7 @@ import GithubSettingsCard from './GithubSettingsCard';
 import IntegrationsCard from './IntegrationsCard';
 import KeyboardSettingsCard from './KeyboardSettingsCard';
 import LanguageCard from './LanguageCard';
+import { LlmConfigDebugCard } from './LlmConfigDebugCard';
 import NotificationSettingsCard from './NotificationSettingsCard';
 import OpenInAppsSettingsCard from './OpenInAppsSettingsCard';
 import PromptsSettingsCard from './PromptsSettingsCard';
@@ -57,6 +58,7 @@ export type SettingsPageTab =
   | 'general'
   | 'account'
   | 'clis-models'
+  | 'llm'
   | 'tasks'
   | 'sessions'
   | 'integrations'
@@ -113,6 +115,7 @@ function useSettingsTabGroups(): SettingsTabEntry[][] {
     // Agent execution config: runtimes and model access. Resource management
     // (prompts, skills, MCP, custom agents, automation) lives in the Library.
     [
+      { id: 'llm', label: t('settings.tabs.llm') },
       { id: 'maas', label: t('settings.tabs.maas') },
       { id: 'clis-models', label: t('settings.tabs.agents') },
     ],
@@ -301,6 +304,11 @@ export function SettingsPage({
           component: <RuntimeAccordion />,
         },
       ],
+    },
+    llm: {
+      title: t('settings.llm.title'),
+      description: t('settings.llm.description'),
+      sections: [{ id: 'llm-config-debug', component: <LlmConfigDebugCard /> }],
     },
     prompts: {
       title: t('settings.tabs.prompts'),
