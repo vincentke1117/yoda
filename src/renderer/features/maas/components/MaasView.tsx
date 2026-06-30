@@ -185,8 +185,8 @@ export const MaasView: React.FC<{ embedded?: boolean }> = ({ embedded = false })
     setSelectedPlatformId(value);
   }, []);
 
-  const recordsActions = (
-    <div className="flex max-w-full flex-wrap items-center gap-2">
+  const recordsToolbarActions = (
+    <div className="flex items-center gap-2">
       {selectedPlatformId === 'zenmux' && (
         <Button
           type="button"
@@ -210,6 +210,11 @@ export const MaasView: React.FC<{ embedded?: boolean }> = ({ embedded = false })
         <RefreshCw className={cn('h-3.5 w-3.5', recordsQuery.reloading && 'animate-spin')} />
         {t('maas.records.reload')}
       </Button>
+    </div>
+  );
+
+  const recordsFilters = (
+    <div className="flex max-w-full justify-end">
       <ToggleGroup
         multiple={false}
         value={[filterKind]}
@@ -265,8 +270,9 @@ export const MaasView: React.FC<{ embedded?: boolean }> = ({ embedded = false })
       <MaasChapter
         title={t('maas.records.title')}
         description={recordsSubtitle}
-        action={recordsActions}
+        action={recordsToolbarActions}
       >
+        {recordsFilters}
         <div
           className={cn(
             '@container flex min-h-0 flex-col overflow-hidden rounded-xl border border-border/60 bg-muted/10',
