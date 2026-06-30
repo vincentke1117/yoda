@@ -185,107 +185,94 @@ export const MaasView: React.FC<{ embedded?: boolean }> = ({ embedded = false })
     setSelectedPlatformId(value);
   }, []);
 
-  return (
+  const recordsActions = (
+    <div className="flex max-w-full flex-wrap items-center gap-2">
+      {selectedPlatformId === 'zenmux' && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => void rpc.app.openExternal(ZENMUX_LOGS_URL)}
+          aria-label={t('maas.records.openZenmuxLogs')}
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
+          {t('maas.records.openZenmuxLogs')}
+        </Button>
+      )}
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={!selectedConnection.connected || recordsQuery.reloading}
+        onClick={recordsQuery.reload}
+        aria-label={t('maas.records.reload')}
+      >
+        <RefreshCw className={cn('h-3.5 w-3.5', recordsQuery.reloading && 'animate-spin')} />
+        {t('maas.records.reload')}
+      </Button>
+      <ToggleGroup
+        multiple={false}
+        value={[filterKind]}
+        className="h-auto max-w-full flex-wrap justify-start overflow-hidden"
+        onValueChange={([value]) => {
+          if (value) setFilterKind(value as MaasInvocationFilterKind);
+        }}
+      >
+        {FILTERS.map((kind) => (
+          <ToggleGroupItem key={kind} value={kind} className="gap-1.5">
+            {kind === 'all' ? (
+              <Activity className="h-3.5 w-3.5" />
+            ) : (
+              React.createElement(KIND_META[kind].icon, { className: 'h-3.5 w-3.5' })
+            )}
+            <span>{t(`maas.records.filters.${kind}`)}</span>
+          </ToggleGroupItem>
+        ))}
+      </ToggleGroup>
+    </div>
+  );
+
+  const content = (
     <div
       className={cn(
-        // Container queries — this view also lives embedded in the narrow
-        // settings side pane where viewport breakpoints lie.
-        '@container flex min-h-0 bg-background text-foreground',
-        embedded ? 'h-[560px] overflow-hidden rounded-xl border border-border' : 'h-full'
+        'flex min-h-0 flex-col gap-8',
+        embedded ? 'w-full' : 'mx-auto w-full max-w-5xl px-6 py-6'
       )}
     >
-      <main className="@container flex min-h-0 min-w-0 flex-1 flex-col">
-        {!embedded && (
-          <div className="border-b border-border px-4 py-4">
-            <div className="flex items-center gap-2">
-              <Layers className="h-4 w-4 text-foreground-muted" />
-              <h1 className="text-sm font-semibold">{t('maas.title')}</h1>
-            </div>
-            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-              {t('maas.subtitle')}
-            </p>
-          </div>
-        )}
+      <MaasChapter
+        title={t('maas.platformsTitle')}
+        action={
+          <Badge variant="secondary">{t('maas.connectedCount', { count: connectedCount })}</Badge>
+        }
+      >
+        <AccordionPrimitive.Root
+          type="single"
+          collapsible
+          value={expandedPlatformId}
+          onValueChange={handlePlatformValueChange}
+          className="overflow-hidden rounded-xl border border-border/60 bg-muted/10"
+        >
+          {MAAS_PLATFORM_IDS.map((platformId) => (
+            <PlatformAccordionItem
+              key={platformId}
+              connection={findConnection(connections, platformId)}
+              loading={isLoading}
+            />
+          ))}
+        </AccordionPrimitive.Root>
+      </MaasChapter>
 
-        <section className="shrink-0 border-b border-border bg-background-secondary px-4 py-4">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <span className="text-xs font-medium text-muted-foreground">
-              {t('maas.platformsTitle')}
-            </span>
-            <Badge variant="secondary">{t('maas.connectedCount', { count: connectedCount })}</Badge>
-          </div>
-
-          <AccordionPrimitive.Root
-            type="single"
-            collapsible
-            value={expandedPlatformId}
-            onValueChange={handlePlatformValueChange}
-            className="overflow-hidden rounded-xl border border-border/60 bg-muted/10"
-          >
-            {MAAS_PLATFORM_IDS.map((platformId) => (
-              <PlatformAccordionItem
-                key={platformId}
-                connection={findConnection(connections, platformId)}
-                loading={isLoading}
-              />
-            ))}
-          </AccordionPrimitive.Root>
-        </section>
-
-        <section className="flex min-h-0 flex-1 flex-col">
-          <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border px-6 py-3">
-            <div className="min-w-0">
-              <h2 className="text-sm font-semibold">{t('maas.records.title')}</h2>
-              <p className="mt-0.5 text-xs text-muted-foreground">{recordsSubtitle}</p>
-            </div>
-
-            <div className="flex max-w-full items-center gap-2 overflow-x-auto">
-              {selectedPlatformId === 'zenmux' && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => void rpc.app.openExternal(ZENMUX_LOGS_URL)}
-                  aria-label={t('maas.records.openZenmuxLogs')}
-                >
-                  <ExternalLink className="h-3.5 w-3.5" />
-                  {t('maas.records.openZenmuxLogs')}
-                </Button>
-              )}
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={!selectedConnection.connected || recordsQuery.reloading}
-                onClick={recordsQuery.reload}
-                aria-label={t('maas.records.reload')}
-              >
-                <RefreshCw
-                  className={cn('h-3.5 w-3.5', recordsQuery.reloading && 'animate-spin')}
-                />
-                {t('maas.records.reload')}
-              </Button>
-              <ToggleGroup
-                multiple={false}
-                value={[filterKind]}
-                onValueChange={([value]) => {
-                  if (value) setFilterKind(value as MaasInvocationFilterKind);
-                }}
-              >
-                {FILTERS.map((kind) => (
-                  <ToggleGroupItem key={kind} value={kind} className="gap-1.5">
-                    {kind === 'all' ? (
-                      <Activity className="h-3.5 w-3.5" />
-                    ) : (
-                      React.createElement(KIND_META[kind].icon, { className: 'h-3.5 w-3.5' })
-                    )}
-                    <span>{t(`maas.records.filters.${kind}`)}</span>
-                  </ToggleGroupItem>
-                ))}
-              </ToggleGroup>
-            </div>
-          </div>
-
+      <MaasChapter
+        title={t('maas.records.title')}
+        description={recordsSubtitle}
+        action={recordsActions}
+      >
+        <div
+          className={cn(
+            '@container flex min-h-0 flex-col overflow-hidden rounded-xl border border-border/60 bg-muted/10',
+            embedded ? 'h-[420px]' : 'h-[560px]'
+          )}
+        >
           <RecordFeed
             connected={selectedConnection.connected}
             filterKind={filterKind}
@@ -296,9 +283,51 @@ export const MaasView: React.FC<{ embedded?: boolean }> = ({ embedded = false })
             isFetchingNextPage={recordsQuery.isFetchingNextPage}
             fetchNextPage={() => void recordsQuery.fetchNextPage()}
           />
-        </section>
-      </main>
+        </div>
+      </MaasChapter>
     </div>
+  );
+
+  return (
+    <div
+      className={cn(
+        // Container queries — this view also lives embedded in the narrow
+        // settings side pane where viewport breakpoints lie.
+        '@container flex min-h-0 bg-background text-foreground',
+        embedded ? 'flex-col' : 'h-full flex-col overflow-y-auto'
+      )}
+    >
+      {!embedded && (
+        <div className="border-b border-border px-4 py-4">
+          <div className="flex items-center gap-2">
+            <Layers className="h-4 w-4 text-foreground-muted" />
+            <h1 className="text-sm font-semibold">{t('maas.title')}</h1>
+          </div>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{t('maas.subtitle')}</p>
+        </div>
+      )}
+      {content}
+    </div>
+  );
+};
+
+const MaasChapter: React.FC<{
+  title: string;
+  description?: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}> = ({ title, description, action, children }) => {
+  return (
+    <section className="flex min-w-0 flex-col gap-3">
+      <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="text-sm font-normal text-foreground">{title}</h3>
+          {description && <p className="mt-1 text-xs text-foreground-muted">{description}</p>}
+        </div>
+        {action && <div className="flex min-w-0 max-w-full justify-end">{action}</div>}
+      </div>
+      {children}
+    </section>
   );
 };
 
