@@ -1,4 +1,4 @@
-import { WebglAddon } from '@xterm/addon-webgl';
+import type { CanvasAddon as CanvasAddonType } from '@xterm/addon-canvas';
 import { Terminal, type IDisposable, type ITerminalOptions } from '@xterm/xterm';
 import { ptyDataChannel } from '@shared/events/ptyEvents';
 import {
@@ -156,8 +156,7 @@ export class FrontendPty {
   /** Overrides OSC 8 hyperlink activation while a pane hosts this terminal; null = system browser. */
   private linkOpener: ((url: string) => void) | null = null;
   private readonly scrollDisposable: { dispose(): void };
-  private webglAddon: WebglAddon | null = null;
-  private webglContextLossDisposable: IDisposable | null = null;
+  private canvasRendererAddon: CanvasAddonType | null = null;
 
   constructor(
     readonly sessionId: string,
@@ -205,7 +204,7 @@ export class FrontendPty {
     registerOsc52ClipboardHandler(this.terminal);
 
     this.terminal.open(this.ownedContainer);
-    this.loadWebglRenderer();
+    this.loadCanvasRenderer();
     this.attachWheelScrollPolicy();
     this.scrollDisposable = this.terminal.onScroll((viewportY) => {
       this.savedViewportY = viewportY;
@@ -273,43 +272,29 @@ export class FrontendPty {
     this.linkOpener = opener;
   }
 
-  private loadWebglRenderer(): void {
-    try {
-      // Default (preserveDrawingBuffer: false) — the drawing buffer is cleared
-      // on every composite, so the WebGL renderer never accumulates stale
-      // frames. preserveDrawingBuffer: true caused duplicate/ghost rows during
-      // scroll (anti-aliased glyph fringes from prior frames were not fully
-      // overwritten). The freeze-frame overlay no longer reads the live canvas
-      // at resize time; it replays a snapshot captured during onRender (see
-      // captureFreezeSnapshot), which is the only moment the buffer holds valid
-      // pixels under the default attribute.
-      const webglAddon = new WebglAddon();
-      const contextLossDisposable = webglAddon.onContextLoss(() => {
-        log.warn('FrontendPty: WebGL renderer context lost; falling back to DOM renderer', {
-          sessionId: this.sessionId,
-        });
-        this.webglContextLossDisposable?.dispose();
-        this.webglContextLossDisposable = null;
-        this.webglAddon?.dispose();
-        this.webglAddon = null;
-        // DOM renderer has no WebGL canvas to snapshot — drop the stale frame
-        // so commitResize resizes bare instead of masking with a dead capture.
-        this.hasFreezeSnapshot = false;
+  private loadCanvasRenderer(): void {
+    if (typeof self === 'undefined') return;
+    void import('@xterm/addon-canvas')
+      .then(({ CanvasAddon }) => {
+        if ((this.terminal as unknown as { _isDisposed?: boolean })._isDisposed) return;
+        const canvasAddon = new CanvasAddon();
+        this.terminal.loadAddon(canvasAddon);
+        if ((this.terminal as unknown as { _isDisposed?: boolean })._isDisposed) {
+          canvasAddon.dispose();
+          return;
+        }
+        this.canvasRendererAddon = canvasAddon;
         this.terminal.refresh(0, Math.max(0, this.terminal.rows - 1));
+      })
+      .catch((error) => {
+        log.debug('FrontendPty: Canvas renderer unavailable; using DOM renderer', {
+          sessionId: this.sessionId,
+          error: String(error),
+        });
+        this.canvasRendererAddon?.dispose();
+        this.canvasRendererAddon = null;
+        this.hasFreezeSnapshot = false;
       });
-      this.terminal.loadAddon(webglAddon);
-      this.webglAddon = webglAddon;
-      this.webglContextLossDisposable = contextLossDisposable;
-    } catch (error) {
-      log.debug('FrontendPty: WebGL renderer unavailable; using DOM renderer', {
-        sessionId: this.sessionId,
-        error: String(error),
-      });
-      this.webglContextLossDisposable?.dispose();
-      this.webglContextLossDisposable = null;
-      this.webglAddon?.dispose();
-      this.webglAddon = null;
-    }
   }
 
   setScrollbackLines(scrollbackLines: unknown): void {
@@ -417,13 +402,10 @@ export class FrontendPty {
     if (frozen) this.armUnfreeze(isShrink ? 'await-data' : 'await-render');
   }
 
-  private getWebglCanvas(): HTMLCanvasElement | null {
-    if (!this.webglAddon) return null;
-    // .xterm-screen hosts canvas.xterm-link-layer (2d) FIRST, then the
-    // unclassed WebGL render canvas — a bare `canvas` selector grabs the
-    // transparent link layer and the freeze snapshot would be empty.
+  private getRendererCanvas(): HTMLCanvasElement | null {
+    if (!this.canvasRendererAddon) return null;
     return this.ownedContainer.querySelector<HTMLCanvasElement>(
-      '.xterm-screen canvas:not(.xterm-link-layer)'
+      '.xterm-screen canvas.xterm-text-layer'
     );
   }
 
@@ -451,29 +433,26 @@ export class FrontendPty {
 
   /**
    * Mirror the just-rendered frame onto the (hidden) freeze overlay. Runs on
-   * every onRender because the WebGL canvas — created with the default
-   * preserveDrawingBuffer:false — only exposes valid pixels inside the render
-   * frame, before the next composite clears it. commitResize then replays this
-   * snapshot without touching the live canvas. Skipped while a freeze is active
-   * so the masking snapshot is never overwritten by mid-resize garbage.
+   * every onRender and replays that frame during resize. Skipped while a freeze
+   * is active so the masking snapshot is never overwritten by mid-resize garbage.
    */
   private captureFreezeSnapshot(): void {
     if (this.unfreezePhase !== 'idle') return;
-    const gl = this.getWebglCanvas();
-    if (!gl || gl.width === 0 || gl.height === 0) return;
+    const canvas = this.getRendererCanvas();
+    if (!canvas || canvas.width === 0 || canvas.height === 0) return;
     const overlay = this.ensureFreezeOverlay();
     try {
-      if (overlay.width !== gl.width) overlay.width = gl.width;
-      if (overlay.height !== gl.height) overlay.height = gl.height;
+      if (overlay.width !== canvas.width) overlay.width = canvas.width;
+      if (overlay.height !== canvas.height) overlay.height = canvas.height;
       const ctx = overlay.getContext('2d');
       if (!ctx) return;
       ctx.clearRect(0, 0, overlay.width, overlay.height);
-      ctx.drawImage(gl, 0, 0);
+      ctx.drawImage(canvas, 0, 0);
     } catch {
       return;
     }
-    overlay.style.width = gl.style.width || `${gl.width}px`;
-    overlay.style.height = gl.style.height || `${gl.height}px`;
+    overlay.style.width = canvas.style.width || `${canvas.width}px`;
+    overlay.style.height = canvas.style.height || `${canvas.height}px`;
     this.hasFreezeSnapshot = true;
   }
 
@@ -531,6 +510,7 @@ export class FrontendPty {
         this.terminal.scrollToBottom();
         this.savedViewportY = this.terminal.buffer.active.viewportY;
         this.savedAtBottom = true;
+        this.canvasRendererAddon?.clearTextureAtlas();
         this.terminal.refresh(0, this.terminal.rows - 1);
       } catch {}
     });
@@ -595,10 +575,8 @@ export class FrontendPty {
     this.scrollDisposable.dispose();
     this.freezeSnapshotDisposable?.dispose();
     this.freezeSnapshotDisposable = null;
-    this.webglContextLossDisposable?.dispose();
-    this.webglContextLossDisposable = null;
-    this.webglAddon?.dispose();
-    this.webglAddon = null;
+    this.canvasRendererAddon?.dispose();
+    this.canvasRendererAddon = null;
     rpc.pty.unsubscribe(this.sessionId).catch(() => {});
     try {
       this.terminal.dispose();
