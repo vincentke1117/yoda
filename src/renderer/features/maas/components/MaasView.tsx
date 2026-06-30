@@ -16,7 +16,9 @@ import {
   Pencil,
   Plug,
   RefreshCw,
+  Trash2,
   Unplug,
+  X,
   Zap,
 } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -43,6 +45,12 @@ import {
 } from '@renderer/lib/ui/dropdown-menu';
 import { EmptyState } from '@renderer/lib/ui/empty-state';
 import { Input } from '@renderer/lib/ui/input';
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from '@renderer/lib/ui/input-group';
 import { ToggleGroup, ToggleGroupItem } from '@renderer/lib/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@renderer/lib/ui/tooltip';
 import { cn } from '@renderer/utils/utils';
@@ -367,6 +375,9 @@ const ConnectionPanel: React.FC<{
   const disconnecting = disconnectMutation.isPending;
   const hasStoredKey = connection.connected && !!connection.keyFingerprint;
   const showingKeyInput = !hasStoredKey || replacingKey;
+  const submitDisabled = saving || (!apiKey.trim() && (!hasStoredKey || replacingKey));
+  const disconnectLabel = t('maas.connection.disconnect');
+  const disconnectHint = t('maas.connection.disconnectHint');
   const keyHelper =
     hasStoredKey && showingKeyInput
       ? t('maas.connection.savedKeyHelper')
@@ -384,7 +395,7 @@ const ConnectionPanel: React.FC<{
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    if (!apiKey.trim() && !hasStoredKey) {
+    if (!apiKey.trim() && (!hasStoredKey || replacingKey)) {
       setFormError(t('maas.connection.apiKeyRequired'));
       return;
     }
@@ -459,19 +470,19 @@ const ConnectionPanel: React.FC<{
   return (
     <section className={cn('@container bg-background px-4 py-4', className)}>
       <form onSubmit={handleSubmit} className="grid gap-4">
-        <div className="grid min-w-0 gap-3 @3xl:grid-cols-[minmax(0,1fr)_auto] @3xl:items-start">
-          <div className="flex min-w-0 items-start gap-3">
-            <span
-              className={cn(
-                'mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md border',
-                connection.connected
-                  ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-                  : 'border-border bg-background-secondary text-muted-foreground'
-              )}
-            >
-              {connection.connected ? <Plug className="h-4 w-4" /> : <Unplug className="h-4 w-4" />}
-            </span>
-            <div className="min-w-0">
+        <div className="flex min-w-0 items-start gap-3">
+          <span
+            className={cn(
+              'mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md border',
+              connection.connected
+                ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                : 'border-border bg-background-secondary text-muted-foreground'
+            )}
+          >
+            {connection.connected ? <Plug className="h-4 w-4" /> : <Unplug className="h-4 w-4" />}
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex min-w-0 items-start justify-between gap-2">
               <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <h2 className="text-base font-semibold">{platform.name}</h2>
                 <Badge
@@ -485,70 +496,33 @@ const ConnectionPanel: React.FC<{
                   {connection.connected ? t('maas.connected') : t('maas.notConnected')}
                 </Badge>
               </div>
-              <p className="mt-1 max-w-2xl text-xs leading-relaxed text-muted-foreground">
-                {t(`maas.platforms.${connection.platformId}.description`)}
-              </p>
-              <p className="mt-0.5 max-w-2xl text-xs leading-relaxed text-foreground-muted">
-                {connection.connected
-                  ? t('maas.connection.connectedSummary')
-                  : t('maas.connection.notConnectedSummary')}
-              </p>
+              <div className="flex shrink-0 items-center gap-1">
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={t('maas.connection.openDocs')}
+                        onClick={() => void rpc.app.openExternal(platform.docsUrl)}
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </Button>
+                    }
+                  />
+                  <TooltipContent>{t('maas.connection.openDocs')}</TooltipContent>
+                </Tooltip>
+              </div>
             </div>
-          </div>
-
-          <div className="flex items-center gap-1 @3xl:justify-end">
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={t('maas.connection.openDocs')}
-                    onClick={() => void rpc.app.openExternal(platform.docsUrl)}
-                  >
-                    <ExternalLink className="h-3.5 w-3.5" />
-                  </Button>
-                }
-              />
-              <TooltipContent>{t('maas.connection.openDocs')}</TooltipContent>
-            </Tooltip>
-            {connection.connected && (
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  render={
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={t('common.more')}
-                    >
-                      <MoreHorizontal className="h-3.5 w-3.5" />
-                    </Button>
-                  }
-                />
-                <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuItem
-                    variant="destructive"
-                    disabled={disconnecting}
-                    onClick={handleDisconnect}
-                    className="items-start"
-                  >
-                    {disconnecting ? (
-                      <Loader2 className="mt-0.5 h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Unplug className="mt-0.5 h-3.5 w-3.5" />
-                    )}
-                    <span className="flex min-w-0 flex-col gap-0.5">
-                      <span>{t('maas.connection.removeKey')}</span>
-                      <span className="text-xs leading-snug text-foreground-muted">
-                        {t('maas.connection.removeKeyDescription')}
-                      </span>
-                    </span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
+            <p className="mt-1 max-w-2xl text-xs leading-relaxed text-muted-foreground">
+              {t(`maas.platforms.${connection.platformId}.description`)}
+            </p>
+            <p className="mt-0.5 max-w-2xl text-xs leading-relaxed text-foreground-muted">
+              {connection.connected
+                ? t('maas.connection.connectedSummary')
+                : t('maas.connection.notConnectedSummary')}
+            </p>
           </div>
         </div>
 
@@ -568,43 +542,57 @@ const ConnectionPanel: React.FC<{
           <label className="grid gap-1.5 @3xl:col-span-2">
             <span className="text-xs font-medium text-muted-foreground">{apiKeyLabel}</span>
             {showingKeyInput ? (
-              <div className="grid gap-2">
-                <Input
-                  type="password"
-                  value={apiKey}
-                  autoComplete="new-password"
-                  placeholder={apiKeyPlaceholder}
-                  onChange={(event) => setApiKey(event.target.value)}
-                />
+              <div className="grid gap-1.5">
+                <InputGroup className="h-8">
+                  <InputGroupInput
+                    type="password"
+                    value={apiKey}
+                    autoComplete="new-password"
+                    placeholder={apiKeyPlaceholder}
+                    onChange={(event) => setApiKey(event.target.value)}
+                  />
+                  {hasStoredKey && (
+                    <InputGroupAddon align="inline-end" className="gap-1 pr-1">
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <InputGroupButton
+                              type="button"
+                              size="icon-xs"
+                              aria-label={t('maas.connection.cancelReplaceKey')}
+                              onClick={handleCancelReplaceKey}
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </InputGroupButton>
+                          }
+                        />
+                        <TooltipContent>{t('maas.connection.cancelReplaceKey')}</TooltipContent>
+                      </Tooltip>
+                    </InputGroupAddon>
+                  )}
+                </InputGroup>
                 {hasStoredKey && (
-                  <div className="flex justify-end">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="xs"
-                      onClick={handleCancelReplaceKey}
-                    >
-                      {t('maas.connection.cancelReplaceKey')}
-                    </Button>
-                  </div>
+                  <span className="text-xs leading-relaxed text-foreground-muted">
+                    {t('maas.connection.replaceKeyEditingHint')}
+                  </span>
                 )}
               </div>
             ) : (
-              <div className="grid gap-2 @3xl:grid-cols-[minmax(0,1fr)_auto]">
-                <Input
+              <InputGroup className="h-8">
+                <InputGroupInput
                   readOnly
                   value={formatMaskedApiKey(connection.keyFingerprint)}
-                  className="font-mono"
+                  className="cursor-pointer font-mono"
                   aria-label={t('maas.connection.storedKeyAriaLabel')}
+                  onClick={handleCopyStoredKey}
                 />
-                <div className="flex items-center gap-2">
+                <InputGroupAddon align="inline-end" className="gap-1 pr-1">
                   <Tooltip>
                     <TooltipTrigger
                       render={
-                        <Button
+                        <InputGroupButton
                           type="button"
-                          variant="outline"
-                          size="icon-sm"
+                          size="icon-xs"
                           disabled={copyingKey}
                           aria-label={t('maas.connection.copyKey')}
                           onClick={handleCopyStoredKey}
@@ -614,17 +602,52 @@ const ConnectionPanel: React.FC<{
                           ) : (
                             <Copy className="h-3.5 w-3.5" />
                           )}
-                        </Button>
+                        </InputGroupButton>
                       }
                     />
                     <TooltipContent>{t('maas.connection.copyKey')}</TooltipContent>
                   </Tooltip>
-                  <Button type="button" variant="outline" size="sm" onClick={handleReplaceKey}>
-                    <Pencil className="h-3.5 w-3.5" />
-                    {t('maas.connection.replaceKey')}
-                  </Button>
-                </div>
-              </div>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <InputGroupButton
+                          type="button"
+                          size="icon-xs"
+                          aria-label={t('maas.connection.replaceKey')}
+                          onClick={handleReplaceKey}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </InputGroupButton>
+                      }
+                    />
+                    <TooltipContent>{t('maas.connection.replaceKey')}</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <InputGroupButton
+                          type="button"
+                          size="icon-xs"
+                          disabled={disconnecting}
+                          aria-label={`${disconnectLabel}: ${disconnectHint}`}
+                          onClick={handleDisconnect}
+                          className="text-foreground-muted hover:bg-destructive/10 hover:text-destructive"
+                        >
+                          {disconnecting ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3.5 w-3.5" />
+                          )}
+                        </InputGroupButton>
+                      }
+                    />
+                    <TooltipContent className="block w-72 max-w-[calc(100vw-2rem)] text-left leading-relaxed">
+                      <span className="block whitespace-nowrap font-medium">{disconnectLabel}</span>
+                      <span className="mt-1 block">{disconnectHint}</span>
+                    </TooltipContent>
+                  </Tooltip>
+                </InputGroupAddon>
+              </InputGroup>
             )}
             <span className="text-xs leading-relaxed text-foreground-muted">{keyHelper}</span>
           </label>
@@ -643,12 +666,7 @@ const ConnectionPanel: React.FC<{
                 : t('maas.connection.neverChecked')}
             </span>
           </div>
-          <Button
-            type="submit"
-            size="sm"
-            disabled={saving || (!apiKey.trim() && !hasStoredKey)}
-            className="w-full @3xl:w-auto"
-          >
+          <Button type="submit" size="sm" disabled={submitDisabled} className="w-full @3xl:w-auto">
             {saving ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
