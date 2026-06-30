@@ -88,6 +88,7 @@ interface SectionConfig {
   title?: string;
   description?: React.ReactNode;
   action?: React.ReactNode;
+  surface?: 'panel';
   component: React.ReactNode;
 }
 
@@ -317,18 +318,21 @@ export function SettingsPage({
           id: 'llm-profiles',
           title: t('settings.llm.profilesSectionTitle'),
           description: t('settings.llm.profilesSectionDescription'),
+          surface: 'panel',
           component: <LlmProfilesCard />,
         },
         {
           id: 'llm-profile-assignments',
           title: t('settings.llm.profileAssignmentsSectionTitle'),
           description: t('settings.llm.profileAssignmentsSectionDescription'),
+          surface: 'panel',
           component: <LlmProfileAssignmentsCard />,
         },
         {
           id: 'llm-profile-debug',
           title: t('settings.llm.profileDebugSectionTitle'),
           description: t('settings.llm.profileDebugSectionDescription'),
+          surface: 'panel',
           component: <LlmProfileDebugCard />,
         },
       ],
@@ -537,26 +541,19 @@ export function SettingsPage({
                   const hasChapterHeader = Boolean(
                     section.title || section.description || section.action
                   );
+                  const usePanelSurface = section.surface === 'panel';
                   return (
-                    <div
-                      key={section.id}
-                      className={cn(
-                        'flex flex-col',
-                        hasChapterHeader
-                          ? 'gap-4 border-l-[3px] border-primary/45 bg-background-1/45 py-4 pr-3 pl-4 @max-md:py-3 @max-md:pr-2 @max-md:pl-3'
-                          : 'gap-3'
-                      )}
-                    >
+                    <div key={section.id} className="flex flex-col gap-3">
                       {hasChapterHeader && (
-                        <div className="flex min-w-0 items-start justify-between gap-3 border-b border-border/70 pb-3">
+                        <div className="flex min-w-0 items-start justify-between gap-3">
                           <div className="min-w-0">
                             {section.title && (
-                              <h3 className="text-sm font-medium text-foreground">
+                              <h3 className="text-base font-semibold text-foreground">
                                 {section.title}
                               </h3>
                             )}
                             {section.description && (
-                              <p className="mt-1 text-xs leading-relaxed text-foreground-muted">
+                              <p className="mt-1 max-w-2xl text-sm leading-relaxed text-foreground-muted">
                                 {section.description}
                               </p>
                             )}
@@ -564,7 +561,13 @@ export function SettingsPage({
                           {section.action && <div className="shrink-0">{section.action}</div>}
                         </div>
                       )}
-                      {section.component}
+                      {usePanelSurface ? (
+                        <div className="rounded-xl border border-border/70 bg-background p-4 @max-md:p-3">
+                          {section.component}
+                        </div>
+                      ) : (
+                        section.component
+                      )}
                     </div>
                   );
                 })}
