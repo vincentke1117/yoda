@@ -17,7 +17,7 @@ const LEVEL_CLASSES = [
   'bg-foreground-diff-added',
 ] as const;
 
-type DayCell = {
+export type DayCell = {
   key: string;
   total: number;
   inFuture: boolean;
@@ -32,41 +32,16 @@ type DayCell = {
 export function TokenHeatmap({ daily }: { daily: DailyTokenUsage[] }) {
   const { t, i18n } = useTranslation();
 
-  const totalsByDate = new Map(daily.map((day) => [day.date, day.tokens.total]));
   const thresholds = quantileThresholds(
     daily.map((day) => day.tokens.total).filter((total) => total > 0)
   );
+  const todayStart = startOfLocalDay(new Date());
+  const weeks = buildTokenHeatmapWeeks(daily, todayStart);
+  const monthLabels = buildTokenHeatmapMonthLabels(weeks, i18n.language, todayStart.getFullYear());
 
-  const today = new Date();
-  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  // Back up to the Monday that starts the first of the WEEKS columns.
-  const mondayOffset = (todayStart.getDay() + 6) % 7;
-  const gridStart = new Date(todayStart.getTime() - (mondayOffset + (WEEKS - 1) * 7) * DAY_MS);
-
-  const weeks: DayCell[][] = [];
-  for (let week = 0; week < WEEKS; week++) {
-    const cells: DayCell[] = [];
-    for (let day = 0; day < 7; day++) {
-      const date = new Date(gridStart.getTime() + (week * 7 + day) * DAY_MS);
-      const key = localDateKey(date);
-      cells.push({
-        key,
-        total: totalsByDate.get(key) ?? 0,
-        inFuture: date.getTime() > todayStart.getTime(),
-      });
-    }
-    weeks.push(cells);
-  }
-
-  const monthFormatter = new Intl.DateTimeFormat(i18n.language, { month: 'short' });
-  const weekdayFormatter = new Intl.DateTimeFormat(i18n.language, { weekday: 'narrow' });
-  const monthLabels = weeks.map((cells, index) => {
-    const first = new Date(`${cells[0]!.key}T00:00:00`);
-    if (index === 0) return monthFormatter.format(first);
-    const previous = new Date(`${weeks[index - 1]![0]!.key}T00:00:00`);
-    return first.getMonth() !== previous.getMonth() ? monthFormatter.format(first) : null;
-  });
   // Monday-first row labels; show every other row to stay quiet.
+  const weekdayFormatter = new Intl.DateTimeFormat(i18n.language, { weekday: 'narrow' });
+  const gridStart = dateFromLocalDateKey(weeks[0]![0]!.key);
   const weekdayLabels = [1, 3, 5].map((day) =>
     weekdayFormatter.format(new Date(gridStart.getTime() + day * DAY_MS))
   );
@@ -125,6 +100,58 @@ export function TokenHeatmap({ daily }: { daily: DailyTokenUsage[] }) {
   );
 }
 
+export function buildTokenHeatmapWeeks(daily: DailyTokenUsage[], today: Date): DayCell[][] {
+  const totalsByDate = new Map(daily.map((day) => [day.date, day.tokens.total]));
+  const todayStart = startOfLocalDay(today);
+  // Back up to the Monday that starts the first of the WEEKS columns.
+  const mondayOffset = (todayStart.getDay() + 6) % 7;
+  const gridStart = new Date(todayStart.getTime() - (mondayOffset + (WEEKS - 1) * 7) * DAY_MS);
+
+  const weeks: DayCell[][] = [];
+  for (let week = 0; week < WEEKS; week++) {
+    const cells: DayCell[] = [];
+    for (let day = 0; day < 7; day++) {
+      const date = new Date(gridStart.getTime() + (week * 7 + day) * DAY_MS);
+      const key = localDateKey(date);
+      cells.push({
+        key,
+        total: totalsByDate.get(key) ?? 0,
+        inFuture: date.getTime() > todayStart.getTime(),
+      });
+    }
+    weeks.push(cells);
+  }
+  return weeks;
+}
+
+export function buildTokenHeatmapMonthLabels(
+  weeks: DayCell[][],
+  language: string,
+  currentYear: number
+): Array<string | null> {
+  const monthFormatter = new Intl.DateTimeFormat(language, { month: 'short' });
+  const crossYearMonthFormatter = new Intl.DateTimeFormat(language, {
+    month: 'short',
+    year: '2-digit',
+  });
+
+  return weeks.map((cells, index) => {
+    const first = dateFromLocalDateKey(cells[0]!.key);
+    if (index > 0) {
+      const previous = dateFromLocalDateKey(weeks[index - 1]![0]!.key);
+      if (
+        first.getMonth() === previous.getMonth() &&
+        first.getFullYear() === previous.getFullYear()
+      ) {
+        return null;
+      }
+    }
+    const formatter =
+      first.getFullYear() === currentYear ? monthFormatter : crossYearMonthFormatter;
+    return formatter.format(first);
+  });
+}
+
 /** p25 / p50 / p75 of the non-zero days — the boundaries between levels 1-4. */
 function quantileThresholds(nonZeroTotals: number[]): [number, number, number] {
   if (nonZeroTotals.length === 0) return [Infinity, Infinity, Infinity];
@@ -146,4 +173,13 @@ function localDateKey(date: Date): string {
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
+}
+
+function dateFromLocalDateKey(key: string): Date {
+  const [year, month, day] = key.split('-').map(Number);
+  return new Date(year!, month! - 1, day!);
+}
+
+function startOfLocalDay(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
