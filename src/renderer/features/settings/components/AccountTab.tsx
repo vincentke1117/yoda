@@ -58,7 +58,7 @@ export function AccountTab() {
         toast({
           title: t('settings.account.signedIn'),
           description: result.user
-            ? t('settings.account.signedInDescription', { username: result.user.username })
+            ? t('settings.account.signedInDescription', { email: result.user.email })
             : t('settings.account.signedInFallback'),
         });
       })
@@ -261,7 +261,7 @@ function SignedInAccountPanel({
         {user.avatarUrl ? (
           <img
             src={user.avatarUrl}
-            alt={user.username}
+            alt={displayName}
             className="h-12 w-12 rounded-full border border-border/60"
           />
         ) : (
@@ -273,10 +273,7 @@ function SignedInAccountPanel({
           <p className="text-sm font-medium text-foreground">
             {t('settings.account.connectedAs')} <span className="font-semibold">{displayName}</span>
           </p>
-          <p className="truncate text-xs text-muted-foreground">
-            @{user.username}
-            {user.email ? ` - ${user.email}` : ''}
-          </p>
+          {user.email && <p className="truncate text-xs text-muted-foreground">{user.email}</p>}
         </div>
         <Button
           type="button"

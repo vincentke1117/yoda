@@ -359,7 +359,7 @@
       "signOutFailed": "Sign out failed",
       "signInFailed": "Sign in failed",
       "signedIn": "Signed in to Yoda",
-      "signedInDescription": "Connected as @{{username}}",
+      "signedInDescription": "Connected as {{email}}",
       "signedInFallback": "Signed in",
       "createAccount": "Create Account",
       "creatingAccount": "Creating account…",

@@ -359,7 +359,7 @@
       "signOutFailed": "退出登录失败",
       "signInFailed": "登录失败",
       "signedIn": "已登录到 Yoda",
-      "signedInDescription": "已连接 @{{username}}",
+      "signedInDescription": "已连接 {{email}}",
       "signedInFallback": "已登录",
       "createAccount": "创建账户",
       "creatingAccount": "创建账户中…",
