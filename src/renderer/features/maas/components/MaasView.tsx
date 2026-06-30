@@ -159,28 +159,8 @@ function formatDateRange(period: { startingAt: string; endingAt: string } | null
 export const MaasView: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const { t } = useTranslation();
   const { data: connections, isLoading } = useMaasConnections();
-  const [selectedPlatformId, setSelectedPlatformId] = useState<MaasPlatformId>('zenmux');
   const [expandedPlatformId, setExpandedPlatformId] = useState<MaasPlatformId | ''>('zenmux');
-  const [filterKind, setFilterKind] = useState<MaasInvocationFilterKind>('all');
-  const selectedConnection = findConnection(connections, selectedPlatformId);
   const connectedCount = connections?.filter((connection) => connection.connected).length ?? 0;
-
-  const recordsQuery = useMaasInvocationRecords(
-    selectedPlatformId,
-    filterKind,
-    selectedConnection.connected
-  );
-  const recordsSubtitle = !selectedConnection.connected
-    ? t('maas.records.emptyNoConnection')
-    : recordsQuery.error
-      ? t('maas.records.errorTitle')
-      : recordsQuery.loading && recordsQuery.records.length === 0
-        ? t('maas.records.loading')
-        : t('maas.records.subtitle', {
-            count: formatCount(recordsQuery.records.length),
-            total: formatCount(recordsQuery.total),
-            range: formatDateRange(recordsQuery.period),
-          });
 
   const handlePlatformValueChange = useCallback((value: string) => {
     if (value === '') {
@@ -189,59 +169,7 @@ export const MaasView: React.FC<{ embedded?: boolean }> = ({ embedded = false })
     }
     if (!isMaasPlatformId(value)) return;
     setExpandedPlatformId(value);
-    setSelectedPlatformId(value);
   }, []);
-
-  const recordsToolbarActions = (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button variant="ghost" size="icon-xs" aria-label={t('common.more')}>
-            <MoreHorizontal className="size-3.5" />
-          </Button>
-        }
-      />
-      <DropdownMenuContent align="end" className="w-40">
-        {selectedPlatformId === 'zenmux' && (
-          <DropdownMenuItem onClick={() => void rpc.app.openExternal(ZENMUX_LOGS_URL)}>
-            <ExternalLink className="size-3.5" />
-            {t('maas.records.openZenmuxLogs')}
-          </DropdownMenuItem>
-        )}
-        <DropdownMenuItem
-          disabled={!selectedConnection.connected || recordsQuery.reloading}
-          onClick={recordsQuery.reload}
-        >
-          <RefreshCw className={cn('size-3.5', recordsQuery.reloading && 'animate-spin')} />
-          {t('maas.records.reload')}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-
-  const recordsFilters = (
-    <div className="flex max-w-full justify-end">
-      <ToggleGroup
-        multiple={false}
-        value={[filterKind]}
-        className="h-auto max-w-full flex-wrap justify-start overflow-hidden"
-        onValueChange={([value]) => {
-          if (value) setFilterKind(value as MaasInvocationFilterKind);
-        }}
-      >
-        {FILTERS.map((kind) => (
-          <ToggleGroupItem key={kind} value={kind} className="gap-1.5">
-            {kind === 'all' ? (
-              <Activity className="h-3.5 w-3.5" />
-            ) : (
-              React.createElement(KIND_META[kind].icon, { className: 'h-3.5 w-3.5' })
-            )}
-            <span>{t(`maas.records.filters.${kind}`)}</span>
-          </ToggleGroupItem>
-        ))}
-      </ToggleGroup>
-    </div>
-  );
 
   const content = (
     <div
@@ -267,35 +195,11 @@ export const MaasView: React.FC<{ embedded?: boolean }> = ({ embedded = false })
             <PlatformAccordionItem
               key={platformId}
               connection={findConnection(connections, platformId)}
+              embedded={embedded}
               loading={isLoading}
             />
           ))}
         </AccordionPrimitive.Root>
-      </MaasChapter>
-
-      <MaasChapter
-        title={t('maas.records.title')}
-        description={recordsSubtitle}
-        action={recordsToolbarActions}
-      >
-        {recordsFilters}
-        <div
-          className={cn(
-            '@container flex min-h-0 flex-col overflow-hidden rounded-xl border border-border/60 bg-muted/10',
-            embedded ? 'h-[420px]' : 'h-[560px]'
-          )}
-        >
-          <RecordFeed
-            connected={selectedConnection.connected}
-            filterKind={filterKind}
-            records={recordsQuery.records}
-            loading={recordsQuery.loading}
-            error={recordsQuery.error}
-            hasNextPage={!!recordsQuery.hasNextPage}
-            isFetchingNextPage={recordsQuery.isFetchingNextPage}
-            fetchNextPage={() => void recordsQuery.fetchNextPage()}
-          />
-        </div>
       </MaasChapter>
     </div>
   );
@@ -343,8 +247,9 @@ const MaasChapter: React.FC<{
 
 const PlatformAccordionItem: React.FC<{
   connection: MaasConnection;
+  embedded: boolean;
   loading: boolean;
-}> = ({ connection, loading }) => {
+}> = ({ connection, embedded, loading }) => {
   const { t } = useTranslation();
   const platform = MAAS_PLATFORMS[connection.platformId];
 
@@ -394,6 +299,7 @@ const PlatformAccordionItem: React.FC<{
         <ConnectionPanel
           key={`${connection.platformId}:${connection.keyFingerprint ?? 'empty'}`}
           connection={connection}
+          embedded={embedded}
           className="border-t border-border/50"
         />
       </AccordionPrimitive.Content>
@@ -401,10 +307,11 @@ const PlatformAccordionItem: React.FC<{
   );
 };
 
-const ConnectionPanel: React.FC<{ connection: MaasConnection; className?: string }> = ({
-  connection,
-  className,
-}) => {
+const ConnectionPanel: React.FC<{
+  connection: MaasConnection;
+  embedded: boolean;
+  className?: string;
+}> = ({ connection, embedded, className }) => {
   const { t } = useTranslation();
   const platform = MAAS_PLATFORMS[connection.platformId];
   const connectMutation = useConnectMaasPlatform();
@@ -564,7 +471,100 @@ const ConnectionPanel: React.FC<{ connection: MaasConnection; className?: string
       </div>
 
       {formError && <p className="mt-2 text-xs text-destructive">{formError}</p>}
+
+      {connection.platformId === 'zenmux' && (
+        <ZenmuxUsageSection connection={connection} embedded={embedded} />
+      )}
     </section>
+  );
+};
+
+const ZenmuxUsageSection: React.FC<{ connection: MaasConnection; embedded: boolean }> = ({
+  connection,
+  embedded,
+}) => {
+  const { t } = useTranslation();
+  const [filterKind, setFilterKind] = useState<MaasInvocationFilterKind>('all');
+  const recordsQuery = useMaasInvocationRecords('zenmux', filterKind, connection.connected);
+  const recordsSubtitle = !connection.connected
+    ? t('maas.records.emptyNoConnection')
+    : recordsQuery.error
+      ? t('maas.records.errorTitle')
+      : recordsQuery.loading && recordsQuery.records.length === 0
+        ? t('maas.records.loading')
+        : t('maas.records.subtitle', {
+            count: formatCount(recordsQuery.records.length),
+            total: formatCount(recordsQuery.total),
+            range: formatDateRange(recordsQuery.period),
+          });
+
+  return (
+    <div className="mt-5 flex min-w-0 flex-col gap-3 border-t border-border/60 pt-4">
+      <div className="flex min-w-0 items-center justify-between gap-3">
+        <h3 className="min-w-0 text-sm font-normal text-foreground">{t('maas.records.title')}</h3>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button variant="ghost" size="icon-xs" aria-label={t('common.more')}>
+                <MoreHorizontal className="size-3.5" />
+              </Button>
+            }
+          />
+          <DropdownMenuContent align="end" className="w-40">
+            <DropdownMenuItem onClick={() => void rpc.app.openExternal(ZENMUX_LOGS_URL)}>
+              <ExternalLink className="size-3.5" />
+              {t('maas.records.openZenmuxLogs')}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              disabled={!connection.connected || recordsQuery.reloading}
+              onClick={recordsQuery.reload}
+            >
+              <RefreshCw className={cn('size-3.5', recordsQuery.reloading && 'animate-spin')} />
+              {t('maas.records.reload')}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+      <p className="text-xs text-foreground-muted">{recordsSubtitle}</p>
+      <div className="flex max-w-full justify-end">
+        <ToggleGroup
+          multiple={false}
+          value={[filterKind]}
+          className="h-auto max-w-full flex-wrap justify-start overflow-hidden"
+          onValueChange={([value]) => {
+            if (value) setFilterKind(value as MaasInvocationFilterKind);
+          }}
+        >
+          {FILTERS.map((kind) => (
+            <ToggleGroupItem key={kind} value={kind} className="gap-1.5">
+              {kind === 'all' ? (
+                <Activity className="h-3.5 w-3.5" />
+              ) : (
+                React.createElement(KIND_META[kind].icon, { className: 'h-3.5 w-3.5' })
+              )}
+              <span>{t(`maas.records.filters.${kind}`)}</span>
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      </div>
+      <div
+        className={cn(
+          '@container flex min-h-0 flex-col overflow-hidden rounded-xl border border-border/60 bg-muted/10',
+          embedded ? 'h-[360px]' : 'h-[460px]'
+        )}
+      >
+        <RecordFeed
+          connected={connection.connected}
+          filterKind={filterKind}
+          records={recordsQuery.records}
+          loading={recordsQuery.loading}
+          error={recordsQuery.error}
+          hasNextPage={!!recordsQuery.hasNextPage}
+          isFetchingNextPage={recordsQuery.isFetchingNextPage}
+          fetchNextPage={() => void recordsQuery.fetchNextPage()}
+        />
+      </div>
+    </div>
   );
 };
 
