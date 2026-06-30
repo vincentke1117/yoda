@@ -1,3 +1,4 @@
+import { clipboard } from 'electron';
 import type { MaasSettings } from '@shared/app-settings';
 import {
   MAAS_PLATFORM_IDS,
@@ -333,6 +334,39 @@ export class MaasService {
     const apiKey = await encryptedAppSecretsStore.getSecret(secretKey(platformId));
     if (!apiKey) return undefined;
     return { endpoint: connection.endpoint, apiKey };
+  }
+
+  async copyStoredApiKeyToClipboard(
+    platformId: MaasPlatformId
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      if (!isMaasPlatformId(platformId)) {
+        return { success: false, error: 'Unsupported MaaS platform.' };
+      }
+
+      const settings = await appSettingsService.get('maas');
+      const connection = getConnectedPlatform(settings, platformId);
+      if (!connection) {
+        return { success: false, error: 'Platform is not connected.' };
+      }
+
+      const apiKey = await encryptedAppSecretsStore.getSecret(secretKey(platformId));
+      if (!apiKey) {
+        return {
+          success: false,
+          error: 'Stored MaaS API key is missing. Paste the key again to reconnect.',
+        };
+      }
+
+      clipboard.writeText(apiKey);
+      return { success: true };
+    } catch (error) {
+      log.error('Failed to copy MaaS API key:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to copy MaaS API key.',
+      };
+    }
   }
 
   async connectPlatform(

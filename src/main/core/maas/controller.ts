@@ -23,6 +23,10 @@ async function checkConnection(platformId: MaasPlatformId) {
   return maasService.checkConnection(platformId);
 }
 
+async function copyStoredApiKey(platformId: MaasPlatformId) {
+  return maasService.copyStoredApiKeyToClipboard(platformId);
+}
+
 async function listInvocationRecords(args: {
   platformId: MaasPlatformId;
   kind: MaasInvocationFilterKind;
@@ -42,6 +46,7 @@ export const maasController = createRPCController({
   connectPlatform,
   disconnectPlatform,
   checkConnection,
+  copyStoredApiKey,
   listInvocationRecords,
   getUsageSummary,
 });

@@ -3,6 +3,7 @@ import {
   Activity,
   ChevronDown,
   Clock,
+  Copy,
   Database,
   ExternalLink,
   FileText,
@@ -12,6 +13,7 @@ import {
   Loader2,
   MessageSquare,
   MoreHorizontal,
+  Pencil,
   Plug,
   RefreshCw,
   Unplug,
@@ -29,6 +31,7 @@ import {
   type MaasInvocationRecord,
   type MaasPlatformId,
 } from '@shared/maas';
+import { useToast } from '@renderer/lib/hooks/use-toast';
 import { rpc } from '@renderer/lib/ipc';
 import { Badge } from '@renderer/lib/ui/badge';
 import { Button } from '@renderer/lib/ui/button';
@@ -155,6 +158,11 @@ function formatDate(value: string): string {
 function formatDateRange(period: { startingAt: string; endingAt: string } | null): string {
   if (!period) return '';
   return `${formatDate(period.startingAt)} - ${formatDate(period.endingAt)}`;
+}
+
+function formatMaskedApiKey(fingerprint: string | null): string {
+  const suffix = fingerprint?.replace(/^\.\.\./, '').trim();
+  return suffix ? `**** **** **** ${suffix}` : '**** **** ****';
 }
 
 export const MaasConnectedCountBadge: React.FC = () => {
@@ -344,10 +352,13 @@ const ConnectionPanel: React.FC<{
   className?: string;
 }> = ({ connection, className }) => {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const platform = MAAS_PLATFORMS[connection.platformId];
   const connectMutation = useConnectMaasPlatform();
   const disconnectMutation = useDisconnectMaasPlatform();
   const [apiKey, setApiKey] = useState('');
+  const [replacingKey, setReplacingKey] = useState(!connection.connected);
+  const [copyingKey, setCopyingKey] = useState(false);
   const [displayName, setDisplayName] = useState(connection.displayName);
   const [endpoint, setEndpoint] = useState(connection.endpoint);
   const [formError, setFormError] = useState<string | null>(null);
@@ -355,11 +366,13 @@ const ConnectionPanel: React.FC<{
   const saving = connectMutation.isPending;
   const disconnecting = disconnectMutation.isPending;
   const hasStoredKey = connection.connected && !!connection.keyFingerprint;
-  const disconnectLabel = t('maas.connection.disconnect');
-  const disconnectHint = t('maas.connection.disconnectHint');
-  const keyHelper = hasStoredKey
-    ? t('maas.connection.savedKeyHelper')
-    : t('maas.connection.newKeyHelper');
+  const showingKeyInput = !hasStoredKey || replacingKey;
+  const keyHelper =
+    hasStoredKey && showingKeyInput
+      ? t('maas.connection.savedKeyHelper')
+      : hasStoredKey
+        ? t('maas.connection.storedKeyHelper')
+        : t('maas.connection.newKeyHelper');
   const apiKeyLabel =
     connection.platformId === 'zenmux'
       ? t('maas.connection.managementApiKey')
@@ -385,7 +398,10 @@ const ConnectionPanel: React.FC<{
         endpoint,
       },
       {
-        onSuccess: () => setApiKey(''),
+        onSuccess: () => {
+          setApiKey('');
+          setReplacingKey(false);
+        },
         onError: (error) => setFormError(error instanceof Error ? error.message : String(error)),
       }
     );
@@ -396,6 +412,48 @@ const ConnectionPanel: React.FC<{
     disconnectMutation.mutate(connection.platformId, {
       onError: (error) => setFormError(error instanceof Error ? error.message : String(error)),
     });
+  };
+
+  const handleCopyStoredKey = () => {
+    setFormError(null);
+    setCopyingKey(true);
+    void rpc.maas
+      .copyStoredApiKey(connection.platformId)
+      .then((result) => {
+        if (result.success) {
+          toast({ title: t('maas.connection.copyKeySuccess') });
+          return;
+        }
+        const message = result.error ?? t('maas.connection.copyKeyFailed');
+        setFormError(message);
+        toast({
+          title: t('maas.connection.copyKeyFailed'),
+          description: message,
+          variant: 'destructive',
+        });
+      })
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error);
+        setFormError(message);
+        toast({
+          title: t('maas.connection.copyKeyFailed'),
+          description: message,
+          variant: 'destructive',
+        });
+      })
+      .finally(() => setCopyingKey(false));
+  };
+
+  const handleReplaceKey = () => {
+    setFormError(null);
+    setApiKey('');
+    setReplacingKey(true);
+  };
+
+  const handleCancelReplaceKey = () => {
+    setFormError(null);
+    setApiKey('');
+    setReplacingKey(false);
   };
 
   return (
@@ -438,42 +496,58 @@ const ConnectionPanel: React.FC<{
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 @3xl:justify-end">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => void rpc.app.openExternal(platform.docsUrl)}
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-              {t('maas.connection.openDocs')}
-            </Button>
+          <div className="flex items-center gap-1 @3xl:justify-end">
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={t('maas.connection.openDocs')}
+                    onClick={() => void rpc.app.openExternal(platform.docsUrl)}
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </Button>
+                }
+              />
+              <TooltipContent>{t('maas.connection.openDocs')}</TooltipContent>
+            </Tooltip>
             {connection.connected && (
-              <Tooltip>
-                <TooltipTrigger
+              <DropdownMenu>
+                <DropdownMenuTrigger
                   render={
                     <Button
                       type="button"
-                      variant="destructive"
-                      size="sm"
-                      disabled={disconnecting}
-                      onClick={handleDisconnect}
-                      aria-label={`${disconnectLabel}: ${disconnectHint}`}
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={t('common.more')}
                     >
-                      {disconnecting ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Unplug className="h-3.5 w-3.5" />
-                      )}
-                      {t('maas.connection.removeKey')}
+                      <MoreHorizontal className="h-3.5 w-3.5" />
                     </Button>
                   }
                 />
-                <TooltipContent className="block w-72 max-w-[calc(100vw-2rem)] text-left leading-relaxed">
-                  <span className="block whitespace-nowrap font-medium">{disconnectLabel}</span>
-                  <span className="mt-1 block">{disconnectHint}</span>
-                </TooltipContent>
-              </Tooltip>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuItem
+                    variant="destructive"
+                    disabled={disconnecting}
+                    onClick={handleDisconnect}
+                    className="items-start"
+                  >
+                    {disconnecting ? (
+                      <Loader2 className="mt-0.5 h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Unplug className="mt-0.5 h-3.5 w-3.5" />
+                    )}
+                    <span className="flex min-w-0 flex-col gap-0.5">
+                      <span>{t('maas.connection.removeKey')}</span>
+                      <span className="text-xs leading-snug text-foreground-muted">
+                        {t('maas.connection.removeKeyDescription')}
+                      </span>
+                    </span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
           </div>
         </div>
@@ -493,19 +567,65 @@ const ConnectionPanel: React.FC<{
           </label>
           <label className="grid gap-1.5 @3xl:col-span-2">
             <span className="text-xs font-medium text-muted-foreground">{apiKeyLabel}</span>
-            <Input
-              type="password"
-              value={apiKey}
-              autoComplete="new-password"
-              placeholder={
-                hasStoredKey
-                  ? t('maas.connection.apiKeyStoredPlaceholder', {
-                      fingerprint: connection.keyFingerprint,
-                    })
-                  : apiKeyPlaceholder
-              }
-              onChange={(event) => setApiKey(event.target.value)}
-            />
+            {showingKeyInput ? (
+              <div className="grid gap-2">
+                <Input
+                  type="password"
+                  value={apiKey}
+                  autoComplete="new-password"
+                  placeholder={apiKeyPlaceholder}
+                  onChange={(event) => setApiKey(event.target.value)}
+                />
+                {hasStoredKey && (
+                  <div className="flex justify-end">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="xs"
+                      onClick={handleCancelReplaceKey}
+                    >
+                      {t('maas.connection.cancelReplaceKey')}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="grid gap-2 @3xl:grid-cols-[minmax(0,1fr)_auto]">
+                <Input
+                  readOnly
+                  value={formatMaskedApiKey(connection.keyFingerprint)}
+                  className="font-mono"
+                  aria-label={t('maas.connection.storedKeyAriaLabel')}
+                />
+                <div className="flex items-center gap-2">
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon-sm"
+                          disabled={copyingKey}
+                          aria-label={t('maas.connection.copyKey')}
+                          onClick={handleCopyStoredKey}
+                        >
+                          {copyingKey ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Copy className="h-3.5 w-3.5" />
+                          )}
+                        </Button>
+                      }
+                    />
+                    <TooltipContent>{t('maas.connection.copyKey')}</TooltipContent>
+                  </Tooltip>
+                  <Button type="button" variant="outline" size="sm" onClick={handleReplaceKey}>
+                    <Pencil className="h-3.5 w-3.5" />
+                    {t('maas.connection.replaceKey')}
+                  </Button>
+                </div>
+              </div>
+            )}
             <span className="text-xs leading-relaxed text-foreground-muted">{keyHelper}</span>
           </label>
         </div>
@@ -514,12 +634,6 @@ const ConnectionPanel: React.FC<{
 
         <div className="flex flex-col gap-3 border-t border-border/50 pt-3 @3xl:flex-row @3xl:items-center @3xl:justify-between">
           <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span className="inline-flex min-h-7 items-center gap-1.5 rounded-md border border-border/60 bg-background-1 px-2">
-              <Key className="h-3.5 w-3.5" />
-              {connection.keyFingerprint
-                ? t('maas.connection.keyFingerprint', { fingerprint: connection.keyFingerprint })
-                : t('maas.connection.noKey')}
-            </span>
             <span className="inline-flex min-h-7 items-center gap-1.5 rounded-md border border-border/60 bg-background-1 px-2">
               <RefreshCw className="h-3.5 w-3.5" />
               {connection.lastCheckedAt
