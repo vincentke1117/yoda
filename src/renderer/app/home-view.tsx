@@ -2505,26 +2505,44 @@ export const HomeComposer = observer(function HomeComposer({
         <span className="hidden @lg/composer:inline">{t('home.composerSettingsLabel')}</span>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-96 gap-0 p-2.5">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-1.5">
-            <span className="text-xs text-foreground">{t('home.attachImagesAsPathsLabel')}</span>
-            <InfoTooltip
-              label={t('home.attachImagesAsPathsLabel')}
-              content={t('home.attachImagesAsPathsDesc')}
-            />
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-1.5">
+              <span className="text-xs text-foreground">{t('home.attachImagesAsPathsLabel')}</span>
+              <InfoTooltip
+                label={t('home.attachImagesAsPathsLabel')}
+                content={t('home.attachImagesAsPathsDesc')}
+              />
+            </div>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <ComposerScopeToggle
+                source={attachImagesField.source}
+                canOverride={attachImagesField.canOverride}
+                onChange={attachImagesField.setSource}
+              />
+              <Switch
+                size="sm"
+                checked={attachImagesAsPaths}
+                onCheckedChange={attachImagesField.setValue}
+              />
+            </div>
           </div>
-          <div className="flex shrink-0 items-center gap-1.5">
-            <ComposerScopeToggle
-              source={attachImagesField.source}
-              canOverride={attachImagesField.canOverride}
-              onChange={attachImagesField.setSource}
-            />
-            <Switch
-              size="sm"
-              checked={attachImagesAsPaths}
-              onCheckedChange={attachImagesField.setValue}
-            />
-          </div>
+          <ComposerScopeSelectRow
+            label={t('settings.tasks.namingLanguageLabel')}
+            value={namingLanguageField.value}
+            source={namingLanguageField.source}
+            canOverride={namingLanguageField.canOverride}
+            onValueChange={namingLanguageField.setValue}
+            onScopeChange={namingLanguageField.setSource}
+          />
+          <ComposerScopeSelectRow
+            label={t('settings.tasks.summaryLanguageLabel')}
+            value={summaryLanguageField.value}
+            source={summaryLanguageField.source}
+            canOverride={summaryLanguageField.canOverride}
+            onValueChange={summaryLanguageField.setValue}
+            onScopeChange={summaryLanguageField.setSource}
+          />
         </div>
         {runtimeId && (
           <div className="mt-2 flex flex-col gap-2 border-t border-border/60 pt-2">
@@ -2642,22 +2660,6 @@ export const HomeComposer = observer(function HomeComposer({
                   scope === 'project' ? reviewerRuntime : undefined
                 )
               }
-            />
-            <ComposerScopeSelectRow
-              label={t('settings.tasks.namingLanguageLabel')}
-              value={namingLanguageField.value}
-              source={namingLanguageField.source}
-              canOverride={namingLanguageField.canOverride}
-              onValueChange={namingLanguageField.setValue}
-              onScopeChange={namingLanguageField.setSource}
-            />
-            <ComposerScopeSelectRow
-              label={t('settings.tasks.summaryLanguageLabel')}
-              value={summaryLanguageField.value}
-              source={summaryLanguageField.source}
-              canOverride={summaryLanguageField.canOverride}
-              onValueChange={summaryLanguageField.setValue}
-              onScopeChange={summaryLanguageField.setSource}
             />
           </CollapsibleContent>
         </Collapsible>
