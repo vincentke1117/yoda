@@ -9,6 +9,7 @@ import {
 import { createRPCController } from '@shared/ipc/rpc';
 import { appSettingsService } from '@main/core/settings/settings-service';
 import { requestUtilityAgentText } from '@main/core/tasks/name-generation/task-naming-service';
+import { summarizeLlmDebugError } from './debug-error';
 import { discoverGlobalLlmModels } from './model-discovery-service';
 
 const MAX_DEBUG_PROMPT_CHARS = 8_000;
@@ -48,25 +49,36 @@ async function debug(input: GlobalLlmDebugInput): Promise<GlobalLlmDebugResult> 
       durationMs: Date.now() - startedAt,
     };
   } catch (error) {
-    return failedResult(
-      error instanceof Error ? error.message : String(error),
-      Date.now() - startedAt
-    );
+    const rawError = error instanceof Error ? error.message : String(error);
+    return failedResult(summarizeLlmDebugError(rawError), Date.now() - startedAt, {
+      profileId: profile.id,
+      profileName: profile.name,
+      runtimeId: profile.runtimeId,
+      authProvider: profile.authProvider,
+      maasPlatformId: profile.authProvider === 'yoda-maas' ? profile.maasPlatformId : null,
+      model: profile.model || null,
+      rawError,
+    });
   }
 }
 
-function failedResult(error: string, durationMs: number): GlobalLlmDebugResult {
+function failedResult(
+  error: string,
+  durationMs: number,
+  context: Partial<GlobalLlmDebugResult> = {}
+): GlobalLlmDebugResult {
   return {
     success: false,
-    profileId: null,
-    profileName: null,
-    runtimeId: null,
-    authProvider: null,
-    maasPlatformId: null,
-    model: null,
+    profileId: context.profileId ?? null,
+    profileName: context.profileName ?? null,
+    runtimeId: context.runtimeId ?? null,
+    authProvider: context.authProvider ?? null,
+    maasPlatformId: context.maasPlatformId ?? null,
+    model: context.model ?? null,
     output: '',
     durationMs,
     error,
+    rawError: context.rawError,
   };
 }
 
