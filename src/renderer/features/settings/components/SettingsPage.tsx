@@ -549,26 +549,41 @@ export function SettingsPage({
                   </div>
                   <Separator />
                 </div>
-                {currentContent.sections.map((section) => (
-                  <div key={section.id} className="flex flex-col gap-3">
-                    {(section.title || section.description || section.action) && (
-                      <div className="flex min-w-0 items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          {section.title && (
-                            <h3 className="text-sm font-normal text-foreground">{section.title}</h3>
-                          )}
-                          {section.description && (
-                            <p className="mt-1 text-xs text-foreground-muted">
-                              {section.description}
-                            </p>
-                          )}
+                {currentContent.sections.map((section) => {
+                  const hasChapterHeader = Boolean(
+                    section.title || section.description || section.action
+                  );
+                  return (
+                    <div
+                      key={section.id}
+                      className={cn(
+                        'flex flex-col',
+                        hasChapterHeader
+                          ? 'gap-4 border-l-[3px] border-primary/45 bg-background-1/45 py-4 pr-3 pl-4 @max-md:py-3 @max-md:pr-2 @max-md:pl-3'
+                          : 'gap-3'
+                      )}
+                    >
+                      {hasChapterHeader && (
+                        <div className="flex min-w-0 items-start justify-between gap-3 border-b border-border/70 pb-3">
+                          <div className="min-w-0">
+                            {section.title && (
+                              <h3 className="text-sm font-medium text-foreground">
+                                {section.title}
+                              </h3>
+                            )}
+                            {section.description && (
+                              <p className="mt-1 text-xs leading-relaxed text-foreground-muted">
+                                {section.description}
+                              </p>
+                            )}
+                          </div>
+                          {section.action && <div className="shrink-0">{section.action}</div>}
                         </div>
-                        {section.action && <div className="shrink-0">{section.action}</div>}
-                      </div>
-                    )}
-                    {section.component}
-                  </div>
-                ))}
+                      )}
+                      {section.component}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
