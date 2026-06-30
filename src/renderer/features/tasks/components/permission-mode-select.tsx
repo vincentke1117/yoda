@@ -20,9 +20,11 @@ import { cn } from '@renderer/utils/utils';
 export function PermissionModeSelect({
   runtimeId,
   className,
+  contentPortaled = true,
 }: {
   runtimeId: RuntimeId | null | undefined;
   className?: string;
+  contentPortaled?: boolean;
 }) {
   const { t } = useTranslation();
   const permissionModes = useRuntimePermissionModes();
@@ -52,7 +54,7 @@ export function PermissionModeSelect({
       >
         <SelectValue>{(value: string | null) => labelFor(value)}</SelectValue>
       </SelectTrigger>
-      <SelectContent>
+      <SelectContent portaled={contentPortaled}>
         {modes.map((mode) => (
           <SelectItem
             key={mode.id}

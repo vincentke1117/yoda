@@ -2418,7 +2418,11 @@ export const HomeComposer = observer(function HomeComposer({
                 content={t('home.permissionModeDesc')}
               />
             </div>
-            <PermissionModeSelect runtimeId={runtimeId} className="shrink-0" />
+            <PermissionModeSelect
+              runtimeId={runtimeId}
+              className="shrink-0"
+              contentPortaled={false}
+            />
           </div>
         )}
         <Collapsible
