@@ -16,6 +16,7 @@ import { useShowModal } from '@renderer/lib/modal/modal-provider';
 import { Button } from '@renderer/lib/ui/button';
 import { Input } from '@renderer/lib/ui/input';
 import { Label } from '@renderer/lib/ui/label';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@renderer/lib/ui/tooltip';
 import { cn } from '@renderer/utils/utils';
 import { ServerUnavailableMessage } from './ServerUnavailableMessage';
 
@@ -256,55 +257,89 @@ function SignedInAccountPanel({
   };
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-4">
-        {user.avatarUrl ? (
-          <img
-            src={user.avatarUrl}
-            alt={displayName}
-            className="h-12 w-12 rounded-full border border-border/60"
-          />
-        ) : (
-          <div className="flex h-12 w-12 items-center justify-center rounded-full border border-border/60 bg-muted">
-            <User className="h-6 w-6 text-muted-foreground" />
+    <div className="@container flex flex-col gap-4">
+      <div className="flex flex-col gap-3 @2xl:flex-row @2xl:items-center @2xl:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="relative shrink-0">
+            {user.avatarUrl ? (
+              <img
+                src={user.avatarUrl}
+                alt={displayName}
+                className="size-11 rounded-full border border-border/60"
+              />
+            ) : (
+              <div className="flex size-11 items-center justify-center rounded-full border border-border/60 bg-muted">
+                <User className="h-5 w-5 text-muted-foreground" />
+              </div>
+            )}
+            <span className="absolute right-0 bottom-0 size-3 rounded-full border-2 border-background bg-emerald-500" />
           </div>
-        )}
-        <div className="min-w-0 flex-1 basis-56">
-          <p className="text-sm font-medium text-foreground">
-            {t('settings.account.connectedAs')} <span className="font-semibold">{displayName}</span>
-          </p>
-          {user.email && <p className="truncate text-xs text-muted-foreground">{user.email}</p>}
+          <div className="min-w-0">
+            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+              <p className="min-w-0 truncate text-base font-semibold text-foreground">
+                {displayName}
+              </p>
+              <span className="inline-flex h-5 shrink-0 items-center gap-1 rounded-full bg-emerald-500/10 px-2 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
+                <span className="size-1.5 rounded-full bg-emerald-500" />
+                {t('settings.account.connectedStatus')}
+              </span>
+            </div>
+            {user.email && <p className="truncate text-sm text-foreground-muted">{user.email}</p>}
+          </div>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          className="w-fit"
-          onClick={handleRefreshSession}
-          disabled={controlsDisabled}
-        >
-          <RefreshCw
-            className={cn('h-3.5 w-3.5', refreshSessionMutation.isPending && 'animate-spin')}
-          />
-          {refreshSessionMutation.isPending
-            ? t('settings.account.refreshing')
-            : t('settings.account.refresh')}
-        </Button>
-        <Button type="button" className="w-fit" onClick={onSignOut} disabled={controlsDisabled}>
-          <LogOut className="h-3.5 w-3.5" />
-          {t('settings.account.signOut')}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2 @2xl:justify-end">
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon-sm"
+                  aria-label={t('settings.account.refresh')}
+                  onClick={handleRefreshSession}
+                  disabled={controlsDisabled}
+                >
+                  <RefreshCw
+                    className={cn(
+                      'h-3.5 w-3.5',
+                      refreshSessionMutation.isPending && 'animate-spin'
+                    )}
+                  />
+                </Button>
+              }
+            />
+            <TooltipContent>{t('settings.account.refresh')}</TooltipContent>
+          </Tooltip>
+          <Button
+            type="button"
+            variant="destructive"
+            size="sm"
+            className="w-fit"
+            onClick={onSignOut}
+            disabled={controlsDisabled}
+          >
+            <LogOut className="h-3.5 w-3.5" />
+            {t('settings.account.signOut')}
+          </Button>
+        </div>
       </div>
-      <form className="flex flex-col gap-2" onSubmit={handleNicknameSubmit}>
-        <div className="flex flex-col gap-1">
-          <Label htmlFor="account-display-nickname">{t('settings.account.displayNickname')}</Label>
-          <p className="text-xs text-muted-foreground">
+
+      <form
+        className="grid gap-3 border-t border-border/60 pt-4 @2xl:grid-cols-[9rem_minmax(0,1fr)] @2xl:items-start"
+        onSubmit={handleNicknameSubmit}
+      >
+        <div className="min-w-0">
+          <Label htmlFor="account-display-nickname" className="text-foreground">
+            {t('settings.account.displayNickname')}
+          </Label>
+          <p className="mt-1 text-xs leading-relaxed text-foreground-passive">
             {t('settings.account.displayNicknameDescription')}
           </p>
         </div>
-        <div className="flex max-w-xl flex-wrap items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <Input
             id="account-display-nickname"
-            className="min-w-48 flex-1 basis-56"
+            className="h-9 min-w-48 flex-1 basis-64"
             value={nicknameDraft}
             maxLength={80}
             placeholder={t('settings.account.displayNicknamePlaceholder')}
@@ -313,23 +348,31 @@ function SignedInAccountPanel({
           />
           <Button
             type="submit"
-            variant="outline"
+            variant="default"
+            size="sm"
             disabled={controlsDisabled || !nicknameDirty}
             className="w-fit"
           >
             <Save className="h-3.5 w-3.5" />
             {nicknameBusy ? t('settings.account.nicknameSaving') : t('common.save')}
           </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            disabled={controlsDisabled || !user.nicknameOverride}
-            className="w-fit"
-            onClick={handleNicknameReset}
-          >
-            <RotateCcw className="h-3.5 w-3.5" />
-            {t('settings.account.resetNickname')}
-          </Button>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={t('settings.account.resetNickname')}
+                  disabled={controlsDisabled || !user.nicknameOverride}
+                  onClick={handleNicknameReset}
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                </Button>
+              }
+            />
+            <TooltipContent>{t('settings.account.resetNickname')}</TooltipContent>
+          </Tooltip>
         </div>
       </form>
     </div>
