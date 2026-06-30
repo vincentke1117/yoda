@@ -4,6 +4,7 @@ import { NewTaskModal } from '@renderer/app/new-task-modal';
 import { AgentEditModal } from '@renderer/features/agents-config/agent-edit-modal';
 import { CommandPaletteModal } from '@renderer/features/command-palette/command-palette-modal';
 import { IntegrationSetupModal } from '@renderer/features/integrations/integration-setup-modal';
+import { ZenmuxUsageModal } from '@renderer/features/maas/components/ZenmuxUsageModal';
 import { McpModal } from '@renderer/features/mcp/components/McpModal';
 import { AddProjectModal } from '@renderer/features/projects/components/add-project-modal/add-project-modal';
 import { ExpressCreateProjectModal } from '@renderer/features/projects/components/express-create-project-modal';
@@ -38,7 +39,7 @@ import { GithubDeviceFlowModalOverlay } from '@renderer/lib/components/github-de
 import { QuitAgentSessionsModal } from '@renderer/lib/components/quit-agent-sessions-modal';
 import { type ModalComponent } from '@renderer/lib/modal/modal-provider';
 
-export type ModalSize = 'xs' | 'sm' | 'md' | 'lg';
+export type ModalSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
 export type ModalPosition = 'center' | 'top';
 
 export type ModalRegistryEntry<TProps = unknown, TResult = unknown> = {
@@ -69,6 +70,7 @@ export const modalRegistry = {
   accountDeviceFlowModal: createModal(AccountDeviceFlowModalOverlay, { size: 'sm' }),
   confirmActionModal: createModal(ConfirmActionDialog, { size: 'xs' }),
   feedbackModal: createModal(FeedbackModal),
+  zenmuxUsageModal: createModal(ZenmuxUsageModal, { size: 'xl' }),
   mcpServerModal: createModal(McpModal),
   createSkillModal: createModal(CreateSkillModal),
   reviseSkillModal: createModal(ReviseSkillModal, { size: 'lg' }),
