@@ -6,7 +6,10 @@ describe('settings defaults', () => {
     expect(getDefaultForKey('project').tmuxByDefault).toBe(true);
   });
 
-  it('keeps input prompts in their original language by default', () => {
-    expect(getDefaultForKey('tasks').inputPromptLanguage).toBe('prompt');
+  it('disables extra language generation calls by default', () => {
+    const tasks = getDefaultForKey('tasks');
+    expect(tasks.inputPromptLanguage).toBe('skip');
+    expect(tasks.namingLanguage).toBe('skip');
+    expect(tasks.summaryLanguage).toBe('skip');
   });
 });

@@ -248,9 +248,10 @@ interface RunModeInputChrome {
 
 const MAX_COMPARE_VARIANTS = 5;
 const DEFAULT_REVIEWER_RUNTIME: RuntimeId = 'claude';
-const DEFAULT_TASK_OUTPUT_LANGUAGE: TaskOutputLanguage = 'app';
-const DEFAULT_INPUT_PROMPT_LANGUAGE: TaskOutputLanguage = 'prompt';
-const TASK_OUTPUT_LANGUAGE_OPTIONS: TaskOutputLanguage[] = ['skip', 'app', 'prompt', 'zh-CN', 'en'];
+const DEFAULT_TASK_OUTPUT_LANGUAGE: TaskOutputLanguage = 'skip';
+const DEFAULT_INPUT_PROMPT_LANGUAGE: TaskOutputLanguage = 'skip';
+const TASK_OUTPUT_ENABLED_LANGUAGE_OPTIONS: TaskOutputLanguage[] = ['app', 'prompt', 'zh-CN', 'en'];
+const INPUT_PROMPT_ENABLED_LANGUAGE_OPTIONS: TaskOutputLanguage[] = ['app', 'zh-CN', 'en'];
 type ExplicitTaskOutputLanguage = Extract<TaskOutputLanguage, 'en' | 'zh-CN'>;
 
 const NORMAL_PROMPT_KEY = 'normal:agent';
@@ -2569,6 +2570,8 @@ export const HomeComposer = observer(function HomeComposer({
           <ComposerScopeSelectRow
             label={t('settings.tasks.inputPromptLanguageLabel')}
             value={inputPromptLanguageField.value}
+            options={INPUT_PROMPT_ENABLED_LANGUAGE_OPTIONS}
+            disabledValues={['skip', 'prompt']}
             source={inputPromptLanguageField.source}
             canOverride={inputPromptLanguageField.canOverride}
             onValueChange={inputPromptLanguageField.setValue}
@@ -2577,6 +2580,7 @@ export const HomeComposer = observer(function HomeComposer({
           <ComposerScopeSelectRow
             label={t('settings.tasks.sessionTitleLanguageLabel')}
             value={namingLanguageField.value}
+            options={TASK_OUTPUT_ENABLED_LANGUAGE_OPTIONS}
             source={namingLanguageField.source}
             canOverride={namingLanguageField.canOverride}
             onValueChange={namingLanguageField.setValue}
@@ -2585,6 +2589,7 @@ export const HomeComposer = observer(function HomeComposer({
           <ComposerScopeSelectRow
             label={t('settings.tasks.summaryLanguageLabel')}
             value={summaryLanguageField.value}
+            options={TASK_OUTPUT_ENABLED_LANGUAGE_OPTIONS}
             source={summaryLanguageField.source}
             canOverride={summaryLanguageField.canOverride}
             onValueChange={summaryLanguageField.setValue}
@@ -3326,27 +3331,27 @@ function ComposerScopeToggle({
   const { t } = useTranslation();
   const isProject = source === 'project';
   const disabled = !canOverride && !isProject;
+  if (disabled) return null;
   return (
     <button
       type="button"
       disabled={disabled}
+      aria-label={
+        isProject ? t('home.composerScopeOverrideTooltip') : t('home.composerScopeInheritTooltip')
+      }
       title={
-        disabled
-          ? t('home.composerScopeProjectRequired')
-          : isProject
-            ? t('home.composerScopeOverrideTooltip')
-            : t('home.composerScopeInheritTooltip')
+        isProject ? t('home.composerScopeOverrideTooltip') : t('home.composerScopeInheritTooltip')
       }
       onClick={() => onChange(isProject ? 'global' : 'project')}
       className={cn(
-        'flex h-5 shrink-0 items-center rounded-full border px-1.5 text-[10px] font-medium transition-colors',
+        'flex h-5 shrink-0 items-center rounded-full border text-[10px] font-medium transition-colors',
         isProject
-          ? 'border-primary/40 bg-primary/10 text-primary'
-          : 'border-border bg-background-1 text-foreground-passive hover:text-foreground',
+          ? 'border-primary/40 bg-primary/10 px-1.5 text-primary'
+          : 'w-5 justify-center border-border bg-background-1 text-foreground-passive hover:bg-background-2 hover:text-foreground',
         disabled && 'pointer-events-none opacity-40'
       )}
     >
-      {isProject ? t('home.composerScopeProject') : t('home.composerScopeGlobal')}
+      {isProject ? t('home.composerScopeProject') : <Folder className="size-3" />}
     </button>
   );
 }
@@ -3403,6 +3408,8 @@ function explicitTaskOutputLanguageFromI18n(language?: string | null): ExplicitT
 function ComposerScopeSelectRow({
   label,
   value,
+  options,
+  disabledValues = ['skip'],
   source,
   canOverride,
   onValueChange,
@@ -3410,28 +3417,71 @@ function ComposerScopeSelectRow({
 }: {
   label: string;
   value: TaskOutputLanguage;
+  options: TaskOutputLanguage[];
+  disabledValues?: TaskOutputLanguage[];
   source: ComposerOverrideScope;
   canOverride: boolean;
   onValueChange: (value: TaskOutputLanguage) => void;
   onScopeChange: (source: ComposerOverrideScope) => void;
 }) {
   const { t } = useTranslation();
+  const enabled = !disabledValues.includes(value);
+  const selectValue = enabled ? value : 'skip';
   return (
-    <div className="flex items-center justify-between gap-3">
-      <span className="min-w-0 truncate text-xs text-foreground">{label}</span>
+    <div
+      className={cn(
+        'flex items-center justify-between gap-3 rounded-md px-1.5 py-1 transition-colors',
+        enabled ? 'bg-background-1/50' : 'bg-transparent'
+      )}
+    >
+      <span
+        className={cn(
+          'min-w-0 truncate text-xs transition-colors',
+          enabled ? 'text-foreground' : 'text-foreground-passive'
+        )}
+      >
+        {label}
+      </span>
       <div className="flex shrink-0 items-center gap-1.5">
-        <Select value={value} onValueChange={(next) => onValueChange(next as TaskOutputLanguage)}>
-          <SelectTrigger size="sm" className="h-6 w-28 text-[11px]">
-            <SelectValue>{taskOutputLanguageLabel(t, value)}</SelectValue>
+        <Select
+          value={selectValue}
+          disabled={!enabled}
+          onValueChange={(next) => onValueChange(next as TaskOutputLanguage)}
+        >
+          <SelectTrigger
+            size="sm"
+            className={cn(
+              'h-6 w-28 text-[11px]',
+              !enabled && 'border-border/60 bg-background text-foreground-passive'
+            )}
+          >
+            <SelectValue>{taskOutputLanguageLabel(t, selectValue)}</SelectValue>
           </SelectTrigger>
           <SelectContent>
-            {TASK_OUTPUT_LANGUAGE_OPTIONS.map((option) => (
+            {options.map((option) => (
               <SelectItem key={option} value={option}>
                 {taskOutputLanguageLabel(t, option)}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
+        <Switch
+          size="sm"
+          checked={enabled}
+          aria-label={t(
+            enabled ? 'home.composerLanguageCallDisable' : 'home.composerLanguageCallEnable',
+            {
+              label,
+            }
+          )}
+          title={t(
+            enabled ? 'home.composerLanguageCallDisable' : 'home.composerLanguageCallEnable',
+            {
+              label,
+            }
+          )}
+          onCheckedChange={(next) => onValueChange(next ? 'app' : 'skip')}
+        />
         <ComposerScopeToggle source={source} canOverride={canOverride} onChange={onScopeChange} />
       </div>
     </div>
