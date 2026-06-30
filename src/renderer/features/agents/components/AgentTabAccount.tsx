@@ -3,7 +3,7 @@ import { CheckCircle2, ChevronDown, ExternalLink, RefreshCw, XCircle } from 'luc
 import { observer } from 'mobx-react-lite';
 import React, { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { MAAS_PLATFORMS, type MaasConnection, type MaasUsageSummary } from '@shared/maas';
+import { MAAS_PLATFORMS, type MaasConnection } from '@shared/maas';
 import {
   AGENT_ACCOUNT_PROVIDER_IDS,
   getRuntime,
@@ -14,11 +14,7 @@ import {
   type RuntimeAccountStatus,
   type RuntimeId,
 } from '@shared/runtime-registry';
-import {
-  useCheckMaasConnection,
-  useMaasConnections,
-  useMaasUsageSummary,
-} from '@renderer/features/maas/useMaas';
+import { useCheckMaasConnection, useMaasConnections } from '@renderer/features/maas/useMaas';
 import { useRuntimeSettings } from '@renderer/features/settings/use-runtime-settings';
 import { rpc } from '@renderer/lib/ipc';
 import { useNavigate } from '@renderer/lib/layout/navigation-provider';
@@ -79,23 +75,6 @@ function formatCost(value: number | null): string {
     currency: 'USD',
     maximumFractionDigits: value < 1 ? 4 : 2,
   }).format(value);
-}
-
-function formatDate(value: string): string {
-  const date = new Date(`${value}T00:00:00.000Z`);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(date);
-}
-
-function formatPeriod(period: MaasUsageSummary['period']): string {
-  if (!period) return '-';
-  return `${formatDate(period.startingAt)} - ${formatDate(period.endingAt)}`;
-}
-
-function totalTokens(summary: MaasUsageSummary | null): number | null {
-  if (!summary) return null;
-  if (summary.totalInputTokens === null && summary.totalOutputTokens === null) return null;
-  return (summary.totalInputTokens ?? 0) + (summary.totalOutputTokens ?? 0);
 }
 
 export const AgentTabAccount: React.FC<AgentTabAccountProps> = observer(function AgentTabAccount({
@@ -170,10 +149,6 @@ export const AgentTabAccount: React.FC<AgentTabAccountProps> = observer(function
     [maasConnections.data]
   );
   const zenmuxConnection = findConnection(maasConnections.data, 'zenmux');
-  const usageSummary = useMaasUsageSummary('zenmux', 'all', zenmuxConnection.connected, {
-    providerHints: profile.maas.providerHints,
-    modelHints: profile.maas.modelHints,
-  });
   const handleSelectAuthProvider = useCallback(
     (authProvider: AgentAccountProviderId) => {
       updateProviderSettings({ ...(providerConfig ?? {}), authProvider });
@@ -393,30 +368,7 @@ export const AgentTabAccount: React.FC<AgentTabAccountProps> = observer(function
             >
               <div className="space-y-3">
                 <MaasConnectionList connections={connectedMaasConnections} />
-                <div>
-                  <div className="mb-1.5 flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">
-                      {t('agents.account.usageTitle')}
-                    </span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-xs"
-                      disabled={!zenmuxConnection.connected || usageSummary.reloading}
-                      aria-label={t('agents.account.usageRefresh')}
-                      onClick={usageSummary.reload}
-                    >
-                      <RefreshCw className={cn(usageSummary.reloading && 'animate-spin')} />
-                    </Button>
-                  </div>
-                  <UsageSummaryPanel
-                    connected={zenmuxConnection.connected}
-                    loading={usageSummary.loading}
-                    error={usageSummary.error}
-                    summary={usageSummary.summary}
-                    providerHints={profile.maas.providerHints}
-                  />
-                </div>
+                <MaasUsageHandoffPanel connected={zenmuxConnection.connected} />
               </div>
             </AuthSourceRow>
           </div>
@@ -877,13 +829,9 @@ const MaasConnectionList: React.FC<{ connections: MaasConnection[] }> = ({ conne
   );
 };
 
-const UsageSummaryPanel: React.FC<{
-  connected: boolean;
-  loading: boolean;
-  error: string | null;
-  summary: MaasUsageSummary | null;
-  providerHints: readonly string[];
-}> = ({ connected, loading, error, summary, providerHints }) => {
+const ZENMUX_COST_URL = 'https://zenmux.ai/platform/analysis/cost';
+
+const MaasUsageHandoffPanel: React.FC<{ connected: boolean }> = ({ connected }) => {
   const { t } = useTranslation();
 
   if (!connected) {
@@ -894,55 +842,27 @@ const UsageSummaryPanel: React.FC<{
     );
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center rounded-md border border-border px-3 py-8 text-xs text-muted-foreground">
-        <RefreshCw className="mr-2 h-3.5 w-3.5 animate-spin" />
-        {t('agents.account.usageLoading')}
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <p className="rounded-md border border-destructive/20 bg-destructive/10 px-3 py-3 text-xs text-destructive">
-        {t('agents.account.usageError')}: {error}
-      </p>
-    );
-  }
-
-  if (!summary || summary.recordCount === 0) {
-    return (
-      <p className="rounded-md border border-dashed border-border px-3 py-5 text-center text-xs text-muted-foreground">
-        {t('agents.account.usageEmpty')}
-      </p>
-    );
-  }
-
   return (
-    <div className="overflow-hidden rounded-md border border-border">
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(7.5rem,1fr))] gap-px bg-border">
-        <UsageMetric
-          label={t('agents.account.usageTokens')}
-          value={formatCompactNumber(totalTokens(summary))}
-        />
-        <UsageMetric
-          label={t('agents.account.usageCost')}
-          value={formatCost(summary.totalCostUsd)}
-        />
-        <UsageMetric
-          label={t('agents.account.usageRecords')}
-          value={`${formatCompactNumber(summary.recordCount)} / ${formatCompactNumber(
-            summary.totalRecords
-          )}`}
-        />
-      </div>
-      <div className="border-t border-border px-3 py-2 text-xs text-muted-foreground">
-        {t('agents.account.usagePeriod')} {formatPeriod(summary.period)}
-        {' · '}
-        {providerHints.length > 0
-          ? `${t('agents.account.usageFilteredBy')}: ${providerHints.join(', ')}`
-          : t('agents.account.usageAllRoutes')}
+    <div className="rounded-md border border-border bg-background px-3 py-3">
+      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <div className="text-xs font-medium text-foreground">
+            {t('agents.account.usageExternalTitle')}
+          </div>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+            {t('agents.account.usageExternalDescription')}
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="shrink-0"
+          onClick={() => void rpc.app.openExternal(ZENMUX_COST_URL)}
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
+          {t('agents.account.usageOpenZenmuxCost')}
+        </Button>
       </div>
     </div>
   );

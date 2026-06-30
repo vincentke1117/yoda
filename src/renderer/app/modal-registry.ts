@@ -70,7 +70,7 @@ export const modalRegistry = {
   accountDeviceFlowModal: createModal(AccountDeviceFlowModalOverlay, { size: 'sm' }),
   confirmActionModal: createModal(ConfirmActionDialog, { size: 'xs' }),
   feedbackModal: createModal(FeedbackModal),
-  zenmuxUsageModal: createModal(ZenmuxUsageModal, { size: 'xl' }),
+  zenmuxUsageModal: createModal(ZenmuxUsageModal, { size: 'lg' }),
   mcpServerModal: createModal(McpModal),
   createSkillModal: createModal(CreateSkillModal),
   reviseSkillModal: createModal(ReviseSkillModal, { size: 'lg' }),
