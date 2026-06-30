@@ -234,7 +234,9 @@ interface RunModeInputChrome {
 const MAX_COMPARE_VARIANTS = 5;
 const DEFAULT_REVIEWER_RUNTIME: RuntimeId = 'claude';
 const DEFAULT_TASK_OUTPUT_LANGUAGE: TaskOutputLanguage = 'app';
+const DEFAULT_INPUT_PROMPT_LANGUAGE: TaskOutputLanguage = 'prompt';
 const TASK_OUTPUT_LANGUAGE_OPTIONS: TaskOutputLanguage[] = ['app', 'prompt', 'zh-CN', 'en'];
+type ExplicitTaskOutputLanguage = Extract<TaskOutputLanguage, 'en' | 'zh-CN'>;
 
 const NORMAL_PROMPT_KEY = 'normal:agent';
 const REVIEW_IMPLEMENTER_PROMPT_KEY = 'review:implementer';
@@ -559,7 +561,7 @@ export const HomeComposer = observer(function HomeComposer({
   onSubmitted?: (result: HomeComposerSubmitResult) => void;
   submitTarget?: HomeComposerSubmitTarget;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { navigate } = useNavigate();
   const taskScopedTarget = submitTarget.kind === 'existing-task' ? submitTarget : null;
   // Subtask mode: still creates tasks, but locked to the parent's project and
@@ -1380,6 +1382,13 @@ export const HomeComposer = observer(function HomeComposer({
     hasProject: hasProjectOverrideTarget,
   });
   const attachImagesAsPaths = attachImagesField.value;
+  const inputPromptLanguageField = dualField<TaskOutputLanguage>({
+    override: composerDefaults?.inputPromptLanguage,
+    globalValue: taskSettings?.inputPromptLanguage ?? DEFAULT_INPUT_PROMPT_LANGUAGE,
+    setGlobal: (value) => updateTaskSettings({ inputPromptLanguage: value }),
+    setOverride: (value) => setComposerDefault('inputPromptLanguage', value),
+    hasProject: hasProjectOverrideTarget,
+  });
   const namingLanguageField = dualField<TaskOutputLanguage>({
     override: composerDefaults?.namingLanguage,
     globalValue: taskSettings?.namingLanguage ?? DEFAULT_TASK_OUTPUT_LANGUAGE,
@@ -1416,6 +1425,25 @@ export const HomeComposer = observer(function HomeComposer({
   const modeRequiresWorktree =
     !taskScopedTarget &&
     (runMode === 'team' || (runMode === 'review' && effectiveReviewStrategyKind === 'new-branch'));
+  const appPromptLanguage = useMemo(
+    () => explicitTaskOutputLanguageFromI18n(i18n.resolvedLanguage ?? i18n.language),
+    [i18n.language, i18n.resolvedLanguage]
+  );
+  const inputPromptLanguage = inputPromptLanguageField.value;
+  const rewriteInputRequirement = useCallback(
+    async (value: string) => {
+      if (!value.trim() || inputPromptLanguage === 'prompt') return value;
+      const result = await rpc.conversations.rewritePrompt({
+        prompt: value,
+        language: inputPromptLanguage,
+        projectId: selectedProjectId ?? null,
+        runtimeId: runtimeId ?? null,
+        appLanguage: appPromptLanguage,
+      });
+      return result.prompt;
+    },
+    [appPromptLanguage, inputPromptLanguage, runtimeId, selectedProjectId]
+  );
   const trimmed = prompt.trim();
   // A slot can run only when it has an Agent assigned (the Agent supplies the
   // runtime + prompt). Each mode requires all its slots filled.
@@ -1476,7 +1504,14 @@ export const HomeComposer = observer(function HomeComposer({
       const serialized = serializePromptWithTokens(prompt, promptTokens, {
         imagesAsPaths: attachImagesAsPaths,
       });
-      const requirement = serialized.text.trim();
+      const rawRequirement = serialized.text.trim();
+      let requirement: string;
+      try {
+        requirement = await rewriteInputRequirement(rawRequirement);
+      } catch {
+        toast.error(t('home.promptRewriteFailed'));
+        return;
+      }
       const imagePaths = serialized.imagePaths.length > 0 ? serialized.imagePaths : undefined;
       const resetComposer = () => {
         setPrompt('');
@@ -2027,6 +2062,7 @@ export const HomeComposer = observer(function HomeComposer({
     inPlacePick,
     promptTokens,
     attachImagesAsPaths,
+    rewriteInputRequirement,
     clearPromptTokens,
     reviewSubmitKind,
     standardSubmitKind,
@@ -2041,6 +2077,7 @@ export const HomeComposer = observer(function HomeComposer({
     userAgents,
     slotAgentId,
     autoApproveDefaults,
+    t,
     navigate,
     onSubmitted,
     projectManager,
@@ -2438,7 +2475,15 @@ export const HomeComposer = observer(function HomeComposer({
             </div>
           </div>
           <ComposerScopeSelectRow
-            label={t('settings.tasks.namingLanguageLabel')}
+            label={t('settings.tasks.inputPromptLanguageLabel')}
+            value={inputPromptLanguageField.value}
+            source={inputPromptLanguageField.source}
+            canOverride={inputPromptLanguageField.canOverride}
+            onValueChange={inputPromptLanguageField.setValue}
+            onScopeChange={inputPromptLanguageField.setSource}
+          />
+          <ComposerScopeSelectRow
+            label={t('settings.tasks.sessionTitleLanguageLabel')}
             value={namingLanguageField.value}
             source={namingLanguageField.source}
             canOverride={namingLanguageField.canOverride}
@@ -3333,6 +3378,10 @@ function taskOutputLanguageLabel(t: ReturnType<typeof useTranslation>['t'], valu
     default:
       return value;
   }
+}
+
+function explicitTaskOutputLanguageFromI18n(language?: string | null): ExplicitTaskOutputLanguage {
+  return language?.toLowerCase().startsWith('zh') ? 'zh-CN' : 'en';
 }
 
 function ComposerScopeSelectRow({

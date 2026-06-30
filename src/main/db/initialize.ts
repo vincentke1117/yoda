@@ -46,7 +46,7 @@ function ensureSearchIndex(connection: BetterSqlite3.Database): void {
  * without it reappearing on every launch (gated by the kv version below).
  */
 function ensureBuiltinAgents(connection: BetterSqlite3.Database): void {
-  const BUILTIN_AGENTS_VERSION = '2';
+  const BUILTIN_AGENTS_VERSION = '3';
 
   const row = connection
     .prepare(`SELECT value FROM kv WHERE key = 'builtin_agents_version'`)

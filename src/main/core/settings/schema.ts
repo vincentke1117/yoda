@@ -68,6 +68,8 @@ export const taskSettingsSchema = z.object({
   namingAgentId: z.string().catch(''),
   /** Agent that drives session-summary generation. Empty = built-in summary Agent. */
   summaryAgentId: z.string().catch(''),
+  /** Target language for rewriting the user's input prompt before sending. */
+  inputPromptLanguage: z.enum(['app', 'prompt', 'en', 'zh-CN']).catch('prompt'),
   /** Output language for generated session summaries. */
   summaryLanguage: z.enum(['app', 'prompt', 'en', 'zh-CN']).catch('app'),
   /** Which transcript parts feed the `recent` summary (defaults to user-only for speed). */

@@ -2,6 +2,7 @@ import { Download, RefreshCw } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import React, { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { TaskOutputLanguage } from '@shared/project-settings';
 import { useAppSettingsKey } from '@renderer/features/settings/use-app-settings-key';
 import { useTaskSettings } from '@renderer/features/tasks/hooks/useTaskSettings';
 import { useInstallTmux } from '@renderer/lib/components/tmux-install';
@@ -106,6 +107,46 @@ export const BranchNamingRow: React.FC = observer(() => {
             <SelectContent>
               <SelectItem value="hash">{t('settings.tasks.branchNamingHash')}</SelectItem>
               <SelectItem value="ai">{t('settings.tasks.branchNamingAi')}</SelectItem>
+            </SelectContent>
+          </Select>
+        </>
+      }
+    />
+  );
+});
+
+export const InputPromptLanguageRow: React.FC = observer(() => {
+  const { t } = useTranslation();
+  const taskSettings = useTaskSettings();
+  const disabled = taskSettings.loading || taskSettings.saving;
+
+  return (
+    <SettingRow
+      title={t('settings.tasks.inputPromptLanguageLabel')}
+      description={t('settings.tasks.inputPromptLanguageDescription')}
+      control={
+        <>
+          <ResetToDefaultButton
+            visible={taskSettings.isFieldOverridden('inputPromptLanguage')}
+            defaultLabel={t('settings.tasks.namingLanguagePrompt')}
+            onReset={taskSettings.resetInputPromptLanguage}
+            disabled={disabled}
+          />
+          <Select
+            value={taskSettings.inputPromptLanguage}
+            onValueChange={(value) =>
+              taskSettings.updateInputPromptLanguage(value as TaskOutputLanguage)
+            }
+            disabled={taskSettings.loading}
+          >
+            <SelectTrigger className="h-8 w-44">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="app">{t('settings.tasks.namingLanguageApp')}</SelectItem>
+              <SelectItem value="prompt">{t('settings.tasks.namingLanguagePrompt')}</SelectItem>
+              <SelectItem value="zh-CN">{t('settings.tasks.namingLanguageZh')}</SelectItem>
+              <SelectItem value="en">{t('settings.tasks.namingLanguageEn')}</SelectItem>
             </SelectContent>
           </Select>
         </>

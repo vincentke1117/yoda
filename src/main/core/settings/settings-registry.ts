@@ -41,6 +41,7 @@ export const SETTINGS_DEFAULTS = {
     branchNaming: 'hash' as const,
     namingAgentId: '',
     summaryAgentId: '',
+    inputPromptLanguage: 'prompt' as const,
     summaryLanguage: 'app' as const,
     summaryContextRecent: DEFAULT_SUMMARY_CONTEXT_RECENT,
     summaryContextGlobal: DEFAULT_SUMMARY_CONTEXT_GLOBAL,

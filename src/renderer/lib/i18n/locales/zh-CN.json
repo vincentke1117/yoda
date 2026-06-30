@@ -553,6 +553,9 @@
       "namingAgentHint": "负责命名任务的 Agent，同时绑定其客户端与模型——命名必须在 Agent 环境中执行。",
       "summaryAgentLabel": "摘要 Agent",
       "summaryAgentHint": "负责生成会话摘要的 Agent，完全使用其自身的客户端与模型运行；即使当前会话的运行时已不可用，摘要仍可正常生成。",
+      "inputPromptLanguageLabel": "输入 Prompt 语言",
+      "inputPromptLanguageDescription": "发送前先把用户输入改写为目标语言；选择 Prompt 语言表示保持原文。",
+      "sessionTitleLanguageLabel": "会话标题语言",
       "summaryLanguageLabel": "摘要语言",
       "summaryContext": {
         "recentLabel": "近期摘要输入",
@@ -742,6 +745,7 @@
     "attachAria": "添加附件",
     "attachSshUnsupported": "SSH 项目暂不支持本地附件",
     "attachPasteFailedToast": "无法添加粘贴的图片",
+    "promptRewriteFailed": "Prompt 改写失败，未启动 agent。",
     "composerSettingsAria": "输入设置",
     "composerSettingsLabel": "配置",
     "attachImagesAsPathsLabel": "图片以文件路径发送",
@@ -1932,6 +1936,10 @@
     "summary": {
       "name": "摘要",
       "description": "根据会话消息生成编码会话摘要。"
+    },
+    "prompt-rewrite": {
+      "name": "Prompt 改写",
+      "description": "发送前把用户 Prompt 改写为目标语言。"
     }
   },
   "agents": {

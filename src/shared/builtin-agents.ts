@@ -50,6 +50,7 @@ export const BUILTIN_AGENT_KEYS = {
   teamOperations: 'builtin:team-operations',
   // Internal utility Agents — drive the app's own LLM helpers (no API client,
   // so these run as one-shot provider CLI calls just like coding tasks).
+  promptRewrite: 'builtin:prompt-rewrite',
   naming: 'builtin:naming',
   summary: 'builtin:summary',
 } as const;
@@ -192,6 +193,14 @@ export const BUILTIN_AGENT_PRESETS: readonly BuiltinAgentPreset[] = [
       'Review user-facing rollout, onboarding, communication, and operational risks.'
     ),
     preferredRuntime: 'codex',
+  },
+  {
+    key: BUILTIN_AGENT_KEYS.promptRewrite,
+    name: 'Prompt Rewrite',
+    description: 'Rewrites user prompts into a target language before sending.',
+    icon: '✍️',
+    systemPrompt: 'You rewrite user prompts faithfully into the requested target language.',
+    preferredRuntime: null,
   },
   {
     key: BUILTIN_AGENT_KEYS.naming,

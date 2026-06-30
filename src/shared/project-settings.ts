@@ -110,6 +110,7 @@ export const composerDefaultsSchema = z.object({
   reviewStrategyKind: z.enum(composerStrategyKindValues).optional(),
   reviewerRuntime: z.enum(RUNTIME_IDS).optional(),
   attachImagesAsPaths: z.boolean().optional(),
+  inputPromptLanguage: z.enum(taskOutputLanguageValues).optional(),
   namingLanguage: z.enum(taskOutputLanguageValues).optional(),
   summaryLanguage: z.enum(taskOutputLanguageValues).optional(),
 });
