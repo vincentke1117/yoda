@@ -127,7 +127,7 @@ export const InputPromptLanguageRow: React.FC = observer(() => {
         <>
           <ResetToDefaultButton
             visible={taskSettings.isFieldOverridden('inputPromptLanguage')}
-            defaultLabel={t('settings.tasks.namingLanguagePrompt')}
+            defaultLabel={t('settings.tasks.namingLanguageSkip')}
             onReset={taskSettings.resetInputPromptLanguage}
             disabled={disabled}
           />

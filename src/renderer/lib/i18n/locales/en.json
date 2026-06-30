@@ -877,6 +877,8 @@
     "composerScopeInheritTooltip": "Inheriting the global default. Click to override just for this project.",
     "composerScopeOverrideTooltip": "Overriding for this project — saved to project settings (.yoda.json). Click to revert to the global default.",
     "composerScopeProjectRequired": "Pick a project to set a project-specific override.",
+    "composerLanguageCallEnable": "Enable {{label}}",
+    "composerLanguageCallDisable": "Disable {{label}}",
     "composerRunDefaultsLabel": "Run defaults",
     "composerRunDefaultsHint": "Per-project defaults for the agent, mode, base branch and worktree strategy. Each inherits your global default until you override it for this project.",
     "composerDefaultRuntimeLabel": "Default agent",

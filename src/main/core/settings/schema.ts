@@ -82,15 +82,15 @@ export const taskSettingsSchema = z.object({
   /** Agent that drives session-summary generation. Empty = built-in summary Agent. */
   summaryAgentId: z.string().catch(''),
   /** Target language for rewriting the user's input prompt before sending. */
-  inputPromptLanguage: z.enum(taskOutputLanguageValues).catch('prompt'),
+  inputPromptLanguage: z.enum(taskOutputLanguageValues).catch('skip'),
   /** Output language for generated session summaries. */
-  summaryLanguage: z.enum(taskOutputLanguageValues).catch('app'),
+  summaryLanguage: z.enum(taskOutputLanguageValues).catch('skip'),
   /** Which transcript parts feed the `recent` summary (defaults to user-only for speed). */
   summaryContextRecent: summaryContextSchema.catch(DEFAULT_SUMMARY_CONTEXT_RECENT),
   /** Which transcript parts feed the `global` summary (defaults to everything). */
   summaryContextGlobal: summaryContextSchema.catch(DEFAULT_SUMMARY_CONTEXT_GLOBAL),
   namingModel: z.string(),
-  namingLanguage: z.enum(taskOutputLanguageValues),
+  namingLanguage: z.enum(taskOutputLanguageValues).catch('skip'),
   namingContext: z.object(
     Object.fromEntries(TASK_NAMING_CONTEXT_SOURCE_IDS.map((id) => [id, z.boolean()])) as Record<
       (typeof TASK_NAMING_CONTEXT_SOURCE_IDS)[number],
