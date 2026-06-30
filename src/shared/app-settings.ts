@@ -3,6 +3,7 @@ import {
   appSettingsSchema,
   type automationEntrySchema,
   type automationsSettingsSchema,
+  type globalLlmSettingsSchema,
   type homeDraftSchema,
   type interfaceSettingsSchema,
   type kanbanColumnHookSchema,
@@ -38,6 +39,7 @@ export type KanbanHookAction = z.infer<typeof kanbanHookActionSchema>;
 export type KanbanColumnHook = z.infer<typeof kanbanColumnHookSchema>;
 export type KanbanSettings = z.infer<typeof kanbanSettingsSchema>;
 export type MaasSettings = z.infer<typeof maasSettingsSchema>;
+export type GlobalLlmSettings = z.infer<typeof globalLlmSettingsSchema>;
 export type RuntimeModelCandidatesSettings = z.infer<typeof runtimeModelCandidatesSettingsSchema>;
 export type TerminalSettings = z.infer<typeof terminalSettingsSchema>;
 export type StatuslineTemplate = z.infer<typeof statuslineTemplateSchema>;

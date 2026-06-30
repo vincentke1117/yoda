@@ -63,6 +63,15 @@ export const SETTINGS_DEFAULTS = {
     selectedPlatformId: MAAS_PLATFORMS.zenmux.id,
     connections: [],
   },
+  llm: {
+    maasEnabled: false,
+    maasModel: '',
+    agentEnabled: true,
+    agentId: '',
+    preferredProvider: 'maas' as const,
+    promptTranslationEnabled: false,
+    promptTranslationShowOriginal: true,
+  },
   runtimeModelCandidates: {
     runtimes: {},
   },
