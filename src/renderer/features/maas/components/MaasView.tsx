@@ -481,7 +481,6 @@ const ConnectionPanel: React.FC<{
                     disabled={disconnecting}
                     onClick={handleDisconnect}
                     aria-label={`${disconnectLabel}: ${disconnectHint}`}
-                    title={disconnectHint}
                   >
                     {disconnecting ? (
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -491,8 +490,8 @@ const ConnectionPanel: React.FC<{
                   </Button>
                 }
               />
-              <TooltipContent className="max-w-64 text-left leading-relaxed">
-                <span className="block font-medium">{disconnectLabel}</span>
+              <TooltipContent className="block w-72 max-w-[calc(100vw-2rem)] text-left leading-relaxed">
+                <span className="block whitespace-nowrap font-medium">{disconnectLabel}</span>
                 <span className="mt-1 block">{disconnectHint}</span>
               </TooltipContent>
             </Tooltip>
