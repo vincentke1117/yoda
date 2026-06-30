@@ -100,130 +100,127 @@ const KeyboardSettingsCard: React.FC = () => {
   };
 
   return (
-    <div className="rounded-xl border border-border/60 bg-muted/10 p-4">
-      <div className="space-y-6">
-        {Object.entries(SHORTCUTS_BY_CATEGORY).map(([category, shortcuts]) => (
-          <div key={category}>
-            <div className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              {category}
-            </div>
-            <div className="space-y-3">
-              {shortcuts.map(([key, def]) => {
-                const effectiveHotkey = getEffectiveHotkey(key, keyboard);
-                const capturing = editingKey === key && recorder.isRecording;
-                const cleared = keyboard?.[key] === null;
-                const showClear = !cleared;
-                const showReset =
-                  def.defaultHotkey != null && effectiveHotkey !== def.defaultHotkey;
-                const showActions = showClear || showReset;
-                const displayHotkey = effectiveHotkey ? formatForDisplay(effectiveHotkey) : '';
+    <div className="space-y-6">
+      {Object.entries(SHORTCUTS_BY_CATEGORY).map(([category, shortcuts]) => (
+        <div key={category}>
+          <div className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            {category}
+          </div>
+          <div className="space-y-3">
+            {shortcuts.map(([key, def]) => {
+              const effectiveHotkey = getEffectiveHotkey(key, keyboard);
+              const capturing = editingKey === key && recorder.isRecording;
+              const cleared = keyboard?.[key] === null;
+              const showClear = !cleared;
+              const showReset = def.defaultHotkey != null && effectiveHotkey !== def.defaultHotkey;
+              const showActions = showClear || showReset;
+              const displayHotkey = effectiveHotkey ? formatForDisplay(effectiveHotkey) : '';
 
-                return (
-                  <div
-                    key={key}
-                    className="group/shortcut flex min-w-0 flex-wrap items-start justify-between gap-x-2 gap-y-2"
-                  >
-                    <div className="min-w-0 flex-1 basis-64 space-y-1">
-                      <div className="break-words text-sm">{def.label}</div>
-                      <div className="break-words text-xs text-muted-foreground">
-                        {def.description}
-                      </div>
-                    </div>
-                    <div className="ml-auto flex shrink-0 items-center gap-2">
-                      {capturing ? (
-                        <>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="min-w-[80px] animate-pulse"
-                            onClick={() => recorder.cancelRecording()}
-                            disabled={saving}
-                          >
-                            {t('settings.keyboard.pressKeys')}
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => recorder.cancelRecording()}
-                            disabled={saving}
-                          >
-                            {t('settings.keyboard.cancel')}
-                          </Button>
-                        </>
-                      ) : (
-                        <>
-                          {showActions && (
-                            <div className="pointer-events-none flex items-center gap-1 opacity-0 transition-opacity group-hover/shortcut:pointer-events-auto group-hover/shortcut:opacity-100">
-                              <TooltipProvider delay={150}>
-                                {showClear && (
-                                  <Tooltip>
-                                    <TooltipTrigger
-                                      render={
-                                        <Button
-                                          type="button"
-                                          variant="ghost"
-                                          size="icon"
-                                          className="text-muted-foreground hover:text-foreground"
-                                          onClick={() => handleClear(key)}
-                                          disabled={loading || saving}
-                                          aria-label={t('settings.keyboard.removeShortcut')}
-                                        >
-                                          <X className="h-3.5 w-3.5" />
-                                        </Button>
-                                      }
-                                    />
-                                    <TooltipContent side="top">
-                                      {t('settings.keyboard.removeShortcut')}
-                                    </TooltipContent>
-                                  </Tooltip>
-                                )}
-                                {showReset && (
-                                  <Tooltip>
-                                    <TooltipTrigger
-                                      render={
-                                        <Button
-                                          type="button"
-                                          variant="ghost"
-                                          size="icon"
-                                          className="text-muted-foreground hover:text-foreground"
-                                          onClick={() => handleReset(key)}
-                                          disabled={loading || saving}
-                                          aria-label={t('settings.keyboard.resetToDefault')}
-                                        >
-                                          <RotateCcw className="h-3.5 w-3.5" />
-                                        </Button>
-                                      }
-                                    />
-                                    <TooltipContent side="top">
-                                      {t('settings.keyboard.resetToDefault')}
-                                    </TooltipContent>
-                                  </Tooltip>
-                                )}
-                              </TooltipProvider>
-                            </div>
-                          )}
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="min-w-[80px] font-mono"
-                            onClick={() => startCapture(key)}
-                            disabled={loading || saving}
-                          >
-                            {displayHotkey}
-                          </Button>
-                        </>
-                      )}
+              return (
+                <div
+                  key={key}
+                  className="group/shortcut flex min-w-0 flex-wrap items-start justify-between gap-x-2 gap-y-2"
+                >
+                  <div className="min-w-0 flex-1 basis-64 space-y-1">
+                    <div className="break-words text-sm">{def.label}</div>
+                    <div className="break-words text-xs text-muted-foreground">
+                      {def.description}
                     </div>
                   </div>
-                );
-              })}
-            </div>
+                  <div className="ml-auto flex shrink-0 items-center gap-2">
+                    {capturing ? (
+                      <>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="min-w-[80px] animate-pulse"
+                          onClick={() => recorder.cancelRecording()}
+                          disabled={saving}
+                        >
+                          {t('settings.keyboard.pressKeys')}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => recorder.cancelRecording()}
+                          disabled={saving}
+                        >
+                          {t('settings.keyboard.cancel')}
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        {showActions && (
+                          <div className="pointer-events-none flex items-center gap-1 opacity-0 transition-opacity group-hover/shortcut:pointer-events-auto group-hover/shortcut:opacity-100">
+                            <TooltipProvider delay={150}>
+                              {showClear && (
+                                <Tooltip>
+                                  <TooltipTrigger
+                                    render={
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className="text-muted-foreground hover:text-foreground"
+                                        onClick={() => handleClear(key)}
+                                        disabled={loading || saving}
+                                        aria-label={t('settings.keyboard.removeShortcut')}
+                                      >
+                                        <X className="h-3.5 w-3.5" />
+                                      </Button>
+                                    }
+                                  />
+                                  <TooltipContent side="top">
+                                    {t('settings.keyboard.removeShortcut')}
+                                  </TooltipContent>
+                                </Tooltip>
+                              )}
+                              {showReset && (
+                                <Tooltip>
+                                  <TooltipTrigger
+                                    render={
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className="text-muted-foreground hover:text-foreground"
+                                        onClick={() => handleReset(key)}
+                                        disabled={loading || saving}
+                                        aria-label={t('settings.keyboard.resetToDefault')}
+                                      >
+                                        <RotateCcw className="h-3.5 w-3.5" />
+                                      </Button>
+                                    }
+                                  />
+                                  <TooltipContent side="top">
+                                    {t('settings.keyboard.resetToDefault')}
+                                  </TooltipContent>
+                                </Tooltip>
+                              )}
+                            </TooltipProvider>
+                          </div>
+                        )}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="min-w-[80px] font-mono"
+                          onClick={() => startCapture(key)}
+                          disabled={loading || saving}
+                        >
+                          {displayHotkey}
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        ))}
-      </div>
+        </div>
+      ))}
     </div>
   );
 };

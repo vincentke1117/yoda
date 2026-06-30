@@ -95,82 +95,51 @@ export function AccountTab() {
 
   if (isSignedIn && user) {
     return (
-      <div className="rounded-xl border border-border/60 bg-muted/10 p-4">
-        <div className="flex items-center gap-4">
-          {user.avatarUrl ? (
-            <img
-              src={user.avatarUrl}
-              alt={user.username}
-              className="h-12 w-12 rounded-full border border-border/60"
-            />
-          ) : (
-            <div className="flex h-12 w-12 items-center justify-center rounded-full border border-border/60 bg-muted">
-              <User className="h-6 w-6 text-muted-foreground" />
-            </div>
-          )}
-          <div className="flex-1">
-            <p className="text-sm font-medium text-foreground">
-              {t('settings.account.connectedAs')}{' '}
-              <span className="font-semibold">{user.name?.trim() || `@${user.username}`}</span>
-              {user.name?.trim() && (
-                <span className="ml-1 text-xs text-muted-foreground">@{user.username}</span>
-              )}
-            </p>
-            {user.email && <p className="text-xs text-muted-foreground">{user.email}</p>}
+      <div className="flex flex-wrap items-center gap-4">
+        {user.avatarUrl ? (
+          <img
+            src={user.avatarUrl}
+            alt={user.username}
+            className="h-12 w-12 rounded-full border border-border/60"
+          />
+        ) : (
+          <div className="flex h-12 w-12 items-center justify-center rounded-full border border-border/60 bg-muted">
+            <User className="h-6 w-6 text-muted-foreground" />
           </div>
-          <Button
-            type="button"
-            className="w-fit"
-            onClick={handleSignOut}
-            disabled={signOutMutation.isPending}
-          >
-            <LogOut className="h-3.5 w-3.5" />
-            {t('settings.account.signOut')}
-          </Button>
+        )}
+        <div className="min-w-0 flex-1 basis-56">
+          <p className="text-sm font-medium text-foreground">
+            {t('settings.account.connectedAs')}{' '}
+            <span className="font-semibold">{user.name?.trim() || `@${user.username}`}</span>
+            {user.name?.trim() && (
+              <span className="ml-1 text-xs text-muted-foreground">@{user.username}</span>
+            )}
+          </p>
+          {user.email && <p className="text-xs text-muted-foreground">{user.email}</p>}
         </div>
+        <Button
+          type="button"
+          className="w-fit"
+          onClick={handleSignOut}
+          disabled={signOutMutation.isPending}
+        >
+          <LogOut className="h-3.5 w-3.5" />
+          {t('settings.account.signOut')}
+        </Button>
       </div>
     );
   }
 
   if (hasAccount && !isSignedIn) {
     return (
-      <div className="rounded-xl border border-border/60 bg-muted/10 p-4">
-        <div className="flex flex-col gap-3">
-          <div>
-            <p className="text-sm font-medium text-foreground">
-              {t('settings.account.sessionExpired')}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {t('settings.account.sessionExpiredHint')}
-            </p>
-          </div>
-          {error && <p className="text-xs text-destructive">{error}</p>}
-          {serverAvailable === false ? (
-            <ServerUnavailableMessage />
-          ) : (
-            <Button
-              type="button"
-              className="w-fit"
-              onClick={handleSignIn}
-              disabled={signInMutation.isPending}
-            >
-              <LogIn className="h-3.5 w-3.5" />
-              {signInMutation.isPending
-                ? t('settings.account.signingIn')
-                : t('settings.account.signIn')}
-            </Button>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="rounded-xl border border-border/60 bg-muted/10 p-4">
       <div className="flex flex-col gap-3">
         <div>
-          <p className="text-sm font-medium text-foreground">{t('settings.account.yodaAccount')}</p>
-          <p className="text-xs text-muted-foreground">{t('settings.account.createAccountHint')}</p>
+          <p className="text-sm font-medium text-foreground">
+            {t('settings.account.sessionExpired')}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {t('settings.account.sessionExpiredHint')}
+          </p>
         </div>
         {error && <p className="text-xs text-destructive">{error}</p>}
         {serverAvailable === false ? (
@@ -184,11 +153,36 @@ export function AccountTab() {
           >
             <LogIn className="h-3.5 w-3.5" />
             {signInMutation.isPending
-              ? t('settings.account.creatingAccount')
-              : t('settings.account.createAccount')}
+              ? t('settings.account.signingIn')
+              : t('settings.account.signIn')}
           </Button>
         )}
       </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <p className="text-sm font-medium text-foreground">{t('settings.account.yodaAccount')}</p>
+        <p className="text-xs text-muted-foreground">{t('settings.account.createAccountHint')}</p>
+      </div>
+      {error && <p className="text-xs text-destructive">{error}</p>}
+      {serverAvailable === false ? (
+        <ServerUnavailableMessage />
+      ) : (
+        <Button
+          type="button"
+          className="w-fit"
+          onClick={handleSignIn}
+          disabled={signInMutation.isPending}
+        >
+          <LogIn className="h-3.5 w-3.5" />
+          {signInMutation.isPending
+            ? t('settings.account.creatingAccount')
+            : t('settings.account.createAccount')}
+        </Button>
+      )}
     </div>
   );
 }

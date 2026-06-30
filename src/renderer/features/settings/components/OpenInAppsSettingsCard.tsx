@@ -30,64 +30,62 @@ export default function OpenInAppsSettingsCard() {
   }, [availability, labels]);
 
   return (
-    <div className="rounded-xl border border-border/60 bg-muted/10 p-2">
-      <div className="space-y-2">
-        {sortedApps.map((app) => {
-          const isDetected = availability[app.id] ?? app.alwaysAvailable ?? false;
-          const isVisible = isDetected && !hiddenApps.includes(app.id);
-          const canToggleVisibility = isDetected;
-          const label = labels[app.id] ?? app.label;
-          const icon = icons[app.id];
-          const indicatorClass = isDetected ? 'bg-emerald-500' : 'bg-muted-foreground/50';
-          const statusLabel = isDetected
-            ? t('settings.openInApps.detected')
-            : t('settings.openInApps.notDetected');
+    <div className="space-y-2">
+      {sortedApps.map((app) => {
+        const isDetected = availability[app.id] ?? app.alwaysAvailable ?? false;
+        const isVisible = isDetected && !hiddenApps.includes(app.id);
+        const canToggleVisibility = isDetected;
+        const label = labels[app.id] ?? app.label;
+        const icon = icons[app.id];
+        const indicatorClass = isDetected ? 'bg-emerald-500' : 'bg-muted-foreground/50';
+        const statusLabel = isDetected
+          ? t('settings.openInApps.detected')
+          : t('settings.openInApps.notDetected');
 
-          return (
-            <IntegrationRow
-              key={app.id}
-              logoSrc={icon}
-              name={label}
-              status={isDetected ? 'connected' : 'missing'}
-              showStatusPill={false}
-              middle={
-                <span className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <span className={`h-1.5 w-1.5 rounded-full ${indicatorClass}`} />
-                  {statusLabel}
-                </span>
-              }
-              rightExtra={
-                <TooltipProvider delay={150}>
-                  <Tooltip>
-                    <TooltipTrigger>
-                      <span>
-                        <Switch
-                          checked={isVisible}
-                          disabled={isLoading || isSaving || !canToggleVisibility}
-                          onCheckedChange={(checked) => toggle(app.id, checked)}
-                          aria-label={t('settings.openInApps.ariaToggle', {
-                            verb: isVisible
-                              ? t('settings.openInApps.hide')
-                              : t('settings.openInApps.show'),
-                            label,
-                          })}
-                        />
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="text-xs">
-                      {!isDetected
-                        ? t('settings.openInApps.tooltipNotInstalled')
-                        : isVisible
-                          ? t('settings.openInApps.tooltipHide')
-                          : t('settings.openInApps.tooltipShow')}
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              }
-            />
-          );
-        })}
-      </div>
+        return (
+          <IntegrationRow
+            key={app.id}
+            logoSrc={icon}
+            name={label}
+            status={isDetected ? 'connected' : 'missing'}
+            showStatusPill={false}
+            middle={
+              <span className="flex items-center gap-2 text-sm text-muted-foreground">
+                <span className={`h-1.5 w-1.5 rounded-full ${indicatorClass}`} />
+                {statusLabel}
+              </span>
+            }
+            rightExtra={
+              <TooltipProvider delay={150}>
+                <Tooltip>
+                  <TooltipTrigger>
+                    <span>
+                      <Switch
+                        checked={isVisible}
+                        disabled={isLoading || isSaving || !canToggleVisibility}
+                        onCheckedChange={(checked) => toggle(app.id, checked)}
+                        aria-label={t('settings.openInApps.ariaToggle', {
+                          verb: isVisible
+                            ? t('settings.openInApps.hide')
+                            : t('settings.openInApps.show'),
+                          label,
+                        })}
+                      />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="text-xs">
+                    {!isDetected
+                      ? t('settings.openInApps.tooltipNotInstalled')
+                      : isVisible
+                        ? t('settings.openInApps.tooltipHide')
+                        : t('settings.openInApps.tooltipShow')}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            }
+          />
+        );
+      })}
     </div>
   );
 }

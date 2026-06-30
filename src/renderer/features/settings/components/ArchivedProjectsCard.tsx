@@ -47,7 +47,7 @@ export default function ArchivedProjectsCard() {
   }
 
   return (
-    <div className="flex flex-col gap-1 rounded-xl border border-border/60 bg-muted/10 p-2">
+    <div className="flex flex-col gap-1">
       {data.map((project) => (
         <ArchivedProjectRow
           key={project.id}

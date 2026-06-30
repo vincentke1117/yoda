@@ -16,7 +16,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@renderer/lib/ui/select';
-import { Separator } from '@renderer/lib/ui/separator';
 import { Switch } from '@renderer/lib/ui/switch';
 import { isImeComposing } from '@renderer/utils/ime';
 import { cn } from '@renderer/utils/utils';
@@ -266,12 +265,8 @@ export const TmuxRecheckButton: React.FC = observer(() => {
 });
 
 /**
- * tmux rendered as a chapter inside the Terminal tab: a divider + a prominent
- * heading (one step below the page title) and description, then a row-based body
- * (detection status, binary path) so future tmux options — socket name, mouse
- * mode, kill-on-archive, … — slot in as additional {@link SettingRow}s without
- * reworking the layout. Re-check is the chapter's heading action. The enable
- * toggle lives in {@link EnableTmuxRow} under the Sessions tab.
+ * tmux rows rendered inside the Terminal tab's section panel. The section
+ * heading is owned by SettingsPage so all settings chapters use one shell.
  */
 export const TmuxSettingsChapter: React.FC = observer(() => {
   const { t } = useTranslation();
@@ -298,74 +293,67 @@ export const TmuxSettingsChapter: React.FC = observer(() => {
       : t('settings.agentsTab.notDetected');
 
   return (
-    <div className="flex flex-col gap-4">
-      <Separator />
-      <div className="flex min-w-0 flex-col gap-1">
-        <h3 className="text-lg text-foreground">{t('settings.terminal.tmux')}</h3>
-        <p className="text-sm text-foreground-muted">{t('settings.tasks.enableTmuxDescription')}</p>
-      </div>
-      <div className="flex flex-col gap-3">
-        <SettingRow
-          title={t('settings.tasks.tmuxStatusRow')}
-          description={
-            tmuxErrored && tmuxState?.error ? (
-              <span className="text-destructive">
-                {t('settings.tasks.tmuxError', { error: tmuxState.error })}
-              </span>
-            ) : undefined
-          }
-          control={
-            <>
-              <span className="flex items-center gap-2 pr-1">
-                <span
-                  className={cn(
-                    'h-1.5 w-1.5 shrink-0 rounded-full',
-                    tmuxAvailable
-                      ? 'bg-emerald-500'
-                      : tmuxErrored
-                        ? 'bg-amber-500'
-                        : 'bg-muted-foreground/40'
-                  )}
-                  aria-hidden="true"
-                />
-                <span className="text-xs tabular-nums text-foreground-passive">{statusLabel}</span>
-              </span>
-              {tmuxMissing && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={installingTmux}
-                  onClick={handleInstallTmux}
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  {installingTmux
-                    ? t('settings.tasks.installingTmux')
-                    : t('settings.tasks.installTmux')}
-                </Button>
-              )}
-            </>
-          }
-        />
-        {tmuxAvailable && tmuxState?.path && (
-          <SettingRow
-            title={t('settings.tasks.tmuxPathRow')}
-            control={
+    <div className="flex flex-col gap-3">
+      <SettingRow
+        title={t('settings.tasks.tmuxStatusRow')}
+        description={
+          tmuxErrored && tmuxState?.error ? (
+            <span className="text-destructive">
+              {t('settings.tasks.tmuxError', { error: tmuxState.error })}
+            </span>
+          ) : undefined
+        }
+        control={
+          <>
+            <span className="flex items-center gap-2 pr-1">
               <span
-                className="max-w-[360px] truncate font-mono text-xs text-foreground-passive"
-                title={tmuxState.path}
+                className={cn(
+                  'h-1.5 w-1.5 shrink-0 rounded-full',
+                  tmuxAvailable
+                    ? 'bg-emerald-500'
+                    : tmuxErrored
+                      ? 'bg-amber-500'
+                      : 'bg-muted-foreground/40'
+                )}
+                aria-hidden="true"
+              />
+              <span className="text-xs tabular-nums text-foreground-passive">{statusLabel}</span>
+            </span>
+            {tmuxMissing && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={installingTmux}
+                onClick={handleInstallTmux}
               >
-                {tmuxState.path}
-              </span>
-            }
-          />
-        )}
+                <Download className="h-3.5 w-3.5" />
+                {installingTmux
+                  ? t('settings.tasks.installingTmux')
+                  : t('settings.tasks.installTmux')}
+              </Button>
+            )}
+          </>
+        }
+      />
+      {tmuxAvailable && tmuxState?.path && (
         <SettingRow
-          title={t('settings.tasks.recheckTmuxRow')}
-          description={t('settings.tasks.recheckTmuxRowDescription')}
-          control={<TmuxRecheckButton />}
+          title={t('settings.tasks.tmuxPathRow')}
+          control={
+            <span
+              className="max-w-[360px] truncate font-mono text-xs text-foreground-passive"
+              title={tmuxState.path}
+            >
+              {tmuxState.path}
+            </span>
+          }
         />
-      </div>
+      )}
+      <SettingRow
+        title={t('settings.tasks.recheckTmuxRow')}
+        description={t('settings.tasks.recheckTmuxRowDescription')}
+        control={<TmuxRecheckButton />}
+      />
     </div>
   );
 });

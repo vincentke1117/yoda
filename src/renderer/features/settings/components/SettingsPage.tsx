@@ -88,7 +88,7 @@ interface SectionConfig {
   title?: string;
   description?: React.ReactNode;
   action?: React.ReactNode;
-  surface?: 'panel';
+  surface?: 'panel' | 'plain';
   component: React.ReactNode;
 }
 
@@ -306,6 +306,7 @@ export function SettingsPage({
           id: 'cli-agents',
           title: t('settings.agentsTab.cliAgents'),
           action: <CliAgentsRescanButton />,
+          surface: 'plain',
           component: <RuntimeAccordion />,
         },
       ],
@@ -346,12 +347,14 @@ export function SettingsPage({
       title: t('skills.title'),
       titleHint: <SkillsCatalogHint />,
       description: t('skills.subtitle'),
-      sections: [{ id: 'skills', component: <SkillsView embedded /> }],
+      sections: [{ id: 'skills', surface: 'plain', component: <SkillsView embedded /> }],
     },
     'agent-manager': {
       title: t('agentManager.title'),
       description: t('agentManager.subtitle'),
-      sections: [{ id: 'agent-manager', component: <AgentManagerView embedded /> }],
+      sections: [
+        { id: 'agent-manager', surface: 'plain', component: <AgentManagerView embedded /> },
+      ],
     },
     maas: {
       title: t('maas.title'),
@@ -361,22 +364,24 @@ export function SettingsPage({
     usage: {
       title: t('usage.title'),
       description: t('usage.subtitle'),
-      sections: [{ id: 'usage', component: <UsageView embedded /> }],
+      sections: [{ id: 'usage', surface: 'plain', component: <UsageView embedded /> }],
     },
     'ai-logs': {
       title: t('aiLogs.title'),
       description: t('aiLogs.subtitle'),
-      sections: [{ id: 'ai-logs', component: <AiLogsPanel /> }],
+      sections: [{ id: 'ai-logs', surface: 'plain', component: <AiLogsPanel /> }],
     },
     automation: {
       title: t('automation.title'),
       description: t('automation.subtitle'),
-      sections: [{ id: 'automation', component: <AutomationMainPanel embedded /> }],
+      sections: [
+        { id: 'automation', surface: 'plain', component: <AutomationMainPanel embedded /> },
+      ],
     },
     mobile: {
       title: t('sidebar.mobileConnection.title'),
       description: t('sidebar.mobileConnection.description'),
-      sections: [{ id: 'mobile', component: <MobileView embedded /> }],
+      sections: [{ id: 'mobile', surface: 'plain', component: <MobileView embedded /> }],
     },
     integrations: {
       title: t('settings.tabs.integrations'),
@@ -402,7 +407,7 @@ export function SettingsPage({
     mcp: {
       title: t('settings.tabs.mcp'),
       description: t('mcp.subtitle'),
-      sections: [{ id: 'mcp', component: <McpView embedded /> }],
+      sections: [{ id: 'mcp', surface: 'plain', component: <McpView embedded /> }],
     },
     repository: {
       title: t('settings.tabs.repository'),
@@ -430,7 +435,12 @@ export function SettingsPage({
       description: t('settings.terminalTab.description'),
       sections: [
         { id: 'terminal', component: <TerminalSettingsCard /> },
-        { id: 'tmux', component: <TmuxSettingsChapter /> },
+        {
+          id: 'tmux',
+          title: t('settings.terminal.tmux'),
+          description: t('settings.tasks.enableTmuxDescription'),
+          component: <TmuxSettingsChapter />,
+        },
       ],
     },
     'keyboard-shortcuts': {
@@ -449,6 +459,7 @@ export function SettingsPage({
       sections: [
         {
           id: 'kanban',
+          surface: 'plain',
           // The board fills its container height; columns scroll internally.
           component: (
             <div className="h-[65vh] min-h-80 overflow-hidden rounded-xl border border-border/70">
@@ -461,12 +472,12 @@ export function SettingsPage({
     'ai-lab': {
       title: t('aiLab.title'),
       description: t('aiLab.subtitle'),
-      sections: [{ id: 'ai-lab', component: <AiLabView embedded /> }],
+      sections: [{ id: 'ai-lab', surface: 'plain', component: <AiLabView embedded /> }],
     },
     roadmap: {
       title: t('roadmap.title'),
       description: t('roadmap.subtitle'),
-      sections: [{ id: 'roadmap', component: <RoadmapView embedded /> }],
+      sections: [{ id: 'roadmap', surface: 'plain', component: <RoadmapView embedded /> }],
     },
   };
 
@@ -541,7 +552,7 @@ export function SettingsPage({
                   const hasChapterHeader = Boolean(
                     section.title || section.description || section.action
                   );
-                  const usePanelSurface = section.surface === 'panel';
+                  const usePanelSurface = section.surface !== 'plain';
                   return (
                     <div key={section.id} className="flex flex-col gap-3">
                       {hasChapterHeader && (
