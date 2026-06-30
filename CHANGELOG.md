@@ -5,6 +5,37 @@ All notable changes to Yoda will be documented in this file.
 The public Yoda changelog starts at **0.1.0**. Earlier non-Yoda release history
 is preserved in git tags only.
 
+## 0.13.10 — 2026-06-30
+
+### Added
+
+- Projects: a project overview surface with usage columns, customizable
+  overview columns, archive/view actions, and sidebar quick actions.
+- Composer and settings: per-agent permission mode controls, project language
+  overrides, input prompt language overrides, global LLM configuration, and LLM
+  profile settings.
+- MaaS: ZenMux usage entry points, a usage modal, provider info snapshots, AI
+  Gateway model discovery, model candidate sorting, and model picker controls.
+- Tasks and worktrees: move worktree tasks across projects, search move targets,
+  drag sidebar projects, and order move targets by sidebar order.
+
+### Changed
+
+- Settings: LLM and MaaS configuration now use clearer panel sections and
+  chapter-style controls.
+- Terminal: embedded terminals can use the canvas renderer.
+
+### Fixed
+
+- Composer and home: permission and branch controls stay stable inside popovers,
+  and system prompt controls are scoped to agent CLI settings.
+- Settings: row controls stay inline, IME composition is guarded in LLM inputs,
+  and LLM debug failures expose copyable details.
+- MaaS: API key masks, ZenMux console routes, usage stats, and toolbar layout are
+  corrected.
+- Tasks and worktrees: empty context items are clearer, and moving worktree tasks
+  into non-git targets reports copyable errors.
+
 ## 0.13.9 — 2026-06-27
 
 ### Fixed
