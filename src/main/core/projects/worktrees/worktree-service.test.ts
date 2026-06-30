@@ -235,5 +235,61 @@ describe('WorktreeService', () => {
         fs.rmSync(remoteDir, { recursive: true, force: true });
       }
     });
+
+    it('uses the explicitly selected remote source branch', async () => {
+      const remoteDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wt-upstream-'));
+      try {
+        await git(['init', '--bare'], { cwd: remoteDir });
+        await git(['remote', 'add', 'upstream', remoteDir], { cwd: repoDir });
+        await git(['branch', 'feature/from-upstream'], { cwd: repoDir });
+        await git(['push', '-u', 'upstream', 'feature/from-upstream'], { cwd: repoDir });
+        await git(['branch', '-D', 'feature/from-upstream'], { cwd: repoDir });
+
+        const svc = makeService();
+        const result = await svc.checkoutExistingBranch('feature/from-upstream', {
+          type: 'remote',
+          branch: 'feature/from-upstream',
+          remote: { name: 'upstream', url: remoteDir },
+        });
+
+        expect(result.success).toBe(true);
+        if (!result.success) throw new Error('expected success');
+        expect(fs.existsSync(result.data)).toBe(true);
+      } finally {
+        fs.rmSync(remoteDir, { recursive: true, force: true });
+      }
+    });
+
+    it('fast-forwards an existing local branch from the explicit remote source', async () => {
+      const remoteDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wt-ff-'));
+      try {
+        await git(['init', '--bare'], { cwd: remoteDir });
+        await git(['remote', 'add', 'origin', remoteDir], { cwd: repoDir });
+        await git(['branch', 'feature/fast-forward'], { cwd: repoDir });
+        await git(['push', '-u', 'origin', 'feature/fast-forward'], { cwd: repoDir });
+        await git(['checkout', 'feature/fast-forward'], { cwd: repoDir });
+        await git(['commit', '--allow-empty', '-m', 'remote update'], { cwd: repoDir });
+        await git(['push', 'origin', 'feature/fast-forward'], { cwd: repoDir });
+        const remoteHead = await git(['rev-parse', 'HEAD'], { cwd: repoDir });
+        await git(['checkout', 'main'], { cwd: repoDir });
+        await git(['branch', '--force', 'feature/fast-forward', 'main'], { cwd: repoDir });
+
+        const svc = makeService();
+        const result = await svc.checkoutExistingBranch('feature/fast-forward', {
+          type: 'remote',
+          branch: 'feature/fast-forward',
+          remote: originRemote(remoteDir),
+        });
+
+        expect(result.success).toBe(true);
+        if (!result.success) throw new Error('expected success');
+        const localHead = await git(['rev-parse', 'feature/fast-forward'], { cwd: repoDir });
+        expect(localHead.stdout.trim()).toBe(remoteHead.stdout.trim());
+        const worktreeHead = await git(['rev-parse', 'HEAD'], { cwd: result.data });
+        expect(worktreeHead.stdout.trim()).toBe(remoteHead.stdout.trim());
+      } finally {
+        fs.rmSync(remoteDir, { recursive: true, force: true });
+      }
+    });
   });
 });

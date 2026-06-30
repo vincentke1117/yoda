@@ -48,7 +48,7 @@ export async function resolveTaskWorkDir(
   if (existing) return existing;
 
   if (!task.sourceBranch || task.taskBranch === task.sourceBranch.branch) {
-    const result = await worktreeService.checkoutExistingBranch(task.taskBranch);
+    const result = await worktreeService.checkoutExistingBranch(task.taskBranch, task.sourceBranch);
     if (!result.success) throw mapWorktreeErrorToProvisionError(task.taskBranch, result.error);
     return result.data;
   }

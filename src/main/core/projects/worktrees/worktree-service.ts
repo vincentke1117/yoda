@@ -103,6 +103,110 @@ export class WorktreeService {
     return [configuredRemote, DEFAULT_REMOTE_NAME];
   }
 
+  private async fetchRemoteSourceRef(
+    sourceBranch: Extract<Branch, { type: 'remote' }>
+  ): Promise<Result<{ displayRef: string; ref: string }, ServeWorktreeError>> {
+    const remoteName = sourceBranch.remote.name;
+    await this.ctx
+      .exec('git', ['fetch', remoteName], { timeout: FETCH_TIMEOUT_MS })
+      .catch(() => {});
+    const ref = `refs/remotes/${remoteName}/${sourceBranch.branch}`;
+    try {
+      await this.ctx.exec('git', ['rev-parse', '--verify', ref]);
+      return ok({ displayRef: `${remoteName}/${sourceBranch.branch}`, ref });
+    } catch {
+      return err({ type: 'branch-not-found', branch: `${remoteName}/${sourceBranch.branch}` });
+    }
+  }
+
+  private async localBranchExists(branchName: string): Promise<boolean> {
+    try {
+      await this.ctx.exec('git', ['rev-parse', '--verify', `refs/heads/${branchName}`]);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private async refSha(ref: string): Promise<string | undefined> {
+    return this.ctx
+      .exec('git', ['rev-parse', '--verify', ref])
+      .then(({ stdout }) => stdout.trim())
+      .catch(() => undefined);
+  }
+
+  private async syncLocalBranchWithRemoteSource(
+    branchName: string,
+    sourceBranch: Extract<Branch, { type: 'remote' }>,
+    checkedOutPath: string | undefined
+  ): Promise<Result<void, ServeWorktreeError>> {
+    const remoteSource = await this.fetchRemoteSourceRef(sourceBranch);
+    if (!remoteSource.success) return remoteSource;
+
+    const localRef = `refs/heads/${branchName}`;
+    if (!(await this.localBranchExists(branchName))) {
+      try {
+        await this.ctx.exec('git', ['branch', '--track', branchName, remoteSource.data.displayRef]);
+        return ok(undefined);
+      } catch (cause) {
+        return err({ type: 'worktree-setup-failed', cause });
+      }
+    }
+
+    const [localSha, remoteSha] = await Promise.all([
+      this.refSha(localRef),
+      this.refSha(remoteSource.data.ref),
+    ]);
+    if (localSha && remoteSha && localSha === remoteSha) {
+      return ok(undefined);
+    }
+
+    try {
+      await this.ctx.exec('git', ['merge-base', '--is-ancestor', localRef, remoteSource.data.ref]);
+    } catch {
+      return err({
+        type: 'worktree-setup-failed',
+        cause: new Error(
+          `Local branch "${branchName}" has diverged from "${remoteSource.data.displayRef}". Update it manually or choose a new branch.`
+        ),
+      });
+    }
+
+    try {
+      if (checkedOutPath) {
+        const { stdout } = await this.ctx.exec('git', [
+          '-C',
+          checkedOutPath,
+          'status',
+          '--porcelain',
+        ]);
+        if (stdout.trim()) {
+          return err({
+            type: 'worktree-setup-failed',
+            cause: new Error(
+              `Local branch "${branchName}" is checked out with uncommitted changes and cannot be fast-forwarded from "${remoteSource.data.displayRef}".`
+            ),
+          });
+        }
+        await this.ctx.exec('git', [
+          '-C',
+          checkedOutPath,
+          'merge',
+          '--ff-only',
+          remoteSource.data.ref,
+        ]);
+      } else {
+        await this.ctx.exec('git', ['branch', '--force', branchName, remoteSource.data.ref]);
+      }
+      await this.ctx
+        .exec('git', ['branch', `--set-upstream-to=${remoteSource.data.displayRef}`, branchName])
+        .catch(() => {});
+      return ok(undefined);
+    } catch (cause) {
+      return err({ type: 'worktree-setup-failed', cause });
+    }
+  }
+
   /**
    * Directory candidates for a branch's worktree, flat under the pool. The
    * leaf segment is preferred ("yoda/us84e" -> "us84e") — prefix segments add
@@ -252,31 +356,37 @@ export class WorktreeService {
     return ok(targetPath);
   }
 
-  async checkoutExistingBranch(branchName: string): Promise<Result<string, ServeWorktreeError>> {
+  async checkoutExistingBranch(
+    branchName: string,
+    sourceBranch?: Branch
+  ): Promise<Result<string, ServeWorktreeError>> {
     await this.ensureWorktreePoolDirExists();
-    return this.enqueueGitOp(() => this.doCheckoutExistingBranch(branchName));
+    return this.enqueueGitOp(() => this.doCheckoutExistingBranch(branchName, sourceBranch));
   }
 
   private async doCheckoutExistingBranch(
-    branchName: string
+    branchName: string,
+    sourceBranch: Branch | undefined
   ): Promise<Result<string, ServeWorktreeError>> {
     const checkedOutPath = await this.findCheckedOutPathForBranch(branchName);
-    if (checkedOutPath) {
+    if (sourceBranch?.type === 'remote') {
+      const synced = await this.syncLocalBranchWithRemoteSource(
+        branchName,
+        sourceBranch,
+        checkedOutPath
+      );
+      if (!synced.success) return synced;
+      if (checkedOutPath) return ok(checkedOutPath);
+    } else if (checkedOutPath) {
       return ok(checkedOutPath);
     }
 
     const target = await this.resolveWorktreeTargetPath(branchName);
     if (!target.success) return target;
     const targetPath = target.data;
-    const remoteCandidates = await this.getRemoteCandidates();
 
     try {
       await this.host.mkdirAbsolute(path.dirname(targetPath), { recursive: true });
-      for (const remoteName of remoteCandidates) {
-        await this.ctx
-          .exec('git', ['fetch', remoteName], { timeout: FETCH_TIMEOUT_MS })
-          .catch(() => {});
-      }
       let localExists = false;
       try {
         await this.ctx.exec('git', ['rev-parse', '--verify', `refs/heads/${branchName}`]);
@@ -284,6 +394,12 @@ export class WorktreeService {
       } catch {}
 
       if (!localExists) {
+        const remoteCandidates = await this.getRemoteCandidates();
+        for (const remoteName of remoteCandidates) {
+          await this.ctx
+            .exec('git', ['fetch', remoteName], { timeout: FETCH_TIMEOUT_MS })
+            .catch(() => {});
+        }
         let trackingRemote: string | undefined;
         for (const remoteName of remoteCandidates) {
           try {
