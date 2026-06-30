@@ -63,6 +63,7 @@ import {
 } from '@renderer/lib/ui/select';
 import { Switch } from '@renderer/lib/ui/switch';
 import { Textarea } from '@renderer/lib/ui/textarea';
+import { isImeComposing } from '@renderer/utils/ime';
 import { cn } from '@renderer/utils/utils';
 import { SettingRow } from './SettingRow';
 
@@ -224,7 +225,9 @@ export const LlmProfilesCard: React.FC = () => {
                     }
                   }}
                   onKeyDown={(event) => {
-                    if (event.key === 'Enter') event.currentTarget.blur();
+                    if (event.key === 'Enter' && !isImeComposing(event)) {
+                      event.currentTarget.blur();
+                    }
                   }}
                 />
                 <Button
@@ -490,7 +493,7 @@ const ModelField: React.FC<{
             }
             onBlur={commitModelInput}
             onKeyDown={(event) => {
-              if (event.key === 'Enter') {
+              if (event.key === 'Enter' && !isImeComposing(event)) {
                 commitModelInput();
                 event.currentTarget.blur();
               }
