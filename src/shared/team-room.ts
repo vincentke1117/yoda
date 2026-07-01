@@ -1,4 +1,5 @@
 import type { RuntimeId } from './runtime-registry';
+import type { RoutingHopLimit } from './team-routing-limit';
 
 /** Preset that seeded a room. `review-loop` wires implementer↔reviewer routing. */
 export type RoomPreset = 'freeform' | 'review-loop';
@@ -29,6 +30,8 @@ export interface TeamRoom {
   name: string;
   preset: RoomPreset;
   status: 'active' | 'archived';
+  /** Max conductor routing deliveries per human prompt. null = unlimited. */
+  routingHopLimit: RoutingHopLimit;
   createdAt: string;
   updatedAt: string;
 }

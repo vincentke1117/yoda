@@ -3,6 +3,11 @@ import { observer } from 'mobx-react-lite';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Agent } from '@shared/agents';
+import {
+  DEFAULT_ROUTING_HOP_LIMIT,
+  normalizeRoutingHopLimit,
+  type RoutingHopLimit,
+} from '@shared/team-routing-limit';
 import { rpc } from '@renderer/lib/ipc';
 import { cn } from '@renderer/utils/utils';
 import { agentRoomStore } from './agent-room-store';
@@ -39,6 +44,8 @@ export const NewRoomForm = observer(function NewRoomForm({ onClose }: { onClose:
   const [implementerRuntime, setImplementerRuntime] = useState('claude');
   const [reviewerRuntime, setReviewerRuntime] = useState('codex');
   const [selectedAgentIds, setSelectedAgentIds] = useState<string[]>([]);
+  const [routingHopLimit, setRoutingHopLimit] =
+    useState<RoutingHopLimit>(DEFAULT_ROUTING_HOP_LIMIT);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -108,6 +115,7 @@ export const NewRoomForm = observer(function NewRoomForm({ onClose }: { onClose:
           requirement: requirement.trim(),
           implementerRuntime,
           reviewerRuntime,
+          routingHopLimit,
         });
       } else {
         const members = selectedAgentIds
@@ -124,6 +132,7 @@ export const NewRoomForm = observer(function NewRoomForm({ onClose }: { onClose:
           taskId: resolvedTaskId,
           name: name.trim(),
           members,
+          routingHopLimit,
         });
       }
       onClose();
@@ -223,6 +232,35 @@ export const NewRoomForm = observer(function NewRoomForm({ onClose }: { onClose:
               placeholder={t('agentRoom.field.roomNamePlaceholder')}
               className="w-full rounded-md border border-border bg-background-1 px-3 py-2 text-sm outline-none focus:border-primary/60"
             />
+          </Field>
+
+          <Field label={t('agentRoom.field.routingHopLimit')}>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min={1}
+                step={1}
+                disabled={routingHopLimit === null}
+                value={routingHopLimit ?? ''}
+                onChange={(e) =>
+                  setRoutingHopLimit(normalizeRoutingHopLimit(Number(e.target.value)))
+                }
+                className="min-w-0 flex-1 rounded-md border border-border bg-background-1 px-3 py-2 text-sm outline-none focus:border-primary/60 disabled:opacity-50"
+              />
+              <span className="flex shrink-0 items-center gap-1.5 text-xs text-foreground-muted">
+                <input
+                  type="checkbox"
+                  checked={routingHopLimit === null}
+                  onChange={(e) =>
+                    setRoutingHopLimit(e.target.checked ? null : DEFAULT_ROUTING_HOP_LIMIT)
+                  }
+                />
+                {t('agentRoom.field.routingHopLimitInfinite')}
+              </span>
+            </div>
+            <span className="text-[11px] text-foreground-passive">
+              {t('agentRoom.field.routingHopLimitHint')}
+            </span>
           </Field>
 
           {mode === 'review' ? (

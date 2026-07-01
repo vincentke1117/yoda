@@ -1,5 +1,6 @@
 import { BUILTIN_AGENT_KEYS } from './builtin-agents';
 import type { RuntimeId } from './runtime-registry';
+import { DEFAULT_ROUTING_HOP_LIMIT, type RoutingHopLimit } from './team-routing-limit';
 
 /**
  * An Agent Team is a reusable, project/task-decoupled template (like an Agent) —
@@ -42,6 +43,8 @@ export interface AgentTeam {
   routing: TeamRouting;
   /** Code-defined built-ins are not editable/deletable. */
   builtin: boolean;
+  /** Max conductor routing deliveries per human prompt. null = unlimited. */
+  routingHopLimit: RoutingHopLimit;
   members: AgentTeamMember[];
   createdAt: string;
   updatedAt: string;
@@ -51,6 +54,7 @@ export interface AgentTeamDraft {
   name: string;
   icon: string;
   routing: TeamRouting;
+  routingHopLimit: RoutingHopLimit;
   members: AgentTeamMember[];
 }
 
@@ -70,6 +74,7 @@ export const BUILTIN_TEAMS: AgentTeam[] = [
     icon: '🏢',
     routing: 'fan-out',
     builtin: true,
+    routingHopLimit: DEFAULT_ROUTING_HOP_LIMIT,
     members: [
       {
         handle: 'ceo',
@@ -116,6 +121,7 @@ export const BUILTIN_TEAMS: AgentTeam[] = [
     icon: '🔍',
     routing: 'review-loop',
     builtin: true,
+    routingHopLimit: DEFAULT_ROUTING_HOP_LIMIT,
     members: [
       {
         handle: 'referee',

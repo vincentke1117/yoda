@@ -5,6 +5,7 @@ import {
   teamRoomUpdatedChannel,
 } from '@shared/events/teamRoomEvents';
 import type { RoomSnapshot, TeamRoom } from '@shared/team-room';
+import type { RoutingHopLimit } from '@shared/team-routing-limit';
 import { events, rpc } from '@renderer/lib/ipc';
 
 /**
@@ -89,6 +90,7 @@ class AgentRoomStore {
     requirement: string;
     implementerRuntime: string;
     reviewerRuntime: string;
+    routingHopLimit?: RoutingHopLimit;
   }): Promise<void> {
     const roomId = await rpc.teamRooms.createReviewRoom({
       projectId: params.projectId,
@@ -97,6 +99,7 @@ class AgentRoomStore {
       requirement: params.requirement,
       implementer: { runtime: params.implementerRuntime as never },
       reviewer: { runtime: params.reviewerRuntime as never },
+      routingHopLimit: params.routingHopLimit,
     });
     await this.loadRooms();
     await this.selectRoom(roomId);
@@ -107,11 +110,13 @@ class AgentRoomStore {
     taskId: string;
     name: string;
     members: { handle: string; displayName: string; runtime: string; systemPrompt?: string }[];
+    routingHopLimit?: RoutingHopLimit;
   }): Promise<void> {
     const roomId = await rpc.teamRooms.createFreeformRoom({
       projectId: params.projectId,
       taskId: params.taskId,
       name: params.name,
+      routingHopLimit: params.routingHopLimit,
       members: params.members.map((m) => ({
         handle: m.handle,
         displayName: m.displayName,

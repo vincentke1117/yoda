@@ -8,6 +8,7 @@ import {
 } from '@shared/agent-team';
 import type { RuntimeId } from '@shared/runtime-registry';
 import type { MemberAccent } from '@shared/team-room';
+import type { RoutingHopLimit } from '@shared/team-routing-limit';
 import { agentTeamsService } from '@main/core/agent-teams/agent-teams-service';
 import { agentsConfigService } from '@main/core/agents-config/agents-config-service';
 import { addMember, createRoom, postMessage } from './store';
@@ -41,6 +42,7 @@ export type SeedReviewRoomParams = {
   requirement: string;
   implementer: { runtime: RuntimeId; systemPrompt?: string; autoApprove?: boolean };
   reviewer: { runtime: RuntimeId; systemPrompt?: string; autoApprove?: boolean };
+  routingHopLimit?: RoutingHopLimit;
 };
 
 /** Create a review-loop room (lead + implementer + reviewer) and kick it off. */
@@ -50,6 +52,7 @@ export async function seedReviewRoom(params: SeedReviewRoomParams): Promise<stri
     taskId: params.taskId,
     name: params.name,
     preset: 'freeform',
+    routingHopLimit: params.routingHopLimit,
   });
 
   const lead = await addMember({
@@ -171,6 +174,7 @@ export async function seedRoomFromTeam(args: {
     // One generic engine: the routing addendum in each member's prompt encodes
     // the collaboration; the conductor adds no per-preset control logic.
     preset: 'freeform',
+    routingHopLimit: team.routingHopLimit,
   });
 
   const lead = await addMember({
@@ -260,6 +264,7 @@ export type SeedFreeformRoomParams = {
   taskId: string;
   name: string;
   members: FreeformMemberSeed[];
+  routingHopLimit?: RoutingHopLimit;
 };
 
 /** Create a freeform room: a lead + the chosen agent members, no auto-routing. */
@@ -269,6 +274,7 @@ export async function seedFreeformRoom(params: SeedFreeformRoomParams): Promise<
     taskId: params.taskId,
     name: params.name,
     preset: 'freeform',
+    routingHopLimit: params.routingHopLimit,
   });
   await addMember({
     roomId: room.id,

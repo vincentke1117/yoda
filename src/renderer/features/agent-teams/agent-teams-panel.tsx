@@ -9,6 +9,11 @@ import {
 import type { Agent } from '@shared/agents';
 import { BUILTIN_AGENT_PRESETS } from '@shared/builtin-agents';
 import { RUNTIMES } from '@shared/runtime-registry';
+import {
+  DEFAULT_ROUTING_HOP_LIMIT,
+  normalizeRoutingHopLimit,
+  type RoutingHopLimit,
+} from '@shared/team-routing-limit';
 import { useAgents } from '@renderer/features/agents-config/use-agents';
 import { AgentCard } from '@renderer/lib/components/agent-card/agent-card';
 import { AgentMetaRow } from '@renderer/lib/components/agent-card/agent-meta-row';
@@ -118,6 +123,7 @@ type Editing = {
   name: string;
   icon: string;
   routing: TeamRouting;
+  routingHopLimit: RoutingHopLimit;
   members: AgentTeamMember[];
 } | null;
 
@@ -126,6 +132,10 @@ const ROUTING_LABELS: Record<TeamRouting, string> = {
   'fan-out': 'Fan-out (lead plans, team executes once)',
   freeform: 'Freeform (open @-mention chat)',
 };
+
+function formatRoutingHopLimit(limit: RoutingHopLimit): string {
+  return limit === null ? 'Unlimited routing steps' : `${limit} routing steps per prompt`;
+}
 
 export function AgentTeamsMainPanel() {
   const { teams, create, update, remove, duplicate } = useAgentTeams();
@@ -141,7 +151,13 @@ export function AgentTeamsMainPanel() {
 
   const startNew = () => {
     setSelectedId('__new__');
-    setDraft({ name: '', icon: '👥', routing: 'freeform', members: [] });
+    setDraft({
+      name: '',
+      icon: '👥',
+      routing: 'freeform',
+      routingHopLimit: DEFAULT_ROUTING_HOP_LIMIT,
+      members: [],
+    });
   };
   const startEdit = (team: AgentTeam) => {
     setSelectedId(team.id);
@@ -149,6 +165,7 @@ export function AgentTeamsMainPanel() {
       name: team.name,
       icon: team.icon,
       routing: team.routing,
+      routingHopLimit: team.routingHopLimit,
       members: team.members.map((m) => ({ ...m })),
     });
   };
@@ -255,7 +272,10 @@ export function AgentTeamsMainPanel() {
                 </>
               )}
             </div>
-            <p className="mb-2 text-xs text-foreground-muted">{ROUTING_LABELS[selected.routing]}</p>
+            <p className="mb-1 text-xs text-foreground-muted">{ROUTING_LABELS[selected.routing]}</p>
+            <p className="mb-2 text-xs text-foreground-passive">
+              {formatRoutingHopLimit(selected.routingHopLimit)}
+            </p>
             <MemberList members={selected.members} agents={agents} />
             {isBuiltin && (
               <p className="mt-3 text-xs text-foreground-muted">
@@ -357,6 +377,42 @@ function TeamEditor({
               </option>
             ))}
           </select>
+        </label>
+
+        <label className="flex flex-col gap-1.5">
+          <span className="text-xs font-medium text-foreground-muted">Routing limit</span>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min={1}
+              step={1}
+              disabled={draft.routingHopLimit === null}
+              value={draft.routingHopLimit ?? ''}
+              onChange={(e) =>
+                onChange({
+                  ...draft,
+                  routingHopLimit: normalizeRoutingHopLimit(Number(e.target.value)),
+                })
+              }
+              className="min-w-0 flex-1 rounded-md border border-border bg-background-1 px-3 py-2 text-sm outline-none focus:border-primary/60 disabled:opacity-50"
+            />
+            <span className="flex shrink-0 items-center gap-1.5 text-xs text-foreground-muted">
+              <input
+                type="checkbox"
+                checked={draft.routingHopLimit === null}
+                onChange={(e) =>
+                  onChange({
+                    ...draft,
+                    routingHopLimit: e.target.checked ? null : DEFAULT_ROUTING_HOP_LIMIT,
+                  })
+                }
+              />
+              Unlimited
+            </span>
+          </div>
+          <span className="text-[11px] text-foreground-passive">
+            Max agent deliveries per human prompt.
+          </span>
         </label>
 
         <div className="flex flex-col gap-1.5">

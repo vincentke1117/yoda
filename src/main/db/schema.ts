@@ -591,6 +591,8 @@ export const teamRooms = sqliteTable(
     preset: text('preset').notNull().default('freeform'),
     /** 'active' | 'archived' */
     status: text('status').notNull().default('active'),
+    /** Max conductor routing deliveries per human prompt; NULL = unlimited. */
+    routingHopLimit: integer('routing_hop_limit').default(100),
     createdAt: text('created_at')
       .notNull()
       .default(sql`CURRENT_TIMESTAMP`),
@@ -726,6 +728,8 @@ export const agentTeams = sqliteTable('agent_teams', {
   icon: text('icon').notNull().default(''),
   /** TeamRouting: 'review-loop' | 'fan-out' | 'freeform'. */
   routing: text('routing').notNull().default('freeform'),
+  /** Max conductor routing deliveries per human prompt; NULL = unlimited. */
+  routingHopLimit: integer('routing_hop_limit').default(100),
   members: text('members', { mode: 'json' })
     .notNull()
     .$type<AgentTeamMember[]>()

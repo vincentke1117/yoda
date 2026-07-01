@@ -9,6 +9,7 @@ import {
   type TeamRouting,
 } from '@shared/agent-team';
 import { isValidRuntimeId } from '@shared/runtime-registry';
+import { normalizeRoutingHopLimit } from '@shared/team-routing-limit';
 import { db } from '@main/db/client';
 import { agentTeams, type AgentTeamRow } from '@main/db/schema';
 
@@ -22,6 +23,7 @@ function rowToTeam(row: AgentTeamRow): AgentTeam {
     routing: ROUTINGS.includes(row.routing as TeamRouting)
       ? (row.routing as TeamRouting)
       : 'freeform',
+    routingHopLimit: normalizeRoutingHopLimit(row.routingHopLimit),
     builtin: false,
     members: Array.isArray(row.members) ? row.members : [],
     createdAt: row.createdAt,
@@ -61,6 +63,7 @@ function sanitizeDraft(draft: AgentTeamDraft): AgentTeamDraft {
     name: draft.name.trim() || 'Untitled team',
     icon: draft.icon.trim() || '👥',
     routing: ROUTINGS.includes(draft.routing) ? draft.routing : 'freeform',
+    routingHopLimit: normalizeRoutingHopLimit(draft.routingHopLimit),
     members: sanitizeMembers(draft.members),
   };
 }
@@ -89,6 +92,7 @@ class AgentTeamsService {
         name: clean.name,
         icon: clean.icon,
         routing: clean.routing,
+        routingHopLimit: clean.routingHopLimit,
         members: clean.members,
       })
       .execute();
@@ -103,7 +107,13 @@ class AgentTeamsService {
     const clean = sanitizeDraft(draft);
     await db
       .update(agentTeams)
-      .set({ name: clean.name, icon: clean.icon, routing: clean.routing, members: clean.members })
+      .set({
+        name: clean.name,
+        icon: clean.icon,
+        routing: clean.routing,
+        routingHopLimit: clean.routingHopLimit,
+        members: clean.members,
+      })
       .where(eq(agentTeams.id, id))
       .execute();
     const updated = await this.get(id);
@@ -124,6 +134,7 @@ class AgentTeamsService {
       name: `${source.name} copy`,
       icon: source.icon,
       routing: source.routing,
+      routingHopLimit: source.routingHopLimit,
       members: source.members,
     });
   }

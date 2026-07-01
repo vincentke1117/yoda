@@ -10,6 +10,7 @@ import { teamRoomUpdatedChannel } from '@shared/events/teamRoomEvents';
 import { makePtySessionId } from '@shared/ptySessionId';
 import type { RuntimeId } from '@shared/runtime-registry';
 import type { MemberStatus, RoomMember, RoomMessage } from '@shared/team-room';
+import type { RoutingHopLimit } from '@shared/team-routing-limit';
 import { agentSessionRuntimeStore } from '@main/core/conversations/agent-session-runtime';
 import { createConversation } from '@main/core/conversations/createConversation';
 import { injectPrompt } from '@main/core/conversations/inject-prompt';
@@ -30,8 +31,6 @@ import { teamRoomEvents } from './team-room-events';
 const STATUS_POLL_MS = 1_500;
 /** Cadence of the conductor's "standup" roster summary while work is in progress. */
 const STANDUP_MS = 120_000;
-/** Max agent deliveries per human prompt, so an @-cascade can't loop forever. */
-const MAX_HOPS = 24;
 /** The reserved broadcast handle. */
 const ALL_HANDLE = 'all';
 
@@ -61,7 +60,7 @@ function mapStatus(s: AgentSessionRuntimeStatus): MemberStatus {
  */
 class RoomConductor {
   private started = false;
-  private readonly hops = new Map<string, number>(); // roomId -> remaining budget
+  private readonly hops = new Map<string, RoutingHopLimit>(); // roomId -> remaining budget; null = unlimited
   private readonly statusWatchers = new Map<string, () => void>(); // memberId -> cancel
   private readonly standups = new Map<string, () => void>(); // roomId -> stop
   private readonly activity = new Map<string, number>(); // memberId -> last PTY-growth ts
@@ -108,7 +107,7 @@ class RoomConductor {
     // A fresh human prompt (a member with no runtime) refills the cascade budget;
     // agent-authored messages spend it so a back-and-forth can't run away.
     const fromHuman = !!author && !author.runtime;
-    if (fromHuman) this.hops.set(roomId, MAX_HOPS);
+    if (fromHuman) this.hops.set(roomId, room.routingHopLimit);
 
     // An agent that addressed someone this turn has explicitly handed off, so its
     // turn-end must NOT also trigger the automatic hand-back to the lead.
@@ -131,7 +130,7 @@ class RoomConductor {
     const fromName = author?.displayName ?? 'the lead';
 
     for (const member of targets) {
-      if (!this.spend(roomId)) return this.pauseRouting(roomId);
+      if (!this.spend(roomId)) return this.pauseRouting(roomId, room.routingHopLimit);
       await this.deliverTo(room.projectId, room.taskId, roomId, member, roster, {
         fromName,
         body: message.body,
@@ -141,17 +140,20 @@ class RoomConductor {
 
   /** Spend one delivery from the room's cascade budget. False when exhausted. */
   private spend(roomId: string): boolean {
-    const remaining = this.hops.get(roomId) ?? 0;
-    if (remaining <= 0) return false;
-    this.hops.set(roomId, remaining - 1);
+    const remaining = this.hops.get(roomId);
+    if (remaining === null) return true;
+    const budget = remaining ?? 0;
+    if (budget <= 0) return false;
+    this.hops.set(roomId, budget - 1);
     return true;
   }
 
-  private async pauseRouting(roomId: string): Promise<void> {
+  private async pauseRouting(roomId: string, limit: RoutingHopLimit): Promise<void> {
+    const limitText = limit === null ? 'unlimited' : `${limit}`;
     await postMessage({
       roomId,
       kind: 'system',
-      body: `Routing paused — hit the ${MAX_HOPS}-message limit for this prompt. @mention a teammate to continue.`,
+      body: `Routing paused — hit the ${limitText} routing-step limit for this prompt. @mention a teammate to continue.`,
       mentions: [],
     });
   }
@@ -313,7 +315,7 @@ class RoomConductor {
       return;
     }
 
-    if (!this.spend(roomId)) return this.pauseRouting(roomId);
+    if (!this.spend(roomId)) return this.pauseRouting(roomId, room.routingHopLimit);
     const roster: RosterEntry[] = members.map((m) => ({
       handle: m.handle,
       displayName: m.displayName,

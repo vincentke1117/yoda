@@ -17,6 +17,7 @@ import {
   type RoomVerdict,
   type TeamRoom,
 } from '@shared/team-room';
+import { normalizeRoutingHopLimit, type RoutingHopLimit } from '@shared/team-routing-limit';
 import { db } from '@main/db/client';
 import {
   roomMembers,
@@ -39,6 +40,7 @@ function mapRoom(row: TeamRoomRow): TeamRoom {
     name: row.name,
     preset: row.preset as RoomPreset,
     status: row.status as TeamRoom['status'],
+    routingHopLimit: normalizeRoutingHopLimit(row.routingHopLimit),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -82,6 +84,7 @@ export type CreateRoomParams = {
   taskId: string;
   name: string;
   preset?: RoomPreset;
+  routingHopLimit?: RoutingHopLimit;
 };
 
 export async function createRoom(params: CreateRoomParams): Promise<TeamRoom> {
@@ -95,6 +98,7 @@ export async function createRoom(params: CreateRoomParams): Promise<TeamRoom> {
       name: params.name,
       preset: params.preset ?? 'freeform',
       status: 'active',
+      routingHopLimit: normalizeRoutingHopLimit(params.routingHopLimit),
       createdAt: sql`CURRENT_TIMESTAMP`,
       updatedAt: sql`CURRENT_TIMESTAMP`,
     })
