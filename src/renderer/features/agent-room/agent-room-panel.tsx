@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { RoomMember, RoomMessage, RoomSnapshot } from '@shared/team-room';
 import { useProvisionedTask } from '@renderer/features/tasks/task-view-context';
+import { Popover, PopoverContent, PopoverTrigger } from '@renderer/lib/ui/popover';
+import { RelativeTime } from '@renderer/lib/ui/relative-time';
 import { cn } from '@renderer/utils/utils';
 import {
   ACCENT_AVATAR,
@@ -73,44 +75,51 @@ export const RoomChat = observer(function RoomChat({ snapshot }: { snapshot: Roo
             · {t('agentRoom.agentCount', { count: agents.length })}
           </p>
         </div>
-        <div className="ml-auto flex items-center gap-1.5">
-          {agents.map((m) => (
-            <button
-              key={m.id}
-              type="button"
-              onClick={() => openMember(m.id)}
-              title={t('agentRoom.viewAgent')}
-              className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-transparent px-1.5 py-1 transition-colors hover:border-border hover:bg-background-2"
-            >
-              <div className="relative">
-                <div
-                  className={cn(
-                    'flex size-6 items-center justify-center rounded-md text-[11px] font-semibold',
-                    ACCENT_AVATAR[m.accent]
-                  )}
-                >
-                  {monogram(m.displayName)}
+        <div className="ml-auto flex items-center gap-2">
+          <TeamIntroPopover
+            agents={agents}
+            preset={snapshot.room.preset}
+            updatedAt={snapshot.room.updatedAt}
+            onOpenMember={openMember}
+          />
+          <div className="flex items-center gap-1.5">
+            {agents.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => openMember(m.id)}
+                title={t('agentRoom.viewAgent')}
+                className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-transparent px-1.5 py-1 transition-colors hover:border-border hover:bg-background-2"
+              >
+                <div className="relative">
+                  <div
+                    className={cn(
+                      'flex size-6 items-center justify-center rounded-md text-[11px] font-semibold',
+                      ACCENT_AVATAR[m.accent]
+                    )}
+                  >
+                    {monogram(m.displayName)}
+                  </div>
+                  <span
+                    className={cn(
+                      'absolute -bottom-0.5 -right-0.5 size-2 rounded-full ring-2 ring-background',
+                      STATUS_DOT[m.status]
+                    )}
+                  />
                 </div>
-                <span
-                  className={cn(
-                    'absolute -bottom-0.5 -right-0.5 size-2 rounded-full ring-2 ring-background',
-                    STATUS_DOT[m.status]
-                  )}
-                />
-              </div>
-              <span className="flex flex-col items-start leading-tight">
-                <span className="text-xs font-medium">{m.displayName}</span>
-                <span className={cn('text-[10px]', STATUS_TEXT[m.status])}>
-                  {STATUS_LABEL[m.status]}
+                <span className="flex flex-col items-start leading-tight">
+                  <span className="text-xs font-medium">{m.displayName}</span>
+                  <span className={cn('text-[10px]', STATUS_TEXT[m.status])}>
+                    {STATUS_LABEL[m.status]}
+                  </span>
                 </span>
-              </span>
-            </button>
-          ))}
+              </button>
+            ))}
+          </div>
         </div>
       </header>
 
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-        <TeamIntroCard agents={agents} preset={snapshot.room.preset} onOpenMember={openMember} />
         {snapshot.messages.map((msg) => (
           <MessageRow
             key={msg.id}
@@ -127,13 +136,53 @@ export const RoomChat = observer(function RoomChat({ snapshot }: { snapshot: Roo
   );
 });
 
-const TeamIntroCard = observer(function TeamIntroCard({
+const TeamIntroPopover = observer(function TeamIntroPopover({
   agents,
   preset,
+  updatedAt,
   onOpenMember,
 }: {
   agents: RoomMember[];
   preset: RoomSnapshot['room']['preset'];
+  updatedAt: string;
+  onOpenMember: OpenTab;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <Popover>
+      <PopoverTrigger
+        aria-label={t('agentRoom.intro.title')}
+        title={t('agentRoom.intro.title')}
+        className="flex size-8 cursor-pointer items-center justify-center rounded-md border border-border text-foreground-muted transition-colors hover:bg-background-2 hover:text-foreground"
+      >
+        <Users className="size-4" />
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        sideOffset={8}
+        className="w-80 gap-3 border border-border bg-background p-3 text-foreground shadow-lg"
+      >
+        <TeamIntroPanel
+          agents={agents}
+          preset={preset}
+          updatedAt={updatedAt}
+          onOpenMember={onOpenMember}
+        />
+      </PopoverContent>
+    </Popover>
+  );
+});
+
+const TeamIntroPanel = observer(function TeamIntroPanel({
+  agents,
+  preset,
+  updatedAt,
+  onOpenMember,
+}: {
+  agents: RoomMember[];
+  preset: RoomSnapshot['room']['preset'];
+  updatedAt: string;
   onOpenMember: OpenTab;
 }) {
   const { t } = useTranslation();
@@ -143,10 +192,16 @@ const TeamIntroCard = observer(function TeamIntroCard({
   const steps = t(`agentRoom.intro.${key}.steps`, { returnObjects: true, impl, rev }) as string[];
 
   return (
-    <div className="mb-4 rounded-xl border border-border bg-background-1 p-4">
-      <div className="mb-1.5 flex items-center gap-2">
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center gap-2">
         <Users className="size-4 text-primary" />
-        <span className="text-sm font-semibold">{t('agentRoom.intro.title')}</span>
+        <span className="min-w-0 flex-1 text-sm font-semibold">{t('agentRoom.intro.title')}</span>
+        <RelativeTime
+          value={updatedAt}
+          compact
+          ago
+          className="shrink-0 text-[11px] text-foreground-passive"
+        />
       </div>
       <p className="text-xs leading-relaxed text-foreground-muted">
         {t(`agentRoom.intro.${key}.lead`)}
@@ -159,7 +214,7 @@ const TeamIntroCard = observer(function TeamIntroCard({
           </li>
         ))}
       </ol>
-      <p className="mb-3 text-[11px] italic text-foreground-muted/80">
+      <p className="text-[11px] italic text-foreground-muted/80">
         {t(`agentRoom.intro.${key}.note`)}
       </p>
       <div className="flex flex-col gap-0.5">
@@ -184,6 +239,12 @@ const TeamIntroCard = observer(function TeamIntroCard({
               <span className={cn('size-1.5 rounded-full', STATUS_DOT[m.status])} />
               {STATUS_LABEL[m.status]}
             </span>
+            <RelativeTime
+              value={m.createdAt}
+              compact
+              ago
+              className="font-mono text-[10px] text-foreground-passive"
+            />
             <span className="font-mono text-[10px] text-foreground-muted">@{m.handle}</span>
           </button>
         ))}
@@ -212,6 +273,13 @@ function MessageRow({
       <div className="my-2 flex justify-center">
         <div className="text-center text-xs italic text-foreground-muted">
           {renderBody(message.body, byHandle, onOpenMember)}
+          <span className="mx-1 text-foreground-passive">·</span>
+          <RelativeTime
+            value={message.createdAt}
+            compact
+            ago
+            className="text-[10px] not-italic text-foreground-passive"
+          />
         </div>
       </div>
     );
@@ -271,6 +339,12 @@ function MessageRow({
               {t('agentRoom.handoff')}
             </span>
           )}
+          <RelativeTime
+            value={message.createdAt}
+            compact
+            ago
+            className="shrink-0 text-[11px] text-foreground-passive"
+          />
           {openSession && (
             <button
               type="button"
