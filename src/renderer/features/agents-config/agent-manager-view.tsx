@@ -39,6 +39,7 @@ function AgentCard({
   return (
     <AgentIdentityCard
       name={name}
+      icon={agent.icon}
       description={description || t('agentManager.noDescription')}
       footer={
         <AgentMetaRow

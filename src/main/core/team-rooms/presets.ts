@@ -6,6 +6,7 @@ import {
   type AgentTeamMember,
   type TeamRouting,
 } from '@shared/agent-team';
+import { DEFAULT_AGENT_ICON } from '@shared/agents';
 import type { RuntimeId } from '@shared/runtime-registry';
 import type { MemberAccent } from '@shared/team-room';
 import { agentTeamsService } from '@main/core/agent-teams/agent-teams-service';
@@ -100,15 +101,20 @@ function joinRolePrompt(base: string, extra?: string): string {
 
 const TEAM_ACCENTS: MemberAccent[] = ['amber', 'teal', 'violet', 'slate'];
 
-/** Resolve a team member's base system prompt from its agentRef or inline text. */
-async function resolveMemberSystemPrompt(member: AgentTeamMember): Promise<string> {
+type MemberSeedProfile = {
+  systemPrompt: string;
+  icon: string;
+};
+
+/** Resolve a team member's base profile from its agentRef or inline text. */
+async function resolveMemberSeedProfile(member: AgentTeamMember): Promise<MemberSeedProfile> {
   if (member.agentRef) {
     const agent = member.agentRef.startsWith('builtin:')
       ? await agentsConfigService.getBySlug(member.agentRef)
       : await agentsConfigService.get(member.agentRef);
-    if (agent?.systemPrompt) return agent.systemPrompt;
+    if (agent) return { systemPrompt: agent.systemPrompt, icon: agent.icon };
   }
-  return member.systemPrompt ?? '';
+  return { systemPrompt: member.systemPrompt ?? '', icon: DEFAULT_AGENT_ICON };
 }
 
 /**
@@ -197,7 +203,7 @@ export async function seedRoomFromTeam(args: {
   for (let i = 0; i < ordered.length; i++) {
     const member = ordered[i];
     const isLeader = i === 0;
-    const base = await resolveMemberSystemPrompt(member);
+    const base = await resolveMemberSeedProfile(member);
     const addendum = routingAddendum(team.routing, isLeader ? 'leader' : 'worker', {
       leaderHandle,
       workerHandles,
@@ -206,9 +212,10 @@ export async function seedRoomFromTeam(args: {
       roomId: room.id,
       handle: handles[i],
       displayName: member.displayName,
+      icon: base.icon,
       role: isLeader ? 'leader' : 'worker',
       runtime: member.runtime,
-      systemPrompt: joinRolePrompt(base, addendum),
+      systemPrompt: joinRolePrompt(base.systemPrompt, addendum),
       accent: TEAM_ACCENTS[i % TEAM_ACCENTS.length],
     });
   }
@@ -250,6 +257,7 @@ const ACCENT_CYCLE = ['amber', 'teal', 'violet', 'slate'] as const;
 export type FreeformMemberSeed = {
   handle: string;
   displayName: string;
+  icon?: string;
   runtime: RuntimeId;
   systemPrompt?: string;
   autoApprove?: boolean;
@@ -289,6 +297,7 @@ export async function seedFreeformRoom(params: SeedFreeformRoomParams): Promise<
       roomId: room.id,
       handle,
       displayName: m.displayName,
+      icon: m.icon,
       role: 'member',
       runtime: m.runtime,
       systemPrompt: m.systemPrompt ?? '',

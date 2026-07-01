@@ -40,6 +40,8 @@ export interface RoomMember {
   conversationId: string | null;
   handle: string;
   displayName: string;
+  /** Emoji/glyph avatar captured when the member is added to a room. */
+  icon: string;
   /** 'lead' is the human; agents use a role label like 'implementer' | 'reviewer'. */
   role: string;
   runtime: RuntimeId | null;

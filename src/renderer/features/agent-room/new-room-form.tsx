@@ -116,6 +116,7 @@ export const NewRoomForm = observer(function NewRoomForm({ onClose }: { onClose:
           .map((a) => ({
             handle: a.slug,
             displayName: a.name,
+            icon: a.icon,
             runtime: a.preferredRuntime ?? 'claude',
             systemPrompt: a.systemPrompt,
           }));

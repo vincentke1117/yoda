@@ -619,6 +619,7 @@ export const roomMembers = sqliteTable(
     /** Stable @handle used for mention routing (unique within a room). */
     handle: text('handle').notNull(),
     displayName: text('display_name').notNull(),
+    icon: text('icon').notNull().default(''),
     /** 'lead' (the human) | a role label like 'implementer' | 'reviewer' | 'member'. */
     role: text('role').notNull(),
     /** Runtime the member's conversation spawns on (null for the human lead). */

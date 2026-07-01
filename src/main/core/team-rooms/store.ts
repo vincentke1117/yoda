@@ -3,6 +3,7 @@ import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import {
   roomMemberStatusChangedChannel,
   roomMessagePostedChannel,
+  teamRoomUpdatedChannel,
 } from '@shared/events/teamRoomEvents';
 import type { RuntimeId } from '@shared/runtime-registry';
 import {
@@ -51,6 +52,7 @@ function mapMember(row: RoomMemberRow): RoomMember {
     conversationId: row.conversationId,
     handle: row.handle,
     displayName: row.displayName,
+    icon: row.icon,
     role: row.role,
     runtime: (row.runtime as RuntimeId | null) ?? null,
     systemPrompt: row.systemPrompt,
@@ -155,6 +157,7 @@ export type AddMemberParams = {
   roomId: string;
   handle: string;
   displayName: string;
+  icon?: string;
   role: string;
   runtime?: RuntimeId | null;
   systemPrompt?: string;
@@ -171,6 +174,7 @@ export async function addMember(params: AddMemberParams): Promise<RoomMember> {
       roomId: params.roomId,
       handle: params.handle,
       displayName: params.displayName,
+      icon: params.icon?.trim() ?? '',
       role: params.role,
       runtime: params.runtime ?? null,
       systemPrompt: params.systemPrompt ?? '',
@@ -190,6 +194,37 @@ export async function getMembers(roomId: string): Promise<RoomMember[]> {
     .where(eq(roomMembers.roomId, roomId))
     .orderBy(asc(roomMembers.createdAt));
   return rows.map(mapMember);
+}
+
+export type UpdateMemberProfileParams = {
+  roomId: string;
+  memberId: string;
+  displayName: string;
+  icon: string;
+};
+
+export async function updateMemberProfile(params: UpdateMemberProfileParams): Promise<RoomMember> {
+  const displayName = params.displayName.trim();
+  if (!displayName) throw new Error('Member name cannot be empty');
+
+  const [row] = await db
+    .update(roomMembers)
+    .set({
+      displayName,
+      icon: params.icon.trim(),
+    })
+    .where(and(eq(roomMembers.id, params.memberId), eq(roomMembers.roomId, params.roomId)))
+    .returning();
+  if (!row) throw new Error(`Room member ${params.memberId} not found`);
+
+  await db
+    .update(teamRooms)
+    .set({ updatedAt: new Date().toISOString() })
+    .where(eq(teamRooms.id, params.roomId));
+
+  const member = mapMember(row);
+  events.emit(teamRoomUpdatedChannel, { roomId: params.roomId }, params.roomId);
+  return member;
 }
 
 /** Find the room member that owns a conversation (used by the team-at callback). */

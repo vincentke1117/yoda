@@ -17,9 +17,11 @@ import {
   getRoomForTask,
   getRoomsForProject,
   postMessage,
+  updateMemberProfile,
   type AddMemberParams,
   type CreateRoomParams,
   type PostMessageParams,
+  type UpdateMemberProfileParams,
 } from './store';
 
 export const teamRoomController = createRPCController({
@@ -34,6 +36,8 @@ export const teamRoomController = createRPCController({
   getRoomForTask: (projectId: string, taskId: string): Promise<RoomSnapshot | null> =>
     getRoomForTask(projectId, taskId),
   addMember: (params: AddMemberParams): Promise<RoomMember> => addMember(params),
+  updateMemberProfile: (params: UpdateMemberProfileParams): Promise<RoomMember> =>
+    updateMemberProfile(params),
   postMessage: (params: PostMessageParams): Promise<RoomMessage> => postMessage(params),
   getMessages: (roomId: string): Promise<RoomMessage[]> => getMessages(roomId),
 });
