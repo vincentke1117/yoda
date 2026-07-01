@@ -18,6 +18,7 @@ import {
 import { agentRoomStore } from './agent-room-store';
 
 const monogram = (name: string) => name.trim().charAt(0).toUpperCase() || '?';
+const avatarText = (displayName: string, icon?: string) => icon?.trim() || monogram(displayName);
 
 /** Opens an agent's detail / a session as a normal task tab (defaulting to the sidebar). */
 type OpenTab = (id: string) => void;
@@ -98,7 +99,7 @@ export const RoomChat = observer(function RoomChat({ snapshot }: { snapshot: Roo
                       ACCENT_AVATAR[m.accent]
                     )}
                   >
-                    {monogram(m.displayName)}
+                    {avatarText(m.displayName, m.icon)}
                   </div>
                   <span
                     className={cn(
@@ -232,7 +233,7 @@ const TeamIntroPanel = observer(function TeamIntroPanel({
                 ACCENT_AVATAR[m.accent]
               )}
             >
-              {monogram(m.displayName)}
+              {avatarText(m.displayName, m.icon)}
             </div>
             <span className="text-sm font-medium">{m.displayName}</span>
             <span className="ml-auto flex items-center gap-1 text-[10px] text-foreground-muted">
@@ -305,7 +306,7 @@ function MessageRow({
             ACCENT_AVATAR[accent]
           )}
         >
-          {monogram(name)}
+          {avatarText(name, author?.icon)}
         </button>
       ) : (
         <div
@@ -314,7 +315,7 @@ function MessageRow({
             ACCENT_AVATAR[accent]
           )}
         >
-          {monogram(name)}
+          {avatarText(name, author?.icon)}
         </div>
       )}
       <div className="min-w-0 flex-1">
@@ -397,6 +398,7 @@ type MentionItem = {
   kind: 'mention';
   handle: string;
   displayName: string;
+  icon: string;
   accent: RoomMember['accent'];
   status: RoomMember['status'] | null;
 };
@@ -416,7 +418,14 @@ const Composer = observer(function Composer({ members }: { members: RoomMember[]
   );
   const mentionable: MentionItem[] = useMemo(
     () => [
-      { kind: 'mention', handle: 'all', displayName: 'Everyone', accent: 'slate', status: null },
+      {
+        kind: 'mention',
+        handle: 'all',
+        displayName: 'Everyone',
+        icon: '',
+        accent: 'slate',
+        status: null,
+      },
       ...members
         .filter((m) => m.role !== 'lead')
         .map(
@@ -424,6 +433,7 @@ const Composer = observer(function Composer({ members }: { members: RoomMember[]
             kind: 'mention',
             handle: m.handle,
             displayName: m.displayName,
+            icon: m.icon,
             accent: m.accent,
             status: m.status,
           })
@@ -510,7 +520,7 @@ const Composer = observer(function Composer({ members }: { members: RoomMember[]
                       ACCENT_AVATAR[s.accent]
                     )}
                   >
-                    {monogram(s.displayName)}
+                    {avatarText(s.displayName, s.icon)}
                   </div>
                   <span className="flex-1 truncate">{s.displayName}</span>
                   {s.status && (

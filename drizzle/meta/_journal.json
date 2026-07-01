@@ -253,6 +253,13 @@
       "when": 1782902353962,
       "tag": "0035_lazy_electro",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "6",
+      "when": 1782902726589,
+      "tag": "0036_silly_jocasta",
+      "breakpoints": true
     }
   ]
 }

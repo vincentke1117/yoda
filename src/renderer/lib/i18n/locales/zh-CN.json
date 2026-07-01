@@ -1725,7 +1725,16 @@
       }
     },
     "viewAgent": "Agent 详情",
-    "member": { "instructions": "指令", "noInstructions": "无自定义指令" },
+    "member": {
+      "instructions": "指令",
+      "noInstructions": "无自定义指令",
+      "avatar": "头像",
+      "name": "名称",
+      "editProfile": "编辑 Agent",
+      "saveProfile": "保存 Agent",
+      "cancelEdit": "取消",
+      "updateFailed": "更新 Agent 失败"
+    },
     "preset": { "review": "评审循环", "freeform": "自由" },
     "mode": { "review": "评审循环", "freeform": "自由" },
     "taskExisting": "已有任务",

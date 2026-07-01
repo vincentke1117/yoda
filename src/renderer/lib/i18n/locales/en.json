@@ -1725,7 +1725,16 @@
       }
     },
     "viewAgent": "Agent details",
-    "member": { "instructions": "Instructions", "noInstructions": "No custom instructions" },
+    "member": {
+      "instructions": "Instructions",
+      "noInstructions": "No custom instructions",
+      "avatar": "Avatar",
+      "name": "Name",
+      "editProfile": "Edit agent",
+      "saveProfile": "Save agent",
+      "cancelEdit": "Cancel",
+      "updateFailed": "Failed to update agent"
+    },
     "preset": { "review": "Review loop", "freeform": "Freeform" },
     "mode": { "review": "Review loop", "freeform": "Freeform" },
     "taskExisting": "Existing task",

@@ -79,7 +79,11 @@ export function AgentSlotSelector({
           >
             {selectedAgent ? (
               <>
-                <AgentAvatar name={selectedAgent.name} className="size-9 text-sm" />
+                <AgentAvatar
+                  name={selectedAgent.name}
+                  icon={selectedAgent.icon}
+                  className="size-9 text-sm"
+                />
                 <span className="flex min-w-0 flex-1 flex-col text-left leading-tight">
                   {eyebrow}
                   <span className="truncate text-[13px] font-medium">{selectedAgent.name}</span>
@@ -138,6 +142,7 @@ export function AgentSlotSelector({
                   <Row active={active} onClick={() => pick(agent.id)}>
                     <AgentAvatar
                       name={agent.name}
+                      icon={agent.icon}
                       className="size-7 self-start rounded-md text-xs"
                     />
                     <span className="flex min-w-0 flex-1 flex-col gap-0.5">

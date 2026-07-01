@@ -3,8 +3,10 @@ import { cn } from '@renderer/utils/utils';
 import { AgentAvatar } from './agent-avatar';
 
 interface AgentCardProps {
-  /** Drives the monogram avatar and is the card's title. */
+  /** Drives the fallback monogram avatar and is the card's title. */
   name: string;
+  /** Optional user-authored Agent glyph. */
+  icon?: string;
   description?: string;
   /** Tiny label above the name (e.g. a role). */
   eyebrow?: ReactNode;
@@ -25,6 +27,7 @@ interface AgentCardProps {
  */
 export function AgentCard({
   name,
+  icon,
   description,
   eyebrow,
   badges,
@@ -39,7 +42,7 @@ export function AgentCard({
         className
       )}
     >
-      <AgentAvatar name={name} className="size-9 text-sm" />
+      <AgentAvatar name={name} icon={icon} className="size-9 text-sm" />
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         {eyebrow}
         <div className="flex min-w-0 items-center gap-1.5">

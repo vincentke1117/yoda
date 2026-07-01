@@ -99,6 +99,7 @@ function MemberCard({
   const card = (
     <AgentCard
       name={member.displayName}
+      icon={resolved?.icon}
       description={resolved?.description || undefined}
       badges={
         leaderBadge && member.role === 'leader' ? (

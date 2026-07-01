@@ -109,7 +109,13 @@ class AgentRoomStore {
     projectId: string;
     taskId: string;
     name: string;
-    members: { handle: string; displayName: string; runtime: string; systemPrompt?: string }[];
+    members: {
+      handle: string;
+      displayName: string;
+      icon?: string;
+      runtime: string;
+      systemPrompt?: string;
+    }[];
     routingHopLimit?: RoutingHopLimit;
   }): Promise<void> {
     const roomId = await rpc.teamRooms.createFreeformRoom({
@@ -120,12 +126,27 @@ class AgentRoomStore {
       members: params.members.map((m) => ({
         handle: m.handle,
         displayName: m.displayName,
+        icon: m.icon,
         runtime: m.runtime as never,
         systemPrompt: m.systemPrompt,
       })),
     });
     await this.loadRooms();
     await this.selectRoom(roomId);
+  }
+
+  async updateMemberProfile(params: {
+    roomId: string;
+    memberId: string;
+    displayName: string;
+    icon: string;
+  }): Promise<void> {
+    await rpc.teamRooms.updateMemberProfile(params);
+    if (this.activeRoomId === params.roomId) {
+      await this.refreshSnapshot();
+      return;
+    }
+    await this.selectRoom(params.roomId);
   }
 
   /** `/stop` — interrupt every running agent in the active room (Esc to each). */
