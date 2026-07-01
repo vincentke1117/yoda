@@ -141,6 +141,7 @@ const TRAILING_PATH_RUN_RE = new RegExp(`[^${PATH_SEG_EXCLUDED}]+$`, 'u');
 const COMPLETE_EXT_RE = /\.[A-Za-z0-9]{1,8}$/;
 const URL_IN_PROGRESS_RE = /(?:https?|ftp|file):\/\/\S+$/i;
 const URL_CONTINUATION_START_RE = /[A-Za-z0-9._~:/?#@!$&'*+,;=%-]/;
+const URL_CONTINUATION_HINT_RE = /[/:?#&=%]/;
 
 export interface ScanChunk {
   /** Buffer row index of the chunk's first row. */
@@ -226,9 +227,7 @@ function canHardJoin(
   const tail = TRAILING_PATH_RUN_RE.exec(upperText)?.[0];
   if (!tail || !tail.includes('/')) return false;
   if (!lowerStripped || PATH_SEG_EXCLUDED_RE.test(lowerStripped[0])) return false;
-  if (URL_IN_PROGRESS_RE.test(upperText) && !URL_CONTINUATION_START_RE.test(lowerStripped[0])) {
-    return false;
-  }
+  if (URL_IN_PROGRESS_RE.test(upperText) && !canHardJoinUrl(upperText, lowerStripped)) return false;
   // A complete-looking extension at the break usually IS the path end (the row
   // just happens to be full) — only join when the continuation clearly extends
   // it (`.gz` of a wrapped `archive.tar.gz`, or another path segment). A row
@@ -242,6 +241,18 @@ function canHardJoin(
     return false;
   }
   return true;
+}
+
+function canHardJoinUrl(upperText: string, lowerStripped: string): boolean {
+  const first = lowerStripped[0];
+  if (!first || !URL_CONTINUATION_START_RE.test(first)) return false;
+  if (/^[._~:/?#@!$&'*+,;=%-]$/.test(first)) return true;
+  if (/[?&=#%]$/.test(upperText)) return true;
+
+  const leadingToken = /^[^\s"'<>`、，。；：！？（）「」『』【】〈〉《》“”‘’.,;:!?)\]}]+/u.exec(
+    lowerStripped
+  )?.[0];
+  return Boolean(leadingToken && URL_CONTINUATION_HINT_RE.test(leadingToken));
 }
 
 /** True when the row's last column holds a character (hard-wrap break point). */

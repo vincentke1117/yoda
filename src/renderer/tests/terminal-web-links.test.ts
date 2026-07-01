@@ -132,4 +132,15 @@ describe('terminal web links', () => {
       'https://weread.qq.com/web/',
     ]);
   });
+
+  it('does not join a URL into the next ASCII row label', () => {
+    const terminal = makeTerminal([
+      '得到 (https://www.dedao.cn/ebook/detail/',
+      'Macmillan 官方页 (https://us.macmillan.com/books/9781250897947/theworldsisee/)',
+    ]);
+
+    expect(getTerminalWebLinkMatches(terminal, 1).map((match) => match.url)).toEqual([
+      'https://www.dedao.cn/ebook/detail/',
+    ]);
+  });
 });
