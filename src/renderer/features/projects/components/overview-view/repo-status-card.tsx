@@ -8,6 +8,10 @@ import {
   getProjectStore,
   getRepositoryStore,
 } from '@renderer/features/projects/stores/project-selectors';
+import {
+  FilePathActionsDropdown,
+  type FilePathTarget,
+} from '@renderer/lib/components/file-path-actions';
 import { rpc } from '@renderer/lib/ipc';
 import { useGithubContext } from '@renderer/lib/providers/github-context-provider';
 import { Button } from '@renderer/lib/ui/button';
@@ -48,6 +52,11 @@ export const RepoStatusCard = observer(function RepoStatusCard({
   const currentBranch = repo?.currentBranch ?? '—';
   const remote = repo?.configuredRemote;
   const projectPath = project.data.path;
+  const projectPathTarget: FilePathTarget = {
+    absolutePath: projectPath,
+    kind: 'directory',
+    sshConnectionId: project.data.type === 'ssh' ? project.data.connectionId : null,
+  };
   const githubSummary = !repositoryUrl
     ? null
     : !isInitialized || prsLoading || (authenticated && issuesLoading)
@@ -77,8 +86,9 @@ export const RepoStatusCard = observer(function RepoStatusCard({
       </header>
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-xs">
         <dt className="text-foreground-muted">{t('common.path')}</dt>
-        <dd className="font-mono truncate" title={projectPath}>
-          {projectPath}
+        <dd className="flex min-w-0 items-center gap-1 font-mono" title={projectPath}>
+          <span className="min-w-0 truncate">{projectPath}</span>
+          <FilePathActionsDropdown target={projectPathTarget} className="shrink-0" />
         </dd>
         <dt className="text-foreground-muted">{t('projects.currentBranch')}</dt>
         <dd className="font-mono inline-flex items-center gap-1">
