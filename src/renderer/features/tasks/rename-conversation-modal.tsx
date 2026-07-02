@@ -13,7 +13,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@renderer/lib/ui/dialog';
-import { Input } from '@renderer/lib/ui/input';
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from '@renderer/lib/ui/input-group';
 import { isImeComposing } from '@renderer/utils/ime';
 
 type RenameConversationModalArgs = {
@@ -58,7 +63,7 @@ export const RenameConversationModal = observer(function RenameConversationModal
     }
   }, [isValid, isBusy, provisioned, conversationId, normalizedTitle, onSuccess, t]);
 
-  const handleAiRename = useCallback(async () => {
+  const handleAiSuggest = useCallback(async () => {
     if (!provisioned || isBusy) return;
     setIsGeneratingTitle(true);
     setError(null);
@@ -71,16 +76,15 @@ export const RenameConversationModal = observer(function RenameConversationModal
       );
       if (result.snapshot.status === 'skipped') {
         setError(t('tasks.sessionInfo.agentRenameSkipped'));
-        setIsGeneratingTitle(false);
         return;
       }
-      await provisioned.conversations.renameConversation(conversationId, result.title.trim());
-      onSuccess();
+      setTitle(result.title.trim());
     } catch (e) {
-      setError(e instanceof Error ? e.message : t('tasks.sessionInfo.agentRenameFailed'));
+      setError(e instanceof Error ? e.message : t('tasks.rename.aiSuggestionFailed'));
+    } finally {
       setIsGeneratingTitle(false);
     }
-  }, [conversationId, isBusy, onSuccess, projectId, provisioned, t, taskId]);
+  }, [conversationId, isBusy, projectId, provisioned, t, taskId]);
 
   return (
     <>
@@ -88,49 +92,50 @@ export const RenameConversationModal = observer(function RenameConversationModal
         <DialogTitle>{t('tasks.tabs.renameConversation')}</DialogTitle>
       </DialogHeader>
       <DialogContentArea className="pt-0">
-        <Input
-          value={title}
-          onChange={(e) => {
-            setTitle(e.target.value);
-            setError(null);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !isImeComposing(e)) {
-              void handleSubmit();
-            }
-          }}
-          disabled={isBusy}
-          autoFocus
-        />
+        <InputGroup>
+          <InputGroupInput
+            value={title}
+            onChange={(e) => {
+              setTitle(e.target.value);
+              setError(null);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !isImeComposing(e)) {
+                void handleSubmit();
+              }
+            }}
+            disabled={isBusy}
+            autoFocus
+          />
+          <InputGroupAddon align="inline-end" className="gap-1 pr-1">
+            <InputGroupButton
+              type="button"
+              variant="ghost"
+              onClick={() => void handleAiSuggest()}
+              disabled={!provisioned || isBusy}
+            >
+              {isGeneratingTitle ? (
+                <RefreshCw className="size-3 animate-spin" />
+              ) : (
+                <Sparkles className="size-3" />
+              )}
+              {isGeneratingTitle ? t('tasks.rename.aiSuggesting') : t('tasks.rename.aiSuggest')}
+            </InputGroupButton>
+          </InputGroupAddon>
+        </InputGroup>
         {error && <p className="text-xs text-destructive mt-1">{error}</p>}
       </DialogContentArea>
-      <DialogFooter className="sm:justify-between">
+      <DialogFooter>
         <Button variant="outline" className="w-full sm:w-auto" onClick={onClose} disabled={isBusy}>
           {t('common.cancel')}
         </Button>
-        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end">
-          <Button
-            type="button"
-            variant="secondary"
-            className="w-full sm:w-auto"
-            onClick={() => void handleAiRename()}
-            disabled={!provisioned || isBusy}
-          >
-            {isGeneratingTitle ? (
-              <RefreshCw className="size-3 animate-spin" />
-            ) : (
-              <Sparkles className="size-3" />
-            )}
-            {isGeneratingTitle ? t('tasks.rename.aiNamingSimple') : t('tasks.rename.aiName')}
-          </Button>
-          <ConfirmButton
-            className="w-full sm:w-auto"
-            onClick={() => void handleSubmit()}
-            disabled={!isValid || isBusy}
-          >
-            {isSubmitting ? t('tasks.rename.renaming') : t('common.rename')}
-          </ConfirmButton>
-        </div>
+        <ConfirmButton
+          className="w-full sm:w-auto"
+          onClick={() => void handleSubmit()}
+          disabled={!isValid || isBusy}
+        >
+          {isSubmitting ? t('tasks.rename.renaming') : t('common.rename')}
+        </ConfirmButton>
       </DialogFooter>
     </>
   );

@@ -9,6 +9,7 @@ import {
   normalizeTaskDisplayName,
 } from '@shared/task-name';
 import { getTaskManagerStore } from '@renderer/features/tasks/stores/task-selectors';
+import { rpc } from '@renderer/lib/ipc';
 import { type BaseModalProps } from '@renderer/lib/modal/modal-provider';
 import { Button } from '@renderer/lib/ui/button';
 import { ConfirmButton } from '@renderer/lib/ui/confirm-button';
@@ -19,7 +20,12 @@ import {
   DialogTitle,
 } from '@renderer/lib/ui/dialog';
 import { Field, FieldGroup, FieldLabel } from '@renderer/lib/ui/field';
-import { Input } from '@renderer/lib/ui/input';
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from '@renderer/lib/ui/input-group';
 import { isImeComposing } from '@renderer/utils/ime';
 
 type RenameTaskModalArgs = {
@@ -87,18 +93,23 @@ export const RenameTaskModal = observer(function RenameTaskModal({
     }
   }, [isValid, isBusy, taskManager, taskId, normalizedName, onSuccess, t]);
 
-  const handleAiRename = useCallback(async () => {
+  const handleAiSuggest = useCallback(async () => {
     if (!taskManager || isBusy) return;
     setIsGeneratingName(true);
     setError(null);
     try {
-      await taskManager.regenerateTaskName(taskId);
-      onSuccess();
+      const result = await rpc.tasks.suggestTaskName(projectId, taskId);
+      if (!result.name) {
+        setError(result.message ?? t('tasks.rename.aiSuggestionUnavailable'));
+        return;
+      }
+      setName(liveTransformTaskDisplayName(result.name));
     } catch (e) {
-      setError(e instanceof Error ? e.message : t('tasks.rename.aiRenameFailed'));
+      setError(e instanceof Error ? e.message : t('tasks.rename.aiSuggestionFailed'));
+    } finally {
       setIsGeneratingName(false);
     }
-  }, [isBusy, onSuccess, taskId, taskManager, t]);
+  }, [isBusy, projectId, taskId, taskManager, t]);
 
   return (
     <>
@@ -109,18 +120,35 @@ export const RenameTaskModal = observer(function RenameTaskModal({
         <FieldGroup>
           <Field>
             <FieldLabel>{t('tasks.rename.label')}</FieldLabel>
-            <Input
-              value={name}
-              onChange={(e) => handleNameChange(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !isImeComposing(e)) {
-                  void handleSubmit();
-                }
-              }}
-              maxLength={MAX_TASK_NAME_LENGTH}
-              disabled={isBusy}
-              autoFocus
-            />
+            <InputGroup>
+              <InputGroupInput
+                value={name}
+                onChange={(e) => handleNameChange(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !isImeComposing(e)) {
+                    void handleSubmit();
+                  }
+                }}
+                maxLength={MAX_TASK_NAME_LENGTH}
+                disabled={isBusy}
+                autoFocus
+              />
+              <InputGroupAddon align="inline-end" className="gap-1 pr-1">
+                <InputGroupButton
+                  type="button"
+                  variant="ghost"
+                  onClick={() => void handleAiSuggest()}
+                  disabled={!taskManager || isBusy}
+                >
+                  {isGeneratingName ? (
+                    <RefreshCw className="size-3 animate-spin" />
+                  ) : (
+                    <Sparkles className="size-3" />
+                  )}
+                  {isGeneratingName ? t('tasks.rename.aiSuggesting') : t('tasks.rename.aiSuggest')}
+                </InputGroupButton>
+              </InputGroupAddon>
+            </InputGroup>
             {validationMessage && !isUnchanged && (
               <p className="text-xs text-destructive mt-1">{validationMessage}</p>
             )}
@@ -136,33 +164,17 @@ export const RenameTaskModal = observer(function RenameTaskModal({
           </Field>
         </FieldGroup>
       </DialogContentArea>
-      <DialogFooter className="sm:justify-between">
+      <DialogFooter>
         <Button variant="outline" className="w-full sm:w-auto" onClick={onClose} disabled={isBusy}>
           {t('common.cancel')}
         </Button>
-        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end">
-          <Button
-            type="button"
-            variant="secondary"
-            className="w-full sm:w-auto"
-            onClick={() => void handleAiRename()}
-            disabled={!taskManager || isBusy}
-          >
-            {isGeneratingName ? (
-              <RefreshCw className="size-3 animate-spin" />
-            ) : (
-              <Sparkles className="size-3" />
-            )}
-            {isGeneratingName ? t('tasks.rename.aiNamingSimple') : t('tasks.rename.aiName')}
-          </Button>
-          <ConfirmButton
-            className="w-full sm:w-auto"
-            onClick={() => void handleSubmit()}
-            disabled={!isValid || isBusy}
-          >
-            {isSubmitting ? t('tasks.rename.renaming') : t('tasks.rename.submit')}
-          </ConfirmButton>
-        </div>
+        <ConfirmButton
+          className="w-full sm:w-auto"
+          onClick={() => void handleSubmit()}
+          disabled={!isValid || isBusy}
+        >
+          {isSubmitting ? t('tasks.rename.renaming') : t('tasks.rename.submit')}
+        </ConfirmButton>
       </DialogFooter>
     </>
   );
