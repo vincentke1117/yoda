@@ -78,13 +78,7 @@ export async function moveProjectPath(
     return mapProjectRow(row);
   }
 
-  const closeResult = await projectManager.closeProject(projectId, { mode: 'detach' });
-  if (!closeResult.success) {
-    log.warn('moveProjectPath: closeProject failed', {
-      projectId,
-      error: closeResult.error.message,
-    });
-  }
+  await stopProjectAgentsBeforePathChange(projectId, 'move');
 
   const [updated] = await db
     .update(projects)
@@ -119,13 +113,7 @@ async function mergeProjectIntoExisting(source: ProjectRow, target: ProjectRow):
     throw new Error('Cannot merge projects from different SSH connections');
   }
 
-  const closeResult = await projectManager.closeProject(source.id, { mode: 'detach' });
-  if (!closeResult.success) {
-    log.warn('moveProjectPath: closeProject before merge failed', {
-      projectId: source.id,
-      error: closeResult.error.message,
-    });
-  }
+  await stopProjectAgentsBeforePathChange(source.id, 'merge');
 
   await prSyncEngine.deleteProjectData(source.id);
 
@@ -178,6 +166,23 @@ async function mergeProjectIntoExisting(source: ProjectRow, target: ProjectRow):
   projectEvents._emit('project:deleted', source.id);
 
   return mapProjectRow(updatedTarget);
+}
+
+async function stopProjectAgentsBeforePathChange(
+  projectId: string,
+  action: 'move' | 'merge'
+): Promise<void> {
+  const closeResult = await projectManager.closeProject(projectId, { mode: 'terminate' });
+  if (closeResult.success) return;
+
+  log.warn('moveProjectPath: failed to stop project agents before path change', {
+    projectId,
+    action,
+    error: closeResult.error.message,
+  });
+  throw new Error(
+    `Failed to stop running agents before project ${action}: ${closeResult.error.message}`
+  );
 }
 
 function reassignSearchIndex(sourceProjectId: string, targetProjectId: string): void {
