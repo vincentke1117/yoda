@@ -206,6 +206,22 @@ describe('TerminalInputBuffer', () => {
     expect(submitted).toEqual(['hellXo']);
   });
 
+  it('tracks Esc+b word-left insertion at cursor position', () => {
+    const buffer = new SubmittedInputBuffer();
+
+    const submitted = buffer.feed('hello world\x1bbX\r');
+
+    expect(submitted).toEqual(['hello Xworld']);
+  });
+
+  it('tracks Esc+f word-right insertion at cursor position', () => {
+    const buffer = new SubmittedInputBuffer();
+
+    const submitted = buffer.feed('hello world\x01\x1bfX\r');
+
+    expect(submitted).toEqual(['helloX world']);
+  });
+
   it('tracks Ctrl+U line clear before new text', () => {
     const buffer = new SubmittedInputBuffer();
 

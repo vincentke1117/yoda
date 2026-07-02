@@ -13,6 +13,10 @@ export const CTRL_J_ASCII = '\x0A';
 // Ctrl+U (unix-line-discard) kills from cursor to beginning of line
 export const CTRL_U_ASCII = '\x15';
 
+// Esc+b / Esc+f are the readline-compatible word navigation sequences.
+export const ESC_B_ASCII = '\x1bb';
+export const ESC_F_ASCII = '\x1bf';
+
 export function shouldMapShiftEnterToCtrlJ(event: KeyEventLike): boolean {
   return (
     event.type === 'keydown' &&
@@ -96,4 +100,17 @@ export function shouldPasteToTerminal(event: KeyEventLike, isMacPlatform: boolea
   }
 
   return false;
+}
+
+export function getWordNavigationInputFromTerminal(
+  event: KeyEventLike,
+  isMacPlatform: boolean
+): string | null {
+  if (!isMacPlatform) return null;
+  if (event.type !== 'keydown') return null;
+  if (event.altKey !== true || event.ctrlKey || event.metaKey || event.shiftKey) return null;
+
+  if (event.key === 'ArrowLeft') return ESC_B_ASCII;
+  if (event.key === 'ArrowRight') return ESC_F_ASCII;
+  return null;
 }

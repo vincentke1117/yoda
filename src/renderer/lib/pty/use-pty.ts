@@ -18,6 +18,7 @@ import { isRealTaskInput, SubmittedInputBuffer } from './pty-input-buffer';
 import {
   CTRL_J_ASCII,
   CTRL_U_ASCII,
+  getWordNavigationInputFromTerminal,
   shouldCopySelectionFromTerminal,
   shouldHandleInterruptFromTerminal,
   shouldKillLineFromTerminal,
@@ -619,6 +620,15 @@ export function usePty(
           event.stopImmediatePropagation();
           event.stopPropagation();
           sendInput(CTRL_U_ASCII);
+          return false;
+        }
+
+        const wordNavigationInput = getWordNavigationInputFromTerminal(event, IS_MAC_PLATFORM);
+        if (wordNavigationInput !== null) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          event.stopPropagation();
+          sendInput(wordNavigationInput);
           return false;
         }
 
