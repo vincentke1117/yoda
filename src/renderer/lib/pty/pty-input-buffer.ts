@@ -33,7 +33,9 @@ type InputAction =
   | { type: 'move-home' }
   | { type: 'move-end' }
   | { type: 'move-left'; count: number }
-  | { type: 'move-right'; count: number };
+  | { type: 'move-right'; count: number }
+  | { type: 'move-word-left' }
+  | { type: 'move-word-right' };
 
 const MAX_CSI_PAYLOAD_LENGTH = 256;
 
@@ -126,6 +128,14 @@ class AnsiDecoder {
             continue;
           }
           this.mode = 'normal';
+          if (ch === 'b') {
+            actions.push({ type: 'move-word-left' });
+            continue;
+          }
+          if (ch === 'f') {
+            actions.push({ type: 'move-word-right' });
+            continue;
+          }
           if (ch === '\x1b') {
             this.mode = 'escape';
             continue;
@@ -174,6 +184,28 @@ class LineEditor {
   private lineBuffer = '';
   private cursor = 0;
 
+  private isWordSeparator(index: number): boolean {
+    return /\s/u.test(this.lineBuffer[index] ?? '');
+  }
+
+  private moveWordLeft(): void {
+    let nextCursor = this.cursor;
+    while (nextCursor > 0 && this.isWordSeparator(nextCursor - 1)) nextCursor -= 1;
+    while (nextCursor > 0 && !this.isWordSeparator(nextCursor - 1)) nextCursor -= 1;
+    this.cursor = nextCursor;
+  }
+
+  private moveWordRight(): void {
+    let nextCursor = this.cursor;
+    while (nextCursor < this.lineBuffer.length && this.isWordSeparator(nextCursor)) {
+      nextCursor += 1;
+    }
+    while (nextCursor < this.lineBuffer.length && !this.isWordSeparator(nextCursor)) {
+      nextCursor += 1;
+    }
+    this.cursor = nextCursor;
+  }
+
   apply(actions: InputAction[]): string[] {
     const submitted: string[] = [];
 
@@ -220,6 +252,12 @@ class LineEditor {
           break;
         case 'move-right':
           this.cursor = Math.min(this.lineBuffer.length, this.cursor + action.count);
+          break;
+        case 'move-word-left':
+          this.moveWordLeft();
+          break;
+        case 'move-word-right':
+          this.moveWordRight();
           break;
       }
     }

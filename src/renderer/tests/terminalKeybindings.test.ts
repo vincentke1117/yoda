@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   CTRL_J_ASCII,
   CTRL_U_ASCII,
+  ESC_B_ASCII,
+  ESC_F_ASCII,
+  getWordNavigationInputFromTerminal,
   shouldCopySelectionFromTerminal,
   shouldHandleInterruptFromTerminal,
   shouldKillLineFromTerminal,
@@ -145,6 +148,28 @@ describe('TerminalSessionManager - Shift+Enter to Ctrl+J mapping', () => {
 
   it('uses Ctrl+U for kill-line', () => {
     expect(CTRL_U_ASCII).toBe('\x15');
+  });
+
+  it('maps macOS Option+Arrow to readline word navigation', () => {
+    const isMac = true;
+    const isNotMac = false;
+
+    expect(
+      getWordNavigationInputFromTerminal(makeEvent({ key: 'ArrowLeft', altKey: true }), isMac)
+    ).toBe(ESC_B_ASCII);
+    expect(
+      getWordNavigationInputFromTerminal(makeEvent({ key: 'ArrowRight', altKey: true }), isMac)
+    ).toBe(ESC_F_ASCII);
+    expect(
+      getWordNavigationInputFromTerminal(makeEvent({ key: 'ArrowLeft', altKey: true }), isNotMac)
+    ).toBeNull();
+    expect(
+      getWordNavigationInputFromTerminal(
+        makeEvent({ key: 'ArrowLeft', altKey: true, shiftKey: true }),
+        isMac
+      )
+    ).toBeNull();
+    expect(getWordNavigationInputFromTerminal(makeEvent({ key: 'ArrowLeft' }), isMac)).toBeNull();
   });
 
   it('detects Cmd+Backspace on macOS only', () => {
