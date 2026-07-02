@@ -5,6 +5,30 @@ All notable changes to Yoda will be documented in this file.
 The public Yoda changelog starts at **0.1.0**. Earlier non-Yoda release history
 is preserved in git tags only.
 
+## 0.14.1 — 2026-07-02
+
+### Added
+
+- Agent rooms: support member identity editing, photo avatars, relative room
+  times, and configurable routing hop limits.
+- Projects: add issue and pull request overview surfaces, project path move
+  flows, repo path actions, and issue-based task intake actions.
+- Tasks: add AI rename suggestion flows and docked session history previews.
+
+### Changed
+
+- Composer: reuse the shared prompt input implementation across renderer
+  surfaces.
+- Terminal: persist drawer state, improve resize hit areas, and make renderer
+  fallback behavior explicit.
+
+### Fixed
+
+- Projects: recover Codex sessions after path merges and stop agents before
+  moving project paths.
+- Terminal: improve hard-wrapped URL link detection, restore stable WebGL
+  rendering, and support macOS Option-arrow navigation.
+
 ## 0.14.0 — 2026-07-01
 
 ### Added
