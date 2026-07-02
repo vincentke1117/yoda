@@ -60,6 +60,7 @@ export function WorkspaceLayout({ leftSidebar, mainContent, rightPane }: Workspa
         id="workspace-main"
         minSize={MAIN_PANEL_MIN_SIZE}
         className="relative bg-background text-foreground"
+        data-modal-scope-root
       >
         {mainContent}
       </ResizablePanel>

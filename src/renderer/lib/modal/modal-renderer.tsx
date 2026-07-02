@@ -1,6 +1,6 @@
 import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
 import { observer } from 'mobx-react-lite';
-import { useCallback, useRef, type ReactNode } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import {
   modalRegistry,
   type ModalPosition,
@@ -50,6 +50,20 @@ export const ModalRenderer = observer(function ModalRenderer() {
   const displayArgs = lastArgsRef.current;
   const displayEntry = lastEntryRef.current;
   const isContainerScoped = displayEntry?.scope === 'container';
+  const scopeAnchorRef = useRef<HTMLSpanElement>(null);
+  const [scopedPortalContainer, setScopedPortalContainer] = useState<
+    HTMLElement | null | undefined
+  >(null);
+
+  useLayoutEffect(() => {
+    if (!isContainerScoped) {
+      setScopedPortalContainer(null);
+      return;
+    }
+    setScopedPortalContainer(
+      scopeAnchorRef.current?.closest<HTMLElement>('[data-modal-scope-root]') ?? undefined
+    );
+  }, [isContainerScoped]);
 
   const handleOpenChange = (
     open: boolean,
@@ -74,7 +88,7 @@ export const ModalRenderer = observer(function ModalRenderer() {
   }, []);
 
   const content = (
-    <ModalSurface isContainerScoped={isContainerScoped}>
+    <DialogPortal container={isContainerScoped ? scopedPortalContainer : undefined}>
       <DialogOverlay className={isContainerScoped ? 'absolute' : undefined} />
       <DialogPrimitive.Popup
         ref={popupRef}
@@ -95,23 +109,15 @@ export const ModalRenderer = observer(function ModalRenderer() {
       >
         {DisplayComponent && displayArgs ? <DisplayComponent {...displayArgs} /> : null}
       </DialogPrimitive.Popup>
-    </ModalSurface>
+    </DialogPortal>
   );
 
   return (
-    <Dialog open={modalStore.isOpen} onOpenChange={handleOpenChange}>
-      {content}
-    </Dialog>
+    <>
+      <span ref={scopeAnchorRef} hidden />
+      <Dialog open={modalStore.isOpen} onOpenChange={handleOpenChange}>
+        {content}
+      </Dialog>
+    </>
   );
 });
-
-function ModalSurface({
-  isContainerScoped,
-  children,
-}: {
-  isContainerScoped: boolean;
-  children: ReactNode;
-}) {
-  if (isContainerScoped) return <>{children}</>;
-  return <DialogPortal>{children}</DialogPortal>;
-}
