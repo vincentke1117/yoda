@@ -88,6 +88,7 @@ function normalizeTabParams(
 export const PROJECT_PAGE_VIEWS = [
   'overview',
   'tasks',
+  'issues',
   'pullRequests',
   'sessions',
   'harness',

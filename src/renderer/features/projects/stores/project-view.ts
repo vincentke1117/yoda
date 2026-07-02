@@ -5,6 +5,7 @@ import type { Snapshottable } from '@renderer/lib/stores/snapshottable';
 export type ProjectView =
   | 'overview'
   | 'tasks'
+  | 'issues'
   | 'pullRequests'
   | 'sessions'
   | 'harness'

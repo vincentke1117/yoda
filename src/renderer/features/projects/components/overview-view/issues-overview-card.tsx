@@ -84,8 +84,8 @@ export const IssuesOverviewCard = observer(function IssuesOverviewCard({
 
   const recentIssues = issues.slice(0, RECENT_LIMIT);
 
-  const goToTasks = () => {
-    appState.appTabs.openTab('project', { projectId, view: 'tasks' });
+  const goToIssues = () => {
+    appState.appTabs.openTab('project', { projectId, view: 'issues' });
   };
 
   return (
@@ -114,7 +114,7 @@ export const IssuesOverviewCard = observer(function IssuesOverviewCard({
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  onClick={goToTasks}
+                  onClick={goToIssues}
                   disabled={!repositoryUrl || !authenticated}
                   aria-label={t('projects.viewAll')}
                 >
@@ -155,7 +155,11 @@ export const IssuesOverviewCard = observer(function IssuesOverviewCard({
                       </span>
                     ) : null}
                   </button>
-                  <IssueOverviewActions issue={issue} projectId={projectId} onViewAll={goToTasks} />
+                  <IssueOverviewActions
+                    issue={issue}
+                    projectId={projectId}
+                    onViewAll={goToIssues}
+                  />
                 </div>
                 <div className="mt-1 flex min-w-0 items-center">
                   <IssueLinkedTasks
