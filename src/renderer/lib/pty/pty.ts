@@ -1,4 +1,4 @@
-import type { CanvasAddon as CanvasAddonType } from '@xterm/addon-canvas';
+import { WebglAddon } from '@xterm/addon-webgl';
 import { Terminal, type IDisposable, type ITerminalOptions } from '@xterm/xterm';
 import { ptyDataChannel } from '@shared/events/ptyEvents';
 import {
@@ -156,7 +156,8 @@ export class FrontendPty {
   /** Overrides OSC 8 hyperlink activation while a pane hosts this terminal; null = system browser. */
   private linkOpener: ((url: string) => void) | null = null;
   private readonly scrollDisposable: { dispose(): void };
-  private canvasRendererAddon: CanvasAddonType | null = null;
+  private webglAddon: WebglAddon | null = null;
+  private webglContextLossDisposable: IDisposable | null = null;
 
   constructor(
     readonly sessionId: string,
@@ -204,7 +205,7 @@ export class FrontendPty {
     registerOsc52ClipboardHandler(this.terminal);
 
     this.terminal.open(this.ownedContainer);
-    this.loadCanvasRenderer();
+    this.loadWebglRenderer();
     this.attachWheelScrollPolicy();
     this.scrollDisposable = this.terminal.onScroll((viewportY) => {
       this.savedViewportY = viewportY;
@@ -272,29 +273,38 @@ export class FrontendPty {
     this.linkOpener = opener;
   }
 
-  private loadCanvasRenderer(): void {
-    if (typeof self === 'undefined') return;
-    void import('@xterm/addon-canvas')
-      .then(({ CanvasAddon }) => {
-        if ((this.terminal as unknown as { _isDisposed?: boolean })._isDisposed) return;
-        const canvasAddon = new CanvasAddon();
-        this.terminal.loadAddon(canvasAddon);
-        if ((this.terminal as unknown as { _isDisposed?: boolean })._isDisposed) {
-          canvasAddon.dispose();
-          return;
-        }
-        this.canvasRendererAddon = canvasAddon;
-        this.terminal.refresh(0, Math.max(0, this.terminal.rows - 1));
-      })
-      .catch((error) => {
-        log.debug('FrontendPty: Canvas renderer unavailable; using DOM renderer', {
+  private loadWebglRenderer(): void {
+    try {
+      // Default (preserveDrawingBuffer: false) — the drawing buffer is cleared
+      // on every composite, so the renderer cannot accumulate stale text rows.
+      // Resize freeze-frames replay snapshots captured during onRender instead
+      // of reading the live canvas at resize time.
+      const webglAddon = new WebglAddon();
+      const contextLossDisposable = webglAddon.onContextLoss(() => {
+        log.warn('FrontendPty: WebGL renderer context lost; falling back to DOM renderer', {
           sessionId: this.sessionId,
-          error: String(error),
         });
-        this.canvasRendererAddon?.dispose();
-        this.canvasRendererAddon = null;
+        this.webglContextLossDisposable?.dispose();
+        this.webglContextLossDisposable = null;
+        this.webglAddon?.dispose();
+        this.webglAddon = null;
         this.hasFreezeSnapshot = false;
+        this.terminal.refresh(0, Math.max(0, this.terminal.rows - 1));
       });
+      this.terminal.loadAddon(webglAddon);
+      this.webglAddon = webglAddon;
+      this.webglContextLossDisposable = contextLossDisposable;
+    } catch (error) {
+      log.debug('FrontendPty: WebGL renderer unavailable; using DOM renderer', {
+        sessionId: this.sessionId,
+        error: String(error),
+      });
+      this.webglContextLossDisposable?.dispose();
+      this.webglContextLossDisposable = null;
+      this.webglAddon?.dispose();
+      this.webglAddon = null;
+      this.hasFreezeSnapshot = false;
+    }
   }
 
   setScrollbackLines(scrollbackLines: unknown): void {
@@ -402,10 +412,13 @@ export class FrontendPty {
     if (frozen) this.armUnfreeze(isShrink ? 'await-data' : 'await-render');
   }
 
-  private getRendererCanvas(): HTMLCanvasElement | null {
-    if (!this.canvasRendererAddon) return null;
+  private getWebglCanvas(): HTMLCanvasElement | null {
+    if (!this.webglAddon) return null;
+    // .xterm-screen hosts canvas.xterm-link-layer (2d) first, then the
+    // unclassed WebGL render canvas. A bare `canvas` selector grabs the
+    // transparent link layer and the freeze snapshot would be empty.
     return this.ownedContainer.querySelector<HTMLCanvasElement>(
-      '.xterm-screen canvas.xterm-text-layer'
+      '.xterm-screen canvas:not(.xterm-link-layer)'
     );
   }
 
@@ -432,13 +445,15 @@ export class FrontendPty {
   }
 
   /**
-   * Mirror the just-rendered frame onto the (hidden) freeze overlay. Runs on
-   * every onRender and replays that frame during resize. Skipped while a freeze
-   * is active so the masking snapshot is never overwritten by mid-resize garbage.
+   * Mirror the just-rendered WebGL frame onto the (hidden) freeze overlay. Runs
+   * on every onRender because the WebGL canvas uses preserveDrawingBuffer:false;
+   * that exposes valid pixels during the render frame without accumulating
+   * stale glyphs across later composites. Skipped while a freeze is active so
+   * the masking snapshot is never overwritten by mid-resize garbage.
    */
   private captureFreezeSnapshot(): void {
     if (this.unfreezePhase !== 'idle') return;
-    const canvas = this.getRendererCanvas();
+    const canvas = this.getWebglCanvas();
     if (!canvas || canvas.width === 0 || canvas.height === 0) return;
     const overlay = this.ensureFreezeOverlay();
     try {
@@ -510,7 +525,7 @@ export class FrontendPty {
         this.terminal.scrollToBottom();
         this.savedViewportY = this.terminal.buffer.active.viewportY;
         this.savedAtBottom = true;
-        this.canvasRendererAddon?.clearTextureAtlas();
+        this.webglAddon?.clearTextureAtlas();
         this.terminal.refresh(0, this.terminal.rows - 1);
       } catch {}
     });
@@ -575,8 +590,10 @@ export class FrontendPty {
     this.scrollDisposable.dispose();
     this.freezeSnapshotDisposable?.dispose();
     this.freezeSnapshotDisposable = null;
-    this.canvasRendererAddon?.dispose();
-    this.canvasRendererAddon = null;
+    this.webglContextLossDisposable?.dispose();
+    this.webglContextLossDisposable = null;
+    this.webglAddon?.dispose();
+    this.webglAddon = null;
     rpc.pty.unsubscribe(this.sessionId).catch(() => {});
     try {
       this.terminal.dispose();
