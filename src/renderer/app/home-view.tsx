@@ -124,7 +124,7 @@ import {
 } from './composer-project-overrides';
 import { ComposerPromptInput } from './composer-prompt-input';
 import { serializePromptWithTokens, type PromptToken } from './prompt-attachment-tokens';
-import { promptRewriteFailureDescription, resolveSubmitRequirement } from './submit-prompt-rewrite';
+import { promptRewriteFailureDescription } from './submit-prompt-rewrite';
 
 type TaskStrategyKind = 'new-branch' | 'no-worktree';
 /** Strategy actually submitted to createTask — adds checkout-existing, which is
@@ -963,19 +963,24 @@ export const HomeComposer = observer(function HomeComposer({
         imagesAsPaths: attachImagesAsPaths,
       });
       const rawRequirement = serialized.text.trim();
-      const requirement = await resolveSubmitRequirement({
-        rawRequirement,
-        rewriteRequirement: rewriteInputRequirement,
-        onRewriteFailure: (error) => {
-          toast({
-            title: t('home.promptRewriteFailed'),
-            description: promptRewriteFailureDescription(error, t('common.unknownError')),
-            variant: 'destructive',
-            debugInfo: error,
-          });
-        },
-      });
+      const deferInitialPrompt =
+        rawRequirement.length > 0 &&
+        inputPromptLanguage !== 'skip' &&
+        inputPromptLanguage !== 'prompt';
+      const requirement = rawRequirement;
+      const requirementPromise = deferInitialPrompt
+        ? rewriteInputRequirement(rawRequirement).catch((error: unknown) => {
+            toast({
+              title: t('home.promptRewriteFailed'),
+              description: promptRewriteFailureDescription(error, t('common.unknownError')),
+              variant: 'destructive',
+              debugInfo: error,
+            });
+            return null;
+          })
+        : Promise.resolve(rawRequirement);
       const imagePaths = serialized.imagePaths.length > 0 ? serialized.imagePaths : undefined;
+      const sessionImagePaths = deferInitialPrompt ? undefined : imagePaths;
       const resetComposer = () => {
         setPrompt('');
         updateDraft({ prompt: '', promptTokens: [] });
@@ -992,6 +997,59 @@ export const HomeComposer = observer(function HomeComposer({
               : `${failures.length} agent ${targetName}s failed to start.`
           );
         }
+      };
+      const injectDeferredPrompt = async (args: {
+        projectId: string;
+        taskId: string;
+        conversationId: string;
+        runtime: RuntimeId;
+        buildPrompt: (rewrittenRequirement: string) => string | undefined;
+      }): Promise<string | null> => {
+        const rewrittenRequirement = await requirementPromise;
+        if (rewrittenRequirement === null) return null;
+        try {
+          const sent = await rpc.conversations.injectConversationPrompt({
+            projectId: args.projectId,
+            taskId: args.taskId,
+            conversationId: args.conversationId,
+            runtime: args.runtime,
+            prompt: args.buildPrompt(rewrittenRequirement),
+            imagePaths,
+          });
+          if (sent) return rewrittenRequirement;
+          toast.error(t('home.promptSendFailed'));
+          return null;
+        } catch {
+          toast.error(t('home.promptSendFailed'));
+          return null;
+        }
+      };
+      const scheduleDeferredPrompt = (args: {
+        projectId: string;
+        taskId: string;
+        conversationId: string;
+        runtime: RuntimeId;
+        promise: Promise<unknown>;
+        buildPrompt: (rewrittenRequirement: string) => string | undefined;
+      }) => {
+        if (!deferInitialPrompt) return;
+        void args.promise
+          .then(() => injectDeferredPrompt(args))
+          .catch(() => {
+            // Creation failures are reported by the caller that owns the launch promise.
+          });
+      };
+      const runWithResolvedRequirement = (
+        cb: (resolvedRequirement: string) => Promise<void>
+      ): void => {
+        void requirementPromise
+          .then((resolvedRequirement) => {
+            if (resolvedRequirement === null) return undefined;
+            return cb(resolvedRequirement);
+          })
+          .catch(() => {
+            // The promise is already normalized, but keep this chain non-throwing.
+          });
       };
       // Resolve a slot to its Agent's prompt + runtime (per-slot runtime
       // override wins over the Agent's preferred runtime).
@@ -1033,7 +1091,8 @@ export const HomeComposer = observer(function HomeComposer({
             runtime: args.provider,
             title,
             initialPrompt: args.initialPrompt,
-            imagePaths,
+            deferInitialPrompt,
+            imagePaths: sessionImagePaths,
             model: args.model,
           });
           return { conversationId, runtime: args.provider, promise };
@@ -1064,6 +1123,18 @@ export const HomeComposer = observer(function HomeComposer({
             model: slot.agent?.model,
           });
           finishTaskConversationSubmit();
+          scheduleDeferredPrompt({
+            projectId: taskScopedTarget.projectId,
+            taskId: taskScopedTarget.taskId,
+            conversationId: launch.conversationId,
+            runtime: launch.runtime,
+            promise: launch.promise,
+            buildPrompt: (rewrittenRequirement) =>
+              buildSpecPrompt({
+                requirement: rewrittenRequirement,
+                systemPrompt: slot.systemPrompt,
+              }),
+          });
           void launch.promise.catch(() => {
             toast.error('Agent conversation failed to start.');
           });
@@ -1086,48 +1157,79 @@ export const HomeComposer = observer(function HomeComposer({
           finishTaskConversationSubmit();
           const reviewerProvider = reviewerSlot.provider;
           const reviewerSystemPrompt = reviewerSlot.systemPrompt;
-          void implementation.promise
-            .then(() =>
-              rpc.reviewOrchestration.start({
-                projectId: taskScopedTarget.projectId,
-                taskId: taskScopedTarget.taskId,
-                implementerConversationId: implementation.conversationId,
-                requirement,
-                reviewerRuntime: reviewerProvider,
-                reviewerSystemPrompt,
-                reviewerAutoApprove: permissionModes.isDanger(reviewerProvider),
-              })
-            )
-            .catch((error: unknown) => {
-              toast.error(
-                error instanceof Error ? error.message : 'Review mode orchestration failed.'
-              );
+          const startReviewOrchestration = (resolvedRequirement: string) =>
+            rpc.reviewOrchestration.start({
+              projectId: taskScopedTarget.projectId,
+              taskId: taskScopedTarget.taskId,
+              implementerConversationId: implementation.conversationId,
+              requirement: resolvedRequirement,
+              reviewerRuntime: reviewerProvider,
+              reviewerSystemPrompt,
+              reviewerAutoApprove: permissionModes.isDanger(reviewerProvider),
             });
+          const reviewPromise = deferInitialPrompt
+            ? implementation.promise
+                .then(() =>
+                  injectDeferredPrompt({
+                    projectId: taskScopedTarget.projectId,
+                    taskId: taskScopedTarget.taskId,
+                    conversationId: implementation.conversationId,
+                    runtime: implementation.runtime,
+                    buildPrompt: (rewrittenRequirement) =>
+                      buildRequirementPrompt({
+                        requirement: rewrittenRequirement,
+                        systemPrompt: implementerSlot.systemPrompt,
+                      }),
+                  })
+                )
+                .then((resolvedRequirement) => {
+                  if (resolvedRequirement === null) return undefined;
+                  return startReviewOrchestration(resolvedRequirement);
+                })
+            : implementation.promise.then(() => startReviewOrchestration(requirement));
+          void reviewPromise.catch((error: unknown) => {
+            toast.error(
+              error instanceof Error ? error.message : 'Review mode orchestration failed.'
+            );
+          });
           return;
         }
 
         if (runMode === 'team') {
           if (!activeTeam) return;
+          const createRoom = (resolvedRequirement: string) =>
+            rpc.teamRooms
+              .createRoomFromTeam({
+                projectId: taskScopedTarget.projectId,
+                taskId: taskScopedTarget.taskId,
+                teamId: activeTeam.id,
+                requirement: resolvedRequirement,
+              })
+              .then(() =>
+                queryClient.invalidateQueries({
+                  queryKey: ['roomForTask', taskScopedTarget.projectId, taskScopedTarget.taskId],
+                })
+              );
           // Instantiate a chat room from the team template on this task; the
           // conductor drives the iterative @-routing (members appear as the
           // task's conversations).
-          void rpc.teamRooms
-            .createRoomFromTeam({
-              projectId: taskScopedTarget.projectId,
-              taskId: taskScopedTarget.taskId,
-              teamId: activeTeam.id,
-              requirement,
-            })
-            .then(() =>
-              queryClient.invalidateQueries({
-                queryKey: ['roomForTask', taskScopedTarget.projectId, taskScopedTarget.taskId],
-              })
-            )
-            .catch((error: unknown) => {
+          if (deferInitialPrompt) {
+            runWithResolvedRequirement(async (resolvedRequirement) => {
+              try {
+                await createRoom(resolvedRequirement);
+              } catch (error) {
+                toast.error(
+                  error instanceof Error ? error.message : 'Agent team orchestration failed.'
+                );
+              }
+            });
+          } else {
+            void createRoom(requirement).catch((error: unknown) => {
               toast.error(
                 error instanceof Error ? error.message : 'Agent team orchestration failed.'
               );
             });
+          }
           finishTaskConversationSubmit();
           return;
         }
@@ -1144,6 +1246,20 @@ export const HomeComposer = observer(function HomeComposer({
           model: normalSlot.agent?.model,
         });
         finishTaskConversationSubmit();
+        scheduleDeferredPrompt({
+          projectId: taskScopedTarget.projectId,
+          taskId: taskScopedTarget.taskId,
+          conversationId: launch.conversationId,
+          runtime: launch.runtime,
+          promise: launch.promise,
+          buildPrompt: (rewrittenRequirement) =>
+            normalSystemPrompt
+              ? buildRequirementPrompt({
+                  requirement: rewrittenRequirement,
+                  systemPrompt: normalSystemPrompt,
+                })
+              : rewrittenRequirement || undefined,
+        });
         void launch.promise.catch(() => {
           toast.error('Agent conversation failed to start.');
         });
@@ -1181,27 +1297,46 @@ export const HomeComposer = observer(function HomeComposer({
             : draftSystemPrompt
               ? buildRequirementPrompt({ requirement, systemPrompt: draftSystemPrompt })
               : requirement || undefined;
-        void internalProject.taskManager
-          .createTask({
-            id: taskId,
+        const createPromise = internalProject.taskManager.createTask({
+          id: taskId,
+          projectId: INTERNAL_PROJECT_ID,
+          name: taskName,
+          sourceBranch: { type: 'local', branch: 'main' },
+          strategy: { kind: 'no-worktree' },
+          initialConversation: {
+            id: conversationId,
             projectId: INTERNAL_PROJECT_ID,
-            name: taskName,
-            sourceBranch: { type: 'local', branch: 'main' },
-            strategy: { kind: 'no-worktree' },
-            initialConversation: {
-              id: conversationId,
-              projectId: INTERNAL_PROJECT_ID,
-              taskId,
-              runtime: draftRuntime,
-              title: initialConversationTitle(draftRuntime, trimmed || undefined, []),
-              initialPrompt,
-              imagePaths,
-              model: draftSlot.agent?.model,
-            },
-          })
-          .catch(() => {
-            toast.error('Agent task failed to start.');
-          });
+            taskId,
+            runtime: draftRuntime,
+            title: initialConversationTitle(draftRuntime, trimmed || undefined, []),
+            initialPrompt,
+            deferInitialPrompt,
+            imagePaths: sessionImagePaths,
+            model: draftSlot.agent?.model,
+          },
+        });
+        scheduleDeferredPrompt({
+          projectId: INTERNAL_PROJECT_ID,
+          taskId,
+          conversationId,
+          runtime: draftRuntime,
+          promise: createPromise,
+          buildPrompt: (rewrittenRequirement) =>
+            runMode === 'brainstorm'
+              ? buildSpecPrompt({
+                  requirement: rewrittenRequirement,
+                  systemPrompt: draftSlot.systemPrompt,
+                })
+              : draftSystemPrompt
+                ? buildRequirementPrompt({
+                    requirement: rewrittenRequirement,
+                    systemPrompt: draftSystemPrompt,
+                  })
+                : rewrittenRequirement || undefined,
+        });
+        void createPromise.catch(() => {
+          toast.error('Agent task failed to start.');
+        });
         goToTask(INTERNAL_PROJECT_ID, taskId);
         resetComposer();
         return;
@@ -1271,7 +1406,8 @@ export const HomeComposer = observer(function HomeComposer({
               []
             ),
             initialPrompt: args.initialPrompt,
-            imagePaths,
+            deferInitialPrompt,
+            imagePaths: sessionImagePaths,
             model: args.model,
           },
         });
@@ -1293,6 +1429,18 @@ export const HomeComposer = observer(function HomeComposer({
           model: slot.agent?.model,
         });
         goToTask(mounted.data.id, task.taskId);
+        scheduleDeferredPrompt({
+          projectId: mounted.data.id,
+          taskId: task.taskId,
+          conversationId: task.conversationId,
+          runtime: task.runtime,
+          promise: task.promise,
+          buildPrompt: (rewrittenRequirement) =>
+            buildSpecPrompt({
+              requirement: rewrittenRequirement,
+              systemPrompt: slot.systemPrompt,
+            }),
+        });
         void task.promise.catch(() => {
           toast.error('Agent task failed to start.');
         });
@@ -1314,10 +1462,16 @@ export const HomeComposer = observer(function HomeComposer({
           baseBranch: Branch | null;
           nameSeed: string;
         };
+        type CompareLaunch = {
+          projectId: string;
+          taskId: string;
+          conversationId: string;
+          runtime: RuntimeId;
+          systemPrompt: string;
+          promise: Promise<unknown>;
+        };
 
-        const createForSpec = async (
-          spec: CompareSpec
-        ): Promise<{ projectId: string; taskId: string; promise: Promise<unknown> } | null> => {
+        const createForSpec = async (spec: CompareSpec): Promise<CompareLaunch | null> => {
           await projectManager.mountProject(spec.projectId).catch(() => {});
           const target = asMounted(projectManager.projects.get(spec.projectId));
           if (!target) return null;
@@ -1368,11 +1522,19 @@ export const HomeComposer = observer(function HomeComposer({
               initialPrompt: systemPrompt
                 ? buildRequirementPrompt({ requirement, systemPrompt })
                 : requirement || undefined,
-              imagePaths,
+              deferInitialPrompt,
+              imagePaths: sessionImagePaths,
               model: spec.model,
             },
           });
-          return { projectId: spec.projectId, taskId, promise };
+          return {
+            projectId: spec.projectId,
+            taskId,
+            conversationId,
+            runtime: spec.provider,
+            systemPrompt,
+            promise,
+          };
         };
 
         // Every config is an equal row in the list (the base was migrated in when
@@ -1395,13 +1557,29 @@ export const HomeComposer = observer(function HomeComposer({
         });
 
         const results = (await Promise.all(specs.map(createForSpec))).filter(
-          (r): r is { projectId: string; taskId: string; promise: Promise<unknown> } => r !== null
+          (r): r is CompareLaunch => r !== null
         );
         if (results.length === 0) return;
 
         resetComposer();
         const base = results[0];
         if (base) goToTask(base.projectId, base.taskId);
+        for (const result of results) {
+          scheduleDeferredPrompt({
+            projectId: result.projectId,
+            taskId: result.taskId,
+            conversationId: result.conversationId,
+            runtime: result.runtime,
+            promise: result.promise,
+            buildPrompt: (rewrittenRequirement) =>
+              result.systemPrompt
+                ? buildRequirementPrompt({
+                    requirement: rewrittenRequirement,
+                    systemPrompt: result.systemPrompt,
+                  })
+                : rewrittenRequirement || undefined,
+          });
+        }
         void rpc.app.openComparisonWindow({
           panes: results.map((r) => ({ projectId: r.projectId, taskId: r.taskId })),
           layout: { kind: 'columns', count: results.length },
@@ -1428,23 +1606,39 @@ export const HomeComposer = observer(function HomeComposer({
         goToTask(mounted.data.id, implementation.taskId);
         const reviewerProvider = reviewerSlot.provider;
         const reviewerSystemPrompt = reviewerSlot.systemPrompt;
-        void implementation.promise
-          .then(() =>
-            rpc.reviewOrchestration.start({
-              projectId: mounted.data.id,
-              taskId: implementation.taskId,
-              implementerConversationId: implementation.conversationId,
-              requirement,
-              reviewerRuntime: reviewerProvider,
-              reviewerSystemPrompt,
-              reviewerAutoApprove: permissionModes.isDanger(reviewerProvider),
-            })
-          )
-          .catch((error: unknown) => {
-            toast.error(
-              error instanceof Error ? error.message : 'Review mode orchestration failed.'
-            );
+        const startReviewOrchestration = (resolvedRequirement: string) =>
+          rpc.reviewOrchestration.start({
+            projectId: mounted.data.id,
+            taskId: implementation.taskId,
+            implementerConversationId: implementation.conversationId,
+            requirement: resolvedRequirement,
+            reviewerRuntime: reviewerProvider,
+            reviewerSystemPrompt,
+            reviewerAutoApprove: permissionModes.isDanger(reviewerProvider),
           });
+        const reviewPromise = deferInitialPrompt
+          ? implementation.promise
+              .then(() =>
+                injectDeferredPrompt({
+                  projectId: mounted.data.id,
+                  taskId: implementation.taskId,
+                  conversationId: implementation.conversationId,
+                  runtime: implementation.runtime,
+                  buildPrompt: (rewrittenRequirement) =>
+                    buildRequirementPrompt({
+                      requirement: rewrittenRequirement,
+                      systemPrompt: implementerSlot.systemPrompt,
+                    }),
+                })
+              )
+              .then((resolvedRequirement) => {
+                if (resolvedRequirement === null) return undefined;
+                return startReviewOrchestration(resolvedRequirement);
+              })
+          : implementation.promise.then(() => startReviewOrchestration(requirement));
+        void reviewPromise.catch((error: unknown) => {
+          toast.error(error instanceof Error ? error.message : 'Review mode orchestration failed.');
+        });
         resetComposer();
         return;
       }
@@ -1452,7 +1646,6 @@ export const HomeComposer = observer(function HomeComposer({
       if (runMode === 'team') {
         if (!activeTeam) return;
         const teamId = activeTeam.id;
-        const teamRequirement = requirement;
         // Bare task (no initial conversation) — the room conductor instantiates
         // the team and populates the task's conversations via iterative @-routing.
         const taskId = crypto.randomUUID();
@@ -1466,25 +1659,29 @@ export const HomeComposer = observer(function HomeComposer({
           parentTaskId: parentTarget?.taskId,
         });
         goToTask(mounted.data.id, taskId);
-        void createPromise
-          .then(() =>
-            rpc.teamRooms.createRoomFromTeam({
+        const createRoom = (resolvedRequirement: string) =>
+          rpc.teamRooms
+            .createRoomFromTeam({
               projectId: mounted.data.id,
               taskId,
               teamId,
-              requirement: teamRequirement,
+              requirement: resolvedRequirement,
             })
-          )
-          .then(() =>
-            queryClient.invalidateQueries({
-              queryKey: ['roomForTask', mounted.data.id, taskId],
-            })
-          )
-          .catch((error: unknown) => {
-            toast.error(
-              error instanceof Error ? error.message : 'Agent team orchestration failed.'
+            .then(() =>
+              queryClient.invalidateQueries({
+                queryKey: ['roomForTask', mounted.data.id, taskId],
+              })
             );
-          });
+        const roomPromise = deferInitialPrompt
+          ? createPromise.then(async () => {
+              const resolvedRequirement = await requirementPromise;
+              if (resolvedRequirement === null) return undefined;
+              return createRoom(resolvedRequirement);
+            })
+          : createPromise.then(() => createRoom(requirement));
+        void roomPromise.catch((error: unknown) => {
+          toast.error(error instanceof Error ? error.message : 'Agent team orchestration failed.');
+        });
         resetComposer();
         return;
       }
@@ -1503,6 +1700,20 @@ export const HomeComposer = observer(function HomeComposer({
         model: normalSlot.agent?.model,
       });
       goToTask(mounted.data.id, task.taskId);
+      scheduleDeferredPrompt({
+        projectId: mounted.data.id,
+        taskId: task.taskId,
+        conversationId: task.conversationId,
+        runtime: task.runtime,
+        promise: task.promise,
+        buildPrompt: (rewrittenRequirement) =>
+          normalSystemPrompt
+            ? buildRequirementPrompt({
+                requirement: rewrittenRequirement,
+                systemPrompt: normalSystemPrompt,
+              })
+            : rewrittenRequirement || undefined,
+      });
       void task.promise.catch(() => {
         toast.error('Agent task failed to start.');
       });
@@ -1523,6 +1734,7 @@ export const HomeComposer = observer(function HomeComposer({
     selectedBranch,
     promptTokens,
     attachImagesAsPaths,
+    inputPromptLanguage,
     rewriteInputRequirement,
     clearPromptTokens,
     reviewSubmitKind,
