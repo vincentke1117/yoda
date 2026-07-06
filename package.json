@@ -160,6 +160,7 @@
     "postcss": "^8.4.32",
     "prettier": "3.6.2",
     "prettier-plugin-tailwindcss": "^0.6.14",
+    "qiniu": "^7.15.2",
     "qrcode.react": "^4.2.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

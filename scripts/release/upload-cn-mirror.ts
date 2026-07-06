@@ -1,10 +1,15 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { parseArgs } from 'node:util';
+import * as qiniu from 'qiniu';
 import { S3mini } from 's3mini';
 import { findBlockmaps, findInstallers, findManifests } from './lib/artifacts.ts';
 import { requireEnv } from './lib/config.ts';
 import { fail, info, step } from './lib/log.ts';
+
+const QINIU_PART_SIZE_BYTES = 8 * 1024 * 1024;
+const QINIU_OBJECT_TIMEOUT_MS = 30 * 60 * 1000;
+const S3_OBJECT_TIMEOUT_MS = 10 * 60 * 1000;
 
 const { values } = parseArgs({
   options: {
@@ -94,20 +99,83 @@ if (dryRun) {
   process.exit(0);
 }
 
-const s3 = new S3mini({
-  accessKeyId,
-  secretAccessKey,
-  endpoint,
-  region,
-});
+const uploadTarget = createUploadTarget();
 
 for (const item of uploads) {
-  const data = readFileSync(item.file);
-  info(`Uploading ${item.label} (${(data.length / 1024 / 1024).toFixed(1)} MB) -> ${item.key}`);
-  await s3.putObject(item.key, new Uint8Array(data), item.contentType);
+  const size = statSync(item.file).size;
+  info(`Uploading ${item.label} (${formatMiB(size)} MB) -> ${item.key}`);
+  await uploadTarget.upload(item, size);
 }
 
 info(`China mirror uploaded to ${publicBaseUrl}`);
+
+type UploadTarget = {
+  upload(item: UploadItem, size: number): Promise<void>;
+};
+
+function createUploadTarget(): UploadTarget {
+  if (isQiniuEndpoint(endpoint)) {
+    const bucket = process.env.YODA_CN_MIRROR_BUCKET?.trim() || bucketFromEndpoint(endpoint);
+    if (!bucket) {
+      fail(
+        'YODA_CN_MIRROR_BUCKET is required when the Qiniu endpoint does not include a bucket path'
+      );
+    }
+
+    info(`Using Qiniu resumable upload for bucket ${bucket}`);
+    const mac = new qiniu.auth.digest.Mac(accessKeyId, secretAccessKey);
+    const config = new qiniu.conf.Config({ useHttpsDomain: true });
+    const uploader = new qiniu.resume_up.ResumeUploader(config);
+
+    return {
+      async upload(item, size) {
+        const token = new qiniu.rs.PutPolicy({ scope: `${bucket}:${item.key}` }).uploadToken(mac);
+        const progressCallback = createProgressLogger(item.label, size);
+        const putExtra = qiniu.resume_up.PutExtra.create(
+          basename(item.file),
+          {},
+          item.contentType,
+          undefined,
+          progressCallback,
+          QINIU_PART_SIZE_BYTES,
+          'v2'
+        );
+
+        const result = await withTimeout(
+          uploader.putFileV2(token, item.key, item.file, putExtra),
+          QINIU_OBJECT_TIMEOUT_MS,
+          `Qiniu upload timed out for ${item.label}`
+        );
+
+        if (result.resp.statusCode !== 200) {
+          fail(`Qiniu upload failed for ${item.label}: HTTP ${result.resp.statusCode}`);
+        }
+      },
+    };
+  }
+
+  const s3 = new S3mini({
+    accessKeyId,
+    secretAccessKey,
+    endpoint,
+    region,
+    requestAbortTimeout: S3_OBJECT_TIMEOUT_MS,
+  });
+
+  return {
+    async upload(item, size) {
+      const data = readFileSync(item.file);
+      await s3.putObject(
+        item.key,
+        new Uint8Array(data),
+        item.contentType,
+        undefined,
+        undefined,
+        size
+      );
+    },
+  };
+}
 
 function writeMirrorManifest(manifest: string, baseUrl: string, outDir: string): string {
   const content = readFileSync(manifest, 'utf8');
@@ -162,6 +230,62 @@ function contentTypeFor(name: string): string {
   if (name.endsWith('.deb')) return 'application/vnd.debian.binary-package';
   if (name.endsWith('.rpm')) return 'application/x-rpm';
   return 'application/octet-stream';
+}
+
+function createProgressLogger(
+  label: string,
+  totalBytes: number
+): (uploadedBytes: number, totalBytes: number) => void {
+  const thresholds = [25, 50, 75, 100];
+  let nextThreshold = thresholds.shift();
+  return (uploadedBytes, callbackTotalBytes) => {
+    const total = callbackTotalBytes || totalBytes;
+    if (!total || nextThreshold === undefined) {
+      return;
+    }
+    const percent = Math.floor((uploadedBytes / total) * 100);
+    while (nextThreshold !== undefined && percent >= nextThreshold) {
+      info(`Upload progress ${label}: ${nextThreshold}%`);
+      nextThreshold = thresholds.shift();
+    }
+  };
+}
+
+function formatMiB(bytes: number): string {
+  return (bytes / 1024 / 1024).toFixed(1);
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeout = setTimeout(() => reject(new Error(message)), timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+  }
+}
+
+function isQiniuEndpoint(value: string): boolean {
+  try {
+    const hostname = new URL(value).hostname;
+    return hostname.includes('qiniucs.com') || hostname.includes('qiniu');
+  } catch {
+    return false;
+  }
+}
+
+function bucketFromEndpoint(value: string): string {
+  try {
+    const url = new URL(value);
+    return decodeURIComponent(url.pathname.replace(/^\/+|\/+$/g, '').split('/')[0] || '');
+  } catch {
+    return '';
+  }
 }
 
 function joinUrl(base: string, ...parts: string[]): string {
