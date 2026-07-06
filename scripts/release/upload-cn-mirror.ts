@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { parseArgs } from 'node:util';
-import * as qiniu from 'qiniu';
+import * as qiniuModule from 'qiniu';
 import { S3mini } from 's3mini';
 import { findBlockmaps, findInstallers, findManifests } from './lib/artifacts.ts';
 import { requireEnv } from './lib/config.ts';
@@ -10,6 +10,7 @@ import { fail, info, step } from './lib/log.ts';
 const QINIU_PART_SIZE_BYTES = 8 * 1024 * 1024;
 const QINIU_OBJECT_TIMEOUT_MS = 30 * 60 * 1000;
 const S3_OBJECT_TIMEOUT_MS = 10 * 60 * 1000;
+const qiniu = resolveQiniuSdk(qiniuModule);
 
 const { values } = parseArgs({
   options: {
@@ -123,8 +124,14 @@ function createUploadTarget(): UploadTarget {
     }
 
     info(`Using Qiniu resumable upload for bucket ${bucket}`);
+    assertQiniuUploadApi();
     const mac = new qiniu.auth.digest.Mac(accessKeyId, secretAccessKey);
-    const config = new qiniu.conf.Config({ useHttpsDomain: true });
+    const config = new qiniu.conf.Config({
+      useHttpsDomain: true,
+      ...(region === 'auto'
+        ? {}
+        : { regionsProvider: qiniu.httpc.Region.fromRegionId(qiniuRegionId(region)) }),
+    });
     const uploader = new qiniu.resume_up.ResumeUploader(config);
 
     return {
@@ -175,6 +182,37 @@ function createUploadTarget(): UploadTarget {
       );
     },
   };
+}
+
+type QiniuSdk = typeof qiniuModule;
+
+function resolveQiniuSdk(module: QiniuSdk): QiniuSdk {
+  return ((module as QiniuSdk & { default?: QiniuSdk }).default ?? module) as QiniuSdk;
+}
+
+function assertQiniuUploadApi(): void {
+  if (
+    !qiniu.auth?.digest?.Mac ||
+    !qiniu.conf?.Config ||
+    !qiniu.httpc?.Region?.fromRegionId ||
+    !qiniu.resume_up?.ResumeUploader ||
+    !qiniu.resume_up?.PutExtra?.create ||
+    !qiniu.rs?.PutPolicy
+  ) {
+    fail('Qiniu SDK did not expose the expected resumable upload APIs');
+  }
+}
+
+function qiniuRegionId(value: string): string {
+  const normalized = value.trim();
+  const aliases: Record<string, string> = {
+    'cn-east-1': 'z0',
+    'cn-north-1': 'z1',
+    'cn-south-1': 'z2',
+    'us-north-1': 'na0',
+    'ap-southeast-1': 'as0',
+  };
+  return aliases[normalized] || normalized;
 }
 
 function writeMirrorManifest(manifest: string, baseUrl: string, outDir: string): string {
