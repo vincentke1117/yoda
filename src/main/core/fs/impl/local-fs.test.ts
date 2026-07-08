@@ -424,6 +424,37 @@ describe('LocalFileSystem', () => {
     });
   });
 
+  describe('local file copies', () => {
+    it('copies a local absolute file into the project root', async () => {
+      const sourcePath = path.join(tempDir, '..', `source-${Date.now()}.bin`);
+      fs.writeFileSync(sourcePath, Buffer.from([0, 1, 2, 3]));
+
+      try {
+        await fsService.copyLocalFile(sourcePath, 'nested/copied.bin');
+
+        expect(fs.readFileSync(path.join(tempDir, 'nested/copied.bin'))).toEqual(
+          Buffer.from([0, 1, 2, 3])
+        );
+      } finally {
+        fs.rmSync(sourcePath, { force: true });
+      }
+    });
+
+    it('copies a project file out to a local absolute path', async () => {
+      fs.mkdirSync(path.join(tempDir, 'artifacts'));
+      fs.writeFileSync(path.join(tempDir, 'artifacts/bundle.bin'), Buffer.from([4, 5, 6, 7]));
+      const destPath = path.join(tempDir, '..', `dest-${Date.now()}`, 'bundle.bin');
+
+      try {
+        await fsService.copyToLocalFile('artifacts/bundle.bin', destPath);
+
+        expect(fs.readFileSync(destPath)).toEqual(Buffer.from([4, 5, 6, 7]));
+      } finally {
+        fs.rmSync(path.dirname(destPath), { recursive: true, force: true });
+      }
+    });
+  });
+
   describe('readImage', () => {
     it('should read image as data URL', async () => {
       // Create a minimal valid PNG file (1x1 transparent pixel)
