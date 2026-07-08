@@ -743,6 +743,17 @@ export class LocalFileSystem implements FileSystemProvider {
     await fs.copyFile(this.resolvePath(src), this.resolvePath(dest));
   }
 
+  async copyLocalFile(localAbsPath: string, destRelPath: string): Promise<void> {
+    const dest = this.resolvePath(destRelPath);
+    await fs.mkdir(dirname(dest), { recursive: true });
+    await fs.copyFile(localAbsPath, dest);
+  }
+
+  async copyToLocalFile(srcRelPath: string, localAbsPath: string): Promise<void> {
+    await fs.mkdir(dirname(localAbsPath), { recursive: true });
+    await fs.copyFile(this.resolvePath(srcRelPath), localAbsPath);
+  }
+
   watch(
     callback: (events: FileWatchEvent[]) => void,
     options: { debounceMs?: number } = {}

@@ -31,6 +31,7 @@ export class WorktreeService {
   private readonly ctx: IExecutionContext;
   private readonly host: WorktreeHost;
   private readonly projectSettings: ProjectSettingsProvider;
+  private readonly pathApi: Pick<typeof path, 'dirname' | 'join'>;
 
   constructor(args: {
     worktreePoolPath: string;
@@ -44,6 +45,7 @@ export class WorktreeService {
     this.projectSettings = args.projectSettings;
     this.ctx = args.ctx;
     this.host = args.host;
+    this.pathApi = this.ctx.supportsLocalSpawn ? path : path.posix;
 
     this.ctx.exec('git', ['worktree', 'prune']).catch(() => {});
   }
@@ -67,7 +69,7 @@ export class WorktreeService {
         return false;
       }
     }
-    return this.host.existsAbsolute(path.join(worktreePath, '.git'));
+    return this.host.existsAbsolute(this.pathApi.join(worktreePath, '.git'));
   }
 
   private async ensureWorktreePoolDirExists(): Promise<void> {
@@ -269,7 +271,7 @@ export class WorktreeService {
   ): Promise<Result<string, ServeWorktreeError>> {
     let staleCleanupFailure: ServeWorktreeError | undefined;
     for (const dirName of this.worktreeDirCandidates(branchName)) {
-      const targetPath = path.join(this.worktreePoolPath, dirName);
+      const targetPath = this.pathApi.join(this.worktreePoolPath, dirName);
       if (!(await this.host.existsAbsolute(targetPath))) return ok(targetPath);
       if (await this.isValidWorktree(targetPath)) continue;
       const cleanup = await this.removeStaleWorktreeDir(targetPath);
@@ -390,7 +392,7 @@ export class WorktreeService {
         await this.ctx.exec('git', ['branch', '--no-track', branchName, sourceRef]);
       }
 
-      await this.host.mkdirAbsolute(path.dirname(targetPath), { recursive: true });
+      await this.host.mkdirAbsolute(this.pathApi.dirname(targetPath), { recursive: true });
       await this.ctx.exec('git', ['worktree', 'prune']).catch(() => {});
       await this.ctx.exec('git', ['worktree', 'add', targetPath, branchName]);
     } catch (cause) {
@@ -437,7 +439,7 @@ export class WorktreeService {
     const targetPath = target.data;
 
     try {
-      await this.host.mkdirAbsolute(path.dirname(targetPath), { recursive: true });
+      await this.host.mkdirAbsolute(this.pathApi.dirname(targetPath), { recursive: true });
       let localExists = false;
       try {
         await this.ctx.exec('git', ['rev-parse', '--verify', `refs/heads/${branchName}`]);
@@ -507,9 +509,9 @@ export class WorktreeService {
 
   private taskConfigFs(targetPath: string): Pick<FileSystemProvider, 'exists' | 'read'> {
     return {
-      exists: (filePath) => this.host.existsAbsolute(path.join(targetPath, filePath)),
+      exists: (filePath) => this.host.existsAbsolute(this.pathApi.join(targetPath, filePath)),
       read: async (filePath) => {
-        const content = await this.host.readFileAbsolute(path.join(targetPath, filePath));
+        const content = await this.host.readFileAbsolute(this.pathApi.join(targetPath, filePath));
         return {
           content,
           truncated: false,
@@ -541,11 +543,11 @@ export class WorktreeService {
       });
       for (const relPath of matches) {
         if (relPath === '.yoda.json' || (await this.isTrackedSourcePath(relPath))) continue;
-        const src = path.join(this.repoPath, relPath);
+        const src = this.pathApi.join(this.repoPath, relPath);
         const stat = await this.host.statAbsolute(src).catch(() => null);
         if (!stat || stat.type !== 'file') continue;
-        const dest = path.join(targetPath, relPath);
-        await this.host.mkdirAbsolute(path.dirname(dest), { recursive: true });
+        const dest = this.pathApi.join(targetPath, relPath);
+        await this.host.mkdirAbsolute(this.pathApi.dirname(dest), { recursive: true });
         await this.host.copyFileAbsolute(src, dest);
       }
     }
