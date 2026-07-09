@@ -924,6 +924,8 @@
     "attachSshUnsupported": "Local attachments are not supported for SSH projects",
     "attachPasteFailedToast": "Could not attach the pasted image",
     "promptRewriteFailed": "Prompt rewrite failed. The prompt was not sent.",
+    "promptTranslationWaiting": "Translating prompt…",
+    "promptTranslationWaitingDescription": "The agent session is open. Yoda will send the prompt as soon as translation finishes.",
     "promptSendFailed": "Could not send the prompt to the agent.",
     "composerSettingsAria": "Input settings",
     "composerSettingsLabel": "Config",

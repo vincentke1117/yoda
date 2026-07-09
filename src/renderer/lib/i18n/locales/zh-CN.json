@@ -924,6 +924,8 @@
     "attachSshUnsupported": "SSH 项目暂不支持本地附件",
     "attachPasteFailedToast": "无法添加粘贴的图片",
     "promptRewriteFailed": "Prompt 改写失败，未发送给 agent。",
+    "promptTranslationWaiting": "正在翻译 Prompt…",
+    "promptTranslationWaitingDescription": "目标 agent 界面已打开，翻译完成后会自动发送。",
     "promptSendFailed": "无法把 Prompt 发送给 agent。",
     "composerSettingsAria": "输入设置",
     "composerSettingsLabel": "配置",

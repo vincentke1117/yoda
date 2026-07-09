@@ -1029,6 +1029,18 @@ export const HomeComposer = observer(function HomeComposer({
           );
         }
       };
+      const showDeferredPromptWaitToast = () => {
+        let toastId: ReturnType<typeof toast.loading> | undefined;
+        const timer = setTimeout(() => {
+          toastId = toast.loading(t('home.promptTranslationWaiting'), {
+            description: t('home.promptTranslationWaitingDescription'),
+          });
+        }, 350);
+        return () => {
+          clearTimeout(timer);
+          if (toastId !== undefined) toast.dismiss(toastId);
+        };
+      };
       const injectDeferredPrompt = async (args: {
         projectId: string;
         taskId: string;
@@ -1036,9 +1048,10 @@ export const HomeComposer = observer(function HomeComposer({
         runtime: RuntimeId;
         buildPrompt: (rewrittenRequirement: string) => string | undefined;
       }): Promise<string | null> => {
-        const rewrittenRequirement = await requirementPromise;
-        if (rewrittenRequirement === null) return null;
+        const dismissWaitToast = showDeferredPromptWaitToast();
         try {
+          const rewrittenRequirement = await requirementPromise;
+          if (rewrittenRequirement === null) return null;
           const sent = await rpc.conversations.injectConversationPrompt({
             projectId: args.projectId,
             taskId: args.taskId,
@@ -1053,6 +1066,8 @@ export const HomeComposer = observer(function HomeComposer({
         } catch {
           toast.error(t('home.promptSendFailed'));
           return null;
+        } finally {
+          dismissWaitToast();
         }
       };
       const scheduleDeferredPrompt = (args: {
