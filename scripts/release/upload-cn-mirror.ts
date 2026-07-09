@@ -9,6 +9,7 @@ import { fail, info, step } from './lib/log.ts';
 
 const QINIU_PART_SIZE_BYTES = 8 * 1024 * 1024;
 const QINIU_OBJECT_TIMEOUT_MS = 30 * 60 * 1000;
+const QINIU_CDN_REFRESH_TIMEOUT_MS = 2 * 60 * 1000;
 const S3_OBJECT_TIMEOUT_MS = 10 * 60 * 1000;
 const qiniu = resolveQiniuSdk(qiniuModule);
 
@@ -69,6 +70,7 @@ const manifestUploads = manifests.flatMap((manifest) => {
     },
   ] satisfies UploadItem[];
 });
+const rootManifestUrls = manifests.map((manifest) => joinUrl(publicBaseUrl, basename(manifest)));
 
 const binaryUploads = [...installers, ...blockmaps].flatMap((file) => {
   const name = basename(file);
@@ -106,6 +108,10 @@ for (const item of uploads) {
   const size = statSync(item.file).size;
   info(`Uploading ${item.label} (${formatMiB(size)} MB) -> ${item.key}`);
   await uploadTarget.upload(item, size);
+}
+
+if (isQiniuEndpoint(endpoint)) {
+  await refreshQiniuCdnUrls(rootManifestUrls);
 }
 
 info(`China mirror uploaded to ${publicBaseUrl}`);
@@ -193,6 +199,7 @@ function resolveQiniuSdk(module: QiniuSdk): QiniuSdk {
 function assertQiniuUploadApi(): void {
   if (
     !qiniu.auth?.digest?.Mac ||
+    !qiniu.cdn?.CdnManager ||
     !qiniu.conf?.Config ||
     !qiniu.httpc?.Region?.fromRegionId ||
     !qiniu.resume_up?.ResumeUploader ||
@@ -201,6 +208,46 @@ function assertQiniuUploadApi(): void {
   ) {
     fail('Qiniu SDK did not expose the expected resumable upload APIs');
   }
+}
+
+type QiniuCdnRefreshResult = {
+  respBody: unknown;
+  respInfo: { statusCode?: number } | undefined;
+};
+
+async function refreshQiniuCdnUrls(urls: string[]): Promise<void> {
+  if (urls.length === 0) {
+    return;
+  }
+
+  assertQiniuUploadApi();
+  step(`Refreshing ${urls.length} China mirror CDN manifest URL(s)`);
+
+  const mac = new qiniu.auth.digest.Mac(accessKeyId, secretAccessKey);
+  const cdnManager = new qiniu.cdn.CdnManager(mac);
+  const result = await withTimeout(
+    new Promise<QiniuCdnRefreshResult>((resolve, reject) => {
+      cdnManager.refreshUrls(urls, (error, respBody, respInfo) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        resolve({ respBody, respInfo });
+      });
+    }),
+    QINIU_CDN_REFRESH_TIMEOUT_MS,
+    'Qiniu CDN refresh timed out for update manifests'
+  );
+
+  const statusCode = result.respInfo?.statusCode;
+  if (typeof statusCode !== 'number' || statusCode >= 400) {
+    fail(
+      `Qiniu CDN refresh failed for update manifests: HTTP ${statusCode ?? 'unknown'} ${JSON.stringify(result.respBody)}`
+    );
+  }
+
+  info(`CDN refresh requested for ${urls.join(', ')}`);
 }
 
 function qiniuRegionId(value: string): string {

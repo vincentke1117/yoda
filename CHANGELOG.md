@@ -5,6 +5,13 @@ All notable changes to Yoda will be documented in this file.
 The public Yoda changelog starts at **0.1.0**. Earlier non-Yoda release history
 is preserved in git tags only.
 
+## 0.14.5 — 2026-07-09
+
+### Fixed
+
+- Releases: refresh the China CDN root update manifests after uploading mirror
+  assets so macOS and Linux update feeds move to the new version immediately.
+
 ## 0.14.4 — 2026-07-09
 
 ### Added
