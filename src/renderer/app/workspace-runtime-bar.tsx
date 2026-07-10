@@ -1,12 +1,16 @@
 import { Terminal } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getRuntime, isValidRuntimeId, type RuntimeId } from '@shared/runtime-registry';
 import { useTaskStats } from '@renderer/features/tasks/hooks/useTaskStats';
 import { asProvisioned, getTaskStore } from '@renderer/features/tasks/stores/task-selectors';
 import { AgentInfoCard } from '@renderer/lib/components/agent-selector/agent-info-card';
+import { useToast } from '@renderer/lib/hooks/use-toast';
+import { rpc } from '@renderer/lib/ipc';
 import { appState } from '@renderer/lib/stores/app-state';
 import { workspaceShellStore } from '@renderer/lib/stores/workspace-shell-store';
+import { Button } from '@renderer/lib/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@renderer/lib/ui/popover';
 import { formatCompactNumber } from '@renderer/utils/format-compact-number';
 import { cn } from '@renderer/utils/utils';
@@ -17,6 +21,8 @@ export function explicitConversationRuntimeId(value: unknown): RuntimeId | null 
 
 export const WorkspaceRuntimeBar = observer(function WorkspaceRuntimeBar() {
   const { t } = useTranslation();
+  const { toast } = useToast();
+  const [isCompacting, setIsCompacting] = useState(false);
   const route = appState.navigation.currentViewId;
   const params = appState.navigation.viewParamsStore[route] as
     | { projectId?: string; taskId?: string }
@@ -111,6 +117,9 @@ export const WorkspaceRuntimeBar = observer(function WorkspaceRuntimeBar() {
       provisionedTask.taskView.activeBottomPanelTab === 'terminals'
   );
   const terminalActive = provisionedTask ? taskTerminalActive : workspaceShellStore.isShellOpen;
+  const canCompactContext = Boolean(
+    runtimeId === 'codex' && params?.projectId && params.taskId && activeConversationId
+  );
 
   const toggleTerminal = () => {
     if (provisionedTask) {
@@ -125,6 +134,38 @@ export const WorkspaceRuntimeBar = observer(function WorkspaceRuntimeBar() {
       return;
     }
     void workspaceShellStore.toggleShell().catch(() => {});
+  };
+
+  const compactContext = async () => {
+    if (
+      !canCompactContext ||
+      !params?.projectId ||
+      !params.taskId ||
+      !activeConversationId ||
+      !runtimeId
+    ) {
+      toast.error(t('workspaceRuntime.compactContextUnavailable'));
+      return;
+    }
+    setIsCompacting(true);
+    try {
+      const injected = await rpc.conversations.injectConversationPrompt({
+        projectId: params.projectId,
+        taskId: params.taskId,
+        conversationId: activeConversationId,
+        runtime: runtimeId,
+        prompt: '/compact',
+      });
+      if (!injected) {
+        toast.error(t('workspaceRuntime.compactContextUnavailable'));
+        return;
+      }
+      toast.success(t('workspaceRuntime.compactContextStarted'));
+    } catch {
+      toast.error(t('workspaceRuntime.compactContextUnavailable'));
+    } finally {
+      setIsCompacting(false);
+    }
   };
 
   return (
@@ -216,16 +257,31 @@ export const WorkspaceRuntimeBar = observer(function WorkspaceRuntimeBar() {
                       value={sessionTokens ? formatCompactNumber(sessionTokens.total) : '—'}
                     />
                     <ContextMetric
-                      label={t('workspaceRuntime.contextResetsLabel')}
+                      label={t('workspaceRuntime.contextCompactionsLabel')}
                       value={String(sessionContext.resetCount)}
                     />
                     {sessionContext.lastResetAt ? (
                       <ContextMetric
-                        label={t('workspaceRuntime.contextLastResetLabel')}
+                        label={t('workspaceRuntime.contextLastCompactionLabel')}
                         value={formatPopoverTime(sessionContext.lastResetAt)}
                       />
                     ) : null}
                   </div>
+                  {canCompactContext ? (
+                    <div className="border-t border-border p-3">
+                      <Button
+                        className="w-full"
+                        disabled={isCompacting}
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void compactContext()}
+                      >
+                        {isCompacting
+                          ? t('workspaceRuntime.compactingContext')
+                          : t('workspaceRuntime.compactContext')}
+                      </Button>
+                    </div>
+                  ) : null}
                   {sessionContext.rateLimits.length > 0 ? (
                     <div className="border-t border-border px-3 py-2.5">
                       <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-foreground-passive">
