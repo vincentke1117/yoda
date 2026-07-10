@@ -1,4 +1,4 @@
-import { Terminal } from 'lucide-react';
+import { Gauge, Terminal } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -57,12 +57,7 @@ export const WorkspaceRuntimeBar = observer(function WorkspaceRuntimeBar() {
   const contextRemaining = sessionContext
     ? Math.max(0, sessionContext.limitTokens - sessionContext.usedTokens)
     : null;
-  const contextTone =
-    contextPercent != null && contextPercent >= 95
-      ? 'bg-red-500'
-      : contextPercent != null && contextPercent >= 80
-        ? 'bg-amber-500'
-        : 'bg-emerald-500';
+  const contextTone = contextPercent != null ? getUsageTone(contextPercent) : 'bg-emerald-500';
   const contextTitle = sessionContext
     ? [
         t('workspaceRuntime.contextUsageTitle', {
@@ -92,18 +87,6 @@ export const WorkspaceRuntimeBar = observer(function WorkspaceRuntimeBar() {
                 : []),
             ]
           : []),
-        ...sessionContext.rateLimits.map((limit) =>
-          t('workspaceRuntime.quotaUsage', {
-            window: t('workspaceRuntime.quotaWindow', { minutes: limit.windowMinutes }),
-            percent: Math.round(limit.usedPercent),
-            resetAt: limit.resetsAt
-              ? new Intl.DateTimeFormat(undefined, {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                }).format(new Date(limit.resetsAt))
-              : t('tasks.sessionInfo.unknown'),
-          })
-        ),
       ].join('\n')
     : null;
   const connectionId = provisionedTask?.workspace.sshConnectionId;
@@ -166,6 +149,11 @@ export const WorkspaceRuntimeBar = observer(function WorkspaceRuntimeBar() {
     } finally {
       setIsCompacting(false);
     }
+  };
+
+  const manageAccount = () => {
+    if (!runtimeId || connectionId) return;
+    appState.sidePane.pinView('settings', { tab: 'clis-models', runtimeId });
   };
 
   return (
@@ -282,31 +270,72 @@ export const WorkspaceRuntimeBar = observer(function WorkspaceRuntimeBar() {
                       </Button>
                     </div>
                   ) : null}
-                  {sessionContext.rateLimits.length > 0 ? (
-                    <div className="border-t border-border px-3 py-2.5">
-                      <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-foreground-passive">
-                        {t('workspaceRuntime.quotaTitle')}
-                      </div>
-                      <div className="flex flex-col gap-1.5">
-                        {sessionContext.rateLimits.map((limit) => (
-                          <div
-                            key={limit.windowMinutes}
-                            className="flex items-center justify-between gap-3 text-xs"
-                          >
-                            <span className="text-foreground-passive">
+                </PopoverContent>
+              </Popover>
+            </>
+          ) : null}
+          {sessionContext?.rateLimits.length ? (
+            <>
+              <span aria-hidden>·</span>
+              <Popover>
+                <PopoverTrigger
+                  aria-label={t('workspaceRuntime.accountUsage')}
+                  className="flex h-5 shrink-0 items-center gap-1 rounded-sm px-1 text-foreground-passive transition-colors hover:bg-background-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border"
+                  title={t('workspaceRuntime.accountUsage')}
+                >
+                  <Gauge className="size-3.5" />
+                  <span>{t('workspaceRuntime.accountUsage')}</span>
+                </PopoverTrigger>
+                <PopoverContent
+                  align="start"
+                  side="top"
+                  sideOffset={8}
+                  className="w-72 gap-0 border border-border bg-background p-0 text-foreground shadow-lg"
+                >
+                  <div className="p-3">
+                    <div className="text-sm font-medium">{t('workspaceRuntime.accountUsage')}</div>
+                    <div className="mt-0.5 text-xs text-foreground-passive">
+                      {t('workspaceRuntime.accountUsageDescription')}
+                    </div>
+                  </div>
+                  <div className="border-t border-border" />
+                  <div className="flex flex-col gap-3 p-3">
+                    {sessionContext.rateLimits.map((limit) => {
+                      const percent = Math.round(limit.usedPercent);
+                      return (
+                        <div key={limit.windowMinutes} className="flex flex-col gap-1.5">
+                          <div className="flex items-center justify-between gap-3 text-xs">
+                            <span className="text-foreground-muted">
                               {t('workspaceRuntime.quotaWindow', {
                                 minutes: limit.windowMinutes,
                               })}
                             </span>
-                            <span className="font-mono tabular-nums text-foreground-muted">
-                              {Math.round(limit.usedPercent)}% ·{' '}
-                              {limit.resetsAt
-                                ? formatPopoverTime(limit.resetsAt)
-                                : t('tasks.sessionInfo.unknown')}
+                            <span className="font-mono tabular-nums text-foreground">
+                              {percent}%
                             </span>
                           </div>
-                        ))}
-                      </div>
+                          <ContextProgressBar percent={percent} tone={getUsageTone(percent)} />
+                          <span className="text-[11px] text-foreground-passive">
+                            {t('workspaceRuntime.accountQuotaReset', {
+                              time: limit.resetsAt
+                                ? formatPopoverTime(limit.resetsAt)
+                                : t('tasks.sessionInfo.unknown'),
+                            })}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {!connectionId ? (
+                    <div className="border-t border-border p-3">
+                      <Button
+                        className="w-full"
+                        size="sm"
+                        variant="outline"
+                        onClick={manageAccount}
+                      >
+                        {t('workspaceRuntime.manageAccount')}
+                      </Button>
                     </div>
                   ) : null}
                 </PopoverContent>
@@ -375,4 +404,10 @@ function formatPopoverTime(value: string): string {
   return new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' }).format(
     new Date(value)
   );
+}
+
+function getUsageTone(percent: number): string {
+  if (percent >= 95) return 'bg-red-500';
+  if (percent >= 80) return 'bg-amber-500';
+  return 'bg-emerald-500';
 }
