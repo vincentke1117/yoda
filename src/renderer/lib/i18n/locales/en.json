@@ -3066,7 +3066,7 @@
     "contextLastResetLabel": "Last compaction",
     "contextCompactionsLabel": "Automatic compactions",
     "contextLastCompactionLabel": "Last automatic compaction",
-    "sessionHistory": "Prompt history",
+    "sessionHistory": "Chat ({{count}})",
     "compactContext": "Compact context",
     "compactingContext": "Compacting context…",
     "compactContextStarted": "Context compaction started",

@@ -128,6 +128,9 @@ export const WorkspaceRuntimeBar = observer(function WorkspaceRuntimeBar() {
     sessionPromptCount && sessionPromptCount.conversationId === activeConversation?.id
       ? sessionPromptCount.count
       : null;
+  const sessionHistoryLabel = t('workspaceRuntime.sessionHistory', {
+    count: displayedPromptCount ?? 0,
+  });
 
   useEffect(() => {
     if (!activeConversation || !provisionedTask) return;
@@ -249,9 +252,9 @@ export const WorkspaceRuntimeBar = observer(function WorkspaceRuntimeBar() {
               <span aria-hidden>·</span>
               <button
                 type="button"
-                aria-label={t('workspaceRuntime.sessionHistory')}
+                aria-label={sessionHistoryLabel}
                 aria-pressed={sessionHistoryDocked}
-                title={t('workspaceRuntime.sessionHistory')}
+                title={sessionHistoryLabel}
                 onClick={toggleSessionHistoryDock}
                 className={cn(
                   'flex h-5 shrink-0 items-center gap-1 rounded-sm px-1 text-foreground-passive transition-colors hover:bg-background-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border',
@@ -259,12 +262,7 @@ export const WorkspaceRuntimeBar = observer(function WorkspaceRuntimeBar() {
                 )}
               >
                 <MessageSquare className="size-3.5" />
-                <span>{t('workspaceRuntime.sessionHistory')}</span>
-                {displayedPromptCount != null ? (
-                  <span className="font-mono text-[10px] tabular-nums text-foreground-passive">
-                    {displayedPromptCount}
-                  </span>
-                ) : null}
+                <span className="tabular-nums">{sessionHistoryLabel}</span>
               </button>
             </>
           ) : null}
