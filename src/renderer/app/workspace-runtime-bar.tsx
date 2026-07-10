@@ -135,24 +135,26 @@ export const WorkspaceRuntimeBar = observer(function WorkspaceRuntimeBar() {
                   : 'bg-foreground-muted/40'
             )}
           />
-          <span className="shrink-0">{t('workspaceRuntime.currentSession')}</span>
-          <span aria-hidden>·</span>
-          <span className="truncate text-foreground">{runtime?.name ?? runtimeId}</span>
+          <span className="truncate font-medium text-foreground">{runtime?.name ?? runtimeId}</span>
           {dependency?.version ? (
-            <span className="shrink-0 tabular-nums">v{dependency.version}</span>
+            <span className="shrink-0 tabular-nums text-foreground-passive">
+              v{dependency.version}
+            </span>
           ) : null}
           {sessionContext && contextPercent != null ? (
             <>
               <span aria-hidden>·</span>
               <span
-                className="shrink-0 rounded border border-border/70 bg-background px-1 py-0.5 text-foreground-passive"
-                title={contextTitle ?? undefined}
-              >
-                {t('workspaceRuntime.contextUsage', {
+                aria-label={t('workspaceRuntime.contextUsage', {
                   used: formatCompactNumber(sessionContext.usedTokens),
                   limit: formatCompactNumber(sessionContext.limitTokens),
                   percent: contextPercent,
                 })}
+                className="shrink-0 font-mono tabular-nums text-foreground-passive"
+                title={contextTitle ?? undefined}
+              >
+                {formatCompactNumber(sessionContext.usedTokens)} /{' '}
+                {formatCompactNumber(sessionContext.limitTokens)} · {contextPercent}%
               </span>
             </>
           ) : null}
