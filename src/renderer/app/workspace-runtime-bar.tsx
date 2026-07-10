@@ -136,29 +136,14 @@ export const WorkspaceRuntimeBar = observer(function WorkspaceRuntimeBar() {
               aria-label={t('workspaceRuntime.currentSessionTitle', {
                 name: runtime?.name ?? runtimeId,
               })}
-              className="flex h-5 min-w-0 items-center gap-1.5 rounded-sm px-1 text-foreground-muted transition-colors hover:bg-background-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border"
+              className="flex h-5 min-w-0 items-center rounded-sm px-1 text-foreground-muted transition-colors hover:bg-background-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border"
               title={t('workspaceRuntime.currentSessionTitle', {
                 name: runtime?.name ?? runtimeId,
               })}
             >
-              <span
-                className={cn(
-                  'size-1.5 shrink-0 rounded-full',
-                  dependency?.status === 'available'
-                    ? 'bg-emerald-500'
-                    : dependency
-                      ? 'bg-amber-500'
-                      : 'bg-foreground-muted/40'
-                )}
-              />
               <span className="truncate font-medium text-foreground">
                 {runtime?.name ?? runtimeId}
               </span>
-              {dependency?.version ? (
-                <span className="shrink-0 tabular-nums text-foreground-passive">
-                  v{dependency.version}
-                </span>
-              ) : null}
             </PopoverTrigger>
             <PopoverContent
               align="start"
