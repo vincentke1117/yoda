@@ -3071,6 +3071,10 @@
     "quotaWindow": "{{minutes}} min window",
     "quotaTitle": "Rate limits",
     "quotaUsage": "{{window}} usage: {{percent}}%, resets at {{resetAt}}",
+    "accountUsage": "Account usage",
+    "accountUsageDescription": "CLI account quota windows",
+    "accountQuotaReset": "Resets at {{time}}",
+    "manageAccount": "Manage account",
     "actions": {
       "open": "{{name}} console",
       "update": "Update {{name}}",
