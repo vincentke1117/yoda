@@ -286,7 +286,7 @@ export const TaskSidebar = observer(function TaskSidebar() {
           <div
             ref={dropZone.dropRef}
             className={cn(
-              'relative flex min-w-0 flex-1 items-center gap-1 overflow-x-auto rounded-md pr-8',
+              'flex min-w-0 flex-1 items-center gap-1 overflow-x-auto rounded-md',
               dropZone.isOver && 'bg-background-tertiary-1'
             )}
             style={{ scrollbarWidth: 'none' }}
@@ -371,33 +371,26 @@ export const TaskSidebar = observer(function TaskSidebar() {
                 </ChipContextMenu>
               );
             })}
-            {availableGroups.length > 0 ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  render={
-                    <button
-                      type="button"
-                      aria-label={t('tasks.sidePane.addCard')}
-                      title={t('tasks.sidePane.addCard')}
-                      // Keep the "+" outside the scrolling chip flow so chips
-                      // never cover its hit target.
-                      className="absolute right-0 top-1/2 z-20 flex size-7 -translate-y-1/2 items-center justify-center rounded-md bg-background-secondary text-foreground-muted hover:bg-background-2 hover:text-foreground dark:bg-background [-webkit-app-region:no-drag]"
-                    >
-                      <Plus className="size-3.5" />
-                    </button>
-                  }
-                />
-                <DropdownMenuContent align="start" className="w-auto">
-                  {availableGroups.map((group) => (
-                    <DropdownMenuItem key={group} onClick={() => selectGroup(group)}>
-                      {groupIcon(group)}
-                      {t(groupLabelKey(group))}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : null}
           </div>
+          {availableGroups.length > 0 ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                aria-label={t('tasks.sidePane.addCard')}
+                title={t('tasks.sidePane.addCard')}
+                className="flex size-7 shrink-0 items-center justify-center rounded-md bg-background-secondary text-foreground-muted hover:bg-background-2 hover:text-foreground dark:bg-background [-webkit-app-region:no-drag]"
+              >
+                <Plus className="size-3.5" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-auto">
+                {availableGroups.map((group) => (
+                  <DropdownMenuItem key={group} onClick={() => selectGroup(group)}>
+                    {groupIcon(group)}
+                    {t(groupLabelKey(group))}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
           <button
             type="button"
             aria-label={t(
