@@ -1,10 +1,14 @@
 import { Brain, Gauge, MessageSquare, Terminal } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getRuntime, isValidRuntimeId, type RuntimeId } from '@shared/runtime-registry';
 import { useAppSettingsKey } from '@renderer/features/settings/use-app-settings-key';
 import { useTaskStats } from '@renderer/features/tasks/hooks/useTaskStats';
+import {
+  resolveSessionPrompts,
+  SESSION_PROMPTS_REFRESH_MS,
+} from '@renderer/features/tasks/session-prompts';
 import { asProvisioned, getTaskStore } from '@renderer/features/tasks/stores/task-selectors';
 import AgentLogo from '@renderer/lib/components/agent-logo';
 import { AgentInfoCard } from '@renderer/lib/components/agent-selector/agent-info-card';
@@ -28,6 +32,10 @@ export const WorkspaceRuntimeBar = observer(function WorkspaceRuntimeBar() {
   const { value: interfaceSettings, update: updateInterfaceSettings } =
     useAppSettingsKey('interface');
   const [isCompacting, setIsCompacting] = useState(false);
+  const [sessionPromptCount, setSessionPromptCount] = useState<{
+    conversationId: string;
+    count: number;
+  } | null>(null);
   const route = appState.navigation.currentViewId;
   const params = appState.navigation.viewParamsStore[route] as
     | { projectId?: string; taskId?: string }
@@ -39,6 +47,7 @@ export const WorkspaceRuntimeBar = observer(function WorkspaceRuntimeBar() {
   const runtimeId = explicitConversationRuntimeId(
     provisionedTask?.taskView.tabManager.activeConversation?.data.runtimeId
   );
+  const activeConversation = provisionedTask?.taskView.tabManager.activeConversation?.data ?? null;
   const runtime = runtimeId ? getRuntime(runtimeId) : null;
   const runtimeConfig = runtimeId ? agentConfig[runtimeId] : null;
   const activeConversationId = provisionedTask?.taskView.tabManager.activeConversationId;
@@ -115,6 +124,28 @@ export const WorkspaceRuntimeBar = observer(function WorkspaceRuntimeBar() {
   );
   const shortAccountWindow = sessionContext?.rateLimits[0] ?? null;
   const sessionHistoryDocked = interfaceSettings?.dockSessionHistory ?? true;
+  const displayedPromptCount =
+    sessionPromptCount && sessionPromptCount.conversationId === activeConversation?.id
+      ? sessionPromptCount.count
+      : null;
+
+  useEffect(() => {
+    if (!activeConversation || !provisionedTask) return;
+    let cancelled = false;
+    const load = () =>
+      resolveSessionPrompts(activeConversation, provisionedTask.path).then((prompts) => {
+        if (!cancelled) {
+          setSessionPromptCount({ conversationId: activeConversation.id, count: prompts.length });
+        }
+      });
+
+    void load();
+    const interval = window.setInterval(() => void load(), SESSION_PROMPTS_REFRESH_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [activeConversation, provisionedTask]);
 
   const toggleTerminal = () => {
     if (provisionedTask) {
@@ -186,7 +217,7 @@ export const WorkspaceRuntimeBar = observer(function WorkspaceRuntimeBar() {
               aria-label={t('workspaceRuntime.currentSessionTitle', {
                 name: runtime?.name ?? runtimeId,
               })}
-              className="flex h-5 min-w-0 items-center rounded-sm px-1 text-foreground-muted transition-colors hover:bg-background-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border"
+              className="flex h-5 min-w-0 items-center gap-1.5 rounded-sm px-1 text-foreground-muted transition-colors hover:bg-background-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border"
               title={t('workspaceRuntime.currentSessionTitle', {
                 name: runtime?.name ?? runtimeId,
               })}
@@ -197,7 +228,7 @@ export const WorkspaceRuntimeBar = observer(function WorkspaceRuntimeBar() {
                   alt=""
                   isSvg={runtimeConfig.isSvg}
                   invertInDark={runtimeConfig.invertInDark}
-                  className="size-3.5 rounded-[2px]"
+                  className="size-4 rounded-[2px]"
                 />
               ) : null}
               <span className="truncate font-medium text-foreground">
@@ -213,6 +244,30 @@ export const WorkspaceRuntimeBar = observer(function WorkspaceRuntimeBar() {
               <AgentInfoCard id={runtimeId} dependency={dependency} connectionId={connectionId} />
             </PopoverContent>
           </Popover>
+          {activeConversationId ? (
+            <>
+              <span aria-hidden>·</span>
+              <button
+                type="button"
+                aria-label={t('workspaceRuntime.sessionHistory')}
+                aria-pressed={sessionHistoryDocked}
+                title={t('workspaceRuntime.sessionHistory')}
+                onClick={toggleSessionHistoryDock}
+                className={cn(
+                  'flex h-5 shrink-0 items-center gap-1 rounded-sm px-1 text-foreground-passive transition-colors hover:bg-background-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border',
+                  sessionHistoryDocked && 'bg-background-2 text-foreground'
+                )}
+              >
+                <MessageSquare className="size-3.5" />
+                <span>{t('workspaceRuntime.sessionHistory')}</span>
+                {displayedPromptCount != null ? (
+                  <span className="font-mono text-[10px] tabular-nums text-foreground-passive">
+                    {displayedPromptCount}
+                  </span>
+                ) : null}
+              </button>
+            </>
+          ) : null}
           {sessionContext && contextPercent != null ? (
             <>
               <span aria-hidden>·</span>
@@ -394,25 +449,6 @@ export const WorkspaceRuntimeBar = observer(function WorkspaceRuntimeBar() {
                   </div>
                 </PopoverContent>
               </Popover>
-            </>
-          ) : null}
-          {activeConversationId ? (
-            <>
-              <span aria-hidden>·</span>
-              <button
-                type="button"
-                aria-label={t('workspaceRuntime.sessionHistory')}
-                aria-pressed={sessionHistoryDocked}
-                title={t('workspaceRuntime.sessionHistory')}
-                onClick={toggleSessionHistoryDock}
-                className={cn(
-                  'flex h-5 shrink-0 items-center gap-1 rounded-sm px-1 text-foreground-passive transition-colors hover:bg-background-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border',
-                  sessionHistoryDocked && 'bg-background-2 text-foreground'
-                )}
-              >
-                <MessageSquare className="size-3.5" />
-                <span>{t('workspaceRuntime.sessionHistory')}</span>
-              </button>
             </>
           ) : null}
         </div>
