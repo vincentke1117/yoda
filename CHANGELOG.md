@@ -5,6 +5,31 @@ All notable changes to Yoda will be documented in this file.
 The public Yoda changelog starts at **0.1.0**. Earlier non-Yoda release history
 is preserved in git tags only.
 
+## 0.15.0 — 2026-07-10
+
+### Added
+
+- Runtime chrome now surfaces prompt count, live context usage, and session
+  history access directly in the workspace bar.
+- Workspace shell and runtime snapshot plumbing add first-class in-app runtime
+  management and dependency visibility.
+- Task and conversation flows now track richer session prompt context for
+  resumed runs.
+
+### Changed
+
+- Agent selector and runtime settings tighten the display for current
+  runtime/account usage and related controls.
+- Sidebar and task surfaces were reorganized around the new runtime history and
+  prompt context affordances.
+
+### Fixed
+
+- Conversations resume reliably after PTY restarts and duplicate resume
+  requests are coalesced.
+- Task sidebar click targets and overlap issues were cleaned up, along with PTY
+  resize freeze regressions.
+
 ## 0.14.5 — 2026-07-09
 
 ### Fixed
