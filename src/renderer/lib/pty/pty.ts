@@ -231,6 +231,8 @@ export class FrontendPty {
   private unfreezePhase: 'idle' | 'await-data' | 'await-render' = 'idle';
   private unfreezeRenderDisposable: IDisposable | null = null;
   private unfreezeFallbackTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Bumps on each resize chain so stale rAF / timeout callbacks cannot unfreeze a newer frame. */
+  private unfreezeGeneration = 0;
   /** Overrides OSC 8 hyperlink activation while a pane hosts this terminal; null = system browser. */
   private linkOpener: ((url: string) => void) | null = null;
   private readonly scrollDisposable: { dispose(): void };
@@ -554,16 +556,9 @@ export class FrontendPty {
    *   freezeFrame()      snapshot canvas → overlay covers the terminal
    *   terminal.resize()  clear + rewrap happen under the overlay
    *   (caller sends rpc.pty.resize in the same tick → app repaints)
-   *   unfreeze chain — entry phase depends on direction (user-chosen
-   *   tradeoff: live-follow on grow, no garbling on shrink):
-   *     GROW / rows-only ('await-render'): unwrapping is correct by
-   *       construction, so reveal on the resize's own full redraw — live
-   *       per-column tracking during drags.  (The transcript may shift
-   *       vertically as line counts change; inherent to live reflow.)
-   *     SHRINK ('await-data'): force-wrapping garbles TUI rows, so hold the
-   *       snapshot until the app's repaint arrives (looksLikeRepaint in
-   *       writeOrBuffer) — successive shrink commits keep the snapshot up,
-   *       and the reveal happens when the app catches up.
+   *   unfreeze chain — shrink resizes keep the snapshot up until repaint,
+   *   while grow resizes unfreeze immediately because the old snapshot is no
+   *   longer aligned to the wider grid.
    *   then: next FULL-viewport onRender (partial renders would expose the
    *   cleared rest of the canvas) → one requestAnimationFrame (the redrawn
    *   canvas is presented) → overlay hidden.
@@ -581,12 +576,18 @@ export class FrontendPty {
       return;
     }
     const isShrink = cols < this.terminal.cols;
+    if (!isShrink) {
+      this.unfreeze();
+      this.hasFreezeSnapshot = false;
+      this.terminal.resize(cols, rows);
+      return;
+    }
     // If a previous commit is still frozen, keep ITS snapshot (the canvas
     // underneath may be mid-transition garbage — re-snapshotting it would
     // put that garbage on the overlay) and just restart the unfreeze chain.
     const frozen = this.unfreezePhase !== 'idle' ? true : this.freezeFrame();
+    if (frozen) this.armUnfreeze('await-data');
     this.terminal.resize(cols, rows);
-    if (frozen) this.armUnfreeze(isShrink ? 'await-data' : 'await-render');
   }
 
   private getWebglCanvas(): HTMLCanvasElement | null {
@@ -662,19 +663,25 @@ export class FrontendPty {
 
   /** Start the event chain that reveals the resized terminal — see commitResize. */
   private armUnfreeze(entryPhase: 'await-data' | 'await-render'): void {
+    const generation = ++this.unfreezeGeneration;
     this.unfreezeRenderDisposable?.dispose();
     if (this.unfreezeFallbackTimer) clearTimeout(this.unfreezeFallbackTimer);
     this.unfreezePhase = entryPhase;
     this.unfreezeRenderDisposable = this.terminal.onRender((e) => {
       if (this.unfreezePhase !== 'await-render') return;
       if (e.start > 0 || e.end < this.terminal.rows - 1) return;
-      requestAnimationFrame(() => this.unfreeze());
+      requestAnimationFrame(() => {
+        if (generation === this.unfreezeGeneration) this.unfreeze();
+      });
     });
-    this.unfreezeFallbackTimer = setTimeout(() => this.unfreeze(), UNFREEZE_FALLBACK_MS);
+    this.unfreezeFallbackTimer = setTimeout(() => {
+      if (generation === this.unfreezeGeneration) this.unfreeze();
+    }, UNFREEZE_FALLBACK_MS);
   }
 
   /** Hide the overlay and reset the chain. Idempotent. */
   private unfreeze(): void {
+    this.unfreezeGeneration += 1;
     this.unfreezePhase = 'idle';
     this.unfreezeRenderDisposable?.dispose();
     this.unfreezeRenderDisposable = null;
