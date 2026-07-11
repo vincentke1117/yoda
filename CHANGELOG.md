@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.15.2
+
+### Patch Changes
+
+- Start development reliably after a clean Electron 42 install by resolving its lazy-downloaded runtime before electron-vite launches.
+- Keep project merge and workspace reorder updates inside synchronous database transactions to avoid partial state changes.
+
 ## 0.15.1
 
 ### Patch Changes
