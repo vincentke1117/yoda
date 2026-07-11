@@ -1871,7 +1871,6 @@ function SessionDetailScreen({
         <View style={styles.sessionDetailShell}>
           <SessionNavigationBar
             projectLabel={projectName(projects, task.projectId)}
-            runtimeStatus={detail?.session.runtimeStatus ?? null}
             title={session?.title ?? task.name}
             onBack={onBack}
           />
@@ -1899,8 +1898,8 @@ function SessionDetailScreen({
             {detail ? (
               <>
                 <View style={styles.summaryPanel}>
-                  <DetailItem label="Runtime" value={detail.session.runtimeId} />
-                  <DetailItem label="Runtime" value={runtimeLabel(detail.session.runtimeStatus)} />
+                  <DetailItem label="Agent" value={detail.session.runtimeId} />
+                  <DetailItem label="Status" value={runtimeLabel(detail.session.runtimeStatus)} />
                   <DetailItem label="Source" value={contentSourceLabel(detail.source)} />
                   <DetailItem
                     label="Updated"
@@ -1910,9 +1909,8 @@ function SessionDetailScreen({
                 <View style={styles.outputHeader}>
                   <Text style={styles.sectionTitle}>Transcript</Text>
                   <Text style={styles.sectionMeta}>
-                    {detail.truncated
-                      ? `Tail ${detail.content.length}/${detail.contentLength}`
-                      : detail.contentLength}
+                    {detail.transcriptTruncated ? 'Recent ' : ''}
+                    {detail.transcript.length} updates
                   </Text>
                 </View>
                 <OutputModeToggle mode={outputMode} onChange={setOutputMode} />
@@ -1941,6 +1939,7 @@ function SessionDetailScreen({
           <SessionInputComposer
             live={detail?.session.running ?? false}
             acceptsInput={detail?.session.acceptsInput ?? false}
+            runtimeStatus={detail?.session.runtimeStatus ?? null}
             sending={sendingInput}
             value={sessionInput}
             onChange={setSessionInput}
@@ -1954,17 +1953,13 @@ function SessionDetailScreen({
 
 function SessionNavigationBar({
   projectLabel,
-  runtimeStatus,
   title,
   onBack,
 }: {
   projectLabel: string;
-  runtimeStatus: MobileSessionSummary['runtimeStatus'] | null;
   title: string;
   onBack: () => void;
 }) {
-  const status = runtimeStatus ? runtimeLabel(runtimeStatus) : 'Loading';
-  const color = runtimeStatus ? runtimeColor(runtimeStatus) : COLORS.muted;
   return (
     <View style={styles.sessionNavBar}>
       <Pressable
@@ -1986,11 +1981,6 @@ function SessionNavigationBar({
           {title}
         </Text>
       </View>
-      <View style={[styles.sessionNavStatus, { borderColor: color }]}>
-        <Text style={[styles.sessionNavStatusText, { color }]} numberOfLines={1}>
-          {status}
-        </Text>
-      </View>
     </View>
   );
 }
@@ -1998,6 +1988,7 @@ function SessionNavigationBar({
 function SessionInputComposer({
   live,
   acceptsInput,
+  runtimeStatus,
   sending,
   value,
   onChange,
@@ -2005,6 +1996,7 @@ function SessionInputComposer({
 }: {
   live: boolean;
   acceptsInput: boolean;
+  runtimeStatus: MobileSessionSummary['runtimeStatus'] | null;
   sending: boolean;
   value: string;
   onChange: (value: string) => void;
@@ -2013,20 +2005,12 @@ function SessionInputComposer({
   const canSend = acceptsInput && value.trim().length > 0 && !sending;
   return (
     <View style={styles.sessionInputBar}>
-      <View style={styles.sessionInputTopLine}>
-        <View
-          style={[
-            styles.sessionInputStatusDot,
-            acceptsInput ? styles.sessionInputStatusDotLive : null,
-          ]}
-        />
-        <Text style={styles.sessionInputStatus}>
-          {acceptsInput ? 'Live input' : live ? 'Session detached' : 'Session offline'}
-        </Text>
-        <Text style={styles.sessionInputCount}>
-          {value.length}/{MOBILE_SESSION_INPUT_MAX_CHARS}
-        </Text>
-      </View>
+      <SessionRuntimeStatus
+        acceptsInput={acceptsInput}
+        live={live}
+        runtimeStatus={runtimeStatus}
+        valueLength={value.length}
+      />
       <View style={styles.sessionInputRow}>
         <TextInput
           autoCapitalize="sentences"
@@ -2061,6 +2045,116 @@ function SessionInputComposer({
       </View>
     </View>
   );
+}
+
+function SessionRuntimeStatus({
+  acceptsInput,
+  live,
+  runtimeStatus,
+  valueLength,
+}: {
+  acceptsInput: boolean;
+  live: boolean;
+  runtimeStatus: MobileSessionSummary['runtimeStatus'] | null;
+  valueLength: number;
+}) {
+  const presentation = sessionRuntimePresentation(runtimeStatus);
+  const detail = acceptsInput
+    ? runtimeStatus === 'completed'
+      ? 'This turn is complete. You can send a follow-up.'
+      : 'Live input is available.'
+    : live
+      ? 'The session is connected but not accepting input.'
+      : 'The session is offline.';
+
+  return (
+    <View
+      accessibilityLabel={`${presentation.label}. ${detail}`}
+      accessibilityLiveRegion="polite"
+      style={[
+        styles.sessionRunStatus,
+        { borderColor: presentation.color, backgroundColor: presentation.backgroundColor },
+      ]}
+    >
+      <View style={styles.sessionRunStatusIcon}>
+        {presentation.animated ? (
+          <ActivityIndicator color={presentation.color} size="small" />
+        ) : (
+          <Ionicons color={presentation.color} name={presentation.icon} size={20} />
+        )}
+      </View>
+      <View style={styles.sessionRunStatusBody}>
+        <Text style={[styles.sessionRunStatusLabel, { color: presentation.color }]}>
+          {presentation.label}
+        </Text>
+        <Text style={styles.sessionRunStatusDetail} numberOfLines={1}>
+          {detail}
+        </Text>
+      </View>
+      <Text style={styles.sessionInputCount}>
+        {valueLength}/{MOBILE_SESSION_INPUT_MAX_CHARS}
+      </Text>
+    </View>
+  );
+}
+
+function sessionRuntimePresentation(status: MobileSessionSummary['runtimeStatus'] | null): {
+  animated: boolean;
+  backgroundColor: string;
+  color: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+} {
+  switch (status) {
+    case 'working':
+      return {
+        animated: true,
+        backgroundColor: '#EEF3FF',
+        color: COLORS.blue,
+        icon: 'sync-outline',
+        label: 'Running',
+      };
+    case 'awaiting-input':
+      return {
+        animated: false,
+        backgroundColor: '#FFF7E6',
+        color: COLORS.amber,
+        icon: 'alert-circle-outline',
+        label: 'Waiting for input',
+      };
+    case 'completed':
+      return {
+        animated: false,
+        backgroundColor: '#EAF7F2',
+        color: COLORS.green,
+        icon: 'checkmark-circle-outline',
+        label: 'Completed',
+      };
+    case 'error':
+      return {
+        animated: false,
+        backgroundColor: '#FFF0EE',
+        color: COLORS.red,
+        icon: 'close-circle-outline',
+        label: 'Run failed',
+      };
+    case 'idle':
+      return {
+        animated: false,
+        backgroundColor: '#F1F0EA',
+        color: COLORS.muted,
+        icon: 'pause-circle-outline',
+        label: 'Idle',
+      };
+    case null:
+      return {
+        animated: false,
+        backgroundColor: '#F1F0EA',
+        color: COLORS.muted,
+        icon: 'ellipsis-horizontal-circle-outline',
+        label: 'Loading status',
+      };
+  }
 }
 
 function OutputModeToggle({
@@ -2607,22 +2701,10 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontWeight: '800',
   },
-  sessionNavStatus: {
-    maxWidth: 92,
-    minHeight: 30,
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 8,
-  },
-  sessionNavStatusText: {
-    fontSize: 11,
-    fontWeight: '800',
-  },
   scrollToBottomButton: {
     position: 'absolute',
     right: 18,
-    bottom: Platform.OS === 'ios' ? 116 : 108,
+    bottom: Platform.OS === 'ios' ? 150 : 142,
     minHeight: 42,
     flexDirection: 'row',
     alignItems: 'center',
@@ -2645,27 +2727,34 @@ const styles = StyleSheet.create({
     paddingBottom: Platform.OS === 'ios' ? 10 : 12,
     gap: 7,
   },
-  sessionInputTopLine: {
-    minHeight: 18,
+  sessionRunStatus: {
+    minHeight: 52,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 9,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 11,
+    paddingVertical: 8,
   },
-  sessionInputStatusDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: COLORS.muted,
+  sessionRunStatusIcon: {
+    width: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  sessionInputStatusDotLive: {
-    backgroundColor: COLORS.green,
-  },
-  sessionInputStatus: {
+  sessionRunStatusBody: {
+    minWidth: 0,
     flex: 1,
+    gap: 1,
+  },
+  sessionRunStatusLabel: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  sessionRunStatusDetail: {
     color: COLORS.muted,
     fontSize: 11,
-    fontWeight: '800',
-    textTransform: 'uppercase',
+    fontWeight: '600',
   },
   sessionInputCount: {
     color: COLORS.muted,
