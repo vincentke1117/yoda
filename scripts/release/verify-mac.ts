@@ -1,4 +1,4 @@
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, lstatSync, readdirSync, readlinkSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { RELEASE_DIR } from './lib/config.ts';
@@ -45,6 +45,17 @@ for (const appDir of appBundles) {
   step(`Verifying ${appDir} (expected: ${expectedArch ?? 'unknown'})`);
 
   const electronBin = join(appDir, 'Contents', 'MacOS', productName);
+  const sparkleHelper = join(appDir, 'Contents', 'Helpers', 'YodaSparkleUpdater');
+  const sparkleFramework = join(
+    appDir,
+    'Contents',
+    'Frameworks',
+    'Sparkle.framework',
+    'Versions',
+    'B',
+    'Sparkle'
+  );
+  const sparkleFrameworkBundle = join(appDir, 'Contents', 'Frameworks', 'Sparkle.framework');
   const sqliteNode = join(
     appDir,
     'Contents',
@@ -74,6 +85,46 @@ for (const appDir of appBundles) {
       warn(`sqlite3 native module not found at ${sqliteNode}`);
     }
   }
+
+  if (!existsSync(sparkleHelper)) {
+    fail(`Sparkle helper not found at ${sparkleHelper}`);
+  }
+  if (!existsSync(sparkleFramework)) {
+    fail(`Sparkle framework not found at ${sparkleFramework}`);
+  }
+
+  for (const [relativePath, expectedTarget] of [
+    ['Sparkle', 'Versions/Current/Sparkle'],
+    [join('Versions', 'Current'), 'B'],
+  ] as const) {
+    const linkPath = join(sparkleFrameworkBundle, relativePath);
+    if (
+      !existsSync(linkPath) ||
+      !lstatSync(linkPath).isSymbolicLink() ||
+      readlinkSync(linkPath) !== expectedTarget
+    ) {
+      fail(`Sparkle framework has a non-portable link at ${relativePath}`);
+    }
+  }
+
+  for (const [label, binary] of [
+    ['Sparkle helper', sparkleHelper],
+    ['Sparkle framework', sparkleFramework],
+  ] as const) {
+    const architectures = execOrNull(`lipo -archs "${binary}"`);
+    info(`${label}: ${architectures ?? 'unknown architectures'}`);
+    if (!architectures?.includes('arm64') || !architectures.includes('x86_64')) {
+      fail(`${label} must contain both arm64 and x86_64`);
+    }
+  }
+
+  const helperStrings = exec(`strings "${sparkleHelper}"`);
+  if (!helperStrings.includes('yoda-full-update-disabled')) {
+    fail('Sparkle helper is missing the delta-only full-download guard');
+  }
+
+  exec(`codesign --verify --strict --verbose=2 "${sparkleHelper}"`, { echo: true });
+  exec(`codesign --verify --strict --verbose=2 "${sparkleFrameworkBundle}"`, { echo: true });
 
   const plist = join(appDir, 'Contents', 'Info.plist');
   if (existsSync(plist)) {

@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, readlinkSync, rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { info, step } from './lib/log.ts';
 
@@ -19,7 +19,8 @@ const helperPath = join(stageDir, 'YodaSparkleUpdater');
 const frameworkPath = join(stageDir, 'Sparkle.framework');
 
 if (process.platform !== 'darwin') {
-  throw new Error('Sparkle helper can only be prepared on macOS');
+  info('Not macOS — skipping Sparkle helper preparation');
+  process.exit(0);
 }
 
 if (isPrepared()) {
@@ -39,7 +40,11 @@ info(`Prepared Sparkle helper in ${stageDir}`);
 function isPrepared(): boolean {
   if (!existsSync(helperPath) || !existsSync(frameworkPath)) return false;
   const strings = run('strings', [helperPath], { capture: true });
-  return strings.includes('yoda-full-update-disabled');
+  return (
+    strings.includes('yoda-full-update-disabled') &&
+    readFrameworkLink('Sparkle') === 'Versions/Current/Sparkle' &&
+    readFrameworkLink(join('Versions', 'Current')) === 'B'
+  );
 }
 
 function prepareSource(): void {
@@ -69,28 +74,35 @@ function applyDeltaOnlyPatch(): void {
 function buildHelper(): void {
   rmSync(derivedDir, { recursive: true, force: true });
   rmSync(productsDir, { recursive: true, force: true });
-  run('xcodebuild', [
-    '-project',
-    join(sourceDir, 'Sparkle.xcodeproj'),
-    '-scheme',
-    'sparkle-cli',
-    '-configuration',
-    'Release',
-    '-derivedDataPath',
-    derivedDir,
-    `CONFIGURATION_BUILD_DIR=${productsDir}`,
-    'ARCHS=arm64 x86_64',
-    'ONLY_ACTIVE_ARCH=NO',
-    'CODE_SIGNING_ALLOWED=NO',
-    'build',
-  ]);
+  run(
+    'xcodebuild',
+    [
+      '-project',
+      join(sourceDir, 'Sparkle.xcodeproj'),
+      '-scheme',
+      'sparkle-cli',
+      '-configuration',
+      'Release',
+      '-derivedDataPath',
+      derivedDir,
+      `CONFIGURATION_BUILD_DIR=${productsDir}`,
+      'ARCHS=arm64 x86_64',
+      'ONLY_ACTIVE_ARCH=NO',
+      'CODE_SIGNING_ALLOWED=NO',
+      'build',
+    ],
+    { capture: true }
+  );
 }
 
 function stageArtifacts(): void {
   rmSync(stageDir, { recursive: true, force: true });
   mkdirSync(stageDir, { recursive: true });
   cpSync(join(productsDir, 'sparkle.app', 'Contents', 'MacOS', 'sparkle'), helperPath);
-  cpSync(join(productsDir, 'Sparkle.framework'), frameworkPath, { recursive: true });
+  cpSync(join(productsDir, 'Sparkle.framework'), frameworkPath, {
+    recursive: true,
+    verbatimSymlinks: true,
+  });
 }
 
 function verifyArtifacts(): void {
@@ -106,6 +118,20 @@ function verifyArtifacts(): void {
   if (!linked.includes('@rpath/Sparkle.framework')) {
     throw new Error('Sparkle helper is not linked against Sparkle.framework');
   }
+  if (
+    readFrameworkLink('Sparkle') !== 'Versions/Current/Sparkle' ||
+    readFrameworkLink(join('Versions', 'Current')) !== 'B'
+  ) {
+    throw new Error('Sparkle.framework contains non-portable symbolic links');
+  }
+}
+
+function readFrameworkLink(relativePath: string): string | null {
+  try {
+    return readlinkSync(join(frameworkPath, relativePath));
+  } catch {
+    return null;
+  }
 }
 
 type RunOptions = { capture?: boolean };
@@ -116,8 +142,9 @@ function run(command: string, args: string[], options: RunOptions = {}): string 
     stdio: options.capture ? ['ignore', 'pipe', 'pipe'] : 'inherit',
   });
   if (result.status !== 0) {
+    const details = `${result.stdout ?? ''}\n${result.stderr ?? ''}`.trim().slice(-12_000);
     throw new Error(
-      `${command} failed with exit code ${result.status}: ${result.stderr?.trim() ?? ''}`
+      `${command} failed with exit code ${result.status}${details ? `:\n${details}` : ''}`
     );
   }
   return result.stdout ?? '';

@@ -23,6 +23,19 @@ const config: Configuration = {
   ],
   generateUpdatesFilesForAllChannels: false,
   extraResources: ['LICENSE.md'],
+  extraFiles:
+    process.platform === 'darwin'
+      ? [
+          {
+            from: 'build/sparkle/YodaSparkleUpdater',
+            to: 'Helpers/YodaSparkleUpdater',
+          },
+          {
+            from: 'build/sparkle/Sparkle.framework',
+            to: 'Frameworks/Sparkle.framework',
+          },
+        ]
+      : [],
   // node_modules 不写进 files：electron-builder 自动收集 production dependencies
   // （仅 native 模块 + ssh2，其余依赖已由 electron-vite 打进 out/）
   files: ['out/**/*', 'drizzle/**/*'],
