@@ -372,6 +372,9 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: node --experimental-strip-types scripts/release/notarize-mac.ts --app-bundle "Yoda.app"
 
+      - name: Refresh macOS DMG blockmaps and update metadata
+        run: node --experimental-strip-types scripts/release/refresh-mac-update-metadata.ts
+
       - name: Check R2 secrets
         id: r2
         shell: bash

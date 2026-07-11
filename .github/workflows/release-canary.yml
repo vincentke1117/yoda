@@ -157,6 +157,9 @@ jobs:
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
         run: node --experimental-strip-types scripts/release/notarize-mac.ts --app-bundle "Yoda Canary.app"
 
+      - name: Refresh macOS DMG blockmaps and update metadata
+        run: node --experimental-strip-types scripts/release/refresh-mac-update-metadata.ts
+
       - name: Upload to R2
         uses: ./.github/actions/upload-r2
         with:
