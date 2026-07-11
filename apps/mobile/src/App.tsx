@@ -12,6 +12,7 @@ import {
 } from 'react';
 import {
   ActivityIndicator,
+  AppState,
   KeyboardAvoidingView,
   Linking,
   PanResponder,
@@ -24,6 +25,7 @@ import {
   Text,
   TextInput,
   View,
+  type AppStateStatus,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   type StyleProp,
@@ -50,6 +52,7 @@ import {
   type MobileConnection,
 } from './api-client';
 import { clearConnection, loadConnection, saveConnection } from './connection-storage';
+import { subscribeSessionEvents } from './session-event-stream';
 
 const COLORS = {
   page: '#F7F7F2',
@@ -67,7 +70,9 @@ const COLORS = {
 
 const POLL_INTERVAL_MS = 8_000;
 const SESSION_LIST_POLL_INTERVAL_MS = 4_000;
-const SESSION_DETAIL_POLL_INTERVAL_MS = 2_000;
+const SESSION_DETAIL_RECONCILE_INTERVAL_MS = 60_000;
+const SESSION_DETAIL_REQUEST_TIMEOUT_MS = 15_000;
+const SESSION_EVENT_REFRESH_DELAY_MS = 500;
 const DEV_GATEWAY_DEFAULT_PORT = '3879';
 const SWIPE_BACK_EDGE_WIDTH = 34;
 const SWIPE_BACK_ACTIVATION_DISTANCE = 12;
@@ -813,6 +818,7 @@ export function App() {
   if (selectedTask && selectedSessionId) {
     return (
       <SessionDetailScreen
+        key={`${connection.baseUrl}\0${connection.token}\0${selectedTask.id}\0${selectedSessionId}`}
         connection={connection}
         projects={snapshot?.projects ?? []}
         sessionId={selectedSessionId}
@@ -1751,6 +1757,14 @@ function SessionDetailScreen({
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [appState, setAppState] = useState<AppStateStatus>(AppState.currentState);
+  const mountedRef = useRef(true);
+  const detailRefreshQueueRef = useRef<{
+    dirty: boolean;
+    showLoading: boolean;
+    inFlight: Promise<void> | null;
+    controller: AbortController | null;
+  }>({ dirty: false, showLoading: false, inFlight: null, controller: null });
 
   const setBottomState = useCallback((next: boolean) => {
     isAtBottomRef.current = next;
@@ -1780,34 +1794,120 @@ function SessionDetailScreen({
   }, [scrollToBottom, setBottomState]);
 
   const loadDetail = useCallback(
-    async (quiet = false) => {
-      if (!quiet) setLoading(true);
-      try {
-        const next = await fetchSessionDetail(connection, task.projectId, task.id, sessionId);
-        setDetail(next);
-        setError(null);
-      } catch (e) {
-        setError(errorMessage(e));
-      } finally {
-        if (!quiet) setLoading(false);
-      }
+    function requestDetail(quiet = false): Promise<void> {
+      const queue = detailRefreshQueueRef.current;
+      if (!mountedRef.current) return Promise.resolve();
+      queue.dirty = true;
+      if (!quiet) queue.showLoading = true;
+      if (queue.inFlight) return queue.inFlight;
+
+      const run = async () => {
+        while (queue.dirty) {
+          queue.dirty = false;
+          const showLoading = queue.showLoading;
+          queue.showLoading = false;
+          if (showLoading && mountedRef.current) setLoading(true);
+          const controller = new AbortController();
+          let timedOut = false;
+          queue.controller = controller;
+          const timeout = setTimeout(() => {
+            timedOut = true;
+            controller.abort();
+          }, SESSION_DETAIL_REQUEST_TIMEOUT_MS);
+          try {
+            const next = await fetchSessionDetail(
+              connection,
+              task.projectId,
+              task.id,
+              sessionId,
+              controller.signal
+            );
+            if (!mountedRef.current) continue;
+            setDetail(next);
+            setError(null);
+          } catch (e) {
+            if (!controller.signal.aborted && mountedRef.current) setError(errorMessage(e));
+            if (timedOut && mountedRef.current) setError('Session refresh timed out. Retrying…');
+          } finally {
+            clearTimeout(timeout);
+            if (queue.controller === controller) queue.controller = null;
+            if (showLoading && mountedRef.current) setLoading(false);
+          }
+        }
+      };
+      const promise = run().finally(() => {
+        if (queue.inFlight !== promise) return;
+        queue.inFlight = null;
+        if (queue.dirty && mountedRef.current) void requestDetail(true);
+      });
+      queue.inFlight = promise;
+      return promise;
     },
     [connection, sessionId, task.id, task.projectId]
   );
 
   useEffect(() => {
-    let active = true;
-    const run = async (quiet = false) => {
-      if (!active) return;
-      await loadDetail(quiet);
-    };
-    void run(false);
-    const timer = setInterval(() => void run(true), SESSION_DETAIL_POLL_INTERVAL_MS);
+    mountedRef.current = true;
+    const queue = detailRefreshQueueRef.current;
     return () => {
-      active = false;
-      clearInterval(timer);
+      mountedRef.current = false;
+      queue.dirty = false;
+      queue.controller?.abort();
+      queue.controller = null;
     };
+  }, []);
+
+  useEffect(() => {
+    void loadDetail(false);
   }, [loadDetail]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', setAppState);
+    return () => subscription.remove();
+  }, []);
+
+  useEffect(() => {
+    if (appState !== 'active') {
+      const queue = detailRefreshQueueRef.current;
+      queue.dirty = false;
+      queue.controller?.abort();
+      queue.controller = null;
+      return;
+    }
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleRefresh = () => {
+      if (refreshTimer) return;
+      refreshTimer = setTimeout(() => {
+        refreshTimer = null;
+        void loadDetail(true);
+      }, SESSION_EVENT_REFRESH_DELAY_MS);
+    };
+    const unsubscribe = subscribeSessionEvents(connection, task.projectId, task.id, sessionId, {
+      onInvalidated: (event) => {
+        const runtimeStatus = event.runtimeStatus;
+        if (runtimeStatus) {
+          setDetail((current) =>
+            current?.session.id === event.conversationId
+              ? {
+                  ...current,
+                  session: { ...current.session, runtimeStatus },
+                }
+              : current
+          );
+        }
+        scheduleRefresh();
+      },
+    });
+    const reconcileTimer = setInterval(
+      () => void loadDetail(true),
+      SESSION_DETAIL_RECONCILE_INTERVAL_MS
+    );
+    return () => {
+      unsubscribe();
+      if (refreshTimer) clearTimeout(refreshTimer);
+      clearInterval(reconcileTimer);
+    };
+  }, [appState, connection, loadDetail, sessionId, task.id, task.projectId]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);

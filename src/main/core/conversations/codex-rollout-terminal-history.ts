@@ -1,9 +1,18 @@
-import { readFile } from 'node:fs/promises';
+import { open, readFile, stat } from 'node:fs/promises';
 import type { Conversation } from '@shared/conversations';
 import { getCodexSessionContext } from './getCodexSessionContext';
 
 const MAX_COMMAND_OUTPUT_CHARS = 16 * 1024;
 const MAX_HISTORY_CHARS = 2 * 1024 * 1024;
+const MAX_CACHED_ROLLOUTS = 3;
+const MOBILE_ROLLOUT_TAIL_MAX_BYTES = 8 * 1024 * 1024;
+
+type RolloutFileSnapshot = { raw: string; signature: string };
+type CachedValue<T> = { signature: string; value: Promise<T> };
+
+const rolloutReads = new Map<string, CachedValue<RolloutFileSnapshot>>();
+const rolloutTailReads = new Map<string, CachedValue<RolloutFileSnapshot>>();
+const historyCache = new Map<string, CachedValue<string | null>>();
 
 type HistoryEntry = {
   order: number;
@@ -57,19 +66,29 @@ export async function loadCodexRolloutTerminalHistoryForConversation({
   );
   if (!context?.rolloutPath) return null;
 
-  let raw: string;
+  let snapshot: RolloutFileSnapshot;
   try {
-    raw = await readFile(context.rolloutPath, 'utf8');
+    snapshot = await readRolloutSnapshot(context.rolloutPath);
   } catch {
     return null;
   }
 
-  const history = formatCodexRolloutTerminalHistory(raw, {
+  const options = {
     threadId: context.threadId,
     title: context.title,
     rolloutPath: context.rolloutPath,
+  };
+  const signature = `${snapshot.signature}\0${context.threadId}\0${context.title}`;
+  const cached = historyCache.get(context.rolloutPath);
+  if (cached?.signature === signature) return cached.value;
+
+  const value = Promise.resolve().then(() => {
+    const history = formatCodexRolloutTerminalHistory(snapshot.raw, options);
+    return history.trim() ? history : null;
   });
-  return history.trim() ? history : null;
+  historyCache.set(context.rolloutPath, { signature, value });
+  trimCache(historyCache);
+  return value;
 }
 
 export async function loadCodexRolloutTranscriptForConversation({
@@ -89,15 +108,131 @@ export async function loadCodexRolloutTranscriptForConversation({
   );
   if (!context?.rolloutPath) return null;
 
-  let raw: string;
+  let snapshot: RolloutFileSnapshot;
   try {
-    raw = await readFile(context.rolloutPath, 'utf8');
+    snapshot = await readRolloutSnapshot(context.rolloutPath);
   } catch {
     return null;
   }
 
-  const transcript = parseCodexRolloutTranscript(raw);
+  const transcript = parseCodexRolloutTranscript(snapshot.raw);
   return transcript.length > 0 ? transcript : null;
+}
+
+/** Bounded mobile history reader: active rollouts never require a full-file scan. */
+export async function loadCodexRolloutTerminalHistoryTailForConversation({
+  conversation,
+  cwd,
+}: {
+  conversation: Conversation;
+  cwd: string;
+}): Promise<string | null> {
+  const context = await resolveCodexRolloutContext(conversation, cwd);
+  if (!context) return null;
+
+  let snapshot: RolloutFileSnapshot;
+  try {
+    snapshot = await readRolloutTailSnapshot(context.rolloutPath);
+  } catch {
+    return null;
+  }
+  const history = formatCodexRolloutTerminalHistory(snapshot.raw, {
+    threadId: context.threadId,
+    title: context.title,
+    rolloutPath: context.rolloutPath,
+  });
+  return history.trim() ? history : null;
+}
+
+/** Bounded mobile transcript reader; the response itself is subsequently capped to 240k. */
+export async function loadCodexRolloutTranscriptTailForConversation({
+  conversation,
+  cwd,
+}: {
+  conversation: Conversation;
+  cwd: string;
+}): Promise<CodexRolloutTranscriptEntry[] | null> {
+  const context = await resolveCodexRolloutContext(conversation, cwd);
+  if (!context) return null;
+
+  let snapshot: RolloutFileSnapshot;
+  try {
+    snapshot = await readRolloutTailSnapshot(context.rolloutPath);
+  } catch {
+    return null;
+  }
+  const transcript = parseCodexRolloutTranscript(snapshot.raw);
+  return transcript.length > 0 ? transcript : null;
+}
+
+async function readRolloutSnapshot(rolloutPath: string): Promise<RolloutFileSnapshot> {
+  const metadata = await stat(rolloutPath);
+  const signature = `${metadata.size}:${metadata.mtimeMs}`;
+  const existing = rolloutReads.get(rolloutPath);
+  if (existing?.signature === signature) return existing.value;
+
+  const value = readFile(rolloutPath, 'utf8')
+    .then((raw) => ({ raw, signature }))
+    .finally(() => {
+      const current = rolloutReads.get(rolloutPath);
+      if (current?.value === value) rolloutReads.delete(rolloutPath);
+    });
+  rolloutReads.set(rolloutPath, { signature, value });
+  return value;
+}
+
+async function readRolloutTailSnapshot(rolloutPath: string): Promise<RolloutFileSnapshot> {
+  const metadata = await stat(rolloutPath);
+  const signature = `${metadata.size}:${metadata.mtimeMs}`;
+  const existing = rolloutTailReads.get(rolloutPath);
+  if (existing?.signature === signature) return existing.value;
+
+  const value = readRolloutTail(rolloutPath, metadata.size)
+    .then((raw) => ({ raw, signature }))
+    .finally(() => {
+      const current = rolloutTailReads.get(rolloutPath);
+      if (current?.value === value) rolloutTailReads.delete(rolloutPath);
+    });
+  rolloutTailReads.set(rolloutPath, { signature, value });
+  return value;
+}
+
+async function readRolloutTail(rolloutPath: string, size: number): Promise<string> {
+  const start = Math.max(0, size - MOBILE_ROLLOUT_TAIL_MAX_BYTES);
+  const length = Math.max(0, size - start);
+  const file = await open(rolloutPath, 'r');
+  try {
+    const buffer = Buffer.allocUnsafe(length);
+    const { bytesRead } = await file.read(buffer, 0, length, start);
+    let completeLines = buffer.subarray(0, bytesRead);
+    if (start > 0) {
+      const firstNewline = completeLines.indexOf(0x0a);
+      completeLines = firstNewline < 0 ? Buffer.alloc(0) : completeLines.subarray(firstNewline + 1);
+    }
+    return completeLines.toString('utf8');
+  } finally {
+    await file.close();
+  }
+}
+
+async function resolveCodexRolloutContext(conversation: Conversation, cwd: string) {
+  if (conversation.runtimeId !== 'codex') return null;
+  const context = await getCodexSessionContext(
+    cwd,
+    conversation.id,
+    conversation.title,
+    conversation.createdAt
+  );
+  if (!context?.rolloutPath) return null;
+  return { ...context, rolloutPath: context.rolloutPath };
+}
+
+function trimCache<T>(cache: Map<string, CachedValue<T>>): void {
+  while (cache.size > MAX_CACHED_ROLLOUTS) {
+    const oldest = cache.keys().next().value;
+    if (oldest === undefined) return;
+    cache.delete(oldest);
+  }
 }
 
 export function formatCodexRolloutTerminalHistory(raw: string, options: HistoryOptions): string {
