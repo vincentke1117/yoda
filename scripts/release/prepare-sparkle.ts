@@ -12,11 +12,14 @@ const SPARKLE_ARCHIVE_URL = `https://github.com/sparkle-project/Sparkle/releases
 const stageDir = resolve('build/sparkle');
 const cacheDir = resolve('.cache/sparkle');
 const sourceDir = join(cacheDir, `Sparkle-${SPARKLE_VERSION}`);
+const releaseArchivePath = join(cacheDir, `Sparkle-${SPARKLE_VERSION}.tar.xz`);
+const releaseToolsDir = join(cacheDir, 'ReleaseTools');
 const derivedDir = join(cacheDir, 'DerivedData');
 const productsDir = join(cacheDir, 'Products');
 const patchPath = resolve('native/macos/yoda-sparkle-updater/delta-only.patch');
 const helperPath = join(stageDir, 'YodaSparkleUpdater');
 const frameworkPath = join(stageDir, 'Sparkle.framework');
+const generateAppcastPath = join(stageDir, 'bin', 'generate_appcast');
 
 if (process.platform !== 'darwin') {
   info('Not macOS — skipping Sparkle helper preparation');
@@ -33,12 +36,15 @@ mkdirSync(cacheDir, { recursive: true });
 prepareSource();
 applyDeltaOnlyPatch();
 buildHelper();
+prepareReleaseTools();
 stageArtifacts();
 verifyArtifacts();
 info(`Prepared Sparkle helper in ${stageDir}`);
 
 function isPrepared(): boolean {
-  if (!existsSync(helperPath) || !existsSync(frameworkPath)) return false;
+  if (!existsSync(helperPath) || !existsSync(frameworkPath) || !existsSync(generateAppcastPath)) {
+    return false;
+  }
   const strings = run('strings', [helperPath], { capture: true });
   return (
     strings.includes('yoda-full-update-disabled') &&
@@ -97,11 +103,39 @@ function buildHelper(): void {
   );
 }
 
+function prepareReleaseTools(): void {
+  if (!existsSync(releaseArchivePath)) {
+    run('curl', [
+      '--fail',
+      '--location',
+      '--silent',
+      '--show-error',
+      '--output',
+      releaseArchivePath,
+      SPARKLE_ARCHIVE_URL,
+    ]);
+  }
+
+  const archiveDigest = createHash('sha256').update(readFileSync(releaseArchivePath)).digest('hex');
+  if (archiveDigest !== SPARKLE_ARCHIVE_SHA256) {
+    rmSync(releaseArchivePath, { force: true });
+    throw new Error(`Sparkle release archive checksum mismatch: ${archiveDigest}`);
+  }
+
+  rmSync(releaseToolsDir, { recursive: true, force: true });
+  mkdirSync(releaseToolsDir, { recursive: true });
+  run('tar', ['-xJf', releaseArchivePath, '-C', releaseToolsDir]);
+}
+
 function stageArtifacts(): void {
   rmSync(stageDir, { recursive: true, force: true });
   mkdirSync(stageDir, { recursive: true });
   cpSync(join(productsDir, 'sparkle.app', 'Contents', 'MacOS', 'sparkle'), helperPath);
   cpSync(join(productsDir, 'Sparkle.framework'), frameworkPath, {
+    recursive: true,
+    verbatimSymlinks: true,
+  });
+  cpSync(join(releaseToolsDir, 'bin'), join(stageDir, 'bin'), {
     recursive: true,
     verbatimSymlinks: true,
   });
@@ -128,6 +162,10 @@ function verifyArtifacts(): void {
     readFrameworkLink(join('Versions', 'Current')) !== 'B'
   ) {
     throw new Error('Sparkle.framework contains non-portable symbolic links');
+  }
+  const toolArchitectures = run('lipo', ['-archs', generateAppcastPath], { capture: true });
+  if (!toolArchitectures.includes('arm64') || !toolArchitectures.includes('x86_64')) {
+    throw new Error(`Sparkle generate_appcast is not universal: ${toolArchitectures.trim()}`);
   }
 }
 

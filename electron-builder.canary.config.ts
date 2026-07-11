@@ -7,6 +7,7 @@ import {
   UPDATE_CHANNEL,
   UPDATE_FEED_BASE_URL,
 } from './src/shared/app-identity.canary';
+import { SPARKLE_PUBLIC_ED_KEY } from './src/shared/sparkle-signing';
 
 const config: Configuration = {
   appId: APP_ID,
@@ -56,6 +57,10 @@ const config: Configuration = {
     ],
     icon: 'src/assets/images/yoda/yoda-canary.icns',
     notarize: false,
+    extendInfo: {
+      SUPublicEDKey: SPARKLE_PUBLIC_ED_KEY,
+      NSAppTransportSecurity: { NSAllowsLocalNetworking: true },
+    },
   },
   dmg: {
     icon: 'src/assets/images/yoda/yoda-canary.icns',

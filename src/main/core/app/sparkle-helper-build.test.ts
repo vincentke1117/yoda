@@ -7,6 +7,7 @@ const canaryConfig = readFileSync('electron-builder.canary.config.ts', 'utf8');
 const releaseBuild = readFileSync('scripts/release/build.ts', 'utf8');
 const macVerification = readFileSync('scripts/release/verify-mac.ts', 'utf8');
 const sparklePreparation = readFileSync('scripts/release/prepare-sparkle.ts', 'utf8');
+const sparkleSigning = readFileSync('src/shared/sparkle-signing.ts', 'utf8');
 
 describe('Yoda Sparkle helper patch', () => {
   it('blocks every non-delta request before download', () => {
@@ -33,6 +34,13 @@ describe('Yoda Sparkle helper patch', () => {
   ])('embeds the helper and framework in %s macOS builds', (_channel, config) => {
     expect(config).toContain("to: 'Helpers/YodaSparkleUpdater'");
     expect(config).toContain("to: 'Frameworks/Sparkle.framework'");
+    expect(config).toContain('SUPublicEDKey: SPARKLE_PUBLIC_ED_KEY');
+    expect(config).toContain('NSAllowsLocalNetworking: true');
+  });
+
+  it('pins a non-empty Ed25519 public key without exposing a private key', () => {
+    expect(sparkleSigning).toMatch(/SPARKLE_PUBLIC_ED_KEY = '[A-Za-z0-9+/]{43}='/);
+    expect(sparkleSigning).not.toMatch(/PRIVATE|SECRET|SEED/);
   });
 
   it('prepares Sparkle before release packaging', () => {
@@ -40,6 +48,15 @@ describe('Yoda Sparkle helper patch', () => {
     const packageLoop = releaseBuild.indexOf('for (const arch of archs)');
     expect(prepare).toBeGreaterThan(-1);
     expect(prepare).toBeLessThan(packageLoop);
+  });
+
+  it('pins and verifies the official Sparkle release tools', () => {
+    expect(sparklePreparation).toContain(
+      "const SPARKLE_ARCHIVE_SHA256 = '1cb340cbbef04c6c0d162078610c25e2221031d794a3449d89f2f56f4df77c95'"
+    );
+    expect(sparklePreparation).toContain('archiveDigest !== SPARKLE_ARCHIVE_SHA256');
+    expect(sparklePreparation).toContain("join(releaseToolsDir, 'bin')");
+    expect(sparklePreparation).toContain("join(stageDir, 'bin', 'generate_appcast')");
   });
 
   it('preserves portable framework symbolic links', () => {
@@ -53,5 +70,6 @@ describe('Yoda Sparkle helper patch', () => {
     expect(macVerification).toContain('Sparkle framework not found');
     expect(macVerification).toContain('yoda-full-update-disabled');
     expect(macVerification).toContain('codesign --verify --strict');
+    expect(macVerification).toContain('0755 permissions for Sparkle delta eligibility');
   });
 });

@@ -29,6 +29,7 @@
     "build:renderer": "electron-vite build --filter renderer",
     "install:mac-app": "node --experimental-strip-types scripts/install-mac-app.ts",
     "prepare:sparkle": "node --experimental-strip-types scripts/release/prepare-sparkle.ts",
+    "test:sparkle-delta": "node --experimental-strip-types scripts/release/smoke-sparkle-delta.ts",
     "package": "pnpm run build && pnpm run prepare:sparkle && electron-builder --config electron-builder.config.ts && pnpm run install:mac-app",
     "package:mac": "pnpm run build && pnpm run prepare:sparkle && electron-builder --mac --config electron-builder.config.ts && pnpm run install:mac-app",
     "package:linux": "pnpm run build && electron-builder --linux --publish never --config electron-builder.config.ts",

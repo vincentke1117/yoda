@@ -1,6 +1,7 @@
-import { existsSync, lstatSync, readdirSync, readlinkSync } from 'node:fs';
+import { existsSync, lstatSync, readdirSync, readlinkSync, statSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { parseArgs } from 'node:util';
+import { SPARKLE_PUBLIC_ED_KEY } from '../../src/shared/sparkle-signing.ts';
 import { RELEASE_DIR } from './lib/config.ts';
 import { exec, execOrNull } from './lib/exec.ts';
 import { fail, info, step, warn } from './lib/log.ts';
@@ -116,6 +117,10 @@ for (const appDir of appBundles) {
     if (!architectures?.includes('arm64') || !architectures.includes('x86_64')) {
       fail(`${label} must contain both arm64 and x86_64`);
     }
+    const permissions = statSync(binary).mode & 0o777;
+    if (permissions !== 0o755) {
+      fail(`${label} must have 0755 permissions for Sparkle delta eligibility`);
+    }
   }
 
   const helperStrings = exec(`strings "${sparkleHelper}"`);
@@ -134,6 +139,18 @@ for (const appDir of appBundles) {
         `plutil -extract CFBundleIdentifier xml1 -o - "${plist}" | sed -n 's/.*<string>\\(.*\\)<\\/string>.*/\\1/p' | head -n1`
       );
     info(`CFBundleIdentifier: ${bid}`);
+    const sparklePublicKey = execOrNull(
+      `/usr/libexec/PlistBuddy -c 'Print :SUPublicEDKey' "${plist}"`
+    );
+    if (sparklePublicKey !== SPARKLE_PUBLIC_ED_KEY) {
+      fail('SUPublicEDKey is missing or does not match the release signing key');
+    }
+    const allowsLocalNetworking = execOrNull(
+      `/usr/libexec/PlistBuddy -c 'Print :NSAppTransportSecurity:NSAllowsLocalNetworking' "${plist}"`
+    );
+    if (allowsLocalNetworking !== 'true') {
+      fail('NSAllowsLocalNetworking must be enabled for the closed Sparkle proxy');
+    }
   }
 
   exec(`codesign --verify --deep --strict --verbose=2 "${appDir}"`, { echo: true });

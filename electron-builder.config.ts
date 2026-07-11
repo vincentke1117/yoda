@@ -7,6 +7,7 @@ import {
   UPDATE_CHANNEL,
   UPDATE_FEED_BASE_URL,
 } from './src/shared/app-identity';
+import { SPARKLE_PUBLIC_ED_KEY } from './src/shared/sparkle-signing';
 
 const winSigning =
   process.env.YODA_DISABLE_WIN_SIGNING === '1'
@@ -71,6 +72,10 @@ const config: Configuration = {
     ],
     icon: 'src/assets/images/yoda/yoda.icns',
     notarize: false,
+    extendInfo: {
+      SUPublicEDKey: SPARKLE_PUBLIC_ED_KEY,
+      NSAppTransportSecurity: { NSAllowsLocalNetworking: true },
+    },
     ...macSigning,
   },
   dmg: {

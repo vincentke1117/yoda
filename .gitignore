@@ -5,6 +5,8 @@ out/
 /release/
 /build/sparkle/
 /.cache/sparkle/
+/.cache/sparkle-appcast/
+/.cache/sparkle-release-inspect/
 
 # Logs
 *.log
