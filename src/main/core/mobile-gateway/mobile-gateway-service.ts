@@ -21,6 +21,7 @@ import {
   MOBILE_GATEWAY_DEFAULT_PORT,
   MOBILE_SESSION_CONTENT_MAX_CHARS,
   MOBILE_SESSION_INPUT_MAX_CHARS,
+  MOBILE_SESSION_TRANSCRIPT_MAX_CHARS,
   type MobileApiError,
   type MobileCreateDemandRequest,
   type MobileCreateDemandResponse,
@@ -288,6 +289,39 @@ function tailSessionContent(value: string): {
     contentLength: content.length,
     truncated,
   };
+}
+
+function tailSessionTranscript(blocks: MobileSessionTranscriptBlock[]): {
+  transcript: MobileSessionTranscriptBlock[];
+  truncated: boolean;
+} {
+  let remaining = MOBILE_SESSION_TRANSCRIPT_MAX_CHARS;
+  const transcript: MobileSessionTranscriptBlock[] = [];
+
+  for (let index = blocks.length - 1; index >= 0; index -= 1) {
+    const block = blocks[index];
+    if (!block) continue;
+    if (block.content.length <= remaining) {
+      transcript.unshift(block);
+      remaining -= block.content.length;
+      continue;
+    }
+
+    if (remaining > 0) {
+      const marker = '[Earlier activity truncated]\n';
+      const available = Math.max(0, remaining - marker.length);
+      transcript.unshift({
+        ...block,
+        content:
+          remaining <= marker.length
+            ? marker.slice(0, remaining)
+            : `${marker}${block.content.slice(-available)}`,
+      });
+    }
+    return { transcript, truncated: true };
+  }
+
+  return { transcript, truncated: false };
 }
 
 function compareConversations(a: Conversation, b: Conversation): number {
@@ -980,6 +1014,7 @@ export class MobileGatewayService {
       this.readConversationTranscript(conversation, data.cwd, session.sessionId),
     ]);
     const tailed = tailSessionContent(output.content);
+    const tailedTranscript = tailSessionTranscript(transcript);
 
     return {
       generatedAt: new Date().toISOString(),
@@ -988,7 +1023,8 @@ export class MobileGatewayService {
       contentLength: tailed.contentLength,
       truncated: tailed.truncated,
       source: output.source,
-      transcript,
+      transcript: tailedTranscript.transcript,
+      transcriptTruncated: tailedTranscript.truncated,
     };
   }
 

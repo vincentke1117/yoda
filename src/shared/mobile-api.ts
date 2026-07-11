@@ -5,6 +5,7 @@ export const MOBILE_GATEWAY_DEFAULT_DEV_TOKEN = 'dev-mobile-token';
 export const MOBILE_APP_SCHEME = 'yodamobile';
 export const MOBILE_APP_DEFAULT_INSTALL_URL = 'https://lovstudio.ai/yoda/mobile';
 export const MOBILE_SESSION_CONTENT_MAX_CHARS = 120_000;
+export const MOBILE_SESSION_TRANSCRIPT_MAX_CHARS = 240_000;
 export const MOBILE_SESSION_INPUT_MAX_CHARS = 20_000;
 
 export type MobilePairingConnection = {
@@ -179,6 +180,7 @@ export type MobileSessionDetail = {
   truncated: boolean;
   source: MobileSessionContentSource;
   transcript: MobileSessionTranscriptBlock[];
+  transcriptTruncated: boolean;
 };
 
 export type MobileSessionInputRequest = {

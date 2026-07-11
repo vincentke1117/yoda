@@ -132,7 +132,12 @@ async function deriveStatus(args: {
   // verdict is stale (e.g. Esc killed the turn before Claude wrote an interrupt
   // sentinel). Cold-load/unmounted tasks stay transcript-authoritative so tmux
   // sessions can still be shown as running without a connected PTY.
-  let derived = truth ?? memory;
+  // Transcript classifiers intentionally collapse a cleanly finished turn to
+  // `idle`. Do not let that less-specific durable verdict erase a precise
+  // terminal status already observed by the live run-state reducer. A later
+  // `working`/`awaiting-input` truth still wins when the next turn starts.
+  let derived =
+    truth === 'idle' && (memory === 'completed' || memory === 'error') ? memory : (truth ?? memory);
   if (isAgentSessionRunningStatus(derived)) {
     const livePty = hasLivePty(projectId, taskId, conversationId);
     if (truth === undefined) {
