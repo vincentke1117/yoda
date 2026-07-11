@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.15.3
+
+### Patch Changes
+
+- Regenerate macOS DMG blockmaps and update metadata after notarization so published checksums and sizes match the final stapled artifacts.
+
 ## 0.15.2
 
 ### Patch Changes
