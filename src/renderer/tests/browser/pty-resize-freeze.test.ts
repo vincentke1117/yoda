@@ -45,9 +45,21 @@ function setFreezeState(
 
 function createOverlay(pty: FrontendPty): HTMLCanvasElement {
   const overlay = document.createElement('canvas');
-  overlay.style.display = 'block';
+  overlay.width = 2;
+  overlay.height = 2;
+  const context = overlay.getContext('2d');
+  if (!context) throw new Error('2D canvas is required for the resize snapshot test');
+  context.fillStyle = '#ff00ff';
+  context.fillRect(0, 0, overlay.width, overlay.height);
+  overlay.style.display = 'none';
   pty.ownedContainer.appendChild(overlay);
   return overlay;
+}
+
+function expectSnapshotVisible(overlay: HTMLCanvasElement): void {
+  expect(overlay.style.display).toBe('block');
+  const pixel = overlay.getContext('2d')?.getImageData(0, 0, 1, 1).data;
+  expect(Array.from(pixel ?? [])).toEqual([255, 0, 255, 255]);
 }
 
 describe('FrontendPty.commitResize', () => {
@@ -58,7 +70,7 @@ describe('FrontendPty.commitResize', () => {
     pty = null;
   });
 
-  it('does not keep an old freeze frame over a wider resize', () => {
+  it('keeps the previous frame visible while a wider grid renders', async () => {
     pty = new FrontendPty('session-grow');
     pty.flushPendingWrites();
     pty.terminal.resize(120, 32);
@@ -69,7 +81,26 @@ describe('FrontendPty.commitResize', () => {
     pty.commitResize(133, 32);
 
     expect(pty.terminal.cols).toBe(133);
-    expect(overlay.style.display).toBe('none');
+    expectSnapshotVisible(overlay);
+    await vi.waitFor(() => expect(overlay.style.display).toBe('none'));
+  });
+
+  it('keeps visible pixels through an immediate shrink-to-grow reversal', async () => {
+    pty = new FrontendPty('session-resize-reversal');
+    pty.flushPendingWrites();
+    pty.terminal.resize(133, 32);
+
+    const overlay = createOverlay(pty);
+    setFreezeState(pty, overlay, 'idle');
+
+    pty.commitResize(120, 32);
+    expectSnapshotVisible(overlay);
+
+    pty.commitResize(140, 32);
+
+    expect(pty.terminal.cols).toBe(140);
+    expectSnapshotVisible(overlay);
+    await vi.waitFor(() => expect(overlay.style.display).toBe('none'));
   });
 
   it('keeps the freeze frame when shrinking until the unfreeze chain runs', () => {
@@ -83,6 +114,6 @@ describe('FrontendPty.commitResize', () => {
     pty.commitResize(120, 32);
 
     expect(pty.terminal.cols).toBe(120);
-    expect(overlay.style.display).toBe('block');
+    expectSnapshotVisible(overlay);
   });
 });

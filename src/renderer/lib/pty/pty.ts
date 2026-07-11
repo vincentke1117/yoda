@@ -556,9 +556,10 @@ export class FrontendPty {
    *   freezeFrame()      snapshot canvas → overlay covers the terminal
    *   terminal.resize()  clear + rewrap happen under the overlay
    *   (caller sends rpc.pty.resize in the same tick → app repaints)
-   *   unfreeze chain — shrink resizes keep the snapshot up until repaint,
-   *   while grow resizes unfreeze immediately because the old snapshot is no
-   *   longer aligned to the wider grid.
+   *   unfreeze chain — shrink resizes keep the snapshot up until the app's
+   *   post-SIGWINCH repaint; grow resizes keep it only until xterm has rendered
+   *   the wider grid. In both directions the old frame remains visible while
+   *   terminal.resize() clears and rebuilds the WebGL canvas underneath.
    *   then: next FULL-viewport onRender (partial renders would expose the
    *   cleared rest of the canvas) → one requestAnimationFrame (the redrawn
    *   canvas is presented) → overlay hidden.
@@ -576,17 +577,15 @@ export class FrontendPty {
       return;
     }
     const isShrink = cols < this.terminal.cols;
-    if (!isShrink) {
-      this.unfreeze();
-      this.hasFreezeSnapshot = false;
-      this.terminal.resize(cols, rows);
-      return;
-    }
     // If a previous commit is still frozen, keep ITS snapshot (the canvas
     // underneath may be mid-transition garbage — re-snapshotting it would
     // put that garbage on the overlay) and just restart the unfreeze chain.
     const frozen = this.unfreezePhase !== 'idle' ? true : this.freezeFrame();
-    if (frozen) this.armUnfreeze('await-data');
+    // Arm before resize so the first full-viewport render produced by xterm
+    // cannot race the subscription. Registering afterwards leaves the overlay
+    // stale until the timeout; hiding it beforehand exposes the cleared WebGL
+    // canvas as a visible blank flash.
+    if (frozen) this.armUnfreeze(isShrink ? 'await-data' : 'await-render');
     this.terminal.resize(cols, rows);
   }
 
@@ -629,8 +628,8 @@ export class FrontendPty {
    * stale glyphs across later composites. Skipped while a freeze is active so
    * the masking snapshot is never overwritten by mid-resize garbage.
    */
-  private captureFreezeSnapshot(): void {
-    if (this.unfreezePhase !== 'idle') return;
+  private captureFreezeSnapshot(allowWhileFrozen = false): void {
+    if (!allowWhileFrozen && this.unfreezePhase !== 'idle') return;
     const canvas = this.getWebglCanvas();
     if (!canvas || canvas.width === 0 || canvas.height === 0) return;
     const overlay = this.ensureFreezeOverlay();
@@ -670,12 +669,20 @@ export class FrontendPty {
     this.unfreezeRenderDisposable = this.terminal.onRender((e) => {
       if (this.unfreezePhase !== 'await-render') return;
       if (e.start > 0 || e.end < this.terminal.rows - 1) return;
+      // The full resized frame is valid now. Capture it while WebGL's drawing
+      // buffer is readable so the next resize never reuses the older geometry.
+      this.captureFreezeSnapshot(true);
       requestAnimationFrame(() => {
         if (generation === this.unfreezeGeneration) this.unfreeze();
       });
     });
     this.unfreezeFallbackTimer = setTimeout(() => {
-      if (generation === this.unfreezeGeneration) this.unfreeze();
+      if (generation !== this.unfreezeGeneration) return;
+      this.unfreeze();
+      // Silent/plain-shell sessions may never send a repaint. Invalidate the
+      // pre-resize capture and request one fresh frame for the next transition.
+      this.hasFreezeSnapshot = false;
+      this.refreshAllRows();
     }, UNFREEZE_FALLBACK_MS);
   }
 
