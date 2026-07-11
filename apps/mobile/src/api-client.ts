@@ -18,6 +18,22 @@ function normalizeBaseUrl(baseUrl: string): string {
   return baseUrl.trim().replace(/\/+$/, '');
 }
 
+export function mobileApiUrl(connection: MobileConnection, path: string): string {
+  return `${normalizeBaseUrl(connection.baseUrl)}${path}`;
+}
+
+export function mobileApiHeaders(
+  connection: MobileConnection,
+  headers?: HeadersInit
+): Record<string, string> {
+  const result: Record<string, string> = {
+    Authorization: `Bearer ${connection.token}`,
+    'Content-Type': 'application/json',
+  };
+  if (headers) new Headers(headers).forEach((value, key) => (result[key] = value));
+  return result;
+}
+
 async function readError(response: Response): Promise<string> {
   try {
     const body = (await response.json()) as Partial<MobileApiError>;
@@ -35,13 +51,9 @@ async function request<T>(
   const baseUrl = normalizeBaseUrl(connection.baseUrl);
   let response: Response;
   try {
-    response = await fetch(`${baseUrl}${path}`, {
+    response = await fetch(mobileApiUrl(connection, path), {
       ...init,
-      headers: {
-        Authorization: `Bearer ${connection.token}`,
-        'Content-Type': 'application/json',
-        ...(init.headers ?? {}),
-      },
+      headers: mobileApiHeaders(connection, init.headers),
     });
   } catch {
     throw new Error(
@@ -80,11 +92,13 @@ export function fetchSessionDetail(
   connection: MobileConnection,
   projectId: string,
   taskId: string,
-  sessionId: string
+  sessionId: string,
+  signal?: AbortSignal
 ): Promise<MobileSessionDetail> {
   return request<MobileSessionDetail>(
     connection,
-    `/v1/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}/sessions/${encodeURIComponent(sessionId)}`
+    `/v1/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}/sessions/${encodeURIComponent(sessionId)}`,
+    { signal }
   );
 }
 

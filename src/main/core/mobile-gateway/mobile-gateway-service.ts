@@ -39,6 +39,10 @@ import {
   type MobileTaskSummary,
 } from '@shared/mobile-api';
 import {
+  MOBILE_SESSION_EVENT_VERSION,
+  type MobileSessionInvalidationReason,
+} from '@shared/mobile-session-events';
+import {
   INTERNAL_PROJECT_ID,
   projectDisplayName,
   type OpenProjectError,
@@ -48,14 +52,16 @@ import { makePtySessionId } from '@shared/ptySessionId';
 import { RUNTIME_IDS, type RuntimeId } from '@shared/runtime-registry';
 import { ensureUniqueTaskSlug, taskNameFromPrompt } from '@shared/task-name';
 import type { CreateTaskError, CreateTaskWarning, Task } from '@shared/tasks';
+import { agentSessionRuntimeStore } from '@main/core/conversations/agent-session-runtime';
 import { loadClaudeTranscript } from '@main/core/conversations/claude-transcript';
 import {
-  loadCodexRolloutTerminalHistoryForConversation,
-  loadCodexRolloutTranscriptForConversation,
+  loadCodexRolloutTerminalHistoryTailForConversation,
+  loadCodexRolloutTranscriptTailForConversation,
 } from '@main/core/conversations/codex-rollout-terminal-history';
 import { getConversationRuntimeStatuses } from '@main/core/conversations/getConversationRuntimeStatuses';
 import { getConversationSessionInfo } from '@main/core/conversations/getConversationSessionInfo';
 import { getConversationsForTask } from '@main/core/conversations/getConversationsForTask';
+import { subscribeConversationTranscriptChanges } from '@main/core/conversations/transcript-feed';
 import { getProjectById, getProjects } from '@main/core/projects/operations/getProjects';
 import { openProject } from '@main/core/projects/operations/openProject';
 import { projectManager } from '@main/core/projects/project-manager';
@@ -67,6 +73,10 @@ import { getTasks } from '@main/core/tasks/operations/getTasks';
 import { taskManager } from '@main/core/tasks/task-manager';
 import { workspaceRegistry } from '@main/core/workspaces/workspace-registry';
 import { log } from '@main/lib/logger';
+import {
+  MOBILE_SESSION_RECONNECT_RETRY_MS,
+  MobileSessionEventStream,
+} from './mobile-session-event-stream';
 
 const MAX_BODY_BYTES = 128 * 1024;
 const MOBILE_METRO_DEFAULT_PORT = 8081;
@@ -192,7 +202,8 @@ function parsePort(value: string | undefined): number {
 function writeJson(res: http.ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Authorization, Content-Type, X-Yoda-Mobile-Token',
+    'Access-Control-Allow-Headers':
+      'Authorization, Content-Type, Last-Event-ID, X-Yoda-Mobile-Token',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Content-Type': 'application/json',
   });
@@ -595,6 +606,10 @@ function resolveTaskActivityStatus(
 
 export class MobileGatewayService {
   private server: http.Server | null = null;
+  private readonly sessionEventStreams = new Set<MobileSessionEventStream>();
+  private readonly sessionEventEpoch = randomUUID();
+  private sessionEventSequence = 0;
+  private lifecycleGeneration = 0;
   private metroProcess: ChildProcess | null = null;
   private metroHost: string | null = null;
   private metroEnsureInFlight: Promise<void> | null = null;
@@ -603,6 +618,7 @@ export class MobileGatewayService {
   private port = MOBILE_GATEWAY_DEFAULT_PORT;
 
   async initialize(): Promise<void> {
+    this.lifecycleGeneration += 1;
     if (!shouldStartGateway()) return;
 
     this.host = process.env.YODA_MOBILE_GATEWAY_HOST?.trim() || '0.0.0.0';
@@ -647,7 +663,9 @@ export class MobileGatewayService {
   }
 
   dispose(): void {
+    this.lifecycleGeneration += 1;
     this.disposeMetroProcess();
+    for (const stream of [...this.sessionEventStreams]) stream.close();
     if (!this.server) return;
     this.server.close();
     this.server = null;
@@ -848,6 +866,17 @@ export class MobileGatewayService {
     }
 
     if (
+      req.method === 'GET' &&
+      isTaskSessionsRoute &&
+      segments.length === 8 &&
+      segments[6] &&
+      segments[7] === 'events'
+    ) {
+      await this.openSessionEvents(req, res, segments[2]!, segments[4]!, segments[6]);
+      return;
+    }
+
+    if (
       req.method === 'POST' &&
       isTaskSessionsRoute &&
       segments.length === 8 &&
@@ -1028,6 +1057,96 @@ export class MobileGatewayService {
     };
   }
 
+  private async openSessionEvents(
+    req: http.IncomingMessage,
+    res: http.ServerResponse,
+    projectId: string,
+    taskId: string,
+    conversationId: string
+  ): Promise<void> {
+    const lifecycleGeneration = this.lifecycleGeneration;
+    const activeServer = this.server;
+    const conversations = await getConversationsForTask(projectId, taskId);
+    if (!this.isActiveLifecycle(lifecycleGeneration, activeServer)) {
+      if (!res.destroyed && !res.writableEnded) res.end();
+      return;
+    }
+    if (!conversations.some((conversation) => conversation.id === conversationId)) {
+      throw new MobileGatewayError(404, 'session_not_found', 'Mobile session was not found.');
+    }
+
+    let cleaned = false;
+    let unsubscribeRuntime: (() => void) | null = null;
+    let unsubscribeTranscript: (() => void) | null = null;
+    const streamHolder: { current: MobileSessionEventStream | null } = { current: null };
+    const cleanup = () => {
+      if (cleaned) return;
+      cleaned = true;
+      unsubscribeRuntime?.();
+      unsubscribeTranscript?.();
+      if (streamHolder.current) this.sessionEventStreams.delete(streamHolder.current);
+    };
+
+    const stream = new MobileSessionEventStream(req, res, () => this.nextSessionEventId(), cleanup);
+    streamHolder.current = stream;
+    this.sessionEventStreams.add(stream);
+    const sendInvalidation = (
+      reason: MobileSessionInvalidationReason,
+      runtimeStatus?: AgentSessionRuntimeStatus,
+      retry?: number
+    ) => {
+      stream.send(
+        {
+          version: MOBILE_SESSION_EVENT_VERSION,
+          conversationId,
+          reason,
+          emittedAt: new Date().toISOString(),
+          ...(runtimeStatus === undefined ? {} : { runtimeStatus }),
+        },
+        retry
+      );
+    };
+
+    unsubscribeRuntime = agentSessionRuntimeStore.subscribe(
+      { projectId, taskId, conversationId },
+      (state) => sendInvalidation('status-changed', state.status)
+    );
+
+    try {
+      const transcriptSubscription = await subscribeConversationTranscriptChanges(
+        projectId,
+        taskId,
+        conversationId,
+        () => sendInvalidation('transcript-changed')
+      );
+      if (stream.isClosed || !this.isActiveLifecycle(lifecycleGeneration, activeServer)) {
+        transcriptSubscription();
+        stream.close();
+        return;
+      }
+      unsubscribeTranscript = transcriptSubscription;
+      if (!stream.start()) {
+        stream.close();
+        return;
+      }
+      sendInvalidation('connected', undefined, MOBILE_SESSION_RECONNECT_RETRY_MS);
+    } catch (error) {
+      const connectionClosed = stream.isClosed || res.destroyed || res.writableEnded;
+      stream.close(false);
+      if (connectionClosed) return;
+      throw error;
+    }
+  }
+
+  private nextSessionEventId(): string {
+    this.sessionEventSequence += 1;
+    return `${this.sessionEventEpoch}:${this.sessionEventSequence}`;
+  }
+
+  private isActiveLifecycle(generation: number, server: http.Server | null): boolean {
+    return server !== null && this.server === server && this.lifecycleGeneration === generation;
+  }
+
   private async sendSessionInput(
     projectId: string,
     taskId: string,
@@ -1182,7 +1301,7 @@ export class MobileGatewayService {
     }
 
     if (conversation.runtimeId === 'codex') {
-      const history = await loadCodexRolloutTerminalHistoryForConversation({
+      const history = await loadCodexRolloutTerminalHistoryTailForConversation({
         conversation,
         cwd,
       }).catch((error: unknown) => {
@@ -1219,7 +1338,7 @@ export class MobileGatewayService {
 
     if (conversation.runtimeId !== 'codex') return [];
 
-    const transcript = await loadCodexRolloutTranscriptForConversation({
+    const transcript = await loadCodexRolloutTranscriptTailForConversation({
       conversation,
       cwd,
     }).catch((error: unknown) => {
