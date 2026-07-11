@@ -1,0 +1,53 @@
+import { describe, expect, it } from 'vitest';
+import {
+  parseSparkleArchiveHistory,
+  validateGeneratedSparkleAppcast,
+} from '@root/scripts/release/lib/sparkle-feed';
+
+const appcast = `<?xml version="1.0"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <item>
+      <sparkle:version>0.16.0</sparkle:version>
+      <enclosure url="https://releases.test/yoda-0.16.0-arm64.zip" length="1000" sparkle:edSignature="full-signature" />
+      <sparkle:deltas>
+        <enclosure url="https://releases.test/yoda-0.15.3-to-0.16.0-arm64.delta" length="100" sparkle:deltaFrom="0.15.3" sparkle:edSignature="delta-signature" />
+      </sparkle:deltas>
+    </item>
+    <item>
+      <sparkle:version>0.15.3</sparkle:version>
+      <enclosure url="https://releases.test/yoda-0.15.3-arm64.zip" length="900" sparkle:edSignature="old-signature" />
+    </item>
+  </channel>
+</rss>`;
+
+describe('Sparkle release feed', () => {
+  it('extracts versioned full archives without confusing deltas for archives', () => {
+    expect(parseSparkleArchiveHistory(appcast)).toEqual([
+      {
+        version: '0.16.0',
+        url: 'https://releases.test/yoda-0.16.0-arm64.zip',
+        fileName: 'yoda-0.16.0-arm64.zip',
+      },
+      {
+        version: '0.15.3',
+        url: 'https://releases.test/yoda-0.15.3-arm64.zip',
+        fileName: 'yoda-0.15.3-arm64.zip',
+      },
+    ]);
+  });
+
+  it('requires signed full and exact signed delta artifacts', () => {
+    expect(() => validateGeneratedSparkleAppcast(appcast, '0.16.0', ['0.15.3'])).not.toThrow();
+    expect(() => validateGeneratedSparkleAppcast(appcast, '0.16.0', ['0.15.2'])).toThrow(
+      'No signed delta from 0.15.2 to 0.16.0'
+    );
+    expect(() =>
+      validateGeneratedSparkleAppcast(
+        appcast.replace(' sparkle:edSignature="full-signature"', ''),
+        '0.16.0',
+        ['0.15.3']
+      )
+    ).toThrow('full archive is unsigned');
+  });
+});

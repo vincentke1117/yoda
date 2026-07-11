@@ -3,7 +3,13 @@ import { basename, join } from 'node:path';
 import { parseArgs } from 'node:util';
 import * as qiniuModule from 'qiniu';
 import { S3mini } from 's3mini';
-import { findBlockmaps, findInstallers, findManifests } from './lib/artifacts.ts';
+import {
+  findBlockmaps,
+  findInstallers,
+  findManifests,
+  findSparkleDeltas,
+  findSparkleFeeds,
+} from './lib/artifacts.ts';
 import { requireEnv } from './lib/config.ts';
 import { fail, info, step } from './lib/log.ts';
 
@@ -41,6 +47,8 @@ const dryRun = Boolean(values['dry-run']);
 const manifests = findManifests(values.channel);
 const installers = findInstallers(values.prefix);
 const blockmaps = findBlockmaps();
+const sparkleFeeds = findSparkleFeeds();
+const sparkleDeltas = findSparkleDeltas();
 
 if (manifests.length === 0) {
   fail('No update manifests found in release/');
@@ -71,10 +79,28 @@ const manifestUploads = manifests.flatMap((manifest) => {
   ] satisfies UploadItem[];
 });
 const rootManifestUrls = manifests.map((manifest) => joinUrl(publicBaseUrl, basename(manifest)));
+const version = inferVersionFromManifests(manifests);
+
+const sparkleFeedUploads = sparkleFeeds.flatMap((feed) => {
+  const name = basename(feed);
+  return [
+    {
+      file: feed,
+      key: joinKey(keyPrefix, name),
+      contentType: contentTypeFor(name),
+      label: `Sparkle feed ${name}`,
+    },
+    {
+      file: feed,
+      key: joinKey(keyPrefix, `v${version}`, name),
+      contentType: contentTypeFor(name),
+      label: `versioned Sparkle feed ${name}`,
+    },
+  ] satisfies UploadItem[];
+});
 
 const binaryUploads = [...installers, ...blockmaps].flatMap((file) => {
   const name = basename(file);
-  const version = inferVersionFromManifests(manifests);
   return [
     {
       file,
@@ -91,7 +117,30 @@ const binaryUploads = [...installers, ...blockmaps].flatMap((file) => {
   ] satisfies UploadItem[];
 });
 
-const uploads = [...manifestUploads, ...binaryUploads];
+const sparkleDeltaUploads = sparkleDeltas.flatMap((file) => {
+  const name = basename(file);
+  return [
+    {
+      file,
+      key: joinKey(keyPrefix, `v${version}`, name),
+      contentType: contentTypeFor(name),
+      label: `versioned Sparkle delta ${name}`,
+    },
+    {
+      file,
+      key: joinKey(keyPrefix, 'latest', name),
+      contentType: contentTypeFor(name),
+      label: `latest Sparkle delta ${name}`,
+    },
+  ] satisfies UploadItem[];
+});
+
+const uploads = [
+  ...manifestUploads,
+  ...sparkleFeedUploads,
+  ...binaryUploads,
+  ...sparkleDeltaUploads,
+];
 
 step(`Uploading ${uploads.length} China mirror object(s)`);
 
@@ -111,7 +160,10 @@ for (const item of uploads) {
 }
 
 if (isQiniuEndpoint(endpoint)) {
-  await refreshQiniuCdnUrls(rootManifestUrls);
+  await refreshQiniuCdnUrls([
+    ...rootManifestUrls,
+    ...sparkleFeeds.map((feed) => joinUrl(publicBaseUrl, basename(feed))),
+  ]);
 }
 
 info(`China mirror uploaded to ${publicBaseUrl}`);
@@ -308,6 +360,7 @@ function fileNameFromUrl(rawValue: string): string {
 function contentTypeFor(name: string): string {
   if (name.endsWith('.yml')) return 'application/yaml; charset=utf-8';
   if (name.endsWith('.json')) return 'application/json; charset=utf-8';
+  if (name.endsWith('.xml')) return 'application/rss+xml; charset=utf-8';
   if (name.endsWith('.dmg')) return 'application/x-apple-diskimage';
   if (name.endsWith('.zip')) return 'application/zip';
   if (name.endsWith('.exe')) return 'application/vnd.microsoft.portable-executable';
