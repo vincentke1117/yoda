@@ -6,6 +6,13 @@ export type SparkleArchiveHistoryItem = {
   fileName: string;
 };
 
+export function sparkleHistoryFallbackUrl(
+  repository: string,
+  item: SparkleArchiveHistoryItem
+): string {
+  return `https://github.com/${repository}/releases/download/v${item.version}/${encodeURIComponent(item.fileName)}`;
+}
+
 export function qualifySparkleDeltaArtifacts(
   content: string,
   arch: string,

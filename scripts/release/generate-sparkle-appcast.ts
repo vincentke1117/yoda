@@ -16,6 +16,7 @@ import { fail, info, step } from './lib/log.ts';
 import {
   parseSparkleArchiveHistory,
   qualifySparkleDeltaArtifacts,
+  sparkleHistoryFallbackUrl,
   validateGeneratedSparkleAppcast,
   type SparkleArchiveHistoryItem,
 } from './lib/sparkle-feed.ts';
@@ -163,7 +164,12 @@ async function downloadArchive(
 ): Promise<void> {
   if (existsSync(destination)) return;
   info(`Downloading Sparkle history ${item.version}: ${item.url}`);
-  const response = await fetch(item.url, { headers: { 'Cache-Control': 'no-cache' } });
+  let response = await fetch(item.url, { headers: { 'Cache-Control': 'no-cache' } });
+  if (!response.ok) {
+    const fallbackUrl = sparkleHistoryFallbackUrl(repository, item);
+    info(`Sparkle history mirror returned HTTP ${response.status}; trying ${fallbackUrl}`);
+    response = await fetch(fallbackUrl, { headers: { 'Cache-Control': 'no-cache' } });
+  }
   if (!response.ok) {
     fail(`Failed to download Sparkle history ${item.version}: HTTP ${response.status}`);
   }
