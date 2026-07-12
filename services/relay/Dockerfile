@@ -17,4 +17,6 @@ RUN pnpm install --frozen-lockfile --prod --filter @yoda/relay...
 COPY --from=build /app/services/relay/dist ./services/relay/dist
 USER node
 EXPOSE 8787
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:8787/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
 CMD ["node", "services/relay/dist/index.js"]
