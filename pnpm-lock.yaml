@@ -470,7 +470,7 @@ importers:
   services/relay:
     dependencies:
       ws:
-        specifier: ^8.19.0
+        specifier: 8.19.0
         version: 8.19.0
     devDependencies:
       '@types/node':

@@ -111,6 +111,7 @@ Resources:
                 - docker build --pull -f services/relay/Dockerfile -t "$ECR_URI:$IMAGE_TAG" .
             post_build:
               commands:
+                - test "$CODEBUILD_BUILD_SUCCEEDING" = "1"
                 - docker push "$ECR_URI:$IMAGE_TAG"
                 - aws ecr describe-images --repository-name yoda-relay --image-ids imageTag="$IMAGE_TAG" --query 'imageDetails[0].imageDigest' --output text
       Environment:
