@@ -3088,6 +3088,7 @@
     "quotaUsage": "{{window}} usage: {{percent}}%, resets at {{resetAt}}",
     "accountUsage": "Account usage",
     "accountUsageShort": "Account",
+    "accountDocs": "Account docs",
     "accountUsageDescription": "CLI account quota windows",
     "accountQuotaReset": "Resets at {{time}}",
     "accountQuotaStatus": "{{remaining}}% remaining · resets {{reset}}",
