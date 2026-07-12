@@ -6,12 +6,14 @@ COPY services/relay/package.json services/relay/tsconfig.json services/relay/tsc
 RUN pnpm install --frozen-lockfile --filter @yoda/relay --ignore-scripts
 COPY services/relay/src ./services/relay/src
 RUN pnpm --filter @yoda/relay build
-RUN pnpm --filter @yoda/relay deploy --legacy --prod /prod/relay
 
 FROM node:24-alpine AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
-COPY --from=build /prod/relay ./
+RUN corepack enable
+COPY services/relay/package.json services/relay/pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile --prod --ignore-scripts
+COPY --from=build /app/services/relay/dist ./dist
 USER node
 EXPOSE 8787
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
