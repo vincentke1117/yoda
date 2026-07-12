@@ -15,6 +15,11 @@ Parameters:
   WebAclArn:
     Type: String
     Description: CLOUDFRONT-scoped WAF web ACL ARN from us-east-1.
+  RelayPublicBaseUrlValue:
+    Type: String
+    Default: https://pending.invalid
+    AllowedPattern: ^https://[a-z0-9.-]+$
+    Description: CloudFront HTTPS origin returned by Relay pairing responses.
   InstanceType:
     Type: String
     Default: t3.small
@@ -45,7 +50,7 @@ Resources:
       Name: /yoda/production/relay-public-base-url
       Description: CloudFront HTTPS origin returned by Relay pairing responses.
       Type: String
-      Value: https://pending.invalid
+      Value: !Ref RelayPublicBaseUrlValue
       Tags:
         Application: yoda-relay
         Environment: production
