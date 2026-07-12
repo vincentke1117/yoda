@@ -355,7 +355,7 @@
     "title": "Settings",
     "tabs": {
       "general": "General",
-      "account": "LovStudio account",
+      "account": "Account",
       "agents": "Client",
       "tasks": "Tasks",
       "sessions": "Sessions",
