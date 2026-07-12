@@ -1,7 +1,7 @@
 FROM node:24-alpine AS build
 WORKDIR /app
 RUN corepack enable
-COPY pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json ./
 COPY services/relay/package.json services/relay/tsconfig.json services/relay/tsconfig.build.json ./services/relay/
 RUN pnpm install --frozen-lockfile --filter @yoda/relay --ignore-scripts
 COPY services/relay/src ./services/relay/src
