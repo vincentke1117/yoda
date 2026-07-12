@@ -305,6 +305,8 @@
       "installUnavailable": "Install URL is unavailable",
       "connectTitle": "Connect desktop",
       "connectDescription": "Scan after installing the app. The app will open and connect to this gateway.",
+      "tailscaleConnectDescription": "Tailscale detected. Sign in to the same tailnet on your phone, then scan to connect from any network.",
+      "tailscaleReady": "Tailscale remote",
       "connectUnavailable": "Connection code is unavailable",
       "installUrl": "Install URL",
       "localExpoUrl": "Expo Go URL",

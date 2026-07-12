@@ -204,6 +204,7 @@ export type MobileGatewayConnectionInfo = {
   port: number;
   token: string | null;
   urls: string[];
+  connectionKind: 'tailscale' | 'lan' | 'local';
   localExpoUrl: string | null;
   installUrl: string;
   pairingUrl: string | null;

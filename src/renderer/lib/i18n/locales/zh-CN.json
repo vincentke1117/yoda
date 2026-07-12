@@ -303,6 +303,8 @@
       "installUnavailable": "安装地址暂不可用",
       "connectTitle": "连接桌面端",
       "connectDescription": "安装后扫码，移动端会自动打开并连接当前 Gateway。",
+      "tailscaleConnectDescription": "已检测到 Tailscale。确保手机登录同一 Tailnet，扫码后即可跨局域网连接当前 Gateway。",
+      "tailscaleReady": "Tailscale 远程连接",
       "connectUnavailable": "连接二维码暂不可用",
       "installUrl": "安装地址",
       "localExpoUrl": "Expo Go 地址",

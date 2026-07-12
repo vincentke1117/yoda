@@ -77,6 +77,7 @@ import {
   MOBILE_SESSION_RECONNECT_RETRY_MS,
   MobileSessionEventStream,
 } from './mobile-session-event-stream';
+import { mobileGatewayNetworkUrls } from './network-addresses';
 
 const MAX_BODY_BYTES = 128 * 1024;
 const MOBILE_METRO_DEFAULT_PORT = 8081;
@@ -343,32 +344,8 @@ function compareConversations(a: Conversation, b: Conversation): number {
   return (Number.isNaN(bTime) ? 0 : bTime) - (Number.isNaN(aTime) ? 0 : aTime);
 }
 
-// 198.18.0.0/15 (RFC 2544 benchmark block) is used by proxy TUN interfaces
-// (ClashX/Surge fake-IP) and is unreachable from other devices on the LAN.
-function isUsableLanAddress(address: string): boolean {
-  return !/^198\.(?:18|19)\./.test(address);
-}
-
-// Physical interfaces (en0/eth0/wlan0) are reachable from phones on the same
-// network; VPN/tunnel interfaces (utun/wg/tun) usually are not. Rank instead of
-// filter — a tunnel address can still be right (e.g. both devices on Tailscale).
-function lanInterfaceRank(name: string): number {
-  if (/^(en|eth|wlan|wl)/i.test(name)) return 0;
-  if (/^(utun|tun|tap|wg|zt|ipsec|ppp)/i.test(name)) return 2;
-  return 1;
-}
-
 function lanUrls(port: number): string[] {
-  const candidates: { name: string; address: string }[] = [];
-  for (const [name, entries] of Object.entries(networkInterfaces())) {
-    for (const entry of entries ?? []) {
-      if (entry.family === 'IPv4' && !entry.internal && isUsableLanAddress(entry.address)) {
-        candidates.push({ name, address: entry.address });
-      }
-    }
-  }
-  candidates.sort((a, b) => lanInterfaceRank(a.name) - lanInterfaceRank(b.name));
-  return candidates.map((c) => `http://${c.address}:${port}`);
+  return mobileGatewayNetworkUrls(networkInterfaces(), port).map(({ url }) => url);
 }
 
 function mobileInstallUrl(): string {
@@ -802,7 +779,8 @@ export class MobileGatewayService {
 
   getConnectionInfo(): MobileGatewayConnectionInfo {
     this.ensureLocalMetroLazy();
-    const urls = lanUrls(this.port);
+    const networkUrls = mobileGatewayNetworkUrls(networkInterfaces(), this.port);
+    const urls = networkUrls.map(({ url }) => url);
     const primaryUrl = urls[0] ?? `http://localhost:${this.port}`;
     return {
       enabled: shouldStartGateway(),
@@ -812,6 +790,7 @@ export class MobileGatewayService {
       port: this.port,
       token: this.token || null,
       urls,
+      connectionKind: networkUrls[0]?.kind ?? 'local',
       localExpoUrl: this.token ? localExpoUrl(primaryUrl, this.token) : null,
       installUrl: mobileInstallUrl(),
       pairingUrl:

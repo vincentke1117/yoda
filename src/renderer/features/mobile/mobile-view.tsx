@@ -285,6 +285,11 @@ export function MobileView({ embedded = false }: { embedded?: boolean } = {}) {
                         ? t('sidebar.mobileConnection.notReady')
                         : t('sidebar.mobileConnection.disabled')}
                 </span>
+                {isReady && data?.connectionKind === 'tailscale' ? (
+                  <span className="ml-auto rounded-full bg-emerald-500/15 px-2 py-0.5 font-medium">
+                    {t('sidebar.mobileConnection.tailscaleReady')}
+                  </span>
+                ) : null}
               </div>
 
               <div className="rounded-lg border border-border bg-background p-4">
@@ -342,7 +347,9 @@ export function MobileView({ embedded = false }: { embedded?: boolean } = {}) {
                   ) : (
                     <>
                       <p className="max-w-sm text-center text-xs leading-5 text-foreground-muted">
-                        {t('sidebar.mobileConnection.connectDescription')}
+                        {data?.connectionKind === 'tailscale'
+                          ? t('sidebar.mobileConnection.tailscaleConnectDescription')
+                          : t('sidebar.mobileConnection.connectDescription')}
                       </p>
                       <QRBox
                         value={isReady ? pairingUrl : null}
