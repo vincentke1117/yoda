@@ -3136,6 +3136,8 @@
     "quotaUsage": "{{window}} usage: {{percent}}%, resets at {{resetAt}}",
     "accountUsage": "Account usage",
     "accountUsageShort": "Account",
+    "accountDocs": "Yoda docs",
+    "officialAccountUsage": "{{name}} usage",
     "accountUsageDescription": "CLI account quota windows",
     "accountQuotaReset": "Resets at {{time}}",
     "accountQuotaStatus": "{{remaining}}% remaining · resets {{reset}}",

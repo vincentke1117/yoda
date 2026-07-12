@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.15.10
+
+### Fixes
+
+- Run the signed Sparkle delta installation smoke test through the same closed local proxy used by the packaged application.
+
+## 0.15.9
+
+### Fixes
+
+- Preserve the `.delta` extension through the local Sparkle proxy so signed incremental updates can be extracted and installed instead of falling back to a blocked full update.
+
+## 0.15.8
+
+### Fixes
+
+- Prevent Sparkle from rejecting a valid signed delta because of brittle executable-size or localization eligibility hints.
+
 ## 0.15.7
 
 ### Patch Changes

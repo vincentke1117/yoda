@@ -1,14 +1,16 @@
 import { useQuery } from '@tanstack/react-query';
-import { Brain, Gauge, MessageSquare, Terminal } from 'lucide-react';
+import { Brain, ExternalLink, Gauge, MessageSquare, Terminal } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   getRuntime,
+  getRuntimeAccountProfile,
   isValidRuntimeId,
   type AgentAccountUsage,
   type RuntimeId,
 } from '@shared/runtime-registry';
+import { YODA_ACCOUNT_USAGE_DOC_URL } from '@shared/urls';
 import { useAppSettingsKey } from '@renderer/features/settings/use-app-settings-key';
 import { useTaskStats } from '@renderer/features/tasks/hooks/useTaskStats';
 import {
@@ -58,6 +60,9 @@ export const WorkspaceRuntimeBar = observer(function WorkspaceRuntimeBar() {
   );
   const activeConversation = provisionedTask?.taskView.tabManager.activeConversation?.data ?? null;
   const runtime = runtimeId ? getRuntime(runtimeId) : null;
+  const officialUsageUrl = runtimeId
+    ? getRuntimeAccountProfile(runtimeId).officialSubscription.usageUrl
+    : undefined;
   const runtimeConfig = runtimeId ? agentConfig[runtimeId] : null;
   const activeConversationId = provisionedTask?.taskView.tabManager.activeConversationId;
   const { data: taskStats } = useTaskStats(params?.projectId ?? '', params?.taskId ?? '', {
@@ -449,6 +454,30 @@ export const WorkspaceRuntimeBar = observer(function WorkspaceRuntimeBar() {
                     <div className="text-sm font-medium">{t('workspaceRuntime.accountUsage')}</div>
                     <div className="mt-0.5 text-xs text-foreground-passive">
                       {t('workspaceRuntime.accountUsageDescription')}
+                    </div>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+                      <a
+                        href={YODA_ACCOUNT_USAGE_DOC_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex shrink-0 items-center gap-1 text-xs text-foreground-muted underline-offset-2 hover:text-foreground hover:underline"
+                      >
+                        {t('workspaceRuntime.accountDocs')}
+                        <ExternalLink aria-hidden className="size-3" />
+                      </a>
+                      {officialUsageUrl ? (
+                        <a
+                          href={officialUsageUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex shrink-0 items-center gap-1 text-xs text-foreground-muted underline-offset-2 hover:text-foreground hover:underline"
+                        >
+                          {t('workspaceRuntime.officialAccountUsage', {
+                            name: runtime?.name ?? runtimeId,
+                          })}
+                          <ExternalLink aria-hidden className="size-3" />
+                        </a>
+                      ) : null}
                     </div>
                   </div>
                   <div className="border-t border-border" />

@@ -173,6 +173,8 @@ export type RuntimeAccountProfile = {
     supported: boolean;
     /** Interactive command that lets the user sign in or switch the local CLI account. */
     loginCommand?: string;
+    /** Provider-hosted page that shows the current subscription usage and rate limits. */
+    usageUrl?: string;
   };
   officialApi: {
     envVars: readonly string[];
@@ -914,7 +916,11 @@ const MULTI_MODEL_API_ENV = [
 
 export const RUNTIME_ACCOUNT_PROFILES = {
   codex: {
-    officialSubscription: { supported: true, loginCommand: 'codex login' },
+    officialSubscription: {
+      supported: true,
+      loginCommand: 'codex login',
+      usageUrl: 'https://chatgpt.com/codex/settings/usage',
+    },
     officialApi: {
       envVars: OPENAI_API_ENV,
       probe: {
@@ -928,7 +934,11 @@ export const RUNTIME_ACCOUNT_PROFILES = {
     maas: { supported: true, providerHints: ['openai', 'azure'] },
   },
   claude: {
-    officialSubscription: { supported: true, loginCommand: 'claude auth login' },
+    officialSubscription: {
+      supported: true,
+      loginCommand: 'claude auth login',
+      usageUrl: 'https://claude.ai/settings/usage',
+    },
     officialApi: {
       envVars: ['ANTHROPIC_API_KEY', 'ANTHROPIC_BASE_URL'],
       probe: {
