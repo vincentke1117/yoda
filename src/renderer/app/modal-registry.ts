@@ -3,6 +3,8 @@ import { NewSubtaskModal } from '@renderer/app/new-subtask-modal';
 import { NewTaskModal } from '@renderer/app/new-task-modal';
 import { AgentEditModal } from '@renderer/features/agents-config/agent-edit-modal';
 import { CommandPaletteModal } from '@renderer/features/command-palette/command-palette-modal';
+import { CreateFeatureModal } from '@renderer/features/features/create-feature-modal';
+import { FeatureArtifactModal } from '@renderer/features/features/feature-artifact-modal';
 import { IntegrationSetupModal } from '@renderer/features/integrations/integration-setup-modal';
 import { ZenmuxUsageModal } from '@renderer/features/maas/components/ZenmuxUsageModal';
 import { McpModal } from '@renderer/features/mcp/components/McpModal';
@@ -62,6 +64,8 @@ export function createModal<TProps, TResult>(
 
 export const modalRegistry = {
   commandPaletteModal: createModal(CommandPaletteModal, { size: 'md' }),
+  createFeatureModal: createModal(CreateFeatureModal, { size: 'md' }),
+  featureArtifactModal: createModal(FeatureArtifactModal, { size: 'sm' }),
   taskModal: createModal(CreateTaskModal),
   newTaskModal: createModal(NewTaskModal, { size: 'lg' }),
   newConversationModal: createModal(NewConversationModal, { size: 'lg' }),
