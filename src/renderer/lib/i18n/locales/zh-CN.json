@@ -1800,6 +1800,7 @@
       "agents": "智能体",
       "agentTeams": "智能体团队",
       "skills": "技能",
+      "plugins": "插件",
       "mcp": "MCP",
       "automation": "自动化"
     }
