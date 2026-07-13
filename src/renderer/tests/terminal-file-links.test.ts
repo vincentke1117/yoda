@@ -209,6 +209,60 @@ describe('terminal file links', () => {
     });
   });
 
+  it('maps absolute paths from the main checkout into the active worktree', () => {
+    expect(
+      resolveTerminalFileLinkTarget(
+        '/Users/mark/lovstudio/coding/yoda/src/renderer/tests/terminal-file-links.test.ts:31',
+        '/Users/mark/lovstudio/coding/yoda/.worktrees/hr2ln',
+        undefined,
+        ['/Users/mark/lovstudio/coding/yoda']
+      )
+    ).toEqual({
+      originalText:
+        '/Users/mark/lovstudio/coding/yoda/src/renderer/tests/terminal-file-links.test.ts:31',
+      filePath: 'src/renderer/tests/terminal-file-links.test.ts',
+      absolutePath:
+        '/Users/mark/lovstudio/coding/yoda/.worktrees/hr2ln/src/renderer/tests/terminal-file-links.test.ts',
+      line: 31,
+      column: undefined,
+    });
+  });
+
+  it.each([
+    {
+      workspaceRoot: '/Users/mark/lovstudio/coding/yoda/.worktrees/hr2ln',
+      relativePath: '.git/config',
+    },
+    {
+      workspaceRoot: '/Users/mark/lovstudio/coding/yoda/.worktrees/hr2ln',
+      relativePath: '.worktrees/another/src/main/index.ts',
+    },
+    {
+      workspaceRoot: '/Users/mark/lovstudio/coding/yoda/.yoda/worktrees/hr2ln',
+      relativePath: '.yoda/worktrees/another/src/main/index.ts',
+    },
+    {
+      workspaceRoot: '/Users/mark/lovstudio/coding/yoda/custom-pool/hr2ln',
+      relativePath: 'custom-pool/another/src/main/index.ts',
+    },
+  ])(
+    'does not map checkout metadata path $relativePath through a workspace alias',
+    ({ workspaceRoot, relativePath }) => {
+      const text = `/Users/mark/lovstudio/coding/yoda/${relativePath}:12`;
+
+      expect(
+        resolveTerminalFileLinkTarget(text, workspaceRoot, undefined, [
+          '/Users/mark/lovstudio/coding/yoda',
+        ])
+      ).toEqual({
+        originalText: text,
+        absolutePath: `/Users/mark/lovstudio/coding/yoda/${relativePath}`,
+        line: 12,
+        column: undefined,
+      });
+    }
+  );
+
   it('strips mention prefixes when resolving source links', () => {
     expect(resolveTerminalFileLinkTarget('@src/main/index.ts:12:3')).toEqual({
       originalText: '@src/main/index.ts:12:3',
@@ -270,6 +324,92 @@ describe('terminal file links', () => {
     expect(getTerminalFileLinkMatches(terminal, 2, options)).toEqual([expected]);
   });
 
+  it('keeps a hard-wrapped line suffix attached to the file path', () => {
+    const text =
+      '/Users/mark/lovstudio/coding/yoda/src/renderer/tests/terminal-file-links.test.ts:31';
+    const terminal = makeTerminal([text.slice(0, 80), text.slice(80)]);
+    const expected = {
+      range: { start: { x: 1, y: 1 }, end: { x: 3, y: 2 } },
+      text,
+      target: {
+        originalText: text,
+        filePath: 'src/renderer/tests/terminal-file-links.test.ts',
+        absolutePath:
+          '/Users/mark/lovstudio/coding/yoda/.worktrees/hr2ln/src/renderer/tests/terminal-file-links.test.ts',
+        line: 31,
+        column: undefined,
+      },
+    };
+    const options = {
+      workspaceRoot: '/Users/mark/lovstudio/coding/yoda/.worktrees/hr2ln',
+      workspaceRootAliases: ['/Users/mark/lovstudio/coding/yoda'],
+      onOpen: (): void => undefined,
+    };
+
+    expect(getTerminalFileLinkMatches(terminal, 1, options)).toEqual([expected]);
+    expect(getTerminalFileLinkMatches(terminal, 2, options)).toEqual([expected]);
+  });
+
+  it.each([80, 81, 82, 83, 84])(
+    'keeps a line and column suffix across a hard wrap at column %i',
+    (column) => {
+      const text =
+        '/Users/mark/lovstudio/coding/yoda/src/renderer/tests/terminal-file-links.test.ts:31:4';
+      const terminal = makeTerminal([text.slice(0, column), text.slice(column)]);
+      const options = {
+        workspaceRoot: '/Users/mark/lovstudio/coding/yoda',
+        onOpen: (): void => undefined,
+      };
+
+      const matches = getTerminalFileLinkMatches(terminal, 2, options);
+      expect(matches).toHaveLength(1);
+      expect(matches[0]?.text).toBe(text);
+      expect(matches[0]?.target).toMatchObject({ line: 31, column: 4 });
+    }
+  );
+
+  it('does not hard-join a complete file path to colon-prefixed prose', () => {
+    const path = `${'/very-long-directory'.repeat(4)}/file.ts`;
+    const terminal = makeTerminal([path, ': not a line suffix']);
+    const options = {
+      workspaceRoot: '/Users/mark/lovstudio/coding/yoda',
+      onOpen: (): void => undefined,
+    };
+
+    expect(getTerminalFileLinkMatches(terminal, 2, options)).toEqual([]);
+  });
+
+  it('does not hard-join prose to an independent absolute path with a line suffix', () => {
+    const terminal = makeTerminal([`${'a'.repeat(72)} command`, '/tmp/bar.ts:31']);
+    const options = {
+      workspaceRoot: '/Users/mark/project',
+      onOpen: (): void => undefined,
+    };
+
+    expect(getTerminalFileLinkMatches(terminal, 2, options)).toEqual([
+      {
+        range: { start: { x: 1, y: 2 }, end: { x: 14, y: 2 } },
+        text: '/tmp/bar.ts:31',
+        target: {
+          originalText: '/tmp/bar.ts:31',
+          absolutePath: '/tmp/bar.ts',
+          line: 31,
+          column: undefined,
+        },
+      },
+    ]);
+  });
+
+  it('does not treat a hard-wrapped URL location suffix as a file continuation', () => {
+    const terminal = makeTerminal(['http://localhost:3000/src/file.ts', ':31']);
+    const options = {
+      workspaceRoot: '/Users/mark/project',
+      onOpen: (): void => undefined,
+    };
+
+    expect(getTerminalFileLinkMatches(terminal, 2, options)).toEqual([]);
+  });
+
   it('recognizes a spaced absolute path across every row of a soft wrap', () => {
     const terminal = makeTerminal([
       '- /Users/mark/Library/Application',
@@ -295,6 +435,31 @@ describe('terminal file links', () => {
     expect(getTerminalFileLinkMatches(terminal, 1, options)).toEqual([expected]);
     expect(getTerminalFileLinkMatches(terminal, 2, options)).toEqual([expected]);
     expect(getTerminalFileLinkMatches(terminal, 3, options)).toEqual([expected]);
+  });
+
+  it('maps a soft-wrapped link starting at the first cell of a row', () => {
+    const terminal = makeTerminal([
+      `${'a'.repeat(79)}(`,
+      { text: 'src/foo.ts rest', isWrapped: true },
+    ]);
+    const options = {
+      workspaceRoot: '/Users/mark/project',
+      onOpen: (): void => undefined,
+    };
+
+    expect(getTerminalFileLinkMatches(terminal, 2, options)).toEqual([
+      {
+        range: { start: { x: 1, y: 2 }, end: { x: 10, y: 2 } },
+        text: 'src/foo.ts',
+        target: {
+          originalText: 'src/foo.ts',
+          filePath: 'src/foo.ts',
+          absolutePath: '/Users/mark/project/src/foo.ts',
+          line: undefined,
+          column: undefined,
+        },
+      },
+    ]);
   });
 });
 
