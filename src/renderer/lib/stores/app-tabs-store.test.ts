@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ViewId, WrapParams } from '@renderer/app/view-registry';
-import { AppTabsStore } from '@renderer/lib/stores/app-tabs-store';
+import {
+  AppTabsStore,
+  isIndexTab,
+  routeKey,
+  tabScopeKey,
+  type AppTabEntry,
+} from '@renderer/lib/stores/app-tabs-store';
 import type { NavigationStore } from '@renderer/lib/stores/navigation-store';
 
 function createNavigationStub(): NavigationStore {
@@ -50,5 +56,40 @@ describe('AppTabsStore navigation history integration', () => {
 
     expect(navigation.navigate).not.toHaveBeenCalled();
     expect(navigation._applyNavigation).toHaveBeenCalledWith('skills', {});
+  });
+});
+
+describe('skill comparison tabs', () => {
+  it('deduplicates by the ordered skill pair and ignores display labels', () => {
+    const first = routeKey('skillCompare', {
+      baseSkillId: 'alpha',
+      targetSkillId: 'beta',
+      baseDisplayName: 'Alpha',
+      targetDisplayName: 'Beta',
+    });
+    const relabeled = routeKey('skillCompare', {
+      baseSkillId: 'alpha',
+      targetSkillId: 'beta',
+      baseDisplayName: 'Renamed Alpha',
+      targetDisplayName: 'Renamed Beta',
+    });
+    const reversed = routeKey('skillCompare', {
+      baseSkillId: 'beta',
+      targetSkillId: 'alpha',
+    });
+
+    expect(first).toBe(relabeled);
+    expect(reversed).not.toBe(first);
+  });
+
+  it('places comparisons in the skills scope as closeable tabs', () => {
+    const tab: AppTabEntry = {
+      id: 'comparison',
+      viewId: 'skillCompare',
+      params: { baseSkillId: 'alpha', targetSkillId: 'beta' },
+    };
+
+    expect(tabScopeKey(tab.viewId, tab.params)).toBe('view:skills');
+    expect(isIndexTab(tab)).toBe(false);
   });
 });
