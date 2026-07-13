@@ -389,6 +389,85 @@ describe('terminal file links', () => {
     }
   });
 
+  it.each([
+    {
+      wrapKind: 'xterm soft wrap',
+      lines: [
+        '「核心实现见 src/shared/skills/grouping.ts、src/renderer/features/skills/components/SkillsView.tsx 和 src/renderer/features/skills/',
+        { text: 'components/SkillDetailSidebar.tsx。」', isWrapped: true },
+      ],
+      terminalOptions: {},
+      finalRangeEndX: 33,
+    },
+    {
+      wrapKind: 'indented real newline before the terminal edge',
+      lines: [
+        '「核心实现见 src/shared/skills/grouping.ts、src/renderer/features/skills/components/SkillsView.tsx 和 src/renderer/features/skills/',
+        '  components/SkillDetailSidebar.tsx。」',
+      ],
+      terminalOptions: { cols: 160 },
+      finalRangeEndX: 35,
+    },
+  ])(
+    'keeps an implementation path whole across $wrapKind',
+    ({ lines, terminalOptions, finalRangeEndX }) => {
+      const terminal = makeTerminal(lines, terminalOptions);
+      const options = {
+        workspaceRoot: '/Users/mark/lovstudio/coding/yoda/.worktrees/hr2ln',
+        onOpen: (): void => undefined,
+      };
+      const expected = [
+        {
+          text: 'src/shared/skills/grouping.ts',
+          range: { start: { x: 8, y: 1 }, end: { x: 36, y: 1 } },
+          filePath: 'src/shared/skills/grouping.ts',
+          isDirectory: undefined,
+        },
+        {
+          text: 'src/renderer/features/skills/components/SkillsView.tsx',
+          range: { start: { x: 38, y: 1 }, end: { x: 91, y: 1 } },
+          filePath: 'src/renderer/features/skills/components/SkillsView.tsx',
+          isDirectory: undefined,
+        },
+        {
+          text: 'src/renderer/features/skills/components/SkillDetailSidebar.tsx',
+          range: { start: { x: 95, y: 1 }, end: { x: finalRangeEndX, y: 2 } },
+          filePath: 'src/renderer/features/skills/components/SkillDetailSidebar.tsx',
+          isDirectory: undefined,
+        },
+      ];
+
+      for (const row of [1, 2]) {
+        expect(
+          getTerminalFileLinkMatches(terminal, row, options).map(({ text, range, target }) => ({
+            text,
+            range,
+            filePath: target.filePath,
+            isDirectory: target.isDirectory,
+          }))
+        ).toEqual(expected);
+      }
+    }
+  );
+
+  it('keeps unindented paths on separate non-full rows independent', () => {
+    const terminal = makeTerminal(
+      ['src/renderer/features/skills/', 'components/SkillDetailSidebar.tsx'],
+      { cols: 80 }
+    );
+    const options = {
+      workspaceRoot: '/Users/mark/lovstudio/coding/yoda/.worktrees/hr2ln',
+      onOpen: (): void => undefined,
+    };
+
+    expect(getTerminalFileLinkMatches(terminal, 1, options).map(({ text }) => text)).toEqual([
+      'src/renderer/features/skills/',
+    ]);
+    expect(getTerminalFileLinkMatches(terminal, 2, options).map(({ text }) => text)).toEqual([
+      'components/SkillDetailSidebar.tsx',
+    ]);
+  });
+
   it('recognizes the complete hard-wrapped path with a spaced directory from either row', () => {
     const terminal = makeTerminal([
       '- /Users/mark/Library/Application Support/com.lovstudio.ymux/logs/web-',

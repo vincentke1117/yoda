@@ -204,8 +204,9 @@ export function buildScanChunks(lineIndex: number, terminal: Terminal): ScanChun
     const [upperLines, upperStart] = getWindowedLineStrings(upperBottom, terminal);
     const upperText = upperLines.join('');
     const stripped = first.text.replace(/^ +/, '');
-    if (!canHardJoin(terminal, upperBottom, upperText, stripped)) break;
-    first.startCellOffset += first.text.length - stripped.length;
+    const continuationIndent = first.text.length - stripped.length;
+    if (!canHardJoin(terminal, upperBottom, upperText, stripped, continuationIndent)) break;
+    first.startCellOffset += continuationIndent;
     first.text = stripped;
     chunks.unshift({
       startLineIndex: upperStart,
@@ -226,10 +227,11 @@ export function buildScanChunks(lineIndex: number, terminal: Terminal): ScanChun
     const [nextLines, nextStart] = getWindowedLineStrings(lastBottom + 1, terminal);
     const nextText = nextLines.join('');
     const stripped = nextText.replace(/^ +/, '');
-    if (!canHardJoin(terminal, lastBottom, last.text, stripped)) break;
+    const continuationIndent = nextText.length - stripped.length;
+    if (!canHardJoin(terminal, lastBottom, last.text, stripped, continuationIndent)) break;
     chunks.push({
       startLineIndex: nextStart,
-      startCellOffset: nextText.length - stripped.length,
+      startCellOffset: continuationIndent,
       rowCount: nextLines.length,
       text: stripped,
       charOffset: 0,
@@ -248,8 +250,10 @@ function canHardJoin(
   terminal: Terminal,
   upperBottomRowIndex: number,
   upperText: string,
-  lowerStripped: string
+  lowerStripped: string,
+  continuationIndent: number
 ): boolean {
+  if (hasIndentedPathContinuation(upperText, lowerStripped, continuationIndent)) return true;
   if (!isRowFull(terminal, upperBottomRowIndex)) return false;
   if (hasHardWrappedLocationCandidate(upperText, lowerStripped)) return true;
   const tail = TRAILING_PATH_RUN_RE.exec(upperText)?.[0];
@@ -269,6 +273,29 @@ function canHardJoin(
     return false;
   }
   return true;
+}
+
+/**
+ * Ink-style renderers may insert a real newline and indentation while wrapping
+ * a path before the terminal's last column. Keep this exception narrower than
+ * the general hard-wrap rule: the upper fragment must end in `/`, the lower
+ * row must be visibly indented, and joining them must produce a complete file
+ * candidate that crosses the row boundary.
+ */
+function hasIndentedPathContinuation(
+  upperText: string,
+  lowerStripped: string,
+  continuationIndent: number
+): boolean {
+  if (continuationIndent < 2 || !lowerStripped || URL_IN_PROGRESS_RE.test(upperText)) return false;
+
+  const tail = TRAILING_PATH_RUN_RE.exec(upperText)?.[0];
+  if (!tail || tail === '/' || !tail.endsWith('/')) return false;
+
+  return extractTerminalFileLinkCandidates(`${tail}${lowerStripped}`).some(
+    (candidate) =>
+      candidate.index === 0 && candidate.text.length > tail.length && !candidate.text.endsWith('/')
+  );
 }
 
 /**

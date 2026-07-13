@@ -24,14 +24,14 @@ class MockBufferLine {
 
   constructor(
     private readonly text: string,
-    options: { isWrapped?: boolean } = {}
+    options: { cols?: number; isWrapped?: boolean } = {}
   ) {
-    this.length = text.length;
+    this.length = Math.max(options.cols ?? text.length, text.length);
     this.isWrapped = options.isWrapped ?? false;
   }
 
-  translateToString(): string {
-    return this.text;
+  translateToString(trimRight?: boolean): string {
+    return trimRight ? this.text.trimEnd() : this.text.padEnd(this.length);
   }
 
   getCell(index: number, cell: MockCell): MockCell {
@@ -42,10 +42,13 @@ class MockBufferLine {
 }
 
 export function makeTerminal(
-  lines: Array<string | { text: string; isWrapped?: boolean }>
+  lines: Array<string | { text: string; isWrapped?: boolean }>,
+  options: { cols?: number } = {}
 ): Terminal {
   const bufferLines = lines.map((line) =>
-    typeof line === 'string' ? new MockBufferLine(line) : new MockBufferLine(line.text, line)
+    typeof line === 'string'
+      ? new MockBufferLine(line, options)
+      : new MockBufferLine(line.text, { ...options, ...line })
   );
 
   return {
