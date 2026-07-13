@@ -50,6 +50,7 @@ import { buildAgentCommand } from './agent-command';
 import { injectClipboardImagesAndPrompt, substituteImageMentions } from './image-attachments';
 import { getEnabledPromptPrinciplesText } from './prompt-principles';
 import { resolveAgentApiEnvVars, resolveRuntimeEnv, resolveRuntimeTmuxEnv } from './runtime-env';
+import { prepareWindowsClaudeSettings } from './windows-claude-settings';
 
 const DEFAULT_COLS = 80;
 const DEFAULT_ROWS = 24;
@@ -90,6 +91,7 @@ export class LocalConversationProvider implements ConversationProvider {
   private readonly tmuxSessionNames = new Map<string, string>();
   private readonly sessionInfos = new Map<string, Omit<ActiveConversationSession, 'detachable'>>();
   private readonly runStateWatchers = new Map<string, RunStateWatcher[]>();
+  private readonly sessionArtifactCleanups = new Map<string, { pty: Pty; cleanup: () => void }>();
 
   constructor({
     projectId,
@@ -202,7 +204,7 @@ export class LocalConversationProvider implements ConversationProvider {
       terminalThemeMode: await resolveTerminalThemeMode(),
       skillPolicy: conversation.skillPolicy,
     });
-    const args = withCodexRuntimeNotifyArgs(conversation.runtimeId, baseArgs, port);
+    const argsWithNotify = withCodexRuntimeNotifyArgs(conversation.runtimeId, baseArgs, port);
 
     const tmuxSessionName = await this.resolveTmuxSessionName(sessionId, tmuxOverride);
     const providerEnv = resolveRuntimeEnv(providerConfig, {
@@ -210,43 +212,60 @@ export class LocalConversationProvider implements ConversationProvider {
       tmuxEnabled: Boolean(tmuxSessionName),
     });
 
-    const resolved = resolveLocalPtySpawn({
-      platform: process.platform,
-      env: process.env,
-      intent: {
-        kind: 'run-command',
-        cwd: this.taskPath,
-        command: { kind: 'argv', command, args },
-        shellSetup: this.shellSetup,
-        tmuxSessionName,
-        tmuxSize: initialSize,
-        tmuxEnv: resolveRuntimeTmuxEnv(providerEnv),
-      },
-    });
-
-    logLocalPtySpawnWarnings('LocalConversationProvider', resolved.warnings, {
-      conversationId: conversation.id,
-      sessionId,
-    });
-
+    const preparedSettings = prepareWindowsClaudeSettings(conversation.runtimeId, argsWithNotify);
+    const args = preparedSettings.args;
     const ptyId = makePtyId(conversation.runtimeId, conversation.id);
     const sessionStartedAtMs = Date.now();
-    const pty = spawnLocalPty({
-      id: sessionId,
-      command: resolved.command,
-      args: resolved.args,
-      cwd: resolved.cwd,
-      env: {
-        ...buildAgentEnv({
-          agentApiVars: resolveAgentApiEnvVars(providerConfig, conversation.runtimeId),
-          hook: port > 0 ? { port, ptyId, token } : undefined,
-          providerVars: providerEnv,
-        }),
-        ...this.taskEnvVars,
-      },
-      cols: initialSize.cols,
-      rows: initialSize.rows,
-    });
+    const pty = (() => {
+      try {
+        const resolved = resolveLocalPtySpawn({
+          platform: process.platform,
+          env: process.env,
+          intent: {
+            kind: 'run-command',
+            cwd: this.taskPath,
+            command: { kind: 'argv', command, args },
+            shellSetup: this.shellSetup,
+            tmuxSessionName,
+            tmuxSize: initialSize,
+            tmuxEnv: resolveRuntimeTmuxEnv(providerEnv),
+          },
+        });
+
+        logLocalPtySpawnWarnings('LocalConversationProvider', resolved.warnings, {
+          conversationId: conversation.id,
+          sessionId,
+        });
+
+        return spawnLocalPty({
+          id: sessionId,
+          command: resolved.command,
+          args: resolved.args,
+          cwd: resolved.cwd,
+          env: {
+            ...buildAgentEnv({
+              agentApiVars: resolveAgentApiEnvVars(providerConfig, conversation.runtimeId),
+              hook: port > 0 ? { port, ptyId, token } : undefined,
+              providerVars: providerEnv,
+            }),
+            ...this.taskEnvVars,
+          },
+          cols: initialSize.cols,
+          rows: initialSize.rows,
+        });
+      } catch (error) {
+        preparedSettings.cleanup?.();
+        throw error;
+      }
+    })();
+
+    if (preparedSettings.cleanup) {
+      this.sessionArtifactCleanups.set(sessionId, {
+        pty,
+        cleanup: preparedSettings.cleanup,
+      });
+      pty.onExit(() => this.cleanupSessionArtifacts(sessionId, pty));
+    }
 
     // Log the logical agent command, not the resolved PTY spawn (the tmux
     // wrapper around it is launch plumbing, useless for debugging the run).
@@ -529,6 +548,20 @@ export class LocalConversationProvider implements ConversationProvider {
     }
   }
 
+  private cleanupSessionArtifacts(sessionId: string, expectedPty?: Pty): void {
+    const entry = this.sessionArtifactCleanups.get(sessionId);
+    if (!entry || (expectedPty && entry.pty !== expectedPty)) return;
+    this.sessionArtifactCleanups.delete(sessionId);
+    try {
+      entry.cleanup();
+    } catch (error) {
+      log.warn('LocalConversation: failed to clean session artifacts', {
+        sessionId,
+        error: String(error),
+      });
+    }
+  }
+
   async stopSession(conversationId: string): Promise<void> {
     const sessionId = makePtySessionId(this.projectId, this.taskId, conversationId);
     this.knownSessionIds.delete(sessionId);
@@ -544,6 +577,7 @@ export class LocalConversationProvider implements ConversationProvider {
       this.sessions.delete(sessionId);
       ptySessionRegistry.unregister(sessionId);
     }
+    this.cleanupSessionArtifacts(sessionId, pty);
     this.sessionInfos.delete(sessionId);
     markRuntimeSessionExited({
       projectId: this.projectId,
@@ -580,7 +614,11 @@ export class LocalConversationProvider implements ConversationProvider {
       try {
         pty.kill();
       } catch {}
+      this.cleanupSessionArtifacts(sessionId, pty);
       ptySessionRegistry.unregister(sessionId);
+    }
+    for (const sessionId of this.sessionArtifactCleanups.keys()) {
+      this.cleanupSessionArtifacts(sessionId);
     }
     for (const info of this.sessionInfos.values()) {
       agentSessionRuntimeStore.remove(info);
