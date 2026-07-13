@@ -137,6 +137,7 @@ const SkillDetailPanel: React.FC<{
       />
       <div className="min-w-0 flex-1">
         <SkillDetailContent
+          key={skill.id}
           skill={skill}
           isLoadingDetail={isDetailLoading}
           onInstall={install}

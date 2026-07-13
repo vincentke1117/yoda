@@ -24,7 +24,7 @@ export function SkillDetailMainPanel() {
     params: { skillId, catalogSection },
   } = useParams('skill');
   if (!skillId) return null;
-  return <SkillDetailPanel key={skillId} skillId={skillId} catalogSection={catalogSection} />;
+  return <SkillDetailPanel skillId={skillId} catalogSection={catalogSection} />;
 }
 
 export const skillDetailView = {
