@@ -67,7 +67,11 @@ describe('scanCodexSkills', () => {
       description: 'Linked skill',
     });
     mkdirSync(join(home, '.agents', 'skills'), { recursive: true });
-    symlinkSync(linkedTarget, join(home, '.agents', 'skills', 'linked-skill'), 'dir');
+    symlinkSync(
+      linkedTarget,
+      join(home, '.agents', 'skills', 'linked-skill'),
+      process.platform === 'win32' ? 'junction' : 'dir'
+    );
 
     const skills = await scanCodexSkills(cwd, { home, codexHome });
     const byName = new Map(skills.map((skill) => [skill.name, skill]));

@@ -66,6 +66,8 @@ export type RuntimeDefinition = {
   description?: string;
   docUrl?: string;
   installCommand?: string;
+  /** Runtime-native command that upgrades an existing installation in place. */
+  updateCommand?: string;
   commands?: string[];
   versionArgs?: string[];
   detectable?: boolean;
@@ -123,6 +125,8 @@ export type RuntimeDefinition = {
    * Runtimes without it ignore the Agent's model (the CLI's own default applies).
    */
   modelFlag?: string;
+  /** Alternate CLI spellings that select the same model (for example `-m`). */
+  modelFlagAliases?: string[];
   newConversationFlag?: string;
   sessionIdOnResumeOnly?: boolean;
   defaultArgs?: string[];
@@ -169,6 +173,8 @@ export type RuntimeAccountProfile = {
     supported: boolean;
     /** Interactive command that lets the user sign in or switch the local CLI account. */
     loginCommand?: string;
+    /** Provider-hosted page that shows the current subscription usage and rate limits. */
+    usageUrl?: string;
   };
   officialApi: {
     envVars: readonly string[];
@@ -243,6 +249,31 @@ export type AgentSubscriptionAccount = {
   error: string | null;
 };
 
+export type AgentAccountRateLimitWindow = {
+  windowMinutes: number;
+  usedPercent: number;
+  resetsAt: string | null;
+};
+
+/** Live subscription quota read from the provider CLI account API. */
+export type AgentAccountUsage = {
+  runtimeId: RuntimeId;
+  supported: boolean;
+  rateLimits: AgentAccountRateLimitWindow[];
+  resetCreditsAvailable: number | null;
+  fetchedAt: string;
+  error: string | null;
+};
+
+export type AgentAccountResetOutcome = 'reset' | 'nothingToReset' | 'noCredit' | 'alreadyRedeemed';
+
+export type AgentAccountResetResult = {
+  runtimeId: RuntimeId;
+  supported: boolean;
+  outcome: AgentAccountResetOutcome | null;
+  error: string | null;
+};
+
 /** Permission tiers for the Claude CLI, shared by its API-compatible clones. */
 const CLAUDE_PERMISSION_MODES: RuntimePermissionMode[] = [
   { id: 'default', labelKey: 'permissionMode.default', args: [] },
@@ -297,6 +328,7 @@ export const RUNTIMES: RuntimeDefinition[] = [
       'CLI that connects to OpenAI models for project-aware code assistance and terminal workflows.',
     docUrl: 'https://github.com/openai/codex',
     installCommand: 'npm install -g @openai/codex',
+    updateCommand: 'codex update',
     commands: ['codex'],
     versionArgs: ['--version'],
     cli: 'codex',
@@ -304,6 +336,7 @@ export const RUNTIMES: RuntimeDefinition[] = [
     permissionModes: CODEX_PERMISSION_MODES,
     initialPromptFlag: '',
     modelFlag: '--model',
+    modelFlagAliases: ['-m'],
     appendSystemPromptConfigKey: 'developer_instructions',
     resumeFlag: 'resume',
     resumeSessionIdArg: true,
@@ -331,6 +364,7 @@ export const RUNTIMES: RuntimeDefinition[] = [
     permissionModes: CLAUDE_PERMISSION_MODES,
     initialPromptFlag: '',
     modelFlag: '--model',
+    modelFlagAliases: ['-m'],
     clipboardImagePaste: true,
     resumeFlag: '--resume',
     sessionIdFlag: '--session-id',
@@ -813,6 +847,7 @@ export const RUNTIMES: RuntimeDefinition[] = [
     permissionModes: CLAUDE_PERMISSION_MODES,
     initialPromptFlag: '',
     modelFlag: '--model',
+    modelFlagAliases: ['-m'],
     clipboardImagePaste: true,
     resumeFlag: '--resume',
     sessionIdFlag: '--session-id',
@@ -840,6 +875,7 @@ export const RUNTIMES: RuntimeDefinition[] = [
     permissionModes: CLAUDE_PERMISSION_MODES,
     initialPromptFlag: '',
     modelFlag: '--model',
+    modelFlagAliases: ['-m'],
     clipboardImagePaste: true,
     resumeFlag: '--resume',
     sessionIdFlag: '--session-id',
@@ -880,7 +916,11 @@ const MULTI_MODEL_API_ENV = [
 
 export const RUNTIME_ACCOUNT_PROFILES = {
   codex: {
-    officialSubscription: { supported: true, loginCommand: 'codex login' },
+    officialSubscription: {
+      supported: true,
+      loginCommand: 'codex login',
+      usageUrl: 'https://chatgpt.com/codex/settings/usage',
+    },
     officialApi: {
       envVars: OPENAI_API_ENV,
       probe: {
@@ -894,7 +934,11 @@ export const RUNTIME_ACCOUNT_PROFILES = {
     maas: { supported: true, providerHints: ['openai', 'azure'] },
   },
   claude: {
-    officialSubscription: { supported: true, loginCommand: 'claude auth login' },
+    officialSubscription: {
+      supported: true,
+      loginCommand: 'claude auth login',
+      usageUrl: 'https://claude.ai/settings/usage',
+    },
     officialApi: {
       envVars: ['ANTHROPIC_API_KEY', 'ANTHROPIC_BASE_URL'],
       probe: {
@@ -1143,6 +1187,10 @@ export function getRuntimeAccountProfile(id: RuntimeId): RuntimeAccountProfile {
 
 export function getInstallCommandForRuntime(id: RuntimeId): string | null {
   return PROVIDER_MAP.get(id)?.installCommand ?? null;
+}
+
+export function getUpdateCommandForRuntime(id: RuntimeId): string | null {
+  return PROVIDER_MAP.get(id)?.updateCommand ?? null;
 }
 
 /**

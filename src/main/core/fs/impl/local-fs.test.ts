@@ -82,9 +82,11 @@ describe('LocalFileSystem', () => {
       const result = await fsService.list('', { recursive: true });
 
       expect(result.entries.some((e) => e.path === 'level1')).toBe(true);
-      expect(result.entries.some((e) => e.path === 'level1/file1.txt')).toBe(true);
-      expect(result.entries.some((e) => e.path === 'level1/level2')).toBe(true);
-      expect(result.entries.some((e) => e.path === 'level1/level2/file2.txt')).toBe(true);
+      expect(result.entries.some((e) => e.path === path.join('level1', 'file1.txt'))).toBe(true);
+      expect(result.entries.some((e) => e.path === path.join('level1', 'level2'))).toBe(true);
+      expect(
+        result.entries.some((e) => e.path === path.join('level1', 'level2', 'file2.txt'))
+      ).toBe(true);
     });
 
     it('should exclude hidden files by default', async () => {
@@ -420,6 +422,37 @@ describe('LocalFileSystem', () => {
             // Ignore
           }
         }
+      }
+    });
+  });
+
+  describe('local file copies', () => {
+    it('copies a local absolute file into the project root', async () => {
+      const sourcePath = path.join(tempDir, '..', `source-${Date.now()}.bin`);
+      fs.writeFileSync(sourcePath, Buffer.from([0, 1, 2, 3]));
+
+      try {
+        await fsService.copyLocalFile(sourcePath, 'nested/copied.bin');
+
+        expect(fs.readFileSync(path.join(tempDir, 'nested/copied.bin'))).toEqual(
+          Buffer.from([0, 1, 2, 3])
+        );
+      } finally {
+        fs.rmSync(sourcePath, { force: true });
+      }
+    });
+
+    it('copies a project file out to a local absolute path', async () => {
+      fs.mkdirSync(path.join(tempDir, 'artifacts'));
+      fs.writeFileSync(path.join(tempDir, 'artifacts/bundle.bin'), Buffer.from([4, 5, 6, 7]));
+      const destPath = path.join(tempDir, '..', `dest-${Date.now()}`, 'bundle.bin');
+
+      try {
+        await fsService.copyToLocalFile('artifacts/bundle.bin', destPath);
+
+        expect(fs.readFileSync(destPath)).toEqual(Buffer.from([4, 5, 6, 7]));
+      } finally {
+        fs.rmSync(path.dirname(destPath), { recursive: true, force: true });
       }
     });
   });

@@ -86,7 +86,7 @@ export const taskSettingsSchema = z.object({
   /** Target language for rewriting the user's input prompt before sending. */
   inputPromptLanguage: z.enum(taskOutputLanguageValues).catch('skip'),
   /** Output language for generated session summaries. */
-  summaryLanguage: z.enum(taskOutputLanguageValues).catch('skip'),
+  summaryLanguage: z.enum(taskOutputLanguageValues).catch('app'),
   /** Which transcript parts feed the `recent` summary (defaults to user-only for speed). */
   summaryContextRecent: summaryContextSchema.catch(DEFAULT_SUMMARY_CONTEXT_RECENT),
   /** Which transcript parts feed the `global` summary (defaults to everything). */
@@ -328,6 +328,8 @@ export const runtimeCustomConfigEntrySchema = z.object({
   sessionIdOnResumeOnly: z.boolean().optional(),
   extraArgs: z.string().optional(),
   env: z.record(z.string(), z.string()).optional(),
+  /** Default model for new sessions when an Agent/slot does not override it. */
+  defaultModel: z.string().optional(),
   namingModel: z.string().optional(),
   namingCommand: z.string().optional(),
 });

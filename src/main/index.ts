@@ -16,11 +16,13 @@ import { resolveQuitAgentSessionsDecision } from './core/app/quit-agent-sessions
 import { appService } from './core/app/service';
 import { automationScheduler } from './core/automation/automation-scheduler';
 import { agentSessionRuntimeStore } from './core/conversations/agent-session-runtime';
+import { sessionSummaryAutoRefreshService } from './core/conversations/session-summary-autorefresh';
 import { localDependencyManager } from './core/dependencies/dependency-manager';
 import { knownBinDirs } from './core/dependencies/probe';
 import { editorBufferService } from './core/editor/editor-buffer-service';
 import { gitWatcherRegistry } from './core/git/git-watcher-registry';
 import { mobileGatewayService } from './core/mobile-gateway/mobile-gateway-service';
+import { mobileRelayService } from './core/mobile-gateway/mobile-relay-service';
 import { ensureInternalProject } from './core/projects/operations/ensureInternalProject';
 import { projectManager } from './core/projects/project-manager';
 import { ptySessionRegistry } from './core/pty/pty-session-registry';
@@ -139,6 +141,7 @@ void app.whenReady().then(async () => {
   try {
     await initializeDatabase();
     __bootMark('initializeDatabase done');
+    sessionSummaryAutoRefreshService.initialize();
     searchService.initialize();
     __bootMark('searchService.initialize done');
     void editorBufferService.pruneStale();
@@ -200,9 +203,20 @@ void app.whenReady().then(async () => {
 
   yodaAccountService.on('accountChanged', (username, userId, email) => {
     void telemetryService.identify(username, userId, email);
+    void mobileRelayService.initialize().catch((error) => {
+      log.warn('Failed to initialize mobile Relay after sign-in', error);
+    });
+  });
+  yodaAccountService.on('accountWillClear', async () => {
+    try {
+      await mobileRelayService.revoke(AbortSignal.timeout(5_000), true);
+    } catch (error) {
+      log.warn('Failed to revoke mobile Relay while signing out', error);
+    }
   });
   yodaAccountService.on('accountCleared', () => {
     telemetryService.clearIdentity();
+    mobileRelayService.disconnect();
   });
 
   gitWatcherRegistry.initialize();
@@ -239,9 +253,12 @@ void app.whenReady().then(async () => {
     log.error('Failed to start automation scheduler:', e);
   });
 
-  yodaAccountService.loadSessionToken().catch((e) => {
-    log.warn('Failed to load account session token:', e);
-  });
+  yodaAccountService
+    .loadSessionToken()
+    .then(() => mobileRelayService.initialize())
+    .catch((e) => {
+      log.warn('Failed to load account session token or initialize Relay:', e);
+    });
 
   // Dependency probe shells out to user tools, so wait for the login-shell
   // PATH to land before probing — otherwise nvm/mise-managed binaries miss.
@@ -268,41 +285,60 @@ process.on('SIGTERM', () => app.quit());
 process.on('SIGINT', () => app.quit());
 
 let shutdownStarted = false;
+let shutdownPromise: Promise<void> | null = null;
 
-function beginShutdown(mode: TeardownMode): void {
-  if (shutdownStarted) return;
+function prepareShutdown(mode: TeardownMode): Promise<void> {
+  if (shutdownPromise) return shutdownPromise;
 
   shutdownStarted = true;
   markAppQuitting();
   telemetryService.capture('app_closed');
-  void telemetryService.dispose().finally(() => {
-    void (async () => {
-      try {
-        agentHookService.dispose();
-        agentSessionRuntimeStore.dispose();
-        mobileGatewayService.dispose();
-        updateService.dispose();
-        prSyncScheduler.dispose();
-        const [gitWatcherResult, projectManagerResult] = await Promise.allSettled([
-          gitWatcherRegistry.dispose(),
-          projectManager.dispose({ mode }),
-        ]);
-        if (gitWatcherResult.status === 'rejected') {
-          log.error('Failed to shutdown git watcher registry:', gitWatcherResult.reason);
-        }
-        if (projectManagerResult.status === 'rejected') {
-          log.error('Failed to detach project manager:', projectManagerResult.reason);
-        }
-      } finally {
-        app.exit(0);
+  shutdownPromise = (async () => {
+    try {
+      await telemetryService.dispose();
+    } catch (error) {
+      log.error('Failed to dispose telemetry during shutdown:', error);
+    }
+
+    try {
+      agentHookService.dispose();
+      sessionSummaryAutoRefreshService.dispose();
+      agentSessionRuntimeStore.dispose();
+      mobileGatewayService.dispose();
+      mobileRelayService.dispose();
+      updateService.dispose();
+      prSyncScheduler.dispose();
+      const [gitWatcherResult, projectManagerResult] = await Promise.allSettled([
+        gitWatcherRegistry.dispose(),
+        projectManager.dispose({ mode }),
+      ]);
+      if (gitWatcherResult.status === 'rejected') {
+        log.error('Failed to shutdown git watcher registry:', gitWatcherResult.reason);
       }
-    })();
+      if (projectManagerResult.status === 'rejected') {
+        log.error('Failed to detach project manager:', projectManagerResult.reason);
+      }
+    } catch (error) {
+      log.error('Unexpected error during application shutdown:', error);
+    }
+  })();
+  return shutdownPromise;
+}
+
+function beginShutdown(mode: TeardownMode): void {
+  void prepareShutdown(mode).finally(() => {
+    app.exit(0);
   });
 }
 
+updateService.setPrepareInstallRestart(() => prepareShutdown('terminate'));
+
 app.on('before-quit', (event) => {
-  event.preventDefault();
+  // Once cleanup has completed, the updater must be allowed to own the real
+  // quit. Preventing this event makes Squirrel.Mac relaunch the unchanged app.
   if (shutdownStarted) return;
+
+  event.preventDefault();
 
   const summary = taskManager.getActiveAgentSessionSummary();
   if (summary.running <= 0) {

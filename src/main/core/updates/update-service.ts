@@ -1,3 +1,4 @@
+import { app, session, type Session } from 'electron';
 import _electronUpdater, {
   type ProgressInfo,
   type UpdateInfo,
@@ -24,6 +25,8 @@ import { appSettingsService } from '@main/core/settings/settings-service';
 import { events } from '@main/lib/events';
 import type { IDisposable, IInitializable } from '@main/lib/lifecycle';
 import { log } from '@main/lib/logger';
+import { handoffInstallRestart } from './install-restart';
+import { MacSparkleUpdater, type SparkleDownloadProgress } from './mac-sparkle-updater';
 import { formatUpdaterError, sanitizeUpdaterLogArgs } from './utils';
 
 const { autoUpdater } = _electronUpdater;
@@ -33,6 +36,9 @@ const ALLOW_DOWNGRADE = false;
 const CHECK_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 const STARTUP_DELAY_MS = 30 * 1000; // 30 seconds
 const INSTALL_RESTART_GUARD_TIMEOUT_MS = 2 * 60 * 1000;
+const USE_SPARKLE = process.platform === 'darwin';
+
+type PrepareInstallRestart = () => Promise<void>;
 
 export interface UpdateState {
   status: 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'installing' | 'error';
@@ -60,8 +66,10 @@ class UpdateService implements IInitializable, IDisposable {
   private active = false;
   private installRequested = false;
   private installRestartGuardTimer?: NodeJS.Timeout;
+  private prepareInstallRestart: PrepareInstallRestart = async () => {};
   private appliedFeedUrl: string | null = null;
   private appliedFeedSource: UpdatesSettings['source'] | null = null;
+  private readonly macUpdater = USE_SPARKLE ? new MacSparkleUpdater() : null;
 
   constructor() {
     this.updateState = {
@@ -78,13 +86,16 @@ class UpdateService implements IInitializable, IDisposable {
 
     if (import.meta.env.DEV) return;
 
-    this.setupAutoUpdater();
-    this.setupEventListeners();
+    if (!USE_SPARKLE) {
+      this.setupAutoUpdater();
+      this.setupEventListeners();
+    }
     this.active = true;
 
     log.info('AutoUpdateService initialized', {
       version: this.updateState.currentVersion,
       channel: UPDATE_CHANNEL,
+      backend: USE_SPARKLE ? 'sparkle-delta-only' : 'electron-updater',
     });
 
     this.scheduleNextCheck(STARTUP_DELAY_MS);
@@ -100,7 +111,7 @@ class UpdateService implements IInitializable, IDisposable {
     autoUpdater.requestHeaders = { 'Cache-Control': 'no-cache' };
 
     const updaterLogger: UpdaterLogger = {
-      info: (...args: unknown[]) => log.debug('[autoUpdater]', ...sanitizeUpdaterLogArgs(args)),
+      info: (...args: unknown[]) => log.info('[autoUpdater]', ...sanitizeUpdaterLogArgs(args)),
       warn: (...args: unknown[]) => log.warn('[autoUpdater]', ...sanitizeUpdaterLogArgs(args)),
       error: (...args: unknown[]) => log.error('[autoUpdater]', ...sanitizeUpdaterLogArgs(args)),
     };
@@ -127,26 +138,7 @@ class UpdateService implements IInitializable, IDisposable {
     });
 
     autoUpdater.on('error', (err: Error) => {
-      const errorMessage = formatUpdaterError(err);
-      log.error('Auto-updater error:', errorMessage);
-
-      if (this.updateState.status === 'installing') {
-        log.warn('Ignoring auto-updater error while install is in progress');
-        return;
-      }
-
-      const previousVersion = this.updateState.availableVersion;
-      const previousInfo = this.updateState.updateInfo;
-
-      this.updateState.status = 'error';
-      this.updateState.error = errorMessage;
-
-      if (previousVersion) {
-        this.updateState.availableVersion = previousVersion;
-        this.updateState.updateInfo = previousInfo;
-      }
-
-      events.emit(updateErrorEvent, { message: errorMessage });
+      this.handleUpdaterError(err);
     });
 
     autoUpdater.on('download-progress', (progressObj: ProgressInfo) => {
@@ -212,6 +204,10 @@ class UpdateService implements IInitializable, IDisposable {
       feedUrl: feed.url,
     });
 
+    if (USE_SPARKLE) {
+      return await this.performSparkleCheck(feed.url);
+    }
+
     const result = await autoUpdater.checkForUpdatesAndNotify();
     return result?.updateInfo ?? null;
   }
@@ -238,7 +234,7 @@ class UpdateService implements IInitializable, IDisposable {
     const feed = this.resolveUpdateFeedConfig(cfg);
 
     if (feed.url !== this.appliedFeedUrl || feed.source !== this.appliedFeedSource) {
-      autoUpdater.setFeedURL(feed.url);
+      if (!USE_SPARKLE) autoUpdater.setFeedURL(feed.url);
       this.appliedFeedUrl = feed.url;
       this.appliedFeedSource = feed.source;
       log.info('Updater feed source applied', {
@@ -259,7 +255,7 @@ class UpdateService implements IInitializable, IDisposable {
    */
   private async applyProxyConfig(proxyProbeUrl: string): Promise<void> {
     try {
-      const sess = autoUpdater.netSession;
+      const sess = this.getUpdateSession();
       if (!sess) return;
 
       const cfg = await appSettingsService.get('updates');
@@ -298,7 +294,16 @@ class UpdateService implements IInitializable, IDisposable {
 
     try {
       await this.applyProxyConfig(this.appliedFeedUrl ?? UPDATE_FEED_BASE_URL);
-      await autoUpdater.downloadUpdate();
+      if (USE_SPARKLE) {
+        await this.requireMacUpdater().download(this.requireUpdateSession(), (progress) => {
+          this.handleSparkleProgress(progress);
+        });
+        this.updateState.status = 'downloaded';
+        this.updateState.rollbackVersion = this.updateState.currentVersion;
+        events.emit(updateDownloadedEvent, { version: this.updateState.availableVersion });
+      } else {
+        await autoUpdater.downloadUpdate();
+      }
     } catch (error: unknown) {
       const errorMessage = formatUpdaterError(error);
       log.error('Update download failed:', errorMessage, error);
@@ -314,6 +319,10 @@ class UpdateService implements IInitializable, IDisposable {
       events.emit(updateErrorEvent, { message: errorMessage });
       throw error;
     }
+  }
+
+  setPrepareInstallRestart(handler: PrepareInstallRestart): void {
+    this.prepareInstallRestart = handler;
   }
 
   quitAndInstall(): void {
@@ -360,11 +369,24 @@ class UpdateService implements IInitializable, IDisposable {
     }, INSTALL_RESTART_GUARD_TIMEOUT_MS);
 
     setTimeout(() => {
-      try {
-        autoUpdater.quitAndInstall(false, true);
-      } catch (error) {
-        rollback(`quitAndInstall threw: ${formatUpdaterError(error)}`);
-      }
+      void (async () => {
+        if (USE_SPARKLE) {
+          await this.applyProxyConfig(this.appliedFeedUrl ?? UPDATE_FEED_BASE_URL);
+        }
+        await handoffInstallRestart(this.prepareInstallRestart, async () => {
+          if (USE_SPARKLE) {
+            log.info('Application cleanup completed; handing restart to Sparkle');
+            await this.requireMacUpdater().launchInstall(this.requireUpdateSession());
+            app.quit();
+            return;
+          }
+
+          log.info('Application cleanup completed; handing restart to auto-updater');
+          autoUpdater.quitAndInstall(false, true);
+        });
+      })().catch((error) => {
+        rollback(`Failed to prepare update restart: ${formatUpdaterError(error)}`);
+      });
     }, 250);
   }
 
@@ -414,6 +436,10 @@ class UpdateService implements IInitializable, IDisposable {
     return { ...this.updateState };
   }
 
+  isActive(): boolean {
+    return this.active;
+  }
+
   dispose(): void {
     if (this.checkTimer) {
       clearTimeout(this.checkTimer);
@@ -423,6 +449,78 @@ class UpdateService implements IInitializable, IDisposable {
       clearTimeout(this.installRestartGuardTimer);
       this.installRestartGuardTimer = undefined;
     }
+    this.macUpdater?.dispose();
+  }
+
+  private async performSparkleCheck(feedBaseUrl: string): Promise<UpdateInfo | null> {
+    this.updateState.status = 'checking';
+    this.updateState.lastCheck = new Date();
+    events.emit(updateCheckingEvent, undefined);
+
+    try {
+      const info = await this.requireMacUpdater().check(
+        feedBaseUrl,
+        this.updateState.currentVersion,
+        this.requireUpdateSession()
+      );
+      if (!info) {
+        this.updateState.status = 'idle';
+        this.updateState.availableVersion = undefined;
+        this.updateState.updateInfo = undefined;
+        events.emit(updateNotAvailableEvent, undefined);
+        return null;
+      }
+
+      this.updateState.status = 'available';
+      this.updateState.availableVersion = info.version;
+      this.updateState.updateInfo = info;
+      events.emit(updateAvailableEvent, { version: info.version, updateInfo: info });
+      return info;
+    } catch (error) {
+      this.handleUpdaterError(error);
+      throw error;
+    }
+  }
+
+  private handleSparkleProgress(progress: SparkleDownloadProgress): void {
+    this.updateState.status = 'downloading';
+    this.updateState.downloadProgress = progress;
+    events.emit(updateProgressEvent, progress);
+  }
+
+  private handleUpdaterError(error: unknown): void {
+    const errorMessage = formatUpdaterError(error);
+    log.error('Auto-updater error:', errorMessage);
+
+    if (this.updateState.status === 'installing') {
+      log.warn('Ignoring auto-updater error while install is in progress');
+      return;
+    }
+
+    const previousVersion = this.updateState.availableVersion;
+    const previousInfo = this.updateState.updateInfo;
+    this.updateState.status = 'error';
+    this.updateState.error = errorMessage;
+    if (previousVersion) {
+      this.updateState.availableVersion = previousVersion;
+      this.updateState.updateInfo = previousInfo;
+    }
+    events.emit(updateErrorEvent, { message: errorMessage });
+  }
+
+  private getUpdateSession(): Session | undefined {
+    return USE_SPARKLE ? session.fromPartition('yoda-sparkle-updater') : autoUpdater.netSession;
+  }
+
+  private requireUpdateSession(): Session {
+    const updateSession = this.getUpdateSession();
+    if (!updateSession) throw new Error('Update network session is unavailable');
+    return updateSession;
+  }
+
+  private requireMacUpdater(): MacSparkleUpdater {
+    if (!this.macUpdater) throw new Error('Sparkle updater is unavailable on this platform');
+    return this.macUpdater;
   }
 }
 

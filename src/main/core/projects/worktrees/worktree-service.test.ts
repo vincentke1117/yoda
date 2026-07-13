@@ -8,7 +8,7 @@ import { LocalExecutionContext } from '@main/core/execution-context/local-execut
 import type { ProjectSettingsProvider } from '../settings/provider';
 import { LocalWorktreeHost } from './hosts/local-worktree-host';
 import type { WorktreeHost } from './hosts/worktree-host';
-import { WorktreeService } from './worktree-service';
+import { normalizePoolResidentPath, WorktreeService } from './worktree-service';
 
 async function git(
   args: string[],
@@ -71,9 +71,11 @@ describe('WorktreeService', () => {
     });
   });
 
-  afterEach(() => {
-    fs.rmSync(repoDir, { recursive: true, force: true });
-    fs.rmSync(poolDir, { recursive: true, force: true });
+  afterEach(async () => {
+    await Promise.all([
+      fs.promises.rm(repoDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 25 }),
+      fs.promises.rm(poolDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 25 }),
+    ]);
   });
 
   function makeService(
@@ -202,7 +204,9 @@ describe('WorktreeService', () => {
 
       expect(result.success).toBe(true);
       if (!result.success) throw new Error('expected success');
-      expect(result.data).toBe(fs.realpathSync(externalPath));
+      // Yoda may return forward-slash worktree paths even on Windows; normalize
+      // both sides before comparing so the assert is separator-agnostic.
+      expect(path.normalize(result.data)).toBe(path.normalize(fs.realpathSync(externalPath)));
 
       fs.rmSync(externalDir, { recursive: true, force: true });
     });
@@ -250,7 +254,9 @@ describe('WorktreeService', () => {
 
       expect(result.success).toBe(true);
       if (!result.success) throw new Error('expected success');
-      expect(result.data).toBe(fs.realpathSync(externalPath));
+      // Yoda may return forward-slash worktree paths even on Windows; normalize
+      // both sides before comparing so the assert is separator-agnostic.
+      expect(path.normalize(result.data)).toBe(path.normalize(fs.realpathSync(externalPath)));
 
       fs.rmSync(externalDir, { recursive: true, force: true });
     });
@@ -330,5 +336,111 @@ describe('WorktreeService', () => {
         fs.rmSync(remoteDir, { recursive: true, force: true });
       }
     });
+
+    it('fast-forwards a checked out branch when only untracked files are present', async () => {
+      const remoteDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wt-ff-untracked-'));
+      try {
+        await git(['init', '--bare'], { cwd: remoteDir });
+        await git(['remote', 'add', 'origin', remoteDir], { cwd: repoDir });
+        await git(['push', '-u', 'origin', 'main'], { cwd: repoDir });
+        await git(['commit', '--allow-empty', '-m', 'remote update'], { cwd: repoDir });
+        await git(['push', 'origin', 'main'], { cwd: repoDir });
+        const remoteHead = await git(['rev-parse', 'HEAD'], { cwd: repoDir });
+        await git(['reset', '--hard', 'HEAD~1'], { cwd: repoDir });
+        fs.mkdirSync(path.join(repoDir, '.worktrees'), { recursive: true });
+        fs.writeFileSync(path.join(repoDir, '.worktrees', 'local-task'), 'local metadata');
+
+        const svc = makeService();
+        const result = await svc.checkoutExistingBranch('main', {
+          type: 'remote',
+          branch: 'main',
+          remote: originRemote(remoteDir),
+        });
+
+        expect(result.success).toBe(true);
+        if (!result.success) throw new Error('expected success');
+        expect(result.data).toBe(fs.realpathSync(repoDir));
+        const localHead = await git(['rev-parse', 'main'], { cwd: repoDir });
+        expect(localHead.stdout.trim()).toBe(remoteHead.stdout.trim());
+        expect(fs.existsSync(path.join(repoDir, '.worktrees', 'local-task'))).toBe(true);
+      } finally {
+        fs.rmSync(remoteDir, { recursive: true, force: true });
+      }
+    });
+
+    it('does not fast-forward a checked out branch with tracked changes', async () => {
+      const remoteDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wt-ff-tracked-'));
+      try {
+        await git(['init', '--bare'], { cwd: remoteDir });
+        await git(['remote', 'add', 'origin', remoteDir], { cwd: repoDir });
+        fs.writeFileSync(path.join(repoDir, 'tracked.txt'), 'base');
+        await git(['add', 'tracked.txt'], { cwd: repoDir });
+        await git(['commit', '-m', 'add tracked file'], { cwd: repoDir });
+        await git(['push', '-u', 'origin', 'main'], { cwd: repoDir });
+        await git(['commit', '--allow-empty', '-m', 'remote update'], { cwd: repoDir });
+        await git(['push', 'origin', 'main'], { cwd: repoDir });
+        await git(['reset', '--hard', 'HEAD~1'], { cwd: repoDir });
+        fs.writeFileSync(path.join(repoDir, 'tracked.txt'), 'local edit');
+
+        const svc = makeService();
+        const result = await svc.checkoutExistingBranch('main', {
+          type: 'remote',
+          branch: 'main',
+          remote: originRemote(remoteDir),
+        });
+
+        expect(result.success).toBe(false);
+        if (result.success) throw new Error('expected failure');
+        expect(result.error.type).toBe('worktree-setup-failed');
+      } finally {
+        fs.rmSync(remoteDir, { recursive: true, force: true });
+      }
+    });
+  });
+});
+
+describe('normalizePoolResidentPath', () => {
+  it('normalizes mixed Windows separators inside the worktree pool', () => {
+    expect(
+      normalizePoolResidentPath(
+        path.win32,
+        'C:\\Users\\mark\\.yoda\\worktrees',
+        'C:/Users/mark/.yoda/worktrees/task'
+      )
+    ).toBe('C:\\Users\\mark\\.yoda\\worktrees\\task');
+  });
+
+  it('accepts Windows paths whose drive and directory casing differs', () => {
+    expect(
+      normalizePoolResidentPath(
+        path.win32,
+        'C:\\Users\\Mark\\Worktrees',
+        'c:\\users\\mark\\worktrees\\task'
+      )
+    ).toBe('c:\\users\\mark\\worktrees\\task');
+  });
+
+  it('rejects Windows sibling prefixes and other drives', () => {
+    expect(
+      normalizePoolResidentPath(path.win32, 'C:\\pool', 'C:\\pool-other\\task')
+    ).toBeUndefined();
+    expect(normalizePoolResidentPath(path.win32, 'C:\\pool', 'D:\\pool\\task')).toBeUndefined();
+  });
+
+  it('keeps POSIX paths unchanged for SSH worktrees', () => {
+    expect(
+      normalizePoolResidentPath(
+        path.posix,
+        '/home/dev/.yoda/worktrees',
+        '/home/dev/.yoda/worktrees/task'
+      )
+    ).toBe('/home/dev/.yoda/worktrees/task');
+    expect(
+      normalizePoolResidentPath(
+        path.posix,
+        '/home/dev/.yoda/worktrees',
+        '/home/dev/.yoda/worktrees-old/task'
+      )
+    ).toBeUndefined();
   });
 });

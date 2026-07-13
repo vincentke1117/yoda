@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   logWarn: vi.fn(),
   maybeAutoTrustLocal: vi.fn(),
   prepareHookConfig: vi.fn(),
+  prepareWindowsClaudeSettings: vi.fn(),
   ensureCodexThreadUnarchived: vi.fn(),
   resolveAvailableTmuxSessionName: vi.fn(),
   resolveAgentResumeSessionId: vi.fn(),
@@ -124,6 +125,10 @@ vi.mock('@main/core/pty/tmux-session-name', () => ({
   killTmuxSession: vi.fn(),
   makeTmuxSessionName: (sessionId: string) => `tmux-${sessionId}`,
   sendLiteralToTmuxSession: mocks.sendLiteralToTmuxSession,
+}));
+
+vi.mock('./windows-claude-settings', () => ({
+  prepareWindowsClaudeSettings: mocks.prepareWindowsClaudeSettings,
 }));
 
 vi.mock('@main/core/session-title/session-title-manager', () => ({
@@ -252,6 +257,9 @@ describe('LocalConversationProvider', () => {
     );
     mocks.maybeAutoTrustLocal.mockResolvedValue(undefined);
     mocks.prepareHookConfig.mockResolvedValue(undefined);
+    mocks.prepareWindowsClaudeSettings.mockImplementation((_runtimeId: string, args: string[]) => ({
+      args,
+    }));
     mocks.ensureCodexThreadUnarchived.mockResolvedValue(undefined);
     mocks.sendLiteralToTmuxSession.mockResolvedValue(undefined);
     mocks.resolveAgentResumeSessionId.mockImplementation((conversation: Conversation) => {
@@ -374,9 +382,17 @@ describe('LocalConversationProvider', () => {
     await provider.startSession(codexConversation, { cols: 80, rows: 24 }, false, 'Fix this');
 
     expect(spawned[0].options.args[0]).toBe('-c');
-    expect(spawned[0].options.args[1]).toContain('notify=["bash","-c"');
-    // Notify now reads the live hook endpoint file at fire-time (survives restarts).
-    expect(spawned[0].options.args[1]).toContain('hook-endpoint.json');
+    // The notify helper is bash -c on POSIX, powershell.exe -File on Windows.
+    const notifyPrefix =
+      process.platform === 'win32' ? 'notify=["powershell.exe"' : 'notify=["bash","-c"';
+    expect(spawned[0].options.args[1]).toContain(notifyPrefix);
+    // Notify reads the live hook endpoint at fire-time (survives restarts): the
+    // bash helper inlines the hook-endpoint.json read; the .ps1 helper wraps it.
+    if (process.platform === 'win32') {
+      expect(spawned[0].options.args[1]).toContain('.ps1');
+    } else {
+      expect(spawned[0].options.args[1]).toContain('hook-endpoint.json');
+    }
     expect(spawned[0].options.args[1]).not.toContain('YODA_HOOK_PORT');
     expect(spawned[0].options.args.slice(2)).toEqual(['Fix this']);
   });
@@ -512,5 +528,56 @@ describe('LocalConversationProvider', () => {
       },
       'idle'
     );
+  });
+
+  it('cleans prepared Windows Claude settings after the PTY exits', async () => {
+    const cleanup = vi.fn();
+    mocks.prepareWindowsClaudeSettings.mockReturnValue({
+      args: ['--settings', 'C:\\Temp Root\\settings.json'],
+      cleanup,
+    });
+    const provider = createProvider();
+
+    await provider.startSession(conversation, { cols: 80, rows: 24 }, false, 'Fix this');
+    expect(spawned[0].options.args).toEqual(['--settings', 'C:\\Temp Root\\settings.json']);
+
+    spawned[0].pty.emitExit({ exitCode: 0 });
+    expect(cleanup).toHaveBeenCalledTimes(1);
+  });
+
+  it('cleans prepared settings when spawning the PTY fails', async () => {
+    const cleanup = vi.fn();
+    mocks.prepareWindowsClaudeSettings.mockReturnValue({ args: [], cleanup });
+    mocks.spawnLocalPty.mockImplementationOnce(() => {
+      throw new Error('spawn failed');
+    });
+    const provider = createProvider();
+
+    await expect(
+      provider.startSession(conversation, { cols: 80, rows: 24 }, false, 'Fix this')
+    ).rejects.toThrow('spawn failed');
+    expect(cleanup).toHaveBeenCalledTimes(1);
+  });
+
+  it('cleans prepared settings when a session is stopped', async () => {
+    const cleanup = vi.fn();
+    mocks.prepareWindowsClaudeSettings.mockReturnValue({ args: [], cleanup });
+    const provider = createProvider();
+
+    await provider.startSession(conversation, { cols: 80, rows: 24 }, false, 'Fix this');
+    await provider.stopSession(conversation.id);
+
+    expect(cleanup).toHaveBeenCalledTimes(1);
+  });
+
+  it('cleans prepared settings when all PTYs are detached', async () => {
+    const cleanup = vi.fn();
+    mocks.prepareWindowsClaudeSettings.mockReturnValue({ args: [], cleanup });
+    const provider = createProvider();
+
+    await provider.startSession(conversation, { cols: 80, rows: 24 }, false, 'Fix this');
+    await provider.detachAll();
+
+    expect(cleanup).toHaveBeenCalledTimes(1);
   });
 });
