@@ -16,6 +16,11 @@ const PATH_TRAILING = `\\s"')\\]}>,，。；;!?！？.(（）「」『』【】�
 // File extension: 1–32 path chars after a dot, but the final char may not be a
 // dot so a trailing sentence period (`foo.md.`) is left out of the link.
 const PATH_EXT = `[^${PATH_SEG_EXCLUDED}\\/]{0,31}[^${PATH_SEG_EXCLUDED}\\/.]`;
+const PATH_SEG_TOKEN = `[^${PATH_SEG_EXCLUDED}\\/]+`;
+// Unquoted absolute paths may contain one internal ASCII-space boundary per
+// directory component (`Application Support/`). Keeping the allowance local
+// prevents prose such as `/project and src/main.ts` from becoming one link.
+const ABSOLUTE_PATH_SEGMENT = `${PATH_SEG_TOKEN}(?: +${PATH_SEG_TOKEN})?`;
 // A path is either a file (one or more `dir/` segments + a `name.ext`, optional
 // `:line:col`) OR a directory (one or more `dir/` segments ending in a slash,
 // no filename). Making the filename tail optional lets a trailing-slash run
@@ -26,6 +31,14 @@ const FILE_PATH_CANDIDATE_REGEX = new RegExp(
   `(^|[${PATH_LEADING}])(@?(?:(?:~|\\.{1,2})\\/|\\/)?(?:[^${PATH_SEG_EXCLUDED}]+\\/)+(?:[^${PATH_SEG_EXCLUDED}\\/]*\\.${PATH_EXT}(?::\\d+(?::\\d+)?)?)?)(?=$|[${PATH_TRAILING}])`,
   'gu'
 );
+const ROOTED_FILE_PATH_CANDIDATE_REGEX = new RegExp(
+  `(^|[${PATH_LEADING}])(@?\\/(?:${ABSOLUTE_PATH_SEGMENT}\\/)+?[^${PATH_SEG_EXCLUDED}\\/]*\\.${PATH_EXT}(?::\\d+(?::\\d+)?)?)(?!(?:\\.| +)${PATH_SEG_TOKEN}\\/)(?=$|[${PATH_TRAILING}])`,
+  'gu'
+);
+const FILE_PATH_CANDIDATE_REGEXES = [
+  { regex: ROOTED_FILE_PATH_CANDIDATE_REGEX, requiresSpace: true },
+  { regex: FILE_PATH_CANDIDATE_REGEX, requiresSpace: false },
+];
 
 export interface TerminalFileLinkTarget {
   originalText: string;
@@ -75,19 +88,26 @@ export interface TerminalFileLinkMatch {
 export function extractTerminalFileLinkCandidates(line: string): TerminalFileLinkCandidate[] {
   const candidates: TerminalFileLinkCandidate[] = [];
 
-  for (const match of line.matchAll(FILE_PATH_CANDIDATE_REGEX)) {
-    const text = match[2];
-    if (!text) continue;
-    if (text.includes('://') || text.startsWith('//')) continue;
+  for (const { regex, requiresSpace } of FILE_PATH_CANDIDATE_REGEXES) {
+    for (const match of line.matchAll(regex)) {
+      const text = match[2];
+      if (!text) continue;
+      if (requiresSpace && !text.includes(' ')) continue;
+      if (text.includes('://') || text.startsWith('//')) continue;
 
-    const leading = match[1] ?? '';
-    candidates.push({
-      text,
-      index: match.index + leading.length,
-    });
+      const leading = match[1] ?? '';
+      const index = match.index + leading.length;
+      const end = index + text.length;
+      const overlapsExisting = candidates.some(
+        (candidate) => index < candidate.index + candidate.text.length && candidate.index < end
+      );
+      if (overlapsExisting) continue;
+
+      candidates.push({ text, index });
+    }
   }
 
-  return candidates;
+  return candidates.sort((left, right) => left.index - right.index);
 }
 
 export function getTerminalFileLinkMatches(
@@ -494,7 +514,7 @@ function getWindowedLineStrings(lineIndex: number, terminal: Terminal): [string[
   if (!line) return [lines, topIndex];
 
   const currentContent = line.translateToString(true);
-  if (line.isWrapped && currentContent[0] !== ' ') {
+  if (line.isWrapped) {
     length = 0;
     while (
       (line = terminal.buffer.active.getLine(--topIndex)) &&
@@ -503,7 +523,7 @@ function getWindowedLineStrings(lineIndex: number, terminal: Terminal): [string[
       content = line.translateToString(true);
       length += content.length;
       lines.push(content);
-      if (!line.isWrapped || content.includes(' ')) break;
+      if (!line.isWrapped) break;
     }
     lines.reverse();
   }
@@ -519,7 +539,6 @@ function getWindowedLineStrings(lineIndex: number, terminal: Terminal): [string[
     content = line.translateToString(true);
     length += content.length;
     lines.push(content);
-    if (content.includes(' ')) break;
   }
 
   return [lines, topIndex];

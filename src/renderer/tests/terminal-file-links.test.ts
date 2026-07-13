@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   extractTerminalFileLinkCandidates,
+  getTerminalFileLinkMatches,
   resolveTerminalFileLinkTarget,
 } from '@renderer/lib/pty/terminal-file-links';
 import { isTerminalLinkCellInRange } from '@renderer/lib/pty/terminal-link-target';
+import { makeTerminal } from './helpers/mock-terminal';
 
 describe('terminal file links', () => {
   it('extracts generated artifact paths after Chinese labels', () => {
@@ -23,6 +25,64 @@ describe('terminal file links', () => {
         text: 'src/main/index.ts:12:3',
         index: 'open '.length,
       },
+    ]);
+  });
+
+  it('extracts a rooted path whose directory segment contains a space', () => {
+    const line =
+      '- /Users/mark/Library/Application Support/com.lovstudio.ymux/logs/web-1779785445.log:14331 已记录重新编译成功';
+    const expected =
+      '/Users/mark/Library/Application Support/com.lovstudio.ymux/logs/web-1779785445.log:14331';
+
+    expect(extractTerminalFileLinkCandidates(line)).toEqual([
+      { text: expected, index: line.indexOf(expected) },
+    ]);
+  });
+
+  it('keeps separate rooted paths from being merged through prose', () => {
+    const first = '/Users/mark/Library/Application Support/yoda/first.log';
+    const second = '/Users/mark/Library/Application Support/yoda/second.log';
+    const line = `日志 ${first} and ${second}`;
+
+    expect(extractTerminalFileLinkCandidates(line)).toEqual([
+      { text: first, index: line.indexOf(first) },
+      { text: second, index: line.indexOf(second) },
+    ]);
+  });
+
+  it('does not merge an incomplete rooted path through prose into a later path', () => {
+    const line = '目录 /Users/mark/foo and /tmp/second.log';
+    const expected = '/tmp/second.log';
+
+    expect(extractTerminalFileLinkCandidates(line)).toEqual([
+      { text: expected, index: line.indexOf(expected) },
+    ]);
+  });
+
+  it('does not merge an incomplete absolute path through prose into a relative path', () => {
+    const line = '见 /Users/mark/project and src/main/index.ts';
+    const expected = 'src/main/index.ts';
+
+    expect(extractTerminalFileLinkCandidates(line)).toEqual([
+      { text: expected, index: line.indexOf(expected) },
+    ]);
+  });
+
+  it('does not merge absolute-path-like prose into a later dot-relative path', () => {
+    const line = '说明 /Users are people and ./src/main.ts';
+    const expected = './src/main.ts';
+
+    expect(extractTerminalFileLinkCandidates(line)).toEqual([
+      { text: expected, index: line.indexOf(expected) },
+    ]);
+  });
+
+  it('keeps a dotted spaced directory inside one absolute path', () => {
+    const line = '日志 /Users/mark/.cache folder/yoda/app.log';
+    const expected = '/Users/mark/.cache folder/yoda/app.log';
+
+    expect(extractTerminalFileLinkCandidates(line)).toEqual([
+      { text: expected, index: line.indexOf(expected) },
     ]);
   });
 
@@ -96,6 +156,14 @@ describe('terminal file links', () => {
 
   it('does not match a multi-segment path without an extension or trailing slash', () => {
     expect(extractTerminalFileLinkCandidates('see src/main here')).toEqual([]);
+  });
+
+  it('leaves absolute paths without spaces to the strict matcher', () => {
+    const expected = '/foo/./bar.ts';
+
+    expect(extractTerminalFileLinkCandidates(`see ${expected}`)).toEqual([
+      { text: expected, index: 'see '.length },
+    ]);
   });
 
   it('resolves a workspace-relative directory to its folder (no filePath)', () => {
@@ -173,6 +241,60 @@ describe('terminal file links', () => {
 
   it('returns null for ~/ paths when no home dir is provided', () => {
     expect(resolveTerminalFileLinkTarget('~/Documents/foo.md')).toBeNull();
+  });
+
+  it('recognizes the complete hard-wrapped path with a spaced directory from either row', () => {
+    const terminal = makeTerminal([
+      '- /Users/mark/Library/Application Support/com.lovstudio.ymux/logs/web-',
+      '1779785445.log:14331 已记录重新编译成功后续 200',
+    ]);
+    const text =
+      '/Users/mark/Library/Application Support/com.lovstudio.ymux/logs/web-1779785445.log:14331';
+    const expected = {
+      range: { start: { x: 3, y: 1 }, end: { x: 20, y: 2 } },
+      text,
+      target: {
+        originalText: text,
+        absolutePath:
+          '/Users/mark/Library/Application Support/com.lovstudio.ymux/logs/web-1779785445.log',
+        line: 14331,
+        column: undefined,
+      },
+    };
+    const options = {
+      workspaceRoot: '/Users/mark/lovstudio/coding/web',
+      onOpen: (): void => undefined,
+    };
+
+    expect(getTerminalFileLinkMatches(terminal, 1, options)).toEqual([expected]);
+    expect(getTerminalFileLinkMatches(terminal, 2, options)).toEqual([expected]);
+  });
+
+  it('recognizes a spaced absolute path across every row of a soft wrap', () => {
+    const terminal = makeTerminal([
+      '- /Users/mark/Library/Application',
+      { text: ' Support/com.lovstudio.ymux/logs/', isWrapped: true },
+      { text: 'web.log:12 后续', isWrapped: true },
+    ]);
+    const text = '/Users/mark/Library/Application Support/com.lovstudio.ymux/logs/web.log:12';
+    const expected = {
+      range: { start: { x: 3, y: 1 }, end: { x: 10, y: 3 } },
+      text,
+      target: {
+        originalText: text,
+        absolutePath: '/Users/mark/Library/Application Support/com.lovstudio.ymux/logs/web.log',
+        line: 12,
+        column: undefined,
+      },
+    };
+    const options = {
+      workspaceRoot: '/Users/mark/lovstudio/coding/web',
+      onOpen: (): void => undefined,
+    };
+
+    expect(getTerminalFileLinkMatches(terminal, 1, options)).toEqual([expected]);
+    expect(getTerminalFileLinkMatches(terminal, 2, options)).toEqual([expected]);
+    expect(getTerminalFileLinkMatches(terminal, 3, options)).toEqual([expected]);
   });
 });
 
