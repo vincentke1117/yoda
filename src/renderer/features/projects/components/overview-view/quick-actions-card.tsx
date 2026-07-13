@@ -3,6 +3,7 @@ import { observer } from 'mobx-react-lite';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { QuickAction } from '@shared/project-settings';
+import { openFeature } from '@renderer/features/features/feature-navigation';
 import { runProjectCommand } from '@renderer/features/projects/run-project-command';
 import {
   asMounted,
@@ -28,6 +29,7 @@ export const QuickActionsCard = observer(function QuickActionsCard({
   const settingsStore = getProjectSettingsStore(projectId);
   const repo = getRepositoryStore(projectId);
   const showManage = useShowModal('manageQuickActionsModal');
+  const showCreateFeature = useShowModal('createFeatureModal');
 
   const { value: homeDraft } = useAppSettingsKey('homeDraft');
   const connectionId = project?.data?.type === 'ssh' ? project.data.connectionId : undefined;
@@ -40,7 +42,10 @@ export const QuickActionsCard = observer(function QuickActionsCard({
   const [runningId, setRunningId] = useState<string | null>(null);
 
   const handleNewRequirement = () => {
-    navigate('home', { projectId });
+    showCreateFeature({
+      projectId,
+      onSuccess: (feature) => openFeature(projectId, feature.id),
+    });
   };
 
   const handleRun = async (action: QuickAction) => {

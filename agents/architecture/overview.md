@@ -29,4 +29,5 @@
 - Main process details: `main-process.md`
 - Renderer details: `renderer.md`
 - Shared modules and provider registry: `shared.md`
+- Feature delivery aggregate and stage gates: `features.md`
 - Mobile app and gateway: `mobile.md`
