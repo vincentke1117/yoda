@@ -6,6 +6,7 @@ import {
   FileSearch,
   Megaphone,
   PenTool,
+  Play,
   type LucideIcon,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -16,6 +17,7 @@ import {
   type FeatureWorkflowStageProgress,
   type FeatureWorkflowStageStatus,
 } from '@shared/feature-workflow';
+import type { Feature } from '@shared/features';
 import type { RoomSnapshot } from '@shared/team-room';
 import { cn } from '@renderer/utils/utils';
 
@@ -70,13 +72,21 @@ export function FeatureWorkflowPreview({ className }: { className?: string }) {
 
 export function FeatureWorkflowRail({
   snapshot,
+  feature,
+  loading,
   onOpenMember,
+  onResume,
 }: {
   snapshot: RoomSnapshot;
+  feature: Feature | null;
+  loading: boolean;
   onOpenMember: (memberId: string) => void;
+  onResume: () => void;
 }) {
   const { t } = useTranslation();
-  const progress = deriveFeatureWorkflowProgress(snapshot.members, snapshot.messages);
+  const progress = feature
+    ? deriveFeatureWorkflowProgress(feature, snapshot.members, snapshot.messages)
+    : [];
   const completedCount = progress.filter((stage) => stage.status === 'completed').length;
   const focus =
     progress.find((stage) => stage.status === 'blocked') ??
@@ -93,6 +103,16 @@ export function FeatureWorkflowRail({
           {t('featureWorkflow.title')}
         </h3>
         <p className="text-[11px] text-foreground-muted">{t('featureWorkflow.subtitle')}</p>
+        {feature && feature.stage !== 'done' && feature.status === 'active' && (
+          <button
+            type="button"
+            onClick={onResume}
+            className="inline-flex h-6 items-center gap-1 rounded border border-border bg-background px-2 text-[10px] font-medium text-foreground transition-colors hover:bg-background-2"
+          >
+            <Play className="size-3" />
+            {t('featureWorkflow.resume')}
+          </button>
+        )}
         <span className="ml-auto font-mono text-[10px] font-medium text-foreground-muted">
           {t('featureWorkflow.progress', {
             completed: completedCount,
@@ -108,36 +128,46 @@ export function FeatureWorkflowRail({
         )}
       </div>
 
-      <ol className="grid grid-cols-2 gap-2 md:grid-cols-3 2xl:grid-cols-6">
-        {progress.map((item, index) => (
-          <FeatureStageItem
-            key={item.stage.id}
-            item={item}
-            isLast={index === progress.length - 1}
-            onOpenMember={onOpenMember}
-          />
-        ))}
-      </ol>
+      {!feature ? (
+        <p className="rounded border border-dashed border-border px-3 py-2 text-[11px] text-foreground-muted">
+          {t(loading ? 'featureWorkflow.loading' : 'featureWorkflow.unavailable')}
+        </p>
+      ) : (
+        <>
+          <ol className="grid grid-cols-2 gap-2 md:grid-cols-3 2xl:grid-cols-6">
+            {progress.map((item, index) => (
+              <FeatureStageItem
+                key={item.stage.id}
+                item={item}
+                isLast={index === progress.length - 1}
+                onOpenMember={onOpenMember}
+              />
+            ))}
+          </ol>
 
-      {focus && (
-        <div className="mt-2 flex min-w-0 items-start gap-2 text-[11px] leading-4">
-          {focus.status === 'blocked' && (
-            <CircleAlert className="mt-0.5 size-3 shrink-0 text-destructive" />
+          {focus && (
+            <div className="mt-2 flex min-w-0 items-start gap-2 text-[11px] leading-4">
+              {focus.status === 'blocked' && (
+                <CircleAlert className="mt-0.5 size-3 shrink-0 text-destructive" />
+              )}
+              <span className="shrink-0 font-medium text-foreground-muted">
+                {t(
+                  focus.detail
+                    ? 'featureWorkflow.latestEvidence'
+                    : 'featureWorkflow.currentDeliverable'
+                )}
+              </span>
+              <span
+                className={cn(
+                  'line-clamp-2 min-w-0 break-words',
+                  focus.status === 'blocked' ? 'text-destructive' : 'text-foreground-muted'
+                )}
+              >
+                {focus.detail || t(stageDeliverableKey(focus.stage.id))}
+              </span>
+            </div>
           )}
-          <span className="shrink-0 font-medium text-foreground-muted">
-            {t(
-              focus.detail ? 'featureWorkflow.latestEvidence' : 'featureWorkflow.currentDeliverable'
-            )}
-          </span>
-          <span
-            className={cn(
-              'line-clamp-2 min-w-0 break-words',
-              focus.status === 'blocked' ? 'text-destructive' : 'text-foreground-muted'
-            )}
-          >
-            {focus.detail || t(stageDeliverableKey(focus.stage.id))}
-          </span>
-        </div>
+        </>
       )}
     </section>
   );

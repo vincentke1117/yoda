@@ -7,14 +7,19 @@ import {
   type TeamRouting,
 } from '@shared/agent-team';
 import { DEFAULT_AGENT_ICON } from '@shared/agents';
-import { FEATURE_WORKFLOW_ROOM_PRESET, hasFeatureWorkflowContract } from '@shared/feature-workflow';
+import {
+  FEATURE_WORKFLOW_ROOM_PRESET,
+  FEATURE_WORKFLOW_STAGES,
+  hasFeatureWorkflowContract,
+} from '@shared/feature-workflow';
 import type { RuntimeId } from '@shared/runtime-registry';
 import type { SkillSelectionInput } from '@shared/skills/types';
 import type { MemberAccent } from '@shared/team-room';
 import type { RoutingHopLimit } from '@shared/team-routing-limit';
 import { agentTeamsService } from '@main/core/agent-teams/agent-teams-service';
 import { agentsConfigService } from '@main/core/agents-config/agents-config-service';
-import { addMember, createRoom, postMessage } from './store';
+import { featureService } from '@main/core/features/feature-service';
+import { addMember, archiveRoom, createRoom, getFeatureRoomForTask, postMessage } from './store';
 
 /**
  * Room presets seed a room's members + initial routing. A preset is just a set
@@ -204,6 +209,7 @@ export async function seedRoomFromTeam(args: {
   projectId: string;
   taskId: string;
   requirement: string;
+  featureId?: string;
 }): Promise<string> {
   const { team } = args;
   const leader = teamLeader(team);
@@ -214,10 +220,21 @@ export async function seedRoomFromTeam(args: {
   if (isFeatureWorkflow && !requirement) {
     throw new Error('Feature workflow requires a non-empty problem brief.');
   }
+  let featureId: string | null = null;
+  if (isFeatureWorkflow) {
+    const feature = args.featureId
+      ? await featureService.get(args.projectId, args.featureId)
+      : await featureService.ensureForTask(args.projectId, args.taskId, requirement, 'agent');
+    if (!feature || !feature.tasks.some((task) => task.taskId === args.taskId)) {
+      throw new Error('Feature workflow requires a Feature linked to this Task.');
+    }
+    featureId = feature.id;
+  }
 
   const room = await createRoom({
     projectId: args.projectId,
     taskId: args.taskId,
+    featureId,
     name: team.name,
     // Feature teams keep their gate-aware room behavior when duplicated for
     // editing; other teams continue to use the generic freeform conductor.
@@ -241,7 +258,7 @@ export async function seedRoomFromTeam(args: {
     await postMessage({
       roomId: room.id,
       kind: 'system',
-      body: `Feature brief — ${requirement}`,
+      body: `Feature brief — ${requirement}\nAuthoritative Feature: ${featureId}`,
       mentions: [],
     });
   }
@@ -304,10 +321,68 @@ export type CreateRoomFromTeamParams = {
   requirement: string;
 };
 
+/** Coalesce double-clicks and renderer retries while a Feature Room is still seeding. */
+const featureRoomStarts = new Map<string, Promise<string>>();
+
+function isUniqueConstraint(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    'code' in error &&
+    (error as Error & { code?: string }).code === 'SQLITE_CONSTRAINT_UNIQUE'
+  );
+}
+
 /** Resolve a team template by id, then instantiate a room from it. */
 export async function createRoomFromTeam(params: CreateRoomFromTeamParams): Promise<string> {
   const team = await agentTeamsService.get(params.teamId);
   if (!team) throw new Error(`Team ${params.teamId} not found`);
+  if (hasFeatureWorkflowContract(team)) {
+    const key = `${params.projectId}\u0000${params.taskId}`;
+    const inFlight = featureRoomStarts.get(key);
+    if (inFlight) return inFlight;
+    const start = (async () => {
+      const requirement = params.requirement.trim();
+      if (!requirement) throw new Error('Feature workflow requires a non-empty problem brief.');
+      const feature = await featureService.ensureForTask(
+        params.projectId,
+        params.taskId,
+        requirement,
+        'agent'
+      );
+      const existing = await getFeatureRoomForTask(params.projectId, params.taskId, feature.id);
+      if (existing) {
+        const expectedHandles = new Set([
+          'you',
+          ...FEATURE_WORKFLOW_STAGES.map((stage) => stage.handle),
+        ]);
+        const complete =
+          existing.members.length === expectedHandles.size &&
+          existing.members.every((member) => expectedHandles.has(member.handle));
+        if (complete) return existing.room.id;
+        await archiveRoom(existing.room.id);
+      }
+      try {
+        return await seedRoomFromTeam({
+          team,
+          projectId: params.projectId,
+          taskId: params.taskId,
+          requirement,
+          featureId: feature.id,
+        });
+      } catch (error) {
+        if (!isUniqueConstraint(error)) throw error;
+        const winner = await getFeatureRoomForTask(params.projectId, params.taskId, feature.id);
+        if (!winner) throw error;
+        return winner.room.id;
+      }
+    })();
+    featureRoomStarts.set(key, start);
+    try {
+      return await start;
+    } finally {
+      if (featureRoomStarts.get(key) === start) featureRoomStarts.delete(key);
+    }
+  }
   return seedRoomFromTeam({
     team,
     projectId: params.projectId,

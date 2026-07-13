@@ -28,6 +28,8 @@ export interface TeamRoom {
   id: string;
   projectId: string;
   taskId: string;
+  /** Authoritative Feature aggregate for governed workflow rooms. */
+  featureId: string | null;
   name: string;
   preset: RoomPreset;
   status: 'active' | 'archived';

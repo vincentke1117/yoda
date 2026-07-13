@@ -1,78 +1,95 @@
-# Feature development workflow
+# Governed Feature development workflow
 
 ## Problem
 
-Feature work in Yoda can already start an agent, write a spec, run an implementation-review loop, or launch a reusable agent team. Those modes are separate islands. A problem statement does not carry one durable contract through product design, implementation, verification, user documentation, and launch documentation, so later agents must reconstruct context and a green task can still lack tests or docs.
+Feature delivery used to be split between independent prompts, Task sessions, review loops, and
+documentation work. A Team Room could look complete while the project had no durable delivery
+record, and a database Feature could remain at Problem while room messages claimed every step had
+passed. The product needs one traceable contract from the original problem through product/UX
+design, technical planning, implementation, verification, user documentation, and PR/SEO material.
 
-The product job is: give Yoda one problem and receive a traceable, repository-native delivery package whose decisions, code, checks, feature docs, and PR/SEO copy agree with one another.
+## Product decision
 
-## Goals
+The project-scoped `Feature` aggregate is the only source of truth for stage, status, linked Tasks,
+artifact approval, and the immutable delivery trail. A Feature Team Room is its execution surface:
+it owns agent sessions and hand-off evidence, but it cannot approve artifacts or advance a gate.
 
-- Make the complete feature lifecycle a first-class development paradigm, not a checklist pasted into one prompt.
-- Preserve every stage hand-off and its evidence across app restarts.
-- Keep stages sequential, while allowing an explicit validation-to-engineering repair loop.
-- Reuse the existing task worktree, Team Room, member sessions, and `team-at` transport.
-- Make the current gate, owner, blocker, and latest evidence visible without opening every session.
-- Support both a new problem entered on Home and branch/Issue task creation.
+The canonical lifecycle has eight durable stages:
 
-## Non-goals
+```text
+Problem → Product/UX design → Technical plan → Implementation → Verification
+        → Feature docs → Release/communication → Done
+```
 
-- Replace task lifecycle status or the project Kanban.
-- Add a second workflow database or a schema migration.
-- Infer success from an agent process becoming idle.
-- Automatically push, merge, publish, or create external resources without authorization.
-- Force every repository into one documentation directory; project conventions remain authoritative.
+The Room presents the user's six-step mental model by grouping Technical plan + Implementation as
+Engineering and Release + Done as PR/SEO. Both rails are projections of the same database Feature;
+room messages never form a second state machine.
 
-## Workflow
+## Start and identity
 
-The workflow is a built-in `Feature` Agent Team with one coordinating lead and five workers. All members share the task worktree and advance through six gates:
+- Feature remains a built-in sequential Agent Team under Home's Workflow choices and the branch /
+  Issue Task creation flow.
+- Starting the Team idempotently creates or reuses one active Feature, imports the Task's linked
+  Issues, links the Task, and stores the Feature id on the Team Room.
+- If more than one active Feature matches a Task or Issue, creation fails explicitly instead of
+  choosing one by query order.
+- A retry reuses a complete active Room. A partial Room is archived before rebuilding its roster.
+- Pull-request review Tasks keep the Standard path because they start after feature discovery.
 
-1. Problem definition — target user, outcome, non-goals, constraints, success signal, and feature slug.
-2. Product design — PRD, user flow, UI/UX states, accessibility, edge cases, and testable acceptance criteria.
-3. Implementation — production code, focused automated tests, and technical decisions.
-4. Validation — independent diff review and exact repository-required checks. A failure returns to implementation and invalidates affected downstream gates.
-5. Feature documentation — verified user behavior, configuration, examples, limitations, and troubleshooting.
-6. PR and SEO documentation — PR title/body, changelog/release copy, and SEO/discovery copy when applicable.
+## Evidence and gates
 
-The Feature Lead delegates one stage at a time. Workers report a durable marker such as `[FEATURE:validation:pass]` or `[FEATURE:validation:blocked]` together with artifact paths and evidence. The renderer reduces those persisted hand-offs in order, so it can restore the same gate state after a reload. A later-stage marker cannot skip a missing prerequisite. Re-passing an earlier stage invalidates downstream evidence.
+Agents send typed `[FEATURE:<step>:ready]` or `[FEATURE:<step>:blocked]` JSON envelopes. Ready means
+"reviewable", not "approved". The main process validates the current Feature stage, author,
+recipient, artifact types, duplicate types, and repository-relative paths before ingestion.
 
-## Information architecture and interaction
+- Product Design proposes `product_spec`, `ux_design`, and `acceptance_criteria`.
+- Engineering first proposes `technical_plan`; after that gate is approved and advanced, the same
+  owner implements code. An implementation-ready hand-off moves its linked Task to Review.
+- Quality proposes `test_evidence` from a durable validation report.
+- Feature Docs proposes `feature_docs`.
+- PR & SEO proposes `delivery_summary`, `pull_request`, `release_note`, and `seo`. A non-applicable
+  SEO result is still a real artifact explaining why.
 
-Feature appears in the Home development-paradigm dialog under `Workflow`, even though it is implemented on the multi-agent substrate. It sits beside Standard, Review, and Spec because users choose it by delivery method, not by team topology.
+Agent proposals are stored as `draft`, include Task/Room/message/member provenance, and stale older
+non-stale evidence of the same type. A human reviews and approves the draft in Feature delivery,
+then uses the existing main-process gate action to advance. A blocked hand-off is recorded without
+silently changing the aggregate status. Failed verification requires an explicit retreat to
+Implementation before Engineering can be routed again.
 
-The task-creation modal keeps source and execution orthogonal:
+## Interaction
 
-- Source: branch, Issue, or pull request.
-- Execution: Standard task or Feature loop (available for branch and Issue).
+The Room header links back to the authoritative Feature. Its responsive 01–06 rail reads Feature
+state and shows the latest hand-off only as supporting detail. **Continue current stage** sends the
+Feature Lead the freshly translated canonical stage after a human advances or retreats a gate.
+Routing allows only Human → Lead, Lead → current owner/Human, and current owner → Lead; broadcasts,
+future owners, and malformed evidence are rejected.
 
-Selecting Feature replaces the single-agent picker with a six-stage preview and a problem brief. The create action first provisions the task/worktree, then seeds the Feature Team Room. A failed room start reports that the task exists rather than pretending the whole creation failed.
+Artifacts produced inside a Task worktree retain `sourceTaskId`, so file actions open the real Task
+workspace instead of pretending the file already exists in the project root.
 
-Inside a Feature room, a numbered `01–06` hand-off rail sits between the room header and conversation. Each stage shows a text status as well as color, opens its responsible member detail (with session access), and exposes the latest accepted hand-off evidence. Layout uses two columns at narrow widths, three at medium widths, and a connected six-stage spine at wide widths; it never requires horizontal scrolling.
+## Persistence
 
-## States and failure behavior
-
-- `Waiting`: a prerequisite gate has not passed.
-- `In progress`: the first unpassed gate or a legitimate rework session is running.
-- `Gate passed`: an ordered, persisted pass marker exists.
-- `Blocked`: a persisted blocker exists, or the current member is awaiting input or errored.
-
-An idle/finished runtime does not pass a gate. Malformed markers remain visible in chat but do not advance the rail. Out-of-order markers are ignored by the reducer. When an earlier stage is passed again, all later stages return to waiting until they are re-verified.
-
-## Accessibility and responsive behavior
-
-- The rail is an ordered list and the current stage uses `aria-current="step"`.
-- Progress changes are announced through a polite live region.
-- Every stage has a textual status and a keyboard-focus ring; status is never color-only.
-- Stage controls remain visible without hover and wrap into a grid instead of overflowing.
-- The UI introduces no motion dependency; reduced-motion users lose no information.
+- Migration `0038` introduces Features, relationships, artifacts, and the event ledger.
+- Migration `0039` adds Room → Feature identity and artifact Task/Room/message/member provenance.
+- Migration `0040` adds atomic Task → Feature workflow ownership and prevents duplicate active
+  Feature Rooms for one Task.
+- `FeatureService` remains the sole transition boundary and emits `featureUpdatedChannel` after
+  mutations so the workbench, Task backlink, and Room projection converge.
+- Every accepted agent hand-off is auditable with `actorType = agent`; approvals and stage actions
+  retain their real actor.
 
 ## Acceptance criteria
 
-- Feature is selectable from Home as a Workflow entry without changing existing team-mode defaults.
-- Branch and Issue task creation can start Feature without creating an irrelevant initial single-agent conversation.
-- The room is stored with the `feature-workflow` preset and contains the ordered Feature team.
-- A problem prompt starts at stage 01 and the Feature Lead can advance only by emitting the required ordered hand-offs.
-- PASS, BLOCKED, out-of-order, validation failure, engineering rework, and upstream invalidation reduce deterministically from room messages.
-- The rail survives reloads because it uses persisted messages, not component state.
-- Existing Standard, Spec, Review, Startup, custom teams, and pull-request task creation continue to behave as before.
-- Home, Create Task, room-intro, and hand-off-rail product copy is available in English and Simplified Chinese; protocol transcript lines remain repository-neutral English.
+- Starting Feature from Home, branch, or Issue produces one linked Feature and one complete Room.
+- Repeating the start operation does not duplicate the Feature, Task link event, or Room.
+- Concurrent starts coalesce on the same durable owner; an active workflow Room prevents its Task
+  from being detached.
+- The Room cannot route a future owner or derive completion from marker order/runtime idleness.
+- Blocked, cancelled, completed, or stale-stage Agent replies cannot write evidence or move a Task.
+- Agent evidence enters as draft with provenance; it cannot bypass approval or `evaluateFeatureGate`.
+- A new proposal stales prior approval of the same artifact type.
+- The six-step Room rail and eight-stage Feature workbench always project the same aggregate stage.
+- Team Room Tasks retain a visible link to Feature delivery.
+- Product/UX, technical plan, verification, functional docs, PR, release note, and SEO artifacts are
+  all required by their canonical gates.
+- Existing Standard, Spec, Review, Startup, custom-team, and PR Task behavior remains unchanged.

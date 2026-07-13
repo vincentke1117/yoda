@@ -22,6 +22,10 @@ function artifact(
     title: type,
     uri: `docs/${type}.md`,
     contentHash: null,
+    sourceTaskId: null,
+    sourceRoomId: null,
+    sourceMessageId: null,
+    sourceMemberId: null,
     status,
     createdAt: now,
     updatedAt: now,
@@ -30,7 +34,13 @@ function artifact(
 }
 
 function task(status: FeatureTask['status']): FeatureTask {
-  return { taskId: `task-${status}`, name: status, status, archivedAt: null };
+  return {
+    taskId: `task-${status}`,
+    name: status,
+    status,
+    archivedAt: null,
+    workflowRoomId: null,
+  };
 }
 
 function subject(
@@ -67,13 +77,18 @@ describe('feature lifecycle', () => {
     expect(missing.canAdvance).toBe(false);
     expect(missing.blockers).toEqual([
       { code: 'artifact_missing', artifactType: 'product_spec' },
+      { code: 'artifact_missing', artifactType: 'ux_design' },
       { code: 'artifact_missing', artifactType: 'acceptance_criteria' },
     ]);
 
     const ready = evaluateFeatureGate(
       subject({
         stage: 'design',
-        artifacts: [artifact('product_spec'), artifact('acceptance_criteria')],
+        artifacts: [
+          artifact('product_spec'),
+          artifact('ux_design'),
+          artifact('acceptance_criteria'),
+        ],
       })
     );
     expect(ready).toMatchObject({ canAdvance: true, nextStage: 'planning', blockers: [] });
@@ -106,7 +121,6 @@ describe('feature lifecycle', () => {
     ['planning', 'technical_plan', 'implementation'],
     ['verification', 'test_evidence', 'documentation'],
     ['documentation', 'feature_docs', 'release'],
-    ['release', 'delivery_summary', 'done'],
   ] as const)('guards %s with an approved %s artifact', (stage, artifactType, nextStage) => {
     expect(evaluateFeatureGate(subject({ stage })).blockers).toContainEqual({
       code: 'artifact_missing',
@@ -115,6 +129,29 @@ describe('feature lifecycle', () => {
     expect(
       evaluateFeatureGate(subject({ stage, artifacts: [artifact(artifactType)] }))
     ).toMatchObject({ canAdvance: true, nextStage });
+  });
+
+  it('requires the complete PR, release, and SEO packet before completion', () => {
+    const stage = 'release' as const;
+    expect(evaluateFeatureGate(subject({ stage })).blockers).toEqual([
+      { code: 'artifact_missing', artifactType: 'delivery_summary' },
+      { code: 'artifact_missing', artifactType: 'pull_request' },
+      { code: 'artifact_missing', artifactType: 'release_note' },
+      { code: 'artifact_missing', artifactType: 'seo' },
+    ]);
+    expect(
+      evaluateFeatureGate(
+        subject({
+          stage,
+          artifacts: [
+            artifact('delivery_summary'),
+            artifact('pull_request'),
+            artifact('release_note'),
+            artifact('seo'),
+          ],
+        })
+      )
+    ).toMatchObject({ canAdvance: true, nextStage: 'done' });
   });
 
   it('requires linked tasks to reach review or done before verification', () => {

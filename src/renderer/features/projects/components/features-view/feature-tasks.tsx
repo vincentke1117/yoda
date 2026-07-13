@@ -1,4 +1,4 @@
-import { Link2, ListTodo, X } from 'lucide-react';
+import { Link2, ListTodo, LockKeyhole, X } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useTranslation } from 'react-i18next';
 import type { Feature } from '@shared/features';
@@ -25,6 +25,11 @@ export const FeatureTasks = observer(function FeatureTasks({
   const { navigate } = useNavigate();
   const tasks = getReadyTaskStores(projectId);
   const linkedIds = new Set(feature.tasks.map((task) => task.taskId));
+  const workflowRoomIds = new Map(
+    feature.tasks
+      .filter((task) => task.workflowRoomId)
+      .map((task) => [task.taskId, task.workflowRoomId])
+  );
 
   return (
     <section className="border-t border-border pt-4">
@@ -62,6 +67,7 @@ export const FeatureTasks = observer(function FeatureTasks({
               <div className="max-h-72 overflow-y-auto">
                 {tasks.map((task) => {
                   const checked = linkedIds.has(task.data.id);
+                  const workflowOwned = Boolean(workflowRoomIds.get(task.data.id));
                   return (
                     <button
                       key={task.data.id}
@@ -70,7 +76,10 @@ export const FeatureTasks = observer(function FeatureTasks({
                         'flex w-full min-w-0 items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-muted',
                         checked && 'bg-muted/60'
                       )}
-                      disabled={mutations.setTaskLinked.isPending}
+                      disabled={mutations.setTaskLinked.isPending || workflowOwned}
+                      title={
+                        workflowOwned ? t('featureDelivery.tasks.activeWorkflowLocked') : undefined
+                      }
                       onClick={() =>
                         mutations.setTaskLinked.mutate({ taskId: task.data.id, linked: !checked })
                       }
@@ -120,17 +129,27 @@ export const FeatureTasks = observer(function FeatureTasks({
                         : `tasks.lifecycle.${task.status}`
                     )}
               </span>
-              <button
-                type="button"
-                className="-mr-1 flex size-4 items-center justify-center rounded-full text-foreground-passive hover:bg-background-2 hover:text-foreground"
-                aria-label={t('featureDelivery.tasks.unlink', { title: task.name })}
-                disabled={mutations.setTaskLinked.isPending}
-                onClick={() =>
-                  mutations.setTaskLinked.mutate({ taskId: task.taskId, linked: false })
-                }
-              >
-                <X className="size-2.5" />
-              </button>
+              {task.workflowRoomId ? (
+                <span
+                  className="-mr-1 flex size-4 items-center justify-center text-foreground-passive"
+                  title={t('featureDelivery.tasks.activeWorkflowLocked')}
+                  aria-label={t('featureDelivery.tasks.activeWorkflowLocked')}
+                >
+                  <LockKeyhole className="size-2.5" />
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  className="-mr-1 flex size-4 items-center justify-center rounded-full text-foreground-passive hover:bg-background-2 hover:text-foreground"
+                  aria-label={t('featureDelivery.tasks.unlink', { title: task.name })}
+                  disabled={mutations.setTaskLinked.isPending}
+                  onClick={() =>
+                    mutations.setTaskLinked.mutate({ taskId: task.taskId, linked: false })
+                  }
+                >
+                  <X className="size-2.5" />
+                </button>
+              )}
             </Badge>
           ))}
         </div>

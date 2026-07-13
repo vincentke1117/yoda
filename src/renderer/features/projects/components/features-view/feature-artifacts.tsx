@@ -12,12 +12,14 @@ import type { useFeatureMutations } from '@renderer/features/features/use-featur
 import { openProjectFileTab } from '@renderer/features/project-file/project-file-session';
 import { joinProjectPath } from '@renderer/features/projects/project-path';
 import { asMounted, getProjectStore } from '@renderer/features/projects/stores/project-selectors';
+import { asProvisioned, getTaskStore } from '@renderer/features/tasks/stores/task-selectors';
 import {
   FilePathActionsDropdown,
   type FilePathTarget,
 } from '@renderer/lib/components/file-path-actions';
 import { FileIcon } from '@renderer/lib/editor/file-icon';
 import { rpc } from '@renderer/lib/ipc';
+import { useNavigate } from '@renderer/lib/layout/navigation-provider';
 import { useShowModal } from '@renderer/lib/modal/modal-provider';
 import { Badge } from '@renderer/lib/ui/badge';
 import { Button } from '@renderer/lib/ui/button';
@@ -45,7 +47,12 @@ function ArtifactLocation({
   artifact: FeatureArtifact;
 }) {
   const { t } = useTranslation();
+  const { navigate } = useNavigate();
   const project = asMounted(getProjectStore(projectId));
+  const sourceTaskId = artifact.sourceTaskId;
+  const sourceTask = sourceTaskId
+    ? asProvisioned(getTaskStore(projectId, sourceTaskId))
+    : undefined;
   const webUri = isWebUri(artifact.uri);
   if (webUri) {
     return (
@@ -60,13 +67,30 @@ function ArtifactLocation({
     );
   }
 
-  if (!project) return null;
+  if (sourceTaskId && !sourceTask) {
+    return (
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        aria-label={t('featureDelivery.artifacts.openSourceTask')}
+        onClick={() => navigate('task', { projectId, taskId: sourceTaskId })}
+      >
+        <AppWindow className="size-3.5" />
+      </Button>
+    );
+  }
+
+  if (!project && !sourceTask) return null;
   const relativePath = isAbsolutePath(artifact.uri) ? null : artifact.uri;
+  const workspacePath = sourceTask?.path ?? project?.data.path;
+  if (!workspacePath) return null;
   const target: FilePathTarget = {
-    absolutePath: relativePath ? joinProjectPath(project.data.path, relativePath) : artifact.uri,
+    absolutePath: relativePath ? joinProjectPath(workspacePath, relativePath) : artifact.uri,
     relativePath,
     kind: 'file',
-    sshConnectionId: project.data.type === 'ssh' ? project.data.connectionId : null,
+    sshConnectionId:
+      sourceTask?.workspace.sshConnectionId ??
+      (project?.data.type === 'ssh' ? project.data.connectionId : null),
   };
 
   return (
@@ -74,6 +98,11 @@ function ArtifactLocation({
       <DropdownMenuItem
         onClick={(event) => {
           event.stopPropagation();
+          if (sourceTask && sourceTaskId) {
+            sourceTask.taskView.tabManager.openFile(artifact.uri);
+            navigate('task', { projectId, taskId: sourceTaskId });
+            return;
+          }
           openProjectFileTab(projectId, artifact.uri);
         }}
       >

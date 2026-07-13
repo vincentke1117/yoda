@@ -18,6 +18,8 @@ import type { RoutingHopLimit } from '@shared/team-routing-limit';
 import { agentSessionRuntimeStore } from '@main/core/conversations/agent-session-runtime';
 import { createConversation } from '@main/core/conversations/createConversation';
 import { injectPrompt } from '@main/core/conversations/inject-prompt';
+import { ingestFeatureWorkflowHandoff } from '@main/core/features/feature-loop-service';
+import { featureService } from '@main/core/features/feature-service';
 import { ptySessionRegistry } from '@main/core/pty/pty-session-registry';
 import { events } from '@main/lib/events';
 import { log } from '@main/lib/logger';
@@ -124,9 +126,20 @@ class RoomConductor {
       : message.mentions.map((handle) => handle.toLowerCase());
     let handsToHuman = false;
     if (isFeatureWorkflow && requestedHandles.length > 0) {
-      const allowed = new Set(
-        featureWorkflowAllowedTargetHandles(members, snapshot.messages, message)
-      );
+      const feature = room.featureId
+        ? await featureService.get(room.projectId, room.featureId)
+        : null;
+      if (!feature) {
+        if (author?.runtime) this.handedOff.delete(author.id);
+        await postMessage({
+          roomId,
+          kind: 'system',
+          body: 'Feature routing paused — this Room is not linked to an authoritative Feature workspace.',
+          mentions: [],
+        });
+        return;
+      }
+      const allowed = new Set(featureWorkflowAllowedTargetHandles(feature, members, message));
       const rejected = requestedHandles.filter((handle) => !allowed.has(handle));
       requestedHandles = requestedHandles.filter((handle) => allowed.has(handle));
       handsToHuman = requestedHandles.includes('you');
@@ -138,6 +151,22 @@ class RoomConductor {
           body: `Feature gate kept ${rejected.map((handle) => `@${handle}`).join(', ')} waiting. Pass the current gate or return to an unlocked stage first.`,
           mentions: [],
         });
+      }
+      if (requestedHandles.length > 0) {
+        try {
+          await ingestFeatureWorkflowHandoff({ room, feature, members, message });
+        } catch (error) {
+          if (author?.runtime) this.handedOff.delete(author.id);
+          await postMessage({
+            roomId,
+            kind: 'system',
+            body: `Feature evidence was rejected: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            mentions: [],
+          });
+          return;
+        }
       }
     }
     const targets = members.filter(

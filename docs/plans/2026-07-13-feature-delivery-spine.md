@@ -60,14 +60,16 @@ transition, Task link, and artifact mutation writes an event to the delivery led
 - The project Feature workbench lives under
   `src/renderer/features/projects/components/features-view/`.
 
-## Next layers
+## Execution integration and next layers
 
-P1 should derive artifact freshness from content hashes and automatically ingest test runs, changed
-files, pull requests, and release state instead of asking users to enter every URI. P2 should add
-template/version governance, policy profiles per repository, agent-readable gate APIs, historical
-cycle-time analytics, and reusable generation flows for functional docs, PR descriptions, release
-notes, and SEO assets. Those layers extend this aggregate; they should not create parallel workflow
-state.
+The built-in Feature Team now extends this aggregate instead of creating parallel workflow state.
+Its Room stores the Feature id, projects the canonical stage into a six-step execution rail, and
+ingests current-owner hand-offs as draft artifacts with Task/Room/message/member provenance. Humans
+retain explicit approval and stage transitions; a new proposal stales older evidence of its type.
+
+Next layers should derive content hashes, ingest CI/PR/release state from their real providers, add
+template/version governance and repository policy profiles, and expose cycle-time analytics. These
+layers must continue to extend the aggregate rather than restoring a message-based gate state.
 
 ## Verification
 

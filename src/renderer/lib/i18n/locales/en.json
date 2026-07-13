@@ -1104,8 +1104,8 @@
     "modeReviewDesc": "One AI implements, another reviews — looping until it passes.",
     "modeTeamReview": "Review",
     "modeTeamReviewDesc": "A small AI crew collaborates in a chat, looping implementation and review.",
-    "modeTeamFeature": "Feature loop",
-    "modeTeamFeatureDesc": "A gated delivery chain from problem and product design through code, validation, feature docs, and PR/SEO copy.",
+    "modeTeamFeature": "Feature workflow",
+    "modeTeamFeatureDesc": "A governed delivery chain whose specialist agents propose evidence from product/UX design through PR, release, and SEO.",
     "modeTeamStartup": "Startup",
     "modeTeamStartupDesc": "An AI team (CEO, product, engineering, design, ops) divides the work.",
     "modeTeamDesc": "A custom AI team collaborates on the task.",
@@ -1537,8 +1537,8 @@
       "executionMode": "Execution mode",
       "executionAgent": "Standard task",
       "executionAgentDescription": "One selected agent starts from this prompt.",
-      "executionFeature": "Feature loop",
-      "executionFeatureDescription": "Six gated hand-offs from problem to PR and SEO.",
+      "executionFeature": "Feature workflow",
+      "executionFeatureDescription": "One authoritative Feature with six specialist execution hand-offs.",
       "featureBrief": "Problem brief",
       "featureBriefPlaceholder": "Describe the user problem, desired outcome, constraints, and any known success signal.",
       "featureWorkflowTaskNotReady": "The task was created, but its worktree is not ready. Repair task setup before starting the Feature loop.",
@@ -1972,9 +1972,14 @@
     }
   },
   "featureWorkflow": {
-    "title": "Feature hand-off rail",
-    "subtitle": "Every stage passes evidence and artifacts into the next.",
+    "title": "Feature execution hand-offs",
+    "subtitle": "Status comes from Feature delivery; agent evidence enters as reviewable drafts.",
     "progress": "{{completed}} / {{total}} gates",
+    "openWorkspace": "Open Feature delivery",
+    "resume": "Continue current stage",
+    "resumePrompt": "The Feature workspace is now at {{stage}}. Review its gate, delegate only the current owner, and return draft evidence for approval.",
+    "loading": "Loading the authoritative Feature delivery state…",
+    "unavailable": "This Room has no authoritative Feature delivery record. Routing is paused.",
     "latestEvidence": "Latest evidence",
     "currentDeliverable": "Current deliverable",
     "status": {
@@ -1994,7 +1999,7 @@
       },
       "implementation": {
         "title": "Implementation",
-        "deliverable": "Production code, focused tests, and technical decisions"
+        "deliverable": "Approved technical plan, production code, and focused tests"
       },
       "validation": {
         "title": "Validation",
@@ -2006,7 +2011,7 @@
       },
       "launch-docs": {
         "title": "PR & SEO",
-        "deliverable": "PR body, changelog, release notes, and discovery copy"
+        "deliverable": "Delivery summary, PR packet, release notes, and SEO copy"
       }
     }
   },
@@ -3597,7 +3602,8 @@
       "noTasks": "This project has no tasks available to link.",
       "none": "No implementation tasks are linked. At least one must reach review before implementation can advance.",
       "archived": "Archived",
-      "unlink": "Unlink “{{title}}”"
+      "unlink": "Unlink “{{title}}”",
+      "activeWorkflowLocked": "An active Feature workflow is using this Task. Archive its Room first."
     },
     "artifacts": {
       "title": "Artifacts and evidence",
@@ -3609,6 +3615,7 @@
       "uriHint": "Use a project-relative path for files, or a full URL for external material.",
       "status": "Review status",
       "open": "Open artifact",
+      "openSourceTask": "Open source Task",
       "empty": "No artifacts yet; add a document, test result, or release asset",
       "approve": "Approve artifact",
       "markDraft": "Mark draft",
@@ -3668,7 +3675,8 @@
         "task_unlinked": "Unlinked implementation task",
         "artifact_added": "Added artifact",
         "artifact_updated": "Updated artifact",
-        "artifact_removed": "Removed artifact"
+        "artifact_removed": "Removed artifact",
+        "handoff_recorded": "Recorded agent hand-off"
       }
     }
   },

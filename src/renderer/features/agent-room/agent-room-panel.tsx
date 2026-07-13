@@ -1,4 +1,4 @@
-import { Send, Settings, TerminalSquare, Users } from 'lucide-react';
+import { Milestone, Send, Settings, TerminalSquare, Users } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -8,6 +8,8 @@ import {
   normalizeRoutingHopLimit,
   type RoutingHopLimit,
 } from '@shared/team-routing-limit';
+import { openFeature } from '@renderer/features/features/feature-navigation';
+import { useFeature } from '@renderer/features/features/use-features';
 import { useProvisionedTask } from '@renderer/features/tasks/task-view-context';
 import { AvatarValue } from '@renderer/lib/components/avatar-value';
 import { Popover, PopoverContent, PopoverTrigger } from '@renderer/lib/ui/popover';
@@ -42,6 +44,8 @@ export const RoomChat = observer(function RoomChat({ snapshot }: { snapshot: Roo
     () => new Map(snapshot.members.map((m) => [m.handle.toLowerCase(), m])),
     [snapshot.members]
   );
+  const featureQuery = useFeature(snapshot.room.projectId, snapshot.room.featureId ?? undefined);
+  const feature = featureQuery.data ?? null;
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
@@ -84,6 +88,17 @@ export const RoomChat = observer(function RoomChat({ snapshot }: { snapshot: Roo
           </p>
         </div>
         <div className="ml-auto flex items-center gap-2">
+          {feature && (
+            <button
+              type="button"
+              onClick={() => openFeature(snapshot.room.projectId, feature.id)}
+              title={t('featureWorkflow.openWorkspace')}
+              className="flex h-8 min-w-0 items-center gap-1.5 rounded-md border border-border px-2 text-xs text-foreground-muted transition-colors hover:bg-background-2 hover:text-foreground"
+            >
+              <Milestone className="size-3.5 shrink-0" />
+              <span className="hidden max-w-40 truncate xl:inline">{feature.title}</span>
+            </button>
+          )}
           <RoomSettingsPopover room={snapshot.room} />
           <TeamIntroPopover
             agents={agents}
@@ -134,7 +149,20 @@ export const RoomChat = observer(function RoomChat({ snapshot }: { snapshot: Roo
       </header>
 
       {snapshot.room.preset === 'feature-workflow' && (
-        <FeatureWorkflowRail snapshot={snapshot} onOpenMember={openMember} />
+        <FeatureWorkflowRail
+          snapshot={snapshot}
+          feature={feature}
+          loading={featureQuery.isLoading}
+          onOpenMember={openMember}
+          onResume={() => {
+            if (!feature) return;
+            void agentRoomStore.postLeadMessage(
+              `@orchestrator ${t('featureWorkflow.resumePrompt', {
+                stage: t(`featureDelivery.stages.${feature.stage}.label`),
+              })}`
+            );
+          }}
+        />
       )}
 
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-5 py-4">

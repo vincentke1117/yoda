@@ -1,36 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import {
+  acceptedFeatureWorkflowStageSignal,
   deriveFeatureWorkflowProgress,
   FEATURE_WORKFLOW_STAGES,
   featureWorkflowAllowedTargetHandles,
+  featureWorkflowStageForFeatureStage,
   parseFeatureWorkflowStageSignal,
 } from './feature-workflow';
+import type { Feature, FeatureStageId, FeatureStatus } from './features';
 import type { RoomMember, RoomMessage } from './team-room';
 
-function handoff(
-  body: string,
-  index: number,
-  authorHandle: string,
-  mention = 'orchestrator'
-): RoomMessage {
-  return {
-    id: `message-${index}`,
-    roomId: 'room-1',
-    authorMemberId: `member-${authorHandle}`,
-    kind: 'handoff',
-    body,
-    mentions: [mention],
-    sessionRef: `conversation-${index}`,
-    verdict: null,
-    createdAt: new Date(2026, 6, 13, 0, 0, index).toISOString(),
-  };
-}
-
-function member(handle: string, status: RoomMember['status']): RoomMember {
+function member(handle: string): RoomMember {
   return {
     id: `member-${handle}`,
     roomId: 'room-1',
-    conversationId: `conversation-${handle}`,
+    conversationId: handle === 'you' ? null : `conversation-${handle}`,
     handle,
     displayName: handle,
     icon: '',
@@ -40,264 +24,223 @@ function member(handle: string, status: RoomMember['status']): RoomMember {
     skillSelection: null,
     autoApprove: false,
     accent: 'slate',
-    status,
+    status: 'finished',
     createdAt: '2026-07-13T00:00:00.000Z',
   };
 }
 
-const workflowMembers = FEATURE_WORKFLOW_STAGES.map((stage) => member(stage.handle, 'finished'));
-const roomMembers = [member('you', 'idle'), ...workflowMembers];
+const members = [member('you'), ...FEATURE_WORKFLOW_STAGES.map((stage) => member(stage.handle))];
 
-const SIGNALS = {
-  problem: '[FEATURE:problem:pass] Brief: search flow; success: users find a result',
-  product:
-    '[FEATURE:product-design:pass] Artifacts: docs/design.md; Decisions: inline search; Gate: criteria are testable',
-  implementation:
-    '[FEATURE:implementation:pass] Artifacts: src/search.ts; Evidence: focused tests pass; Risks: none',
-  validation:
-    '[FEATURE:validation:pass] Evidence: pnpm test; Coverage: acceptance criteria; Risks: none',
-  featureDocs:
-    '[FEATURE:feature-docs:pass] Artifacts: docs/search.mdx; Evidence: docs build; Coverage: user journey',
-  launchDocs:
-    '[FEATURE:launch-docs:pass] Artifacts: docs/launch.md; Evidence: claims checked; External action: open PR',
-} as const;
+function feature(stage: FeatureStageId, status: FeatureStatus = 'active'): Feature {
+  return {
+    id: 'feature-1',
+    projectId: 'project-1',
+    title: 'Governed Feature workflow',
+    problem: 'Feature delivery loses context.',
+    outcome: '',
+    nonGoals: '',
+    stage,
+    status,
+    templateId: 'feature-development-v1',
+    sourceIssues: [],
+    tasks: [
+      {
+        taskId: 'task-1',
+        name: 'Build it',
+        status: 'in_progress',
+        archivedAt: null,
+        workflowRoomId: 'room-1',
+      },
+    ],
+    artifacts: [],
+    events: [],
+    gate: { stage, nextStage: null, canAdvance: false, blockers: [] },
+    createdAt: '2026-07-13T00:00:00.000Z',
+    updatedAt: '2026-07-13T00:00:00.000Z',
+    completedAt: status === 'completed' ? '2026-07-13T01:00:00.000Z' : null,
+  };
+}
+
+function message(
+  body: string,
+  authorHandle: string,
+  mention: string,
+  kind: RoomMessage['kind'] = 'handoff'
+): RoomMessage {
+  return {
+    id: `message-${authorHandle}-${mention}`,
+    roomId: 'room-1',
+    authorMemberId: `member-${authorHandle}`,
+    kind,
+    body,
+    mentions: [mention],
+    sessionRef: authorHandle === 'you' ? null : `conversation-${authorHandle}`,
+    verdict: null,
+    createdAt: '2026-07-13T00:00:01.000Z',
+  };
+}
+
+const DESIGN_READY =
+  '[FEATURE:product-design:ready] {"summary":"design is reviewable","evidence":"criteria checked","artifacts":[{"type":"product_spec","title":"Spec","uri":"docs/design.md"},{"type":"ux_design","title":"UX","uri":"docs/design.md"},{"type":"acceptance_criteria","title":"AC","uri":"docs/design.md"}]}';
 
 describe('feature workflow protocol', () => {
-  it('parses a gate marker while preserving its human-readable evidence', () => {
-    expect(
-      parseFeatureWorkflowStageSignal(
-        '[FEATURE:validation:pass] Evidence: pnpm test; Coverage: acceptance criteria; Risks: none'
-      )
-    ).toEqual({
-      stageId: 'validation',
-      verdict: 'pass',
-      detail: 'Evidence: pnpm test; Coverage: acceptance criteria; Risks: none',
+  it('parses a typed ready envelope and rejects prose or invalid JSON', () => {
+    expect(parseFeatureWorkflowStageSignal(DESIGN_READY)).toMatchObject({
+      stageId: 'product-design',
+      verdict: 'ready',
+      summary: 'design is reviewable',
+      evidence: 'criteria checked',
+      artifacts: [
+        { type: 'product_spec', title: 'Spec', uri: 'docs/design.md' },
+        { type: 'ux_design', title: 'UX', uri: 'docs/design.md' },
+        { type: 'acceptance_criteria', title: 'AC', uri: 'docs/design.md' },
+      ],
     });
-    expect(parseFeatureWorkflowStageSignal('[FEATURE:unknown:pass] nope')).toBeNull();
-    expect(parseFeatureWorkflowStageSignal('validation passed')).toBeNull();
-    expect(parseFeatureWorkflowStageSignal('[FEATURE:validation:pass]')).toBeNull();
+    expect(parseFeatureWorkflowStageSignal('design passed')).toBeNull();
+    expect(parseFeatureWorkflowStageSignal('[FEATURE:product-design:ready] not-json')).toBeNull();
     expect(
       parseFeatureWorkflowStageSignal(
-        'Do not emit [FEATURE:validation:pass] until the checks actually pass.'
-      )
-    ).toBeNull();
-    expect(
-      parseFeatureWorkflowStageSignal(
-        '[FEATURE:validation:pass] Evidence: tests passed; Coverage: all; Risks: none [FEATURE:launch-docs:pass] not really'
-      )
-    ).toBeNull();
-    expect(
-      parseFeatureWorkflowStageSignal(
-        '[FEATURE:validation:pass] Evidence: tests passed; Risks: none'
+        '[FEATURE:product-design:pass] {"summary":"old marker","evidence":"none"}'
       )
     ).toBeNull();
   });
 
-  it('advances only through ordered durable hand-offs', () => {
-    const progress = deriveFeatureWorkflowProgress(workflowMembers, [
-      handoff(SIGNALS.problem, 1, 'orchestrator', 'product-design'),
-      handoff(SIGNALS.product, 2, 'product-design'),
-      handoff(SIGNALS.implementation, 3, 'engineering'),
-    ]);
+  it('parses a blocked envelope without treating it as aggregate status', () => {
+    expect(
+      parseFeatureWorkflowStageSignal(
+        '[FEATURE:validation:blocked] {"blocker":"regression","needed":"retreat and fix","evidence":"test failed"}'
+      )
+    ).toMatchObject({
+      stageId: 'validation',
+      verdict: 'blocked',
+      blocker: 'regression',
+      needed: 'retreat and fix',
+      artifacts: [],
+    });
+  });
 
-    expect(progress.map((stage) => stage.status)).toEqual([
-      'completed',
-      'completed',
+  it('projects the authoritative eight stages into the six-step SOP', () => {
+    expect(
+      deriveFeatureWorkflowProgress(feature('problem'), members, []).map((x) => x.status)
+    ).toEqual(['active', 'pending', 'pending', 'pending', 'pending', 'pending']);
+    expect(
+      deriveFeatureWorkflowProgress(feature('implementation'), members, []).map((x) => x.status)
+    ).toEqual(['completed', 'completed', 'active', 'pending', 'pending', 'pending']);
+    expect(
+      deriveFeatureWorkflowProgress(feature('done', 'completed'), members, []).every(
+        (x) => x.status === 'completed'
+      )
+    ).toBe(true);
+  });
+
+  it('uses Room evidence only as detail and never to advance canonical status', () => {
+    const forgedFuture = message(
+      '[FEATURE:launch-docs:ready] {"summary":"done","evidence":"claimed","artifacts":[]}',
+      'launch-docs',
+      'orchestrator'
+    );
+    const canonical = feature('design');
+    canonical.events = [
+      {
+        id: 'event-1',
+        featureId: canonical.id,
+        type: 'handoff_recorded',
+        actorType: 'agent',
+        payload: { messageId: 'message-product-design-orchestrator' },
+        createdAt: canonical.updatedAt,
+      },
+    ];
+    const progress = deriveFeatureWorkflowProgress(canonical, members, [
+      message(DESIGN_READY, 'product-design', 'orchestrator'),
+      forgedFuture,
+    ]);
+    expect(progress.map((item) => item.status)).toEqual([
       'completed',
       'active',
       'pending',
       'pending',
-    ]);
-    expect(progress[1]?.detail).toContain('Artifacts: docs/design.md');
-  });
-
-  it('does not let an out-of-order result skip a missing gate', () => {
-    const progress = deriveFeatureWorkflowProgress(workflowMembers, [
-      handoff(SIGNALS.problem, 1, 'orchestrator', 'product-design'),
-      handoff(SIGNALS.implementation, 2, 'engineering'),
-    ]);
-
-    expect(progress.map((stage) => stage.status)).toEqual([
-      'completed',
-      'active',
-      'pending',
-      'pending',
       'pending',
       'pending',
     ]);
+    expect(progress[1]?.detail).toContain('design is reviewable');
   });
 
-  it('invalidates downstream gates when an earlier stage is re-passed', () => {
-    const progress = deriveFeatureWorkflowProgress(workflowMembers, [
-      handoff(SIGNALS.problem, 1, 'orchestrator', 'product-design'),
-      handoff(SIGNALS.product, 2, 'product-design'),
-      handoff(SIGNALS.implementation, 3, 'engineering'),
-      handoff(
-        '[FEATURE:validation:blocked] Blocker: accessibility regression; Needed: engineering fix',
-        4,
-        'quality'
-      ),
-      handoff(
-        '[FEATURE:implementation:pass] Artifacts: src/search.ts; Evidence: regression test passes; Risks: none',
-        5,
-        'engineering'
-      ),
-    ]);
-
-    expect(progress.map((stage) => stage.status)).toEqual([
-      'completed',
-      'completed',
-      'completed',
-      'active',
-      'pending',
-      'pending',
-    ]);
-    expect(progress[3]?.detail).toBe('');
-  });
-
-  it('uses live state for the current stage without treating finished as a gate', () => {
-    const progress = deriveFeatureWorkflowProgress(
-      [member('orchestrator', 'finished'), member('product-design', 'awaiting-input')],
-      [handoff(SIGNALS.problem, 1, 'orchestrator', 'product-design')]
-    );
-
-    expect(progress[0]?.status).toBe('completed');
-    expect(progress[1]?.status).toBe('blocked');
-  });
-
-  it('rejects a gate marker from the wrong role or outside the hand-off path', () => {
-    const progress = deriveFeatureWorkflowProgress(workflowMembers, [
-      handoff(SIGNALS.problem, 1, 'engineering', 'product-design'),
-      handoff(SIGNALS.problem, 2, 'orchestrator', 'you'),
-    ]);
-
-    expect(progress[0]?.status).toBe('active');
-    expect(progress.slice(1).every((stage) => stage.status === 'pending')).toBe(true);
-  });
-
-  it('lets the Feature Lead persist a problem blocker to the human lead', () => {
-    const progress = deriveFeatureWorkflowProgress(workflowMembers, [
-      handoff(
-        '[FEATURE:problem:blocked] Blocker: target user is ambiguous; Needed: choose the target user',
-        1,
-        'orchestrator',
-        'you'
-      ),
-    ]);
-
-    expect(progress[0]?.status).toBe('blocked');
-    expect(progress[0]?.detail).toContain('Needed: choose the target user');
-  });
-
-  it('allows only the current gate to start and blocks fan-out', () => {
-    const opening = handoff('Build search', 0, 'you', 'orchestrator');
-    opening.kind = 'text';
-    expect(featureWorkflowAllowedTargetHandles(roomMembers, [opening], opening)).toEqual([
-      'orchestrator',
-    ]);
-
-    const skipped = handoff('Start coding now', 1, 'orchestrator', 'engineering');
+  it('projects aggregate blocked state onto only the current macro step', () => {
     expect(
-      featureWorkflowAllowedTargetHandles(roomMembers, [opening, skipped], skipped)
-    ).not.toContain('engineering');
-
-    const passed = handoff(SIGNALS.problem, 2, 'orchestrator', 'product-design');
-    expect(featureWorkflowAllowedTargetHandles(roomMembers, [opening, passed], passed)).toContain(
-      'product-design'
-    );
-
-    const broadcast = handoff('Start every stage', 3, 'orchestrator', 'all');
-    expect(
-      featureWorkflowAllowedTargetHandles(roomMembers, [opening, passed, broadcast], broadcast)
-    ).toEqual([]);
-
-    const multiTarget = handoff('Run both stages', 4, 'orchestrator', 'product-design');
-    multiTarget.mentions.push('engineering');
-    expect(
-      featureWorkflowAllowedTargetHandles(roomMembers, [opening, passed, multiTarget], multiTarget)
-    ).toEqual([]);
+      deriveFeatureWorkflowProgress(feature('verification', 'blocked'), members, []).map(
+        (item) => item.status
+      )
+    ).toEqual(['completed', 'completed', 'completed', 'blocked', 'pending', 'pending']);
   });
 
-  it('allows human escalation only through the Feature Lead', () => {
-    const runningLeadMembers = roomMembers.map((roomMember) =>
-      roomMember.handle === 'orchestrator'
-        ? { ...roomMember, status: 'running' as const }
-        : roomMember
-    );
-    const blocker = handoff(
-      '[FEATURE:problem:blocked] Blocker: target user is ambiguous; Needed: human decision',
-      1,
-      'orchestrator',
-      'you'
-    );
-    expect(featureWorkflowAllowedTargetHandles(runningLeadMembers, [blocker], blocker)).toContain(
-      'you'
-    );
+  it('routes only through the current canonical owner', () => {
+    const design = feature('design');
+    const human = message('@orchestrator continue', 'you', 'orchestrator', 'text');
+    expect(featureWorkflowAllowedTargetHandles(design, members, human)).toEqual(['orchestrator']);
 
-    const workerEscalation = handoff('I need a decision', 2, 'product-design', 'you');
+    const delegate = message('@product-design work', 'orchestrator', 'product-design', 'text');
+    expect(featureWorkflowAllowedTargetHandles(design, members, delegate)).toEqual([
+      'product-design',
+      'you',
+    ]);
+
+    const skipped = message('@engineering start', 'orchestrator', 'engineering', 'text');
+    expect(featureWorkflowAllowedTargetHandles(design, members, skipped)).toEqual([
+      'product-design',
+      'you',
+    ]);
+
+    const report = message(DESIGN_READY, 'product-design', 'orchestrator');
+    expect(featureWorkflowAllowedTargetHandles(design, members, report)).toEqual(['orchestrator']);
+
+    const broadcast = { ...delegate, mentions: ['product-design', 'engineering'] };
+    expect(featureWorkflowAllowedTargetHandles(design, members, broadcast)).toEqual([]);
+
+    expect(
+      featureWorkflowAllowedTargetHandles(feature('design', 'blocked'), members, delegate)
+    ).toEqual(['you']);
     expect(
       featureWorkflowAllowedTargetHandles(
-        roomMembers,
-        [handoff(SIGNALS.problem, 1, 'orchestrator', 'product-design'), workerEscalation],
-        workerEscalation
+        feature('design', 'blocked'),
+        members,
+        message(DESIGN_READY, 'product-design', 'orchestrator')
       )
-    ).toEqual(['orchestrator']);
+    ).toEqual([]);
   });
 
-  it('lets the running Feature Lead return the completion packet to the human', () => {
-    const history = [
-      handoff(SIGNALS.problem, 1, 'orchestrator', 'product-design'),
-      handoff(SIGNALS.product, 2, 'product-design'),
-      handoff(SIGNALS.implementation, 3, 'engineering'),
-      handoff(SIGNALS.validation, 4, 'quality'),
-      handoff(SIGNALS.featureDocs, 5, 'feature-docs'),
-      handoff(SIGNALS.launchDocs, 6, 'launch-docs'),
-    ];
-    const completion = handoff('All six gates passed with evidence.', 7, 'orchestrator', 'you');
-    const runningMembers = roomMembers.map((roomMember) =>
-      roomMember.handle === 'orchestrator' || roomMember.handle === 'launch-docs'
-        ? { ...roomMember, status: 'running' as const }
-        : roomMember
-    );
-
+  it('accepts evidence only from the freshly hydrated stage owner and expected recipient', () => {
+    const design = feature('design');
     expect(
-      featureWorkflowAllowedTargetHandles(runningMembers, [...history, completion], completion)
-    ).toContain('you');
+      acceptedFeatureWorkflowStageSignal(
+        design,
+        members,
+        message(DESIGN_READY, 'product-design', 'orchestrator')
+      )
+    ).toMatchObject({ stageId: 'product-design', verdict: 'ready' });
+    expect(
+      acceptedFeatureWorkflowStageSignal(
+        design,
+        members,
+        message(DESIGN_READY, 'engineering', 'orchestrator')
+      )
+    ).toBeNull();
+    expect(
+      acceptedFeatureWorkflowStageSignal(
+        feature('planning'),
+        members,
+        message(DESIGN_READY, 'product-design', 'orchestrator')
+      )
+    ).toBeNull();
+    expect(
+      acceptedFeatureWorkflowStageSignal(
+        feature('design', 'cancelled'),
+        members,
+        message(DESIGN_READY, 'product-design', 'orchestrator')
+      )
+    ).toBeNull();
   });
 
-  it('unlocks implementation repair after validation blocks without unlocking documentation', () => {
-    const history = [
-      handoff(SIGNALS.problem, 1, 'orchestrator', 'product-design'),
-      handoff(SIGNALS.product, 2, 'product-design'),
-      handoff(SIGNALS.implementation, 3, 'engineering'),
-      handoff(
-        '[FEATURE:validation:blocked] Blocker: regression; Needed: engineering fix and re-validation',
-        4,
-        'quality'
-      ),
-    ];
-    const repair = handoff('Repair the regression', 5, 'orchestrator', 'engineering');
-    const allowed = featureWorkflowAllowedTargetHandles(roomMembers, [...history, repair], repair);
-
-    expect(allowed).toContain('engineering');
-    expect(allowed).not.toContain('feature-docs');
-    expect(allowed).not.toContain('launch-docs');
-  });
-
-  it('completes all six gates only with ordered structured evidence', () => {
-    const progress = deriveFeatureWorkflowProgress(workflowMembers, [
-      handoff(SIGNALS.problem, 1, 'orchestrator', 'product-design'),
-      handoff(SIGNALS.product, 2, 'product-design'),
-      handoff(SIGNALS.implementation, 3, 'engineering'),
-      handoff(SIGNALS.validation, 4, 'quality'),
-      handoff(SIGNALS.featureDocs, 5, 'feature-docs'),
-      handoff(SIGNALS.launchDocs, 6, 'launch-docs'),
-    ]);
-
-    expect(progress.every((stage) => stage.status === 'completed')).toBe(true);
-  });
-
-  it('keeps the six-stage contract stable', () => {
+  it('keeps the macro contract and canonical ownership mapping stable', () => {
     expect(FEATURE_WORKFLOW_STAGES.map((stage) => stage.id)).toEqual([
       'problem',
       'product-design',
@@ -306,6 +249,8 @@ describe('feature workflow protocol', () => {
       'feature-docs',
       'launch-docs',
     ]);
+    expect(featureWorkflowStageForFeatureStage('planning').handle).toBe('engineering');
+    expect(featureWorkflowStageForFeatureStage('implementation').handle).toBe('engineering');
     expect(new Set(FEATURE_WORKFLOW_STAGES.map((stage) => stage.handle)).size).toBe(6);
   });
 });

@@ -22,6 +22,8 @@ import {
 import { normalizeRoutingHopLimit, type RoutingHopLimit } from '@shared/team-routing-limit';
 import { db } from '@main/db/client';
 import {
+  featureTaskLinks,
+  featureWorkflowOwners,
   roomMembers,
   roomMessages,
   teamRooms,
@@ -39,6 +41,7 @@ function mapRoom(row: TeamRoomRow): TeamRoom {
     id: row.id,
     projectId: row.projectId,
     taskId: row.taskId,
+    featureId: row.featureId,
     name: row.name,
     preset: row.preset as RoomPreset,
     status: row.status as TeamRoom['status'],
@@ -86,6 +89,7 @@ function mapMessage(row: RoomMessageRow): RoomMessage {
 export type CreateRoomParams = {
   projectId: string;
   taskId: string;
+  featureId?: string | null;
   name: string;
   preset?: RoomPreset;
   routingHopLimit?: RoutingHopLimit;
@@ -93,20 +97,53 @@ export type CreateRoomParams = {
 
 export async function createRoom(params: CreateRoomParams): Promise<TeamRoom> {
   const id = randomUUID();
-  const [row] = await db
-    .insert(teamRooms)
-    .values({
-      id,
-      projectId: params.projectId,
-      taskId: params.taskId,
-      name: params.name,
-      preset: params.preset ?? 'freeform',
-      status: 'active',
-      routingHopLimit: normalizeRoutingHopLimit(params.routingHopLimit),
-      createdAt: sql`CURRENT_TIMESTAMP`,
-      updatedAt: sql`CURRENT_TIMESTAMP`,
-    })
-    .returning();
+  const values = {
+    id,
+    projectId: params.projectId,
+    taskId: params.taskId,
+    featureId: params.featureId ?? null,
+    name: params.name,
+    preset: params.preset ?? 'freeform',
+    status: 'active',
+    routingHopLimit: normalizeRoutingHopLimit(params.routingHopLimit),
+    createdAt: sql`CURRENT_TIMESTAMP`,
+    updatedAt: sql`CURRENT_TIMESTAMP`,
+  } as const;
+  const row =
+    values.preset === 'feature-workflow'
+      ? db.transaction((tx) => {
+          if (!values.featureId) {
+            throw new Error('Feature workflow Room requires an authoritative Feature.');
+          }
+          const owner = tx
+            .select({ taskId: featureWorkflowOwners.taskId })
+            .from(featureWorkflowOwners)
+            .where(
+              and(
+                eq(featureWorkflowOwners.taskId, values.taskId),
+                eq(featureWorkflowOwners.featureId, values.featureId)
+              )
+            )
+            .limit(1)
+            .get();
+          const link = tx
+            .select({ taskId: featureTaskLinks.taskId })
+            .from(featureTaskLinks)
+            .where(
+              and(
+                eq(featureTaskLinks.featureId, values.featureId),
+                eq(featureTaskLinks.taskId, values.taskId)
+              )
+            )
+            .limit(1)
+            .get();
+          if (!owner || !link) {
+            throw new Error('Feature workflow Room requires its Task ownership to remain linked.');
+          }
+          return tx.insert(teamRooms).values(values).returning().get();
+        })
+      : (await db.insert(teamRooms).values(values).returning())[0];
+  if (!row) throw new Error('Could not create Team Room.');
   return mapRoom(row);
 }
 
@@ -139,6 +176,38 @@ export async function getRoomForTask(
   if (!room) return null;
   const [members, messages] = await Promise.all([getMembers(room.id), getMessages(room.id)]);
   return { room: mapRoom(room), members, messages };
+}
+
+export async function getFeatureRoomForTask(
+  projectId: string,
+  taskId: string,
+  featureId: string
+): Promise<RoomSnapshot | null> {
+  const [room] = await db
+    .select()
+    .from(teamRooms)
+    .where(
+      and(
+        eq(teamRooms.projectId, projectId),
+        eq(teamRooms.taskId, taskId),
+        eq(teamRooms.featureId, featureId),
+        eq(teamRooms.preset, 'feature-workflow'),
+        eq(teamRooms.status, 'active')
+      )
+    )
+    .orderBy(desc(teamRooms.createdAt))
+    .limit(1);
+  if (!room) return null;
+  const [members, messages] = await Promise.all([getMembers(room.id), getMessages(room.id)]);
+  return { room: mapRoom(room), members, messages };
+}
+
+export async function archiveRoom(roomId: string): Promise<void> {
+  await db
+    .update(teamRooms)
+    .set({ status: 'archived', updatedAt: new Date().toISOString() })
+    .where(eq(teamRooms.id, roomId));
+  events.emit(teamRoomUpdatedChannel, { roomId }, roomId);
 }
 
 export async function getAllRooms(): Promise<TeamRoom[]> {

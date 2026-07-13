@@ -48,6 +48,12 @@ export type FeatureArtifact = {
   title: string;
   uri: string;
   contentHash: string | null;
+  /** Task worktree that produced this evidence; null for project-level/manual artifacts. */
+  sourceTaskId: string | null;
+  /** Team Room provenance for automatically proposed artifacts. */
+  sourceRoomId: string | null;
+  sourceMessageId: string | null;
+  sourceMemberId: string | null;
   status: FeatureArtifactStatus;
   createdAt: string;
   updatedAt: string;
@@ -59,6 +65,8 @@ export type FeatureTask = {
   name: string;
   status: TaskLifecycleStatus;
   archivedAt: string | null;
+  /** Active Feature Team Room that makes this Task non-detachable. */
+  workflowRoomId: string | null;
 };
 
 export type FeatureEventType =
@@ -71,7 +79,8 @@ export type FeatureEventType =
   | 'task_unlinked'
   | 'artifact_added'
   | 'artifact_updated'
-  | 'artifact_removed';
+  | 'artifact_removed'
+  | 'handoff_recorded';
 
 export type FeatureEvent = {
   id: string;
@@ -175,6 +184,7 @@ export type FeatureMutationError =
   | { type: 'feature_not_found' }
   | { type: 'task_not_found' }
   | { type: 'cross_project_task' }
+  | { type: 'active_workflow_room'; roomId: string }
   | { type: 'artifact_not_found' }
   | { type: 'already_at_first_stage' };
 
@@ -186,11 +196,11 @@ export type FeatureTransitionError =
 export const featureRequiredArtifacts: Readonly<
   Partial<Record<FeatureStageId, readonly FeatureArtifactType[]>>
 > = {
-  design: ['product_spec', 'acceptance_criteria'],
+  design: ['product_spec', 'ux_design', 'acceptance_criteria'],
   planning: ['technical_plan'],
   verification: ['test_evidence'],
   documentation: ['feature_docs'],
-  release: ['delivery_summary'],
+  release: ['delivery_summary', 'pull_request', 'release_note', 'seo'],
 };
 
 export function getNextFeatureStage(stage: FeatureStageId): FeatureStageId | null {

@@ -1,58 +1,63 @@
-# Feature loop
+# Feature development
 
-Feature loop turns one problem into an ordered delivery package: product design, code, validation, feature documentation, and PR/SEO documentation. Each stage runs in its own agent session, shares the same task worktree, and hands evidence to the next stage through the task's Team Room.
+Feature development turns one problem into a governed delivery record and a coordinated Team Room.
+The Feature workspace owns the durable stage, approvals, linked Tasks, artifacts, and history; the
+Room runs the specialist agents that prepare each piece of evidence.
 
-## Start a Feature loop
+## Start
 
-From Home:
+From Home, choose **Workflow → Feature** after selecting a project. From **Create task**, choose
+**Feature workflow** for a branch or Issue Task. Yoda provisions the Task, creates or reuses its
+active Feature, links the source Issue and Task, and then starts one Feature Room. Retrying the same
+action reuses that record instead of forking delivery state.
 
-1. Enter the user problem and desired outcome.
-2. Open **Development paradigm**.
-3. Under **Workflow**, choose **Feature loop**.
-4. Review the six stages and team runtimes, then confirm and submit.
+Concurrent starts share one in-flight seed and one durable Task → Feature owner. The database also
+permits only one active Feature Room for a project Task. While that Room is active, the Feature
+workspace locks its owner Task against accidental unlinking.
 
-From **Create task**:
+Pull-request Tasks retain their review-focused Standard flow.
 
-1. Choose **From branch** or **From issue**.
-2. Under **Execution mode**, choose **Feature loop**.
-3. Write or review the problem brief. An Issue automatically contributes its title, URL, and description.
-4. Configure the branch/worktree and create the task.
+## Canonical gates
 
-Pull-request tasks keep their review-oriented flow; Feature loop is intended to begin from a problem, Issue, or branch.
-
-## The six gates
-
-| Gate | Owner | Required result |
+| Feature stage | Agent owner | Evidence required before advance |
 | --- | --- | --- |
-| 01 Problem | Feature Lead | User, outcome, non-goals, constraints, success signal, and documentation location |
-| 02 Product design | Product Design | PRD, UX flow, UI states, accessibility, edge cases, and acceptance criteria |
-| 03 Implementation | Engineering | Working code, focused tests, and recorded technical decisions |
-| 04 Validation | Quality | Independent review and exact command results; failures return to Engineering |
-| 05 Feature docs | Feature Docs | User-facing behavior, setup, examples, limitations, and troubleshooting |
-| 06 PR & SEO | PR & SEO | Reviewer-ready PR/changelog copy and discovery copy, or an explicit SEO N/A reason |
+| Problem | Feature Lead | A concrete problem definition |
+| Product & UX design | Product Design | Approved product spec, UX design, and acceptance criteria |
+| Technical plan | Engineering | Approved technical plan |
+| Implementation | Engineering | Every linked Task is in Review or Done |
+| Verification | Quality | Approved validation report / test evidence |
+| Feature docs | Feature Docs | Approved user-facing feature documentation |
+| Release | PR & SEO | Approved delivery summary, PR packet, release note, and SEO artifact |
+| Done | — | The complete audited delivery record |
 
-The Feature Lead moves one gate at a time. It checks the actual artifact and evidence before starting the next member. If validation finds a defect, Engineering receives the concrete findings and Quality must validate the revised result again.
+The Room groups this into six visible steps by combining Technical plan + Implementation and
+Release + Done. Its status still comes from the table above.
 
-## Read the hand-off rail
+## Review an agent hand-off
 
-The numbered rail above the room conversation is rebuilt from saved hand-off messages:
+An agent's **ready** hand-off is a proposal, not a passed gate. Yoda validates it against the current
+owner and stage, adds its artifacts to Feature delivery as drafts, and records the source Task,
+Room, message, and member. Open **Feature delivery** from the Room header to inspect the real file,
+mark each required artifact Approved, and advance the gate.
 
-- **Waiting** means a prerequisite has not passed.
-- **In progress** means the stage or an approved rework is active.
-- **Gate passed** means an ordered pass marker and evidence were saved.
-- **Blocked** means the worker reported a durable blocker, currently needs input, or hit an execution error. Explicit blocker hand-offs survive restarts; transient runtime state is recalculated when sessions resume.
+After advancing or retreating, return to the Room and choose **Continue current stage**. The Feature
+Lead receives the current database stage and may delegate only its owner. A future-stage mention or
+`@all` is kept waiting.
 
-Select a stage to open its responsible agent details and session access. The line below the rail shows the latest accepted evidence or the current required deliverable. Because completed gates and explicit blockers come from persisted room history, closing and reopening Yoda does not erase that evidence.
+If a newer hand-off proposes the same artifact type, Yoda marks the older evidence stale. This
+prevents an old approval from making a revised design or test report appear green.
 
-## Artifact behavior
+## Failure and rework
 
-Agents follow the repository's own instructions and documentation layout. If the repository has no feature-doc convention, the Product Design agent uses `docs/features/<feature-slug>/design.md`; later documentation stays beside that feature package. Every hand-off includes concrete artifact paths so the next agent can read the real files rather than relying on a summary alone.
+- A blocked hand-off records the blocker and requested action without silently pausing the whole
+  Feature. Set aggregate status to Blocked only when that is the intended product state.
+- If verification finds an implementation defect, retreat the Feature to Implementation, continue
+  the Room, fix it, move the Task back to Review, and verify again.
+- Runtime completion never passes a gate. Missing/malformed evidence remains visible in chat but is
+  not ingested.
+- Blocked, cancelled, completed, or stale-stage Agent replies cannot add artifacts/events or move a
+  Task to Review. Resume the Feature and ask the current owner to submit fresh evidence.
+- Artifact paths are opened in the Task worktree that produced them, including SSH-backed Tasks.
 
-Feature loop prepares PR and SEO documentation but does not automatically push, merge, publish, or create an external PR unless the original request or repository instructions authorize it.
-
-## If the workflow is blocked
-
-- Open the blocked stage to inspect its session and full output.
-- Reply in the room or `@` the responsible member with the missing decision.
-- For a failed validation, let the Feature Lead send findings back to Engineering, then re-run Quality.
-- If an approved design or implementation changes, expect later gates to return to Waiting; this prevents stale test or documentation evidence from remaining green.
+The workflow prepares PR and SEO material but does not push, merge, publish, or create external
+resources unless the original request and repository policy authorize those actions.

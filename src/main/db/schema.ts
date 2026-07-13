@@ -429,6 +429,32 @@ export const featureTaskLinks = sqliteTable(
   })
 );
 
+/**
+ * A Task may participate in several Features, but a Feature Team workflow needs
+ * one durable owner so concurrent starts cannot create parallel aggregates.
+ */
+export const featureWorkflowOwners = sqliteTable(
+  'feature_workflow_owners',
+  {
+    taskId: text('task_id')
+      .primaryKey()
+      .references(() => tasks.id, { onDelete: 'cascade' }),
+    featureId: text('feature_id')
+      .notNull()
+      .references(() => features.id, { onDelete: 'cascade' }),
+    createdAt: text('created_at')
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text('updated_at')
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`)
+      .$onUpdate(() => new Date().toISOString()),
+  },
+  (table) => ({
+    featureIdIdx: index('idx_feature_workflow_owners_feature_id').on(table.featureId),
+  })
+);
+
 export const featureIssueLinks = sqliteTable(
   'feature_issues',
   {
@@ -459,6 +485,10 @@ export const featureArtifacts = sqliteTable(
     title: text('title').notNull(),
     uri: text('uri').notNull(),
     contentHash: text('content_hash'),
+    sourceTaskId: text('source_task_id'),
+    sourceRoomId: text('source_room_id'),
+    sourceMessageId: text('source_message_id'),
+    sourceMemberId: text('source_member_id'),
     status: text('status').notNull().default('draft'),
     createdAt: text('created_at')
       .notNull()
@@ -472,6 +502,8 @@ export const featureArtifacts = sqliteTable(
   (table) => ({
     featureIdIdx: index('idx_feature_artifacts_feature_id').on(table.featureId),
     featureTypeIdx: index('idx_feature_artifacts_feature_type').on(table.featureId, table.type),
+    sourceTaskIdIdx: index('idx_feature_artifacts_source_task_id').on(table.sourceTaskId),
+    sourceMessageIdIdx: index('idx_feature_artifacts_source_message_id').on(table.sourceMessageId),
   })
 );
 
@@ -713,6 +745,7 @@ export const teamRooms = sqliteTable(
     taskId: text('task_id')
       .notNull()
       .references(() => tasks.id, { onDelete: 'cascade' }),
+    featureId: text('feature_id'),
     name: text('name').notNull(),
     /** Preset that seeded the room: 'review-loop' | 'freeform' | … */
     preset: text('preset').notNull().default('freeform'),
@@ -731,6 +764,10 @@ export const teamRooms = sqliteTable(
   (table) => ({
     projectIdIdx: index('idx_team_rooms_project_id').on(table.projectId),
     taskIdIdx: index('idx_team_rooms_task_id').on(table.taskId),
+    featureIdIdx: index('idx_team_rooms_feature_id').on(table.featureId),
+    activeFeatureWorkflowTaskIdx: uniqueIndex('idx_team_rooms_active_feature_workflow_task')
+      .on(table.projectId, table.taskId)
+      .where(sql`${table.preset} = 'feature-workflow' AND ${table.status} = 'active'`),
   })
 );
 
@@ -1013,6 +1050,7 @@ export const featuresRelations = relations(features, ({ one, many }) => ({
     references: [projects.id],
   }),
   taskLinks: many(featureTaskLinks),
+  workflowOwners: many(featureWorkflowOwners),
   issueLinks: many(featureIssueLinks),
   artifacts: many(featureArtifacts),
   events: many(featureEvents),
@@ -1025,6 +1063,17 @@ export const featureTaskLinksRelations = relations(featureTaskLinks, ({ one }) =
   }),
   task: one(tasks, {
     fields: [featureTaskLinks.taskId],
+    references: [tasks.id],
+  }),
+}));
+
+export const featureWorkflowOwnersRelations = relations(featureWorkflowOwners, ({ one }) => ({
+  feature: one(features, {
+    fields: [featureWorkflowOwners.featureId],
+    references: [features.id],
+  }),
+  task: one(tasks, {
+    fields: [featureWorkflowOwners.taskId],
     references: [tasks.id],
   }),
 }));
@@ -1044,6 +1093,10 @@ export const featureArtifactsRelations = relations(featureArtifacts, ({ one }) =
   feature: one(features, {
     fields: [featureArtifacts.featureId],
     references: [features.id],
+  }),
+  sourceTask: one(tasks, {
+    fields: [featureArtifacts.sourceTaskId],
+    references: [tasks.id],
   }),
 }));
 
@@ -1072,6 +1125,7 @@ export const messagesRelations = relations(messages, ({ one }) => ({
 export const teamRoomsRelations = relations(teamRooms, ({ one, many }) => ({
   project: one(projects, { fields: [teamRooms.projectId], references: [projects.id] }),
   task: one(tasks, { fields: [teamRooms.taskId], references: [tasks.id] }),
+  feature: one(features, { fields: [teamRooms.featureId], references: [features.id] }),
   members: many(roomMembers),
   messages: many(roomMessages),
 }));

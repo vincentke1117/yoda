@@ -1104,8 +1104,8 @@
     "modeReviewDesc": "一个 AI 实现、一个 AI 评审，反复打磨直到通过。",
     "modeTeamReview": "Review",
     "modeTeamReviewDesc": "一个 AI 小组以群聊协作，实现与评审来回打磨。",
-    "modeTeamFeature": "Feature 闭环",
-    "modeTeamFeatureDesc": "从问题与产品设计开始，依次完成代码、验证、功能文档和 PR/SEO 文案，每一步都有门禁。",
+    "modeTeamFeature": "Feature 工作流",
+    "modeTeamFeatureDesc": "以唯一 Feature 交付为主线，让专业 Agent 从产品与 UI/UX 一直接力到 PR、发布与 SEO 证据。",
     "modeTeamStartup": "创业团队",
     "modeTeamStartupDesc": "一支 AI 团队（CEO、产品、工程、设计、运营）分工协作。",
     "modeTeamDesc": "一支自定义 AI 团队协作完成任务。",
@@ -1537,8 +1537,8 @@
       "executionMode": "执行方式",
       "executionAgent": "标准任务",
       "executionAgentDescription": "由一个选定 Agent 从当前 Prompt 开始。",
-      "executionFeature": "Feature 闭环",
-      "executionFeatureDescription": "从问题到 PR 与 SEO，依次经过 6 道门禁。",
+      "executionFeature": "Feature 工作流",
+      "executionFeatureDescription": "一个权威 Feature 加六段专业协作执行。",
       "featureBrief": "问题简报",
       "featureBriefPlaceholder": "描述用户问题、期望结果、约束和已知的成功信号。",
       "featureWorkflowTaskNotReady": "任务已创建，但 worktree 尚未就绪。请先修复任务设置，再启动 Feature 闭环。",
@@ -1972,9 +1972,14 @@
     }
   },
   "featureWorkflow": {
-    "title": "Feature 交接轨",
-    "subtitle": "每个阶段都把证据与产物交给下一阶段。",
+    "title": "Feature 协作执行",
+    "subtitle": "状态以 Feature 交付为准；Agent 证据先作为待审核草稿进入。",
     "progress": "{{completed}} / {{total}} 道门禁",
+    "openWorkspace": "查看 Feature 交付",
+    "resume": "继续当前阶段",
+    "resumePrompt": "Feature 交付已进入「{{stage}}」。请检查当前门禁，只委派当前负责人，并提交待审核证据。",
+    "loading": "正在读取唯一的 Feature 交付状态…",
+    "unavailable": "这个房间没有关联唯一的 Feature 交付记录，路由已暂停。",
     "latestEvidence": "最近证据",
     "currentDeliverable": "当前交付物",
     "status": {
@@ -1994,7 +1999,7 @@
       },
       "implementation": {
         "title": "代码实现",
-        "deliverable": "生产代码、聚焦测试与技术决策"
+        "deliverable": "已批准技术方案、生产代码与聚焦测试"
       },
       "validation": {
         "title": "测试验证",
@@ -2006,7 +2011,7 @@
       },
       "launch-docs": {
         "title": "PR 与 SEO",
-        "deliverable": "PR 正文、Changelog、发布说明与传播文案"
+        "deliverable": "交付摘要、PR 文档、发布说明与 SEO 文案"
       }
     }
   },
@@ -3597,7 +3602,8 @@
       "noTasks": "当前项目还没有可关联的任务。",
       "none": "尚未关联实现任务；进入实现阶段后，至少需要一个任务完成审查。",
       "archived": "已归档",
-      "unlink": "取消关联“{{title}}”"
+      "unlink": "取消关联“{{title}}”",
+      "activeWorkflowLocked": "活跃的 Feature 工作流正在使用此任务，请先归档工作流房间"
     },
     "artifacts": {
       "title": "交付物与证据",
@@ -3609,6 +3615,7 @@
       "uriHint": "项目内文件使用相对路径；外部材料可使用完整链接。",
       "status": "审查状态",
       "open": "打开交付物",
+      "openSourceTask": "打开来源任务",
       "empty": "还没有交付物；添加文档、测试结果或发布材料",
       "approve": "批准交付物",
       "markDraft": "改为草稿",
@@ -3668,7 +3675,8 @@
         "task_unlinked": "取消任务关联",
         "artifact_added": "添加交付物",
         "artifact_updated": "更新交付物",
-        "artifact_removed": "移除交付物"
+        "artifact_removed": "移除交付物",
+        "handoff_recorded": "记录 Agent 交接"
       }
     }
   },

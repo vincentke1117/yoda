@@ -4,7 +4,7 @@
 
 ### Added
 
-- Develop features through a durable six-stage Feature loop that hands one problem through product/UI design, implementation, independent validation, feature documentation, and PR/SEO copy with visible evidence-backed gates.
+- Develop features through one governed delivery spine that links the project Feature workbench to a six-step multi-agent execution Room, ingests worktree evidence as reviewable drafts, and preserves explicit gates from product/UX design through PR, release, and SEO documentation.
 
 ## 0.16.0
 
