@@ -10,6 +10,8 @@ Use a master-detail layout at wide container sizes. A compact 240px navigation r
 
 When a detail opens or changes, the rail scrolls the active skill into the center of the visible list and briefly applies the same amber focus ring used by the catalog. The transient emphasis fades while the persistent selected background and leading rail remain.
 
+The navigation rail persists across skill-detail route changes so its scroll position is not reset before auto-positioning. Only the right-hand detail content is keyed by skill ID, keeping skill-specific interaction state isolated while the rail scrolls from its current position.
+
 Selecting a skill uses the existing skill-tab navigation. An already-open detail is focused and a new skill opens as a deduplicated detail tab, preserving Yoda's established comparison model. Installation, disablement, editing, and other entity actions remain in the shared detail components.
 
 Right-clicking another skill offers two distinct actions. “Compare SKILL.md” opens a deduplicated skill-scope tab backed by the same Monaco side-by-side diff configuration used for Git files, including line and word changes, synchronized scrolling, and collapsed unchanged regions. “Open in side pane” remains a quick way to inspect two complete detail pages at once.
