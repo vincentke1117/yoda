@@ -94,6 +94,7 @@ function normalizeTabParams(
  */
 export const PROJECT_PAGE_VIEWS = [
   'overview',
+  'features',
   'tasks',
   'issues',
   'pullRequests',
@@ -143,7 +144,8 @@ export function isIndexTab(tab: AppTabEntry): boolean {
     return !target || target.kind === 'overview';
   }
   // Within a project scope only the overview page is fixed; the other pages
-  // (tasks/sessions/harness/docs/settings) open on demand and are closeable.
+  // (Features, Tasks, Issues, Sessions, Harness, Docs, Settings, …) open on
+  // demand and are closeable.
   if (tab.viewId === 'project') {
     return ((tab.params.view as string | undefined) ?? 'overview') === 'overview';
   }

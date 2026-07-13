@@ -11,6 +11,7 @@ import { conversationController } from './core/conversations/controller';
 import { dependenciesController } from './core/dependencies/controller';
 import { editorBufferController } from './core/editor/controller';
 import { featurebaseController } from './core/featurebase/controller';
+import { featureController } from './core/features/controller';
 import { forgejoController } from './core/forgejo/controller';
 import { filesController } from './core/fs/controller';
 import { gitController } from './core/git/controller';
@@ -66,6 +67,7 @@ export const rpcRouter = createRPCRouter({
   update: updateController,
   pty: ptyController,
   featurebase: featurebaseController,
+  features: featureController,
   forgejo: forgejoController,
   github: githubController,
   gitlab: gitlabController,

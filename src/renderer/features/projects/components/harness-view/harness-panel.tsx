@@ -20,6 +20,7 @@ import {
   type HarnessRuntimeId,
 } from '@shared/harness';
 import { openProjectFileTab } from '@renderer/features/project-file/project-file-session';
+import { joinProjectPath } from '@renderer/features/projects/project-path';
 import { asMounted, getProjectStore } from '@renderer/features/projects/stores/project-selectors';
 import {
   FilePathActionsDropdown,
@@ -479,14 +480,4 @@ function DebugSection({
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   return `${(bytes / 1024).toFixed(1)} KB`;
-}
-
-function joinProjectPath(basePath: string, relativePath: string): string {
-  const normalizedRelativePath = relativePath.replace(/^\/+/, '');
-  if (!normalizedRelativePath) return basePath;
-  const separator = basePath.includes('\\') && !basePath.includes('/') ? '\\' : '/';
-  return `${basePath.replace(/[\\/]+$/, '')}${separator}${normalizedRelativePath.replace(
-    /\//g,
-    separator
-  )}`;
 }
