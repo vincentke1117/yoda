@@ -1800,6 +1800,7 @@
       "agents": "Agents",
       "agentTeams": "Agent Teams",
       "skills": "Skills",
+      "plugins": "Plugins",
       "mcp": "MCP",
       "automation": "Automation"
     }
