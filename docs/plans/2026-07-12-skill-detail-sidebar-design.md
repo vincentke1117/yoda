@@ -10,6 +10,8 @@ Use a master-detail layout at wide container sizes. A compact 240px navigation r
 
 Selecting a skill uses the existing skill-tab navigation. An already-open detail is focused and a new skill opens as a deduplicated detail tab, preserving Yoda's established comparison model. Installation, disablement, editing, and other entity actions remain in the shared detail components.
 
+Right-clicking another skill offers a focused comparison action. It pins that skill detail into Yoda's existing shell side pane while leaving the current detail in the main area, producing a real side-by-side view without introducing a second comparison state model.
+
 At narrow container widths the rail is hidden and the existing detail layout remains unchanged. The app tab strip continues to provide navigation in that constrained host.
 
 ## Verification

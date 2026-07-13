@@ -2047,6 +2047,7 @@
       "callFrequency": "快捷调用",
       "characters": "字符数",
       "compatibility": "兼容性",
+      "compareWithCurrent": "与当前技能对比",
       "copyDescription": "复制描述",
       "copyPrompt": "复制 prompt",
       "copySkillMd": "复制 SKILL.md",

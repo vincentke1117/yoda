@@ -1,8 +1,15 @@
-import { Search } from 'lucide-react';
+import { PanelRightOpen, Search } from 'lucide-react';
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { CatalogSkill } from '@shared/skills/types';
 import { useOpenViewTab } from '@renderer/lib/layout/navigation-provider';
+import { appState } from '@renderer/lib/stores/app-state';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from '@renderer/lib/ui/context-menu';
 import { Input } from '@renderer/lib/ui/input';
 import { cn } from '@renderer/utils/utils';
 import SkillIconRenderer from './SkillIconRenderer';
@@ -58,38 +65,60 @@ const SkillDetailSidebar: React.FC<{
         {visibleSkills.map((skill) => {
           const active = skill.id === activeSkillId;
           return (
-            <button
-              key={skill.id}
-              type="button"
-              aria-current={active ? 'page' : undefined}
-              onClick={() =>
-                openViewTab('skill', {
-                  skillId: skill.id,
-                  displayName: skill.displayName,
-                  catalogSection,
-                })
-              }
-              className={cn(
-                'relative flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors',
-                active
-                  ? 'bg-background-1 text-foreground'
-                  : 'text-foreground-muted hover:bg-background-2 hover:text-foreground'
-              )}
-            >
-              {active && (
-                <span className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-foreground" />
-              )}
-              <SkillIconRenderer skill={skill} size="xs" />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-xs font-medium">{skill.displayName}</span>
-                <span className="mt-0.5 block truncate text-[10px] text-foreground-muted">
-                  {skill.installed ? t('skills.installed') : t('skills.recommended')}
-                </span>
-              </span>
-              {skill.disabled && (
-                <span className="size-1.5 shrink-0 rounded-full bg-foreground-muted" />
-              )}
-            </button>
+            <ContextMenu key={skill.id}>
+              <ContextMenuTrigger
+                render={
+                  <button
+                    type="button"
+                    aria-current={active ? 'page' : undefined}
+                    onClick={() =>
+                      openViewTab('skill', {
+                        skillId: skill.id,
+                        displayName: skill.displayName,
+                        catalogSection,
+                      })
+                    }
+                    className={cn(
+                      'relative flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors',
+                      active
+                        ? 'bg-background-1 text-foreground'
+                        : 'text-foreground-muted hover:bg-background-2 hover:text-foreground'
+                    )}
+                  >
+                    {active && (
+                      <span className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-foreground" />
+                    )}
+                    <SkillIconRenderer skill={skill} size="xs" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-xs font-medium">
+                        {skill.displayName}
+                      </span>
+                      <span className="mt-0.5 block truncate text-[10px] text-foreground-muted">
+                        {skill.installed ? t('skills.installed') : t('skills.recommended')}
+                      </span>
+                    </span>
+                    {skill.disabled && (
+                      <span className="size-1.5 shrink-0 rounded-full bg-foreground-muted" />
+                    )}
+                  </button>
+                }
+              />
+              <ContextMenuContent className="w-48">
+                <ContextMenuItem
+                  disabled={active}
+                  onClick={() =>
+                    appState.sidePane.pinView('skill', {
+                      skillId: skill.id,
+                      displayName: skill.displayName,
+                      catalogSection,
+                    })
+                  }
+                >
+                  <PanelRightOpen />
+                  {t('skills.detail.compareWithCurrent')}
+                </ContextMenuItem>
+              </ContextMenuContent>
+            </ContextMenu>
           );
         })}
         {visibleSkills.length === 0 && (

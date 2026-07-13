@@ -2047,6 +2047,7 @@
       "callFrequency": "Shortcut calls",
       "characters": "Characters",
       "compatibility": "Compatibility",
+      "compareWithCurrent": "Compare with current skill",
       "copyDescription": "Copy description",
       "copyPrompt": "Copy prompt",
       "copySkillMd": "Copy SKILL.md",
