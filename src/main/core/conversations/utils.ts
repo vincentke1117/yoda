@@ -23,5 +23,7 @@ export function mapConversationRowToConversation(
     resume: resume,
     lastInteractedAt: row.lastInteractedAt ?? null,
     isInitialConversation: row.isInitialConversation,
+    forkedFromConversationId: row.forkedFromConversationId ?? undefined,
+    forkedFromPromptIndex: row.forkedFromPromptIndex ?? undefined,
   };
 }

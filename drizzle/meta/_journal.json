@@ -288,6 +288,13 @@
       "when": 1783947324308,
       "tag": "0040_fine_zarek",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "6",
+      "when": 1784047212409,
+      "tag": "0041_rainy_jackpot",
+      "breakpoints": true
     }
   ]
 }

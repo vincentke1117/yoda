@@ -11,25 +11,19 @@ import {
   getProjectStore,
   projectDisplayName,
 } from '@renderer/features/projects/stores/project-selectors';
-import { formatConversationTitleForDisplay } from '@renderer/features/tasks/conversations/conversation-title-utils';
-import { conversationTime } from '@renderer/features/tasks/conversations/use-archived-conversations';
+import { ConversationTree } from '@renderer/features/tasks/conversations/conversation-tree';
+import { useArchivedConversations } from '@renderer/features/tasks/conversations/use-archived-conversations';
 import {
   getTaskStore,
   taskAncestors,
   taskDisplayName,
 } from '@renderer/features/tasks/stores/task-selectors';
 import { useProvisionedTask, useTaskViewContext } from '@renderer/features/tasks/task-view-context';
-import AgentLogo from '@renderer/lib/components/agent-logo';
 import { rpc } from '@renderer/lib/ipc';
 import { useNavigate } from '@renderer/lib/layout/navigation-provider';
 import { useShowModal } from '@renderer/lib/modal/modal-provider';
 import { Button } from '@renderer/lib/ui/button';
 import { EmptyState } from '@renderer/lib/ui/empty-state';
-import { RelativeTime } from '@renderer/lib/ui/relative-time';
-import { agentConfig } from '@renderer/utils/agentConfig';
-import { cn } from '@renderer/utils/utils';
-import { AgentStatusIndicator } from '../components/agent-status-indicator';
-import { SessionUsageChip } from '../components/session-usage-chip';
 import { TaskStatsStrip } from '../components/task-stats-strip';
 import { useTaskStats } from '../hooks/useTaskStats';
 import { SubtaskList } from './subtask-list';
@@ -47,9 +41,9 @@ export const OverviewPanel = observer(function OverviewPanel() {
   const { tabManager } = provisioned.taskView;
   const showNewConversationModal = useShowModal('newConversationModal');
 
-  const sessions = Array.from(provisioned.conversations.conversations.values()).sort(
-    (a, b) => conversationTime(b.data.lastInteractedAt) - conversationTime(a.data.lastInteractedAt)
-  );
+  const sessions = Array.from(provisioned.conversations.conversations.values());
+  const archivedSessions = useArchivedConversations(projectId, taskId);
+  const sessionCount = sessions.length + archivedSessions.length;
 
   const { data: taskStats } = useTaskStats(projectId, taskId);
   const { data: features = [] } = useFeatures(projectId);
@@ -159,7 +153,7 @@ export const OverviewPanel = observer(function OverviewPanel() {
         <section className="flex flex-col gap-2">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-medium text-foreground">
-              {t('tasks.overview.sessions', { count: sessions.length })}
+              {t('tasks.overview.sessions', { count: sessionCount })}
             </h2>
             <Button size="sm" variant="ghost" onClick={handleCreate}>
               <MessageSquarePlus className="size-4" />
@@ -167,79 +161,21 @@ export const OverviewPanel = observer(function OverviewPanel() {
             </Button>
           </div>
 
-          {sessions.length === 0 ? (
+          {sessionCount === 0 ? (
             <EmptyState label={t('tasks.overview.noSessions')} />
           ) : (
-            <ul className="flex flex-col gap-1">
-              {sessions.map((session) => (
-                <SessionRow
-                  key={session.data.id}
-                  conversationId={session.data.id}
-                  usage={usageByConversation.get(session.data.id)}
-                />
-              ))}
-            </ul>
+            <ConversationTree
+              activeConversations={sessions}
+              archivedConversations={archivedSessions}
+              activeConversationId={tabManager.activeConversationId}
+              usageByConversation={usageByConversation}
+              onOpenActive={(conversationId) => tabManager.openConversation(conversationId)}
+            />
           )}
         </section>
 
         <SubtaskList projectId={projectId} taskId={taskId} />
       </div>
     </div>
-  );
-});
-
-const SessionRow = observer(function SessionRow({
-  conversationId,
-  usage,
-}: {
-  conversationId: string;
-  usage?: ConversationUsageSummary;
-}) {
-  const provisioned = useProvisionedTask();
-  const { tabManager } = provisioned.taskView;
-  const conversation = provisioned.conversations.conversations.get(conversationId);
-  if (!conversation) return null;
-
-  const isActive = tabManager.activeConversationId === conversationId;
-  const config = agentConfig[conversation.data.runtimeId];
-  const displayTitle = formatConversationTitleForDisplay(
-    conversation.data.runtimeId,
-    conversation.data.title
-  );
-
-  return (
-    <li>
-      <button
-        type="button"
-        onClick={() => tabManager.openConversation(conversationId)}
-        className={cn(
-          'flex w-full items-center gap-3 rounded-lg border border-border/70 px-3 py-2.5 text-left text-sm text-foreground-muted transition-colors hover:bg-background-1 hover:text-foreground',
-          isActive && 'border-border bg-background-2 text-foreground'
-        )}
-      >
-        <span className="shrink-0">
-          <AgentLogo
-            logo={config.logo}
-            alt={config.alt}
-            isSvg={config.isSvg}
-            invertInDark={config.invertInDark}
-            className="size-4"
-          />
-        </span>
-        <span className="min-w-0 flex-1 truncate" title={displayTitle}>
-          {displayTitle}
-        </span>
-        <SessionUsageChip usage={usage} />
-        {conversation.indicatorStatus ? (
-          <AgentStatusIndicator status={conversation.indicatorStatus} disableTooltip />
-        ) : (
-          <RelativeTime
-            value={conversation.data.lastInteractedAt ?? ''}
-            className="shrink-0 font-mono text-xs text-foreground-passive"
-            compact
-          />
-        )}
-      </button>
-    </li>
   );
 });

@@ -6,6 +6,9 @@ import {
   runBundledMigrations,
 } from './migrations';
 
+/** Number of migrations that precede 0041_rainy_jackpot. */
+const CONVERSATION_LINEAGE_PREVIOUS_MIGRATION_COUNT = 41;
+
 function createMigrationTable(db: Database.Database): void {
   db.exec(`
     CREATE TABLE __drizzle_migrations (
@@ -71,6 +74,33 @@ function countAppliedMigrations(db: Database.Database): number {
 }
 
 describe('runBundledMigrations', () => {
+  it('adds nullable conversation lineage without rewriting existing sessions', () => {
+    const db = new Database(':memory:');
+    try {
+      createMigrationTable(db);
+      insertAppliedMigrationRows(db, CONVERSATION_LINEAGE_PREVIOUS_MIGRATION_COUNT);
+      db.exec(`
+        CREATE TABLE conversations (id text PRIMARY KEY NOT NULL);
+        INSERT INTO conversations (id) VALUES ('existing-conversation');
+      `);
+
+      runBundledMigrations(db);
+
+      expect(columnExists(db, 'conversations', 'forked_from_conversation_id')).toBe(true);
+      expect(columnExists(db, 'conversations', 'forked_from_prompt_index')).toBe(true);
+      expect(indexExists(db, 'idx_conversations_forked_from_conversation_id')).toBe(true);
+      expect(
+        db
+          .prepare(
+            'SELECT forked_from_conversation_id, forked_from_prompt_index FROM conversations WHERE id = ?'
+          )
+          .get('existing-conversation')
+      ).toEqual({ forked_from_conversation_id: null, forked_from_prompt_index: null });
+    } finally {
+      db.close();
+    }
+  });
+
   it('repairs a partially-applied workspace migration instead of recreating workspaces', () => {
     const db = new Database(':memory:');
     try {

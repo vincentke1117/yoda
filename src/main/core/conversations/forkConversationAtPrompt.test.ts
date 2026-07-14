@@ -87,6 +87,8 @@ describe('forkConversationAtPrompt', () => {
         titleSource: 'yoda',
         isInitialConversation: false,
         lastInteractedAt: '2026-07-14T11:00:00.000Z',
+        forkedFromConversationId: 'source-conversation',
+        forkedFromPromptIndex: 0,
       },
     ]);
     mocks.updateChain.set.mockReturnThis();
@@ -165,6 +167,8 @@ describe('forkConversationAtPrompt', () => {
         runtime: 'codex',
         config: '{"permissionMode":"full-auto"}',
         isInitialConversation: false,
+        forkedFromConversationId: 'source-conversation',
+        forkedFromPromptIndex: 0,
       })
     );
     const inserted = mocks.insertChain.values.mock.calls[0]?.[0] as {
@@ -191,7 +195,11 @@ describe('forkConversationAtPrompt', () => {
       target: { kind: 'claude-message', messageId: 'answer-1' },
     });
 
-    const inserted = mocks.insertChain.values.mock.calls[0]?.[0] as { id: string };
+    const inserted = mocks.insertChain.values.mock.calls[0]?.[0] as {
+      id: string;
+      forkedFromConversationId: string;
+      forkedFromPromptIndex: number;
+    };
     expect(mocks.forkClaudeTranscript).toHaveBeenCalledWith({
       cwd: '/repo',
       claudeConfigDir: '/state/claude',
@@ -203,6 +211,35 @@ describe('forkConversationAtPrompt', () => {
       claudeConfigDir: '/state/claude',
     });
     expect(inserted.id).not.toBe('source-conversation');
+    expect(inserted.forkedFromConversationId).toBe('source-conversation');
+    expect(inserted.forkedFromPromptIndex).toBe(0);
+  });
+
+  it('records the direct parent when a restored branch is forked again', async () => {
+    mocks.selectChain.limit.mockResolvedValue([
+      {
+        ...sourceRow,
+        id: 'first-fork',
+        title: 'Source title · #1',
+        forkedFromConversationId: 'source-conversation',
+        forkedFromPromptIndex: 0,
+      },
+    ]);
+
+    await forkConversationAtPrompt({
+      projectId: 'project-1',
+      taskId: 'task-1',
+      conversationId: 'first-fork',
+      promptIndex: 0,
+      target: { kind: 'codex-turn', turnId: 'turn-1' },
+    });
+
+    expect(mocks.insertChain.values).toHaveBeenCalledWith(
+      expect.objectContaining({
+        forkedFromConversationId: 'first-fork',
+        forkedFromPromptIndex: 0,
+      })
+    );
   });
 
   it('rejects stale or tampered targets before creating a provider fork', async () => {

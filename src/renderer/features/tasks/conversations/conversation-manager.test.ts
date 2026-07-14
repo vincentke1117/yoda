@@ -99,6 +99,8 @@ describe('ConversationManagerStore', () => {
       id: 'conversation-fork',
       title: 'Claude · #1',
       isInitialConversation: false,
+      forkedFromConversationId: 'conversation-1',
+      forkedFromPromptIndex: 0,
     });
     mocks.touchConversationMock.mockResolvedValue(undefined);
     mocks.getConversationRuntimeStatusesMock.mockResolvedValue({});
@@ -327,6 +329,10 @@ describe('ConversationManagerStore', () => {
     expect(mocks.forkConversationAtPromptMock).toHaveBeenCalledWith(params);
     expect(fork.id).toBe('conversation-fork');
     expect(store.conversations.get('conversation-fork')?.data).toEqual(fork);
+    expect(store.conversations.get('conversation-fork')?.data).toMatchObject({
+      forkedFromConversationId: 'conversation-1',
+      forkedFromPromptIndex: 0,
+    });
     expect(mocks.ptyConnectMock).toHaveBeenCalled();
   });
 

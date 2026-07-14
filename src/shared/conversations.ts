@@ -19,6 +19,10 @@ export type Conversation = {
   /** Immutable effective skill set captured when this session was created. */
   skillPolicy?: SkillSessionPolicy;
   isInitialConversation: boolean | null;
+  /** Direct parent when this conversation was created from an earlier checkpoint. */
+  forkedFromConversationId?: string;
+  /** Zero-based prompt index in the direct parent conversation. */
+  forkedFromPromptIndex?: number;
 };
 
 export type ConversationSessionInfo = {

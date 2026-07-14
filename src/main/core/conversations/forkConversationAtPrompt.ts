@@ -131,6 +131,8 @@ async function createConversationFork(
         createdAt: sql`CURRENT_TIMESTAMP`,
         updatedAt: sql`CURRENT_TIMESTAMP`,
         lastInteractedAt,
+        forkedFromConversationId: source.id,
+        forkedFromPromptIndex: params.promptIndex,
       })
       .returning();
     if (!row) {

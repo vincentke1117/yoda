@@ -92,7 +92,9 @@ function createAppDb(): {
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       last_interacted_at TEXT,
       is_initial_conversation INTEGER,
-      archived_at TEXT
+      archived_at TEXT,
+      forked_from_conversation_id TEXT,
+      forked_from_prompt_index INTEGER
     );
   `);
 

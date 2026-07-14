@@ -1237,6 +1237,11 @@
       "restore": "恢复会话",
       "viewTranscript": "查看转录"
     },
+    "conversationTree": {
+      "forkedFromPrompt": "从第 {{index}} 条分叉",
+      "expandBranches": "展开“{{title}}”的分支",
+      "collapseBranches": "收起“{{title}}”的分支"
+    },
     "files": "文件",
     "toggleTerminal": "切换终端",
     "toggleSidebar": "切换侧边栏",

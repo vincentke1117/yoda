@@ -679,9 +679,19 @@ export const conversations = sqliteTable(
     lastInteractedAt: text('last_interacted_at'),
     isInitialConversation: integer('is_initial_conversation', { mode: 'boolean' }),
     archivedAt: text('archived_at'),
+    // Immutable, provider-neutral lineage for conversations created by
+    // restoring an earlier checkpoint. Intentionally not a foreign key:
+    // deleting a parent must not delete or block access to its surviving
+    // branches, and a missing parent is rendered as a root in the UI.
+    forkedFromConversationId: text('forked_from_conversation_id'),
+    // Zero-based prompt index in the direct parent conversation.
+    forkedFromPromptIndex: integer('forked_from_prompt_index'),
   },
   (table) => ({
     taskIdIdx: index('idx_conversations_task_id').on(table.taskId),
+    forkedFromConversationIdIdx: index('idx_conversations_forked_from_conversation_id').on(
+      table.forkedFromConversationId
+    ),
   })
 );
 

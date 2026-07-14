@@ -1,6 +1,6 @@
 import { Archive, ChevronRight, GitBranch, Loader2, MoreHorizontal, Users } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { selectCurrentPr } from '@shared/pull-requests';
 import { getProjectStore } from '@renderer/features/projects/stores/project-selectors';
@@ -17,6 +17,7 @@ import {
   getTaskStore,
   taskDisplayStatus,
 } from '@renderer/features/tasks/stores/task-selectors';
+import { TreeGuideSlot } from '@renderer/lib/components/tree-guide-slot';
 import { useNavigate, useParams } from '@renderer/lib/layout/navigation-provider';
 import { appState, sidebarStore } from '@renderer/lib/stores/app-state';
 import { Badge } from '@renderer/lib/ui/badge';
@@ -46,8 +47,7 @@ interface SidebarTaskItemProps {
   isMultiAgent?: boolean;
 }
 
-/** Indent per subtask level; depth is visually capped so deep trees stay readable. */
-const TASK_TREE_INDENT_PX = 14;
+/** Subtask depth is visually capped so deep trees stay readable. */
 const TASK_TREE_MAX_VISUAL_DEPTH = 5;
 
 export const SidebarTaskItem = observer(function SidebarTaskItem({
@@ -441,38 +441,3 @@ function MultiAgentTaskIcon({ label, className }: { label: string; className?: s
  * (│); the elbow slot draws the connector to this row (├ when `continues`,
  * └ when it is the last sibling).
  */
-function TreeGuideSlot({
-  continues,
-  isElbow,
-  fadeOnRowHover,
-  children,
-}: {
-  continues: boolean;
-  isElbow: boolean;
-  /** Fade the guide lines out on row hover (slot doubles as a collapse toggle). */
-  fadeOnRowHover?: boolean;
-  children?: ReactNode;
-}) {
-  return (
-    <span className="relative h-full shrink-0" style={{ width: TASK_TREE_INDENT_PX }}>
-      <span
-        aria-hidden
-        className={cn(
-          'absolute inset-0 transition-opacity duration-150',
-          fadeOnRowHover && 'group-hover/row:opacity-0'
-        )}
-      >
-        {isElbow ? (
-          <>
-            <span className="absolute left-[5px] top-0 h-1/2 w-px bg-border" />
-            <span className="absolute left-[5px] top-1/2 h-px w-1.5 bg-border" />
-            {continues && <span className="absolute bottom-0 left-[5px] top-1/2 w-px bg-border" />}
-          </>
-        ) : (
-          continues && <span className="absolute bottom-0 left-[5px] top-0 w-px bg-border" />
-        )}
-      </span>
-      {children}
-    </span>
-  );
-}

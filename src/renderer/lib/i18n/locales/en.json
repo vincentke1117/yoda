@@ -1237,6 +1237,11 @@
       "restore": "Restore session",
       "viewTranscript": "View transcript"
     },
+    "conversationTree": {
+      "forkedFromPrompt": "Forked at #{{index}}",
+      "expandBranches": "Expand branches from “{{title}}”",
+      "collapseBranches": "Collapse branches from “{{title}}”"
+    },
     "files": "Files",
     "toggleTerminal": "Toggle terminal",
     "toggleSidebar": "Toggle sidebar",
