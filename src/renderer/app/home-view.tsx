@@ -52,6 +52,7 @@ import { INTERNAL_PROJECT_ID } from '@shared/projects';
 import { withSystemPrompt } from '@shared/prompt-format';
 import { REVIEW_MAX_ROUNDS } from '@shared/review-protocol';
 import { getRuntime, RUNTIME_IDS, type RuntimeId } from '@shared/runtime-registry';
+import { normalizeSkillSelection } from '@shared/skills/selection';
 import type { SkillSelectionInput } from '@shared/skills/types';
 import { ensureUniqueTaskDisplayName, taskNameFromPrompt } from '@shared/task-name';
 import { resolveHomeProjectId } from '@renderer/app/home-project-selection';
@@ -284,10 +285,10 @@ function resolveAgentSlot(args: {
 
 function agentSkillSelection(agent: Agent | null): SkillSelectionInput | undefined {
   if (!agent) return undefined;
-  return {
+  return normalizeSkillSelection({
     autoSkillKeys: agent.enabledSkillIds,
     manualSkillKeys: agent.manualSkillIds,
-  };
+  });
 }
 
 function buildRequirementPrompt(args: { requirement: string; systemPrompt: string }): string {

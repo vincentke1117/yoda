@@ -31,6 +31,7 @@ import { useTranslation } from 'react-i18next';
 import { applyAgentCommandPrefix } from '@shared/agent-command-prefix';
 import type { RuntimeId } from '@shared/runtime-registry';
 import { selectSkillFamilyRepresentatives } from '@shared/skills/grouping';
+import { normalizeSkillSelection } from '@shared/skills/selection';
 import type { CatalogIndex, SkillSelectionInput } from '@shared/skills/types';
 import { recordSkillInvocation } from '@renderer/features/skills/skill-usage-stats';
 import { toast } from '@renderer/lib/hooks/use-toast';
@@ -362,8 +363,9 @@ export function ComposerPromptInput({
     },
   });
   const skillShortcutOptions = useMemo<SkillShortcutOption[]>(() => {
-    const configuredKeys = skillSelection
-      ? new Set([...skillSelection.autoSkillKeys, ...skillSelection.manualSkillKeys])
+    const configuredSelection = normalizeSkillSelection(skillSelection);
+    const configuredKeys = configuredSelection
+      ? new Set([...configuredSelection.autoSkillKeys, ...configuredSelection.manualSkillKeys])
       : null;
     const installed = selectSkillFamilyRepresentatives(
       (skillCatalog?.skills ?? []).filter(

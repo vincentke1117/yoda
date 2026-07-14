@@ -894,6 +894,7 @@ export class SkillsService {
 
     return {
       source: 'agent-profile',
+      restriction: 'allowlist',
       entries,
       available: availableSkills.flatMap((skill) =>
         skill.localPath && skill.scope !== 'catalog'

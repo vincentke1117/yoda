@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { eq, sql } from 'drizzle-orm';
 import { type Conversation, type CreateConversationParams } from '@shared/conversations';
 import { isDangerPermissionMode, resolveRuntimePermissionModeId } from '@shared/runtime-registry';
+import { normalizeSkillSelection } from '@shared/skills/selection';
 import { appSettingsService } from '@main/core/settings/settings-service';
 import { skillsService } from '@main/core/skills/SkillsService';
 import { db } from '@main/db/client';
@@ -57,9 +58,10 @@ export async function createConversation(params: CreateConversationParams): Prom
     .limit(1);
 
   const { permissionMode, autoApprove } = await resolveConversationPermission(params);
-  const skillPolicy = params.skillSelection
+  const skillSelection = normalizeSkillSelection(params.skillSelection);
+  const skillPolicy = skillSelection
     ? await skillsService.resolveSessionPolicy(
-        params.skillSelection,
+        skillSelection,
         task.conversations.taskPath,
         params.runtime
       )

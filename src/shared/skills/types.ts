@@ -139,7 +139,10 @@ export interface CatalogIndex {
   skills: CatalogSkill[];
 }
 
-/** Agent-authored selection before paths and runtime capabilities are resolved. */
+/**
+ * Agent-authored selection before paths and runtime capabilities are resolved.
+ * When both lists are empty, callers normalize the profile to no restriction.
+ */
 export interface SkillSelectionInput {
   autoSkillKeys: string[];
   manualSkillKeys: string[];
@@ -157,6 +160,8 @@ export interface SkillSessionEntry {
 /** Immutable snapshot persisted with a conversation and reused on resume. */
 export interface SkillSessionPolicy {
   source: 'agent-profile';
+  /** Present on explicit Agent allowlists, including an allowlist that resolves to zero entries. */
+  restriction?: 'allowlist';
   entries: SkillSessionEntry[];
   /** Every discovered entry, including disabled ones, needed for runtime isolation. */
   available: Array<Pick<SkillSessionEntry, 'key' | 'id' | 'path' | 'scope'>>;
