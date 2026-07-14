@@ -106,6 +106,7 @@ export function AgentEditModal({ agent, onSuccess, onClose }: Props) {
     installedSkillFamilies.filter((family) => skillMode(family) === 'manual').length +
     draft.manualSkillIds.filter((identifier) => !knownSkillIdentifiers.has(identifier)).length;
   const configuredSkillCount = enabledSkillCount + manualSkillCount;
+  const usesRuntimeSkillDefaults = configuredSkillCount === 0;
 
   const handleSave = async () => {
     if (!draft.name.trim()) {
@@ -221,7 +222,9 @@ export function AgentEditModal({ agent, onSuccess, onClose }: Props) {
             <div className="flex items-center justify-between">
               <Label className="text-xs">{t('agentManager.skills')}</Label>
               <span className="text-[10px] text-muted-foreground">
-                {t('agentManager.skillsEnabledCount', { count: configuredSkillCount })}
+                {usesRuntimeSkillDefaults
+                  ? t('agentManager.skillsRuntimeDefault')
+                  : t('agentManager.skillsEnabledCount', { count: configuredSkillCount })}
               </span>
             </div>
             <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-muted/20 px-2.5 py-2">

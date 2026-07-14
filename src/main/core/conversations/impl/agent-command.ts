@@ -9,10 +9,25 @@ export type AgentCommand = {
 };
 
 const SHELL_SYNTAX_ERROR = 'Custom CLI commands support executable command prefixes only. ';
+const UNAVAILABLE_SKILL_WARNING_PREFIX = 'Configured skill is unavailable:';
 
 const SHELL_BUILTINS = new Set(['.', 'source', 'eval', 'exec', 'cd', 'alias', 'export']);
 
 type ParsedWords = { ok: true; words: string[] } | { ok: false; reason: string };
+
+function effectiveRuntimeSkillPolicy(
+  policy: SkillSessionPolicy | undefined
+): SkillSessionPolicy | undefined {
+  if (!policy) return undefined;
+  if (policy.restriction === 'allowlist' || policy.entries.length > 0) return policy;
+  // Policies persisted before `restriction` existed are ambiguous when empty.
+  // Preserve fail-closed behavior if an explicit selection resolved to zero;
+  // otherwise treat the legacy zero-entry profile as the old unrestricted default.
+  if (policy.warnings.some((warning) => warning.startsWith(UNAVAILABLE_SKILL_WARNING_PREFIX))) {
+    return policy;
+  }
+  return undefined;
+}
 
 export function parseShellWords(
   input: string,
@@ -317,9 +332,13 @@ export function buildAgentCommand({
   }
 
   const extraArgs = parseArgField(providerConfig?.extraArgs);
+  // Conversations created before empty Agent profiles were normalized may
+  // still carry a persisted policy with zero entries. Applying that policy
+  // would disable every discovered skill on resume.
+  const effectiveSkillPolicy = effectiveRuntimeSkillPolicy(skillPolicy);
 
-  if (skillPolicy && runtimeId === 'codex') {
-    args.push('-c', `skills.config=${buildCodexSkillConfig(skillPolicy)}`);
+  if (effectiveSkillPolicy && runtimeId === 'codex') {
+    args.push('-c', `skills.config=${buildCodexSkillConfig(effectiveSkillPolicy)}`);
   }
 
   // Claude ignores OSC 11 terminal-background detection once a theme is set in
@@ -330,12 +349,14 @@ export function buildAgentCommand({
   const isClaudeCli = command === 'claude' || command.endsWith('/claude');
   const canInjectClaudeSettings =
     isClaudeCli && !args.includes('--settings') && !extraArgs.includes('--settings');
-  if (canInjectClaudeSettings && (terminalThemeMode || skillPolicy)) {
+  if (canInjectClaudeSettings && (terminalThemeMode || effectiveSkillPolicy)) {
     args.push(
       '--settings',
       JSON.stringify({
         ...(terminalThemeMode ? { theme: terminalThemeMode } : {}),
-        ...(skillPolicy ? { skillOverrides: buildClaudeSkillOverrides(skillPolicy) } : {}),
+        ...(effectiveSkillPolicy
+          ? { skillOverrides: buildClaudeSkillOverrides(effectiveSkillPolicy) }
+          : {}),
       })
     );
   }
