@@ -189,6 +189,235 @@ describe('getCodexSessionContext', () => {
     ]);
   });
 
+  it.each(['task_started', 'turn_started'] as const)(
+    'exposes an interrupted historical turn once a different %s event starts',
+    async (startedEventType) => {
+      writeFileSync(
+        rolloutPath,
+        [
+          {
+            timestamp: '2026-07-14T15:12:22.000Z',
+            type: 'session_meta',
+            payload: { id: 'conversation-1', cwd },
+          },
+          {
+            timestamp: '2026-07-14T15:12:23.000Z',
+            type: 'event_msg',
+            payload: { type: 'task_started', turn_id: 'turn-interrupted' },
+          },
+          {
+            timestamp: '2026-07-14T15:12:24.000Z',
+            type: 'event_msg',
+            payload: { type: 'user_message', message: 'Interrupted request' },
+          },
+          {
+            timestamp: '2026-07-14T15:12:25.000Z',
+            type: 'event_msg',
+            payload: { type: 'user_message', message: 'Steer interrupted turn' },
+          },
+          {
+            timestamp: '2026-07-14T15:15:00.000Z',
+            type: 'event_msg',
+            payload: { type: startedEventType, turn_id: 'turn-active' },
+          },
+          {
+            timestamp: '2026-07-14T15:15:01.000Z',
+            type: 'event_msg',
+            payload: { type: 'user_message', message: 'Still running' },
+          },
+        ]
+          .map((row) => JSON.stringify(row))
+          .join('\n')
+      );
+      insertThread(statePath, rolloutPath, {
+        id: 'conversation-1',
+        cwd,
+        title: 'Thread title',
+        firstUserMessage: 'Interrupted request',
+      });
+
+      const context = await getConfiguredCodexSessionContext(cwd, 'conversation-1');
+
+      expect(context?.prompts.map((prompt) => [prompt.text, prompt.restoreTarget])).toEqual([
+        ['Interrupted request', undefined],
+        ['Steer interrupted turn', { kind: 'codex-turn', turnId: 'turn-interrupted' }],
+        ['Still running', undefined],
+      ]);
+      expect(context?.completedTurnCount).toBe(0);
+    }
+  );
+
+  it('uses response metadata to restore a completed turn without a started event', async () => {
+    writeFileSync(
+      rolloutPath,
+      [
+        {
+          timestamp: '2026-07-14T15:12:22.000Z',
+          type: 'session_meta',
+          payload: { id: 'conversation-1', cwd },
+        },
+        {
+          timestamp: '2026-07-14T15:12:23.000Z',
+          type: 'response_item',
+          payload: {
+            type: 'message',
+            role: 'user',
+            content: [{ type: 'input_text', text: 'Forked request' }],
+            internal_chat_message_metadata_passthrough: { turn_id: 'turn-forked' },
+          },
+        },
+        {
+          timestamp: '2026-07-14T15:12:24.000Z',
+          type: 'event_msg',
+          payload: { type: 'user_message', message: 'Forked request' },
+        },
+        {
+          timestamp: '2026-07-14T15:12:25.000Z',
+          type: 'event_msg',
+          payload: { type: 'task_complete', turn_id: 'turn-forked' },
+        },
+      ]
+        .map((row) => JSON.stringify(row))
+        .join('\n')
+    );
+    insertThread(statePath, rolloutPath, {
+      id: 'conversation-1',
+      cwd,
+      title: 'Thread title',
+      firstUserMessage: 'Forked request',
+    });
+
+    const context = await getConfiguredCodexSessionContext(cwd, 'conversation-1');
+
+    expect(context?.prompts).toEqual([
+      {
+        id: '2026-07-14T15:12:24.000Z',
+        text: 'Forked request',
+        timestamp: '2026-07-14T15:12:24.000Z',
+        restoreTarget: { kind: 'codex-turn', turnId: 'turn-forked' },
+      },
+    ]);
+  });
+
+  it('does not close an active turn from stale non-user response metadata', async () => {
+    writeFileSync(
+      rolloutPath,
+      [
+        {
+          timestamp: '2026-07-14T15:12:22.000Z',
+          type: 'session_meta',
+          payload: { id: 'conversation-1', cwd },
+        },
+        {
+          timestamp: '2026-07-14T15:12:23.000Z',
+          type: 'event_msg',
+          payload: { type: 'task_started', turn_id: 'turn-active' },
+        },
+        {
+          timestamp: '2026-07-14T15:12:24.000Z',
+          type: 'event_msg',
+          payload: { type: 'user_message', message: 'Still running' },
+        },
+        {
+          timestamp: '2026-07-14T15:12:25.000Z',
+          type: 'response_item',
+          payload: {
+            type: 'message',
+            role: 'assistant',
+            content: [{ type: 'output_text', text: 'Delayed output' }],
+            internal_chat_message_metadata_passthrough: { turn_id: 'turn-old' },
+          },
+        },
+        {
+          timestamp: '2026-07-14T15:12:26.000Z',
+          type: 'response_item',
+          payload: {
+            type: 'message',
+            role: 'developer',
+            content: [{ type: 'input_text', text: 'Delayed instructions' }],
+            internal_chat_message_metadata_passthrough: { turn_id: 'turn-old' },
+          },
+        },
+      ]
+        .map((row) => JSON.stringify(row))
+        .join('\n')
+    );
+    insertThread(statePath, rolloutPath, {
+      id: 'conversation-1',
+      cwd,
+      title: 'Thread title',
+      firstUserMessage: 'Still running',
+    });
+
+    const context = await getConfiguredCodexSessionContext(cwd, 'conversation-1');
+
+    expect(context?.prompts).toEqual([
+      {
+        id: '2026-07-14T15:12:24.000Z',
+        text: 'Still running',
+        timestamp: '2026-07-14T15:12:24.000Z',
+      },
+    ]);
+  });
+
+  it('does not associate a new prompt with stale user response metadata', async () => {
+    writeFileSync(
+      rolloutPath,
+      [
+        {
+          timestamp: '2026-07-14T15:12:22.000Z',
+          type: 'session_meta',
+          payload: { id: 'conversation-1', cwd },
+        },
+        {
+          timestamp: '2026-07-14T15:12:23.000Z',
+          type: 'event_msg',
+          payload: { type: 'task_started', turn_id: 'turn-active' },
+        },
+        {
+          timestamp: '2026-07-14T15:12:24.000Z',
+          type: 'event_msg',
+          payload: { type: 'user_message', message: 'Initial active request' },
+        },
+        {
+          timestamp: '2026-07-14T15:12:25.000Z',
+          type: 'response_item',
+          payload: {
+            type: 'message',
+            role: 'user',
+            content: [{ type: 'input_text', text: 'Old request' }],
+            internal_chat_message_metadata_passthrough: { turn_id: 'turn-old' },
+          },
+        },
+        {
+          timestamp: '2026-07-14T15:12:26.000Z',
+          type: 'event_msg',
+          payload: { type: 'user_message', message: 'Steer active request' },
+        },
+        {
+          timestamp: '2026-07-14T15:12:27.000Z',
+          type: 'event_msg',
+          payload: { type: 'task_complete', turn_id: 'turn-active' },
+        },
+      ]
+        .map((row) => JSON.stringify(row))
+        .join('\n')
+    );
+    insertThread(statePath, rolloutPath, {
+      id: 'conversation-1',
+      cwd,
+      title: 'Thread title',
+      firstUserMessage: 'Initial active request',
+    });
+
+    const context = await getConfiguredCodexSessionContext(cwd, 'conversation-1');
+
+    expect(context?.prompts.map((prompt) => [prompt.text, prompt.restoreTarget])).toEqual([
+      ['Initial active request', undefined],
+      ['Steer active request', { kind: 'codex-turn', turnId: 'turn-active' }],
+    ]);
+  });
+
   it('can resolve a Codex thread by conversation title when the ids differ', async () => {
     writeRollout(rolloutPath);
     insertThread(statePath, rolloutPath, {

@@ -559,9 +559,25 @@ function parseCodexRollout(raw: string, firstUserMessage: string | null): Parsed
   const messages: SessionTranscriptMessage[] = [];
   const turnContexts: CodexTurnContext[] = [];
   let currentTurnId: string | null = null;
+  let pendingResponseUser: { turnId: string; text: string } | null = null;
   let completedTurnCount = 0;
   // Keep only the latest compaction summary — later compactions supersede earlier ones.
   let summary: SessionSummary | null = null;
+
+  const markTurnRestorable = (turnId: string): void => {
+    markLastPromptForTurn(eventPrompts, eventPromptTurnIds, turnId);
+    markLastPromptForTurn(responseUserPrompts, responsePromptTurnIds, turnId);
+  };
+  const transitionToTurn = (turnId: string | null): void => {
+    if (!turnId) return;
+    if (pendingResponseUser && turnId !== pendingResponseUser.turnId) {
+      pendingResponseUser = null;
+    }
+    if (currentTurnId && turnId !== currentTurnId) {
+      markTurnRestorable(currentTurnId);
+    }
+    currentTurnId = turnId;
+  };
 
   for (const line of raw.split('\n')) {
     if (!line) continue;
@@ -584,7 +600,7 @@ function parseCodexRollout(raw: string, firstUserMessage: string | null): Parsed
       const ctx = parseTurnContext(parsed.payload);
       if (ctx) {
         turnContexts.push(ctx);
-        currentTurnId = ctx.turnId ?? currentTurnId;
+        transitionToTurn(ctx.turnId);
       }
       continue;
     }
@@ -593,19 +609,14 @@ function parseCodexRollout(raw: string, firstUserMessage: string | null): Parsed
       const payload = objectValue(parsed.payload);
       if (!payload) continue;
       if (payload.type === 'task_started' || payload.type === 'turn_started') {
-        currentTurnId = nullableString(payload.turn_id) ?? currentTurnId;
+        transitionToTurn(nullableString(payload.turn_id));
         continue;
       }
       if (payload.type === 'task_complete' || payload.type === 'turn_complete') {
         completedTurnCount += 1;
-        const completedTurnId = nullableString(payload.turn_id) ?? currentTurnId;
+        const completedTurnId: string | null = nullableString(payload.turn_id) ?? currentTurnId;
         if (completedTurnId) {
-          markLastPromptForCompletedTurn(eventPrompts, eventPromptTurnIds, completedTurnId);
-          markLastPromptForCompletedTurn(
-            responseUserPrompts,
-            responsePromptTurnIds,
-            completedTurnId
-          );
+          markTurnRestorable(completedTurnId);
         }
         if (completedTurnId === currentTurnId) currentTurnId = null;
         const lastAgentMessage = nullableString(payload.last_agent_message);
@@ -622,13 +633,19 @@ function parseCodexRollout(raw: string, firstUserMessage: string | null): Parsed
       if (payload.type !== 'user_message') continue;
       const text = nullableString(payload.message)?.trim();
       if (text) {
+        const matchingPendingTurnId =
+          pendingResponseUser?.text === text ? pendingResponseUser.turnId : null;
+        const promptTurnId: string | null =
+          nullableString(payload.turn_id) ?? matchingPendingTurnId ?? currentTurnId;
         const prompt = {
           id: timestamp ?? `event-user-${eventPrompts.length}`,
           text,
           timestamp,
         };
         eventPrompts.push(prompt);
-        eventPromptTurnIds.push(nullableString(payload.turn_id) ?? currentTurnId);
+        eventPromptTurnIds.push(promptTurnId);
+        if (!currentTurnId && promptTurnId) currentTurnId = promptTurnId;
+        pendingResponseUser = null;
         pushMessage(messages, { ...prompt, role: 'user' });
       }
       continue;
@@ -637,6 +654,8 @@ function parseCodexRollout(raw: string, firstUserMessage: string | null): Parsed
     if (parsed.type === 'response_item') {
       const payload = objectValue(parsed.payload);
       if (!payload || payload.type !== 'message') continue;
+      const metadata = objectValue(payload.internal_chat_message_metadata_passthrough);
+      const responseTurnId = nullableString(metadata?.turn_id);
       const text = extractContentText(payload.content)?.trim();
       if (!text) continue;
       if (payload.role === 'developer') {
@@ -648,13 +667,16 @@ function parseCodexRollout(raw: string, firstUserMessage: string | null): Parsed
       } else if (payload.role === 'user' && text.startsWith(CODEX_SUMMARY_PREFIX)) {
         summary = { text, timestamp };
       } else if (payload.role === 'user' && !isCodexEnvironmentMessage(text)) {
+        const promptTurnId: string | null = responseTurnId ?? currentTurnId;
         const prompt = {
           id: timestamp ?? `response-user-${responseUserPrompts.length}`,
           text,
           timestamp,
         };
         responseUserPrompts.push(prompt);
-        responsePromptTurnIds.push(currentTurnId);
+        responsePromptTurnIds.push(promptTurnId);
+        if (!currentTurnId && responseTurnId) currentTurnId = responseTurnId;
+        pendingResponseUser = responseTurnId ? { turnId: responseTurnId, text } : null;
         pushMessage(messages, { ...prompt, role: 'user' });
       } else if (payload.role === 'assistant') {
         pushMessage(messages, {
@@ -693,16 +715,16 @@ function parseCodexRollout(raw: string, firstUserMessage: string | null): Parsed
   };
 }
 
-function markLastPromptForCompletedTurn(
+function markLastPromptForTurn(
   prompts: ClaudeSessionPrompt[],
   promptTurnIds: Array<string | null>,
-  completedTurnId: string
+  turnId: string
 ): void {
   for (let index = promptTurnIds.length - 1; index >= 0; index -= 1) {
-    if (promptTurnIds[index] !== completedTurnId) continue;
+    if (promptTurnIds[index] !== turnId) continue;
     const prompt = prompts[index];
     if (prompt) {
-      prompt.restoreTarget = { kind: 'codex-turn', turnId: completedTurnId };
+      prompt.restoreTarget = { kind: 'codex-turn', turnId };
     }
     return;
   }
