@@ -130,8 +130,10 @@ describe('DockedSessionHistory conversation tree menu', () => {
     const viewTree = host.querySelector<HTMLButtonElement>(
       'button[aria-label="tasks.bottomPanel.sessionViewTree"]'
     );
+    expect(viewTree?.getAttribute('aria-expanded')).toBe('false');
     await act(async () => viewTree?.click());
 
+    expect(viewTree?.getAttribute('aria-expanded')).toBe('true');
     expect(mocks.update).not.toHaveBeenCalled();
     expect(host.textContent).toContain('current path prompt');
     expect(document.querySelector('[data-session-prompt-tree]')?.textContent).toBe('tree path');
@@ -141,6 +143,12 @@ describe('DockedSessionHistory conversation tree menu', () => {
     expect(document.body.textContent).toContain('tasks.bottomPanel.sessionTreeSummary');
     expect(mocks.useSessionPrompts).toHaveBeenLastCalledWith(true);
     expect(mocks.useSessionPromptTree).toHaveBeenLastCalledWith(true);
+
+    await act(async () => viewTree?.click());
+
+    expect(viewTree?.getAttribute('aria-expanded')).toBe('false');
+    expect(document.querySelector('[data-session-prompt-tree]')).toBeNull();
+    expect(mocks.useSessionPromptTree).toHaveBeenLastCalledWith(false);
   });
 
   it('keeps the tree icon available while the current-path list is collapsed', async () => {
