@@ -21,6 +21,13 @@ describe('Yoda Sparkle helper patch', () => {
     expect(patch).not.toMatch(/allowFull|fallbackToFull|disableDeltaOnly/i);
   });
 
+  it('reports the original delta failure before Sparkle tries its regular-update fallback', () => {
+    expect(patch).toContain('SPUCoreBasedUpdateDriver.m');
+    expect(patch).toContain('\\"type\\":\\"delta-failed\\"');
+    expect(patch).toContain('\\"stage\\":\\"download\\"');
+    expect(patch).toContain('\\"stage\\":\\"apply\\"');
+  });
+
   it('emits structured progress events', () => {
     expect(patch).toContain('download-start');
     expect(patch).toContain('download-progress');

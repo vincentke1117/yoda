@@ -28,6 +28,7 @@ export type SparkleHelperEvent =
   | { type: 'download-progress'; transferred: number; total: number }
   | { type: 'ready-to-install' }
   | { type: 'installing' }
+  | { type: 'delta-failed'; stage: 'download' | 'apply'; code: number }
   | { type: 'full-update-blocked'; version: string };
 
 type PendingSparkleUpdate = {
@@ -200,8 +201,19 @@ export class MacSparkleUpdater {
       const event = parseSparkleHelperEvent(line);
       if (!event) return;
 
+      if (event.type === 'delta-failed') {
+        blockedError ??= new Error(
+          event.stage === 'download'
+            ? `Sparkle delta download failed before full-update fallback (code ${event.code})`
+            : 'Sparkle failed to apply the delta update before full-update fallback'
+        );
+        process.kill('SIGTERM');
+        return;
+      }
       if (event.type === 'full-update-blocked' || (event.type === 'update-found' && !event.delta)) {
-        blockedError = new Error('Sparkle refused a full application update');
+        blockedError ??= new Error(
+          'Sparkle delta update is unavailable for this installation; install the latest Yoda release manually'
+        );
         process.kill('SIGTERM');
         return;
       }
@@ -296,6 +308,14 @@ export function parseSparkleHelperEvent(line: string): SparkleHelperEvent | null
       case 'ready-to-install':
       case 'installing':
         return { type: candidate.type };
+      case 'delta-failed':
+        if (
+          (candidate.stage === 'download' || candidate.stage === 'apply') &&
+          typeof candidate.code === 'number'
+        ) {
+          return { type: candidate.type, stage: candidate.stage, code: candidate.code };
+        }
+        break;
       case 'full-update-blocked':
         if (typeof candidate.version === 'string') {
           return { type: candidate.type, version: candidate.version };
@@ -334,8 +354,13 @@ async function waitForInstallHandoff(process: HelperProcess): Promise<void> {
     observeLines(process, (line) => {
       const event = parseSparkleHelperEvent(line);
       if (!event) return;
-      if (event.type === 'full-update-blocked' || (event.type === 'update-found' && !event.delta)) {
-        finish(new Error('Sparkle refused a full application update during install'));
+      if (event.type === 'delta-failed') {
+        finish(new Error(`Sparkle delta ${event.stage} failed during install`));
+      } else if (
+        event.type === 'full-update-blocked' ||
+        (event.type === 'update-found' && !event.delta)
+      ) {
+        finish(new Error('Sparkle delta update is unavailable during install'));
       } else if (event.type === 'update-found' && event.delta) {
         verifiedDelta = true;
       } else if (event.type === 'installing' && verifiedDelta) {

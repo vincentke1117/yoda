@@ -17,6 +17,21 @@ index 940f5bb..ac21320 100644
  // In case we find an update during probing
  - (void)updater:(SPUUpdater *)__unused updater didFindValidUpdate:(SUAppcastItem *)item
  {
+diff --git a/Sparkle/SPUCoreBasedUpdateDriver.m b/Sparkle/SPUCoreBasedUpdateDriver.m
+index d511a64..6a9bb30 100644
+--- a/Sparkle/SPUCoreBasedUpdateDriver.m
++++ b/Sparkle/SPUCoreBasedUpdateDriver.m
+@@ -256,4 +256,5 @@ - (void)extractUpdate:(SPUDownloadedUpdate *)downloadedUpdate SPU_OBJC_DIRECT
+ - (void)downloadDriverDidFailToDownloadFileWithError:(NSError *)error
+ {
+     if ([_updateItem isDeltaUpdate]) {
++        fprintf(stderr, "YODA_EVENT {\"type\":\"delta-failed\",\"stage\":\"download\",\"code\":%ld}\n", (long)error.code);
+         SULog(SULogLevelError, @"Failed to download delta update. Falling back to regular update...");
+@@ -377,3 +378,4 @@ - (void)fallBackAndDownloadRegularUpdate SPU_OBJC_DIRECT
+ - (void)installerDidFailToApplyDeltaUpdate
+ {
++    fprintf(stderr, "YODA_EVENT {\"type\":\"delta-failed\",\"stage\":\"apply\",\"code\":0}\n");
+     [self clearDownloadedUpdate];
 diff --git a/sparkle-cli/SPUCommandLineUserDriver.m b/sparkle-cli/SPUCommandLineUserDriver.m
 index 3cf85fd..cf058a9 100644
 --- a/sparkle-cli/SPUCommandLineUserDriver.m
