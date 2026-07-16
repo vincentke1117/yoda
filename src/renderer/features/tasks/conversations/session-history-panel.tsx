@@ -124,6 +124,7 @@ export const SessionHistoryPanel = observer(function SessionHistoryPanel({
 const MIN_DOCK_ROWS = 1;
 const MAX_DOCK_ROWS = 20;
 const DOCK_PROMPT_HEAD_COUNT = 1;
+type DockSessionHistoryMode = 'list' | 'tree';
 
 /**
  * The same prompt history docked at the bottom of the conversation pane, gated
@@ -137,7 +138,9 @@ export const DockedSessionHistory = observer(function DockedSessionHistory() {
   const { value: ui, update } = useAppSettingsKey('interface');
   const enabled = ui?.dockSessionHistory ?? true;
   const rows = Math.min(MAX_DOCK_ROWS, Math.max(MIN_DOCK_ROWS, ui?.dockSessionHistoryRows ?? 3));
-  const mode = ui?.dockSessionHistoryMode ?? 'list';
+  const persistedMode = ui?.dockSessionHistoryMode ?? 'list';
+  const [modeOverride, setModeOverride] = useState<DockSessionHistoryMode | null>(null);
+  const mode = modeOverride ?? persistedMode;
   const [collapsed, setCollapsed] = useState(false);
   const prompts = useSessionPrompts(enabled && !collapsed && mode === 'list');
   const promptTree = useSessionPromptTree(enabled && !collapsed && mode === 'tree');
@@ -196,6 +199,9 @@ export const DockedSessionHistory = observer(function DockedSessionHistory() {
           value={[mode]}
           onValueChange={([value]) => {
             if (value === 'list' || value === 'tree') {
+              // Switch immediately even before settings metadata has loaded or
+              // while a main-process settings update is still in flight.
+              setModeOverride(value);
               update({ dockSessionHistoryMode: value });
             }
           }}

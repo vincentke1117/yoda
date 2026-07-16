@@ -28,19 +28,11 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-vi.mock('@renderer/features/settings/use-app-settings-key', async () => {
-  const { useState } = await import('react');
+vi.mock('@renderer/features/settings/use-app-settings-key', () => {
   return {
-    useAppSettingsKey: () => {
-      const [value, setValue] = useState(mocks.settings);
-      return {
-        value,
-        update: (partial: Partial<typeof mocks.settings>) => {
-          mocks.update(partial);
-          setValue((current) => ({ ...current, ...partial }));
-        },
-      };
-    },
+    // Deliberately keep returning the stale persisted value. The component
+    // must still switch immediately while the settings mutation is in flight.
+    useAppSettingsKey: () => ({ value: mocks.settings, update: mocks.update }),
   };
 });
 
