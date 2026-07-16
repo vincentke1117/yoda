@@ -5,6 +5,7 @@ import {
   createDreamSkinTheme,
   CUSTOM_THEME_EXAMPLE,
   CUSTOM_THEME_EXAMPLE_FILE_NAME,
+  customThemesSettingsSchema,
   DREAM_SKIN_BUILTIN_IMAGES,
   getCustomThemeId,
   parseCustomThemePackageText,
@@ -90,6 +91,24 @@ describe('custom theme packages', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.themes.map(({ theme }) => theme.id)).toEqual(['solar-light', 'solar-dark']);
+  });
+
+  it('supports arbitrarily many custom themes in packages and persisted settings', () => {
+    const themes = Array.from({ length: 128 }, (_, index) => ({
+      ...validTheme,
+      id: `theme-${index}`,
+      name: `Theme ${index}`,
+    }));
+
+    const packageResult = parseCustomThemePackageText(
+      JSON.stringify(createCustomThemeCollection(themes))
+    );
+    const settingsResult = customThemesSettingsSchema.safeParse({ items: themes });
+
+    expect(packageResult.ok).toBe(true);
+    if (!packageResult.ok) return;
+    expect(packageResult.themes).toHaveLength(128);
+    expect(settingsResult.success).toBe(true);
   });
 
   it('rejects duplicate themes inside a collection', () => {

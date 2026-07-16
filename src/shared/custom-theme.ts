@@ -165,7 +165,7 @@ export const customThemeCollectionSchema = z
   .object({
     schemaVersion: z.union([z.literal(1), z.literal(CUSTOM_THEME_SCHEMA_VERSION)]),
     kind: z.literal('yoda-theme-collection'),
-    themes: z.array(customThemeSchema).min(1).max(100),
+    themes: z.array(customThemeSchema).min(1),
   })
   .strict()
   .superRefine(({ themes }, ctx) => {
@@ -195,7 +195,7 @@ export const customThemeCollectionSchema = z
 
 export const customThemesSettingsSchema = z
   .object({
-    items: z.array(customThemeSchema).max(100),
+    items: z.array(customThemeSchema),
   })
   .default({ items: [] });
 
