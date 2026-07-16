@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+## 0.16.2
+
+### Added
+
+- Manage MaaS globally from the workspace runtime bar, with per-platform status, AI log access, and automatic backup and restoration of every compatible Agent CLI configuration.
+- Browse persistent conversation branches, restore context from session history, and resume interrupted checkpoints from the prompt tree.
+- Export portable settings locally or synchronize account settings through the cloud, with direct transfer actions in the application menu.
+
+### Changed
+
+- Show the current conversation tree node inline and keep branch navigation focused on the active session path.
+- Link the version settings card directly to published releases.
+
+### Fixed
+
+- Reuse the same masked, copyable, replaceable key controls for ZenMux Management and Agent Client API keys without copying the wrong stored secret.
+- Preserve default skills when an Agent profile contains an empty skill selection.
+- Execute captured project quick operations reliably and switch conversation history modes immediately.
+
 ## 0.16.1
 
 ### Added
