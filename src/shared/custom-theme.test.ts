@@ -197,10 +197,10 @@ describe('custom theme packages', () => {
       'ydream-gold',
     ] as const;
 
-    expect(DREAM_SKIN_BUILTIN_IMAGES).toHaveLength(8);
     expect(galleryThemes.map((id) => BUILT_IN_DREAM_SKIN_THEMES[id].skin?.image)).toEqual(
-      DREAM_SKIN_BUILTIN_IMAGES
+      DREAM_SKIN_BUILTIN_IMAGES.filter((image) => image !== 'builtin:dream-portal')
     );
+    expect(BUILT_IN_DREAM_SKIN_THEMES['ydream-night'].skin?.image).toBe('builtin:dream-portal');
   });
 
   it('resolves every built-in skin to its declared light or dark mode', () => {

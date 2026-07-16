@@ -4,6 +4,7 @@ export const CUSTOM_THEME_SCHEMA_VERSION = 1;
 export const CUSTOM_THEME_SELECTION_PREFIX = 'custom:';
 export const CUSTOM_THEME_EXAMPLE_FILE_NAME = 'yoda-theme-example.json';
 export const DREAM_SKIN_BUILTIN_IMAGES = [
+  'builtin:dream-bloom',
   'builtin:dream-portal',
   'builtin:dream-fortune',
   'builtin:dream-scifi',
@@ -303,7 +304,7 @@ export const YODA_LIGHT2_THEME: CustomTheme = {
 const DEFAULT_DREAM_SKIN: DreamSkin = {
   kind: 'dream-skin',
   image: DREAM_SKIN_BUILTIN_IMAGE,
-  imageName: 'codex-dream-skin.jpg',
+  imageName: 'dream-bloom.svg',
   brandSubtitle: 'YODA DREAM SKIN',
   tagline: 'Turn inspiration into an interactive agent workspace.',
   statusText: 'DREAM SKIN ONLINE',
@@ -349,6 +350,8 @@ export const YODA_DREAM_NIGHT_THEME: CustomTheme = {
   mode: 'dark',
   skin: {
     ...DEFAULT_DREAM_SKIN,
+    image: 'builtin:dream-portal',
+    imageName: 'codex-dream-skin.jpg',
     brandSubtitle: 'YODA DREAM NIGHT',
     statusText: 'NIGHT SKIN ONLINE',
   },

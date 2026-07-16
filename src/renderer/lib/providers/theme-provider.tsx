@@ -57,6 +57,7 @@ export function applyThemeToDocument(
     const image = resolveDreamSkinAsset(dreamSkin.image);
     root.style.setProperty('--dream-skin-art', `url(${JSON.stringify(image)})`);
     root.style.setProperty('--dream-skin-brand', JSON.stringify(customTheme.name));
+    root.style.setProperty('--dream-skin-subtitle', JSON.stringify(dreamSkin.brandSubtitle));
     root.style.setProperty('--dream-skin-tagline', JSON.stringify(dreamSkin.tagline));
     root.style.setProperty('--dream-skin-status', JSON.stringify(dreamSkin.statusText));
     root.style.setProperty('--dream-skin-quote', JSON.stringify(dreamSkin.quote));
@@ -65,6 +66,7 @@ export function applyThemeToDocument(
     for (const variable of [
       '--dream-skin-art',
       '--dream-skin-brand',
+      '--dream-skin-subtitle',
       '--dream-skin-tagline',
       '--dream-skin-status',
       '--dream-skin-quote',

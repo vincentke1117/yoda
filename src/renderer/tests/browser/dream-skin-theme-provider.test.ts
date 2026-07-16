@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createDreamSkinTheme, YODA_DREAM_GOLD_THEME } from '@shared/custom-theme';
+import {
+  createDreamSkinTheme,
+  YODA_DREAM_GOLD_THEME,
+  YODA_DREAM_THEME,
+} from '@shared/custom-theme';
 import { applyThemeToDocument } from '@renderer/lib/providers/theme-provider';
 
 vi.mock('@renderer/lib/pty/pty', () => ({ applyThemeToAll: vi.fn() }));
@@ -13,6 +17,7 @@ vi.mock('@renderer/lib/hooks/useLocalStorage', () => ({
 const DREAM_VARIABLES = [
   '--dream-skin-art',
   '--dream-skin-brand',
+  '--dream-skin-subtitle',
   '--dream-skin-tagline',
   '--dream-skin-status',
   '--dream-skin-quote',
@@ -26,6 +31,14 @@ afterEach(() => {
 });
 
 describe('Dream Skin document theme', () => {
+  it('uses the original floral gallery artwork for the default light skin', () => {
+    applyThemeToDocument('ylight', YODA_DREAM_THEME);
+
+    const root = document.documentElement;
+    expect(root.style.getPropertyValue('--dream-skin-art')).toContain('dream-bloom.svg');
+    expect(root.style.getPropertyValue('--dream-skin-subtitle')).toContain('YODA DREAM SKIN');
+  });
+
   it('resolves a bundled gallery skin to its packaged artwork', () => {
     applyThemeToDocument('ydark', YODA_DREAM_GOLD_THEME);
 

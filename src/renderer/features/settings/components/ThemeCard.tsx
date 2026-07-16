@@ -58,7 +58,7 @@ const DREAM_SKIN_BUTTONS = [
     value: 'ydream',
     label: 'yodaDream',
     aria: 'ariaDream',
-    image: 'builtin:dream-portal',
+    image: 'builtin:dream-bloom',
   },
   {
     value: 'ydream-night',

@@ -1,4 +1,5 @@
 import dreamSkinArt from '@/assets/images/themes/codex-dream-skin.jpg';
+import dreamBloomArt from '@/assets/images/themes/dream-bloom.svg';
 import dreamClearArt from '@/assets/images/themes/dream-clear.svg';
 import dreamCosmosArt from '@/assets/images/themes/dream-cosmos.svg';
 import dreamFortuneArt from '@/assets/images/themes/dream-fortune.svg';
@@ -9,6 +10,7 @@ import dreamVirtualArt from '@/assets/images/themes/dream-virtual.svg';
 import type { DREAM_SKIN_BUILTIN_IMAGES } from '@shared/custom-theme';
 
 export const DREAM_SKIN_ASSETS: Record<(typeof DREAM_SKIN_BUILTIN_IMAGES)[number], string> = {
+  'builtin:dream-bloom': dreamBloomArt,
   'builtin:dream-portal': dreamSkinArt,
   'builtin:dream-fortune': dreamFortuneArt,
   'builtin:dream-scifi': dreamScifiArt,
