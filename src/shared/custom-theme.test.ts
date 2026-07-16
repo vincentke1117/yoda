@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BUILT_IN_DREAM_SKIN_THEMES,
   createCustomThemeCollection,
   createDreamSkinTheme,
   CUSTOM_THEME_EXAMPLE,
   CUSTOM_THEME_EXAMPLE_FILE_NAME,
+  DREAM_SKIN_BUILTIN_IMAGES,
   getCustomThemeId,
   parseCustomThemePackageText,
   resolveThemeMode,
@@ -181,5 +183,35 @@ describe('custom theme packages', () => {
         customThemes: [],
       })
     ).toBe('dark');
+  });
+
+  it('ships the eight upstream gallery moods as native built-in skins', () => {
+    const galleryThemes = [
+      'ydream',
+      'ydream-fortune',
+      'ydream-scifi',
+      'ydream-clear',
+      'ydream-cosmos',
+      'ydream-purple',
+      'ydream-virtual',
+      'ydream-gold',
+    ] as const;
+
+    expect(DREAM_SKIN_BUILTIN_IMAGES).toHaveLength(8);
+    expect(galleryThemes.map((id) => BUILT_IN_DREAM_SKIN_THEMES[id].skin?.image)).toEqual(
+      DREAM_SKIN_BUILTIN_IMAGES
+    );
+  });
+
+  it('resolves every built-in skin to its declared light or dark mode', () => {
+    for (const [selection, theme] of Object.entries(BUILT_IN_DREAM_SKIN_THEMES)) {
+      expect(
+        resolveThemeMode(selection as keyof typeof BUILT_IN_DREAM_SKIN_THEMES, {
+          systemMode: theme.mode === 'dark' ? 'light' : 'dark',
+          systemThemes: { light: 'ylight', dark: 'ydark' },
+          customThemes: [],
+        })
+      ).toBe(theme.mode);
+    }
   });
 });

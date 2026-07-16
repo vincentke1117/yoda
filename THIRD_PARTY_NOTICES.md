@@ -11,6 +11,10 @@ The bundled `src/assets/images/themes/codex-dream-skin.jpg` is a JPEG derivative
 art generated for that open-source theme pack. Codex Dream Skin Studio is unofficial and is not
 affiliated with OpenAI.
 
+The other `dream-*.svg` assets bundled by Yoda are original abstract vector artwork created for
+Yoda. They correspond to the mood categories shown in the upstream gallery but do not copy or
+redistribute its full-window screenshots, people, character likenesses, logos, or franchise art.
+
 MIT License
 
 Copyright (c) 2026 Codex Dream Skin Studio contributors

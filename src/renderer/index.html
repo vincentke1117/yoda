@@ -11,7 +11,14 @@
           var pref = raw ? JSON.parse(raw) : null;
           if (pref === 'emlight' || pref === 'ywarm') pref = 'ylight';
           else if (pref === 'emdark') pref = 'ydark';
-          var isDream = pref === 'ydream' || pref === 'ydream-night';
+          var isDream = typeof pref === 'string' && pref.indexOf('ydream') === 0;
+          var isDarkDream =
+            pref === 'ydream-night' ||
+            pref === 'ydream-fortune' ||
+            pref === 'ydream-cosmos' ||
+            pref === 'ydream-purple' ||
+            pref === 'ydream-virtual' ||
+            pref === 'ydream-gold';
           var effective =
             pref === 'ylight' || pref === 'ydark' || isDream
               ? pref
@@ -19,7 +26,7 @@
                 ? 'ydark'
                 : 'ylight';
           document.documentElement.classList.add(
-            pref === 'ydream-night' ? 'ydark' : isDream ? 'ylight' : effective
+            isDarkDream ? 'ydark' : isDream ? 'ylight' : effective
           );
           if (isDream) document.documentElement.classList.add('ydream');
           // Returning launches show the logo centered (part 1 only); the first

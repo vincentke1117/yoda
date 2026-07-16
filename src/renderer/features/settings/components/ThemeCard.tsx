@@ -5,7 +5,6 @@ import {
   Leaf,
   Monitor,
   Moon,
-  Sparkles,
   Sprout,
   Sun,
   Sunset,
@@ -20,7 +19,6 @@ import {
   createDreamSkinTheme,
   CUSTOM_THEME_EXAMPLE,
   CUSTOM_THEME_EXAMPLE_FILE_NAME,
-  DREAM_SKIN_BUILTIN_IMAGE,
   DREAM_SKIN_MAX_IMAGE_BYTES,
   DREAM_SKIN_SUPPORTED_IMAGE_TYPES,
   getCustomThemeId,
@@ -33,6 +31,7 @@ import { useToast } from '@renderer/lib/hooks/use-toast';
 import { useTheme } from '@renderer/lib/hooks/useTheme';
 import { rpc } from '@renderer/lib/ipc';
 import { useShowModal } from '@renderer/lib/modal/modal-provider';
+import { resolveDreamSkinAsset } from '@renderer/lib/providers/dream-skin-assets';
 import { Button } from '@renderer/lib/ui/button';
 import {
   Select,
@@ -46,20 +45,72 @@ import { captureTelemetry } from '@renderer/utils/telemetryClient';
 import { cn } from '@renderer/utils/utils';
 
 // Two pairs and a standalone: neutral 白/黑, brand 浅绿/暗绿, fixed 暖.
-const BUILT_IN_THEME_BUTTONS = [
+const COLOR_THEME_BUTTONS = [
   { value: 'ylight', Icon: Sun, label: 'yodaLight', aria: 'ariaLight' },
   { value: 'ydark', Icon: Moon, label: 'yodaDark', aria: 'ariaDark' },
   { value: 'ylight2', Icon: Sprout, label: 'yodaLightGreen', aria: 'ariaLightGreen' },
   { value: 'ygreen', Icon: Leaf, label: 'yodaDarkGreen', aria: 'ariaDarkGreen' },
   { value: 'ywarm', Icon: Sunset, label: 'yodaWarm', aria: 'ariaWarm' },
-  { value: 'ydream', Icon: Sparkles, label: 'yodaDream', aria: 'ariaDream' },
+] as const;
+
+const DREAM_SKIN_BUTTONS = [
+  {
+    value: 'ydream',
+    label: 'yodaDream',
+    aria: 'ariaDream',
+    image: 'builtin:dream-portal',
+  },
   {
     value: 'ydream-night',
-    Icon: Sparkles,
     label: 'yodaDreamNight',
     aria: 'ariaDreamNight',
+    image: 'builtin:dream-portal',
+  },
+  {
+    value: 'ydream-fortune',
+    label: 'yodaDreamFortune',
+    aria: 'ariaDreamFortune',
+    image: 'builtin:dream-fortune',
+  },
+  {
+    value: 'ydream-scifi',
+    label: 'yodaDreamScifi',
+    aria: 'ariaDreamScifi',
+    image: 'builtin:dream-scifi',
+  },
+  {
+    value: 'ydream-clear',
+    label: 'yodaDreamClear',
+    aria: 'ariaDreamClear',
+    image: 'builtin:dream-clear',
+  },
+  {
+    value: 'ydream-cosmos',
+    label: 'yodaDreamCosmos',
+    aria: 'ariaDreamCosmos',
+    image: 'builtin:dream-cosmos',
+  },
+  {
+    value: 'ydream-purple',
+    label: 'yodaDreamPurple',
+    aria: 'ariaDreamPurple',
+    image: 'builtin:dream-purple',
+  },
+  {
+    value: 'ydream-virtual',
+    label: 'yodaDreamVirtual',
+    aria: 'ariaDreamVirtual',
+    image: 'builtin:dream-virtual',
+  },
+  {
+    value: 'ydream-gold',
+    label: 'yodaDreamGold',
+    aria: 'ariaDreamGold',
+    image: 'builtin:dream-gold',
   },
 ] as const;
+
+const ALL_BUILT_IN_THEMES = [...COLOR_THEME_BUTTONS, ...DREAM_SKIN_BUTTONS] as const;
 
 const ThemeCard: React.FC = () => {
   const { t } = useTranslation();
@@ -78,7 +129,7 @@ const ThemeCard: React.FC = () => {
   // Any theme can fill either system slot — light/dark mode of a theme is a
   // preset, not a restriction. Defaults are 尤达白 / 尤达黑.
   const systemSlotOptions = [
-    ...BUILT_IN_THEME_BUTTONS.map(({ value, label }) => ({
+    ...ALL_BUILT_IN_THEMES.map(({ value, label }) => ({
       value: value as SystemThemes['light'],
       label: t(`settings.theme.${label}`),
     })),
@@ -426,7 +477,7 @@ const ThemeCard: React.FC = () => {
           <Monitor className="h-4 w-4 shrink-0" aria-hidden="true" />
           <span className="text-center">{t('settings.theme.system')}</span>
         </button>
-        {BUILT_IN_THEME_BUTTONS.map(({ value, Icon, label, aria }) => (
+        {COLOR_THEME_BUTTONS.map(({ value, Icon, label, aria }) => (
           <button
             key={value}
             type="button"
@@ -439,6 +490,54 @@ const ThemeCard: React.FC = () => {
             <span className="text-center">{t(`settings.theme.${label}`)}</span>
           </button>
         ))}
+      </div>
+      <div className="mt-1 grid gap-2">
+        <div>
+          <div className="text-xs font-medium text-foreground-muted">
+            {t('settings.theme.dreamSkinGallery')}
+          </div>
+          <div className="text-xs text-foreground-passive">
+            {t('settings.theme.dreamSkinGalleryDescription')}
+          </div>
+        </div>
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-2">
+          {DREAM_SKIN_BUTTONS.map(({ value, label, aria, image }) => {
+            const isActive = theme === value;
+            return (
+              <button
+                key={value}
+                type="button"
+                onClick={() => handleSetTheme(value)}
+                className={cn(
+                  'group relative min-h-28 overflow-hidden rounded-lg border text-left shadow-sm transition-[border-color,box-shadow,transform] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background hover:-translate-y-0.5 hover:shadow-md',
+                  isActive ? 'border-primary ring-1 ring-primary/40' : 'border-border/70'
+                )}
+                aria-pressed={isActive}
+                aria-label={t(`settings.theme.${aria}`)}
+              >
+                <span
+                  className="absolute inset-0 bg-cover bg-center transition-transform duration-300 group-hover:scale-[1.03]"
+                  style={{ backgroundImage: `url(${resolveDreamSkinAsset(image)})` }}
+                  aria-hidden="true"
+                />
+                <span
+                  className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-white/5"
+                  aria-hidden="true"
+                />
+                <span className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 p-2.5 text-white">
+                  <span className="truncate text-xs font-semibold drop-shadow-sm">
+                    {t(`settings.theme.${label}`)}
+                  </span>
+                  {isActive ? (
+                    <span className="rounded-full bg-white/20 px-1.5 py-0.5 text-[9px] font-medium uppercase backdrop-blur-sm">
+                      {t('settings.theme.activeSkin')}
+                    </span>
+                  ) : null}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
       {theme === null && (
         <div className="grid grid-cols-1 gap-2 rounded-md border border-border/60 bg-background-1 px-3 py-2.5 @2xl:grid-cols-2">
@@ -569,12 +668,11 @@ function SystemSlotSelect({
 
 function ThemeSwatches({ theme }: { theme: CustomTheme }) {
   if (theme.skin) {
-    const backgroundImage =
-      theme.skin.image === DREAM_SKIN_BUILTIN_IMAGE ? undefined : `url(${theme.skin.image})`;
+    const backgroundImage = `url(${resolveDreamSkinAsset(theme.skin.image)})`;
     return (
       <span
         className="h-8 w-12 shrink-0 rounded-md border border-border/70 bg-background-3 bg-cover bg-center"
-        style={backgroundImage ? { backgroundImage } : undefined}
+        style={{ backgroundImage }}
       />
     );
   }

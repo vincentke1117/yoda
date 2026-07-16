@@ -1,12 +1,9 @@
 import { createContext, useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
-import dreamSkinArt from '@/assets/images/themes/codex-dream-skin.jpg';
 import type { Theme } from '@shared/app-settings';
 import {
-  DREAM_SKIN_BUILTIN_IMAGE,
+  BUILT_IN_DREAM_SKIN_THEMES,
   findCustomTheme,
   resolveThemeMode,
-  YODA_DREAM_NIGHT_THEME,
-  YODA_DREAM_THEME,
   YODA_GREEN_THEME,
   YODA_LIGHT2_THEME,
   YODA_WARM_THEME,
@@ -19,6 +16,7 @@ import {
   CUSTOM_THEME_CSS_VARIABLES,
   getCustomThemeFingerprint,
 } from './custom-theme-css';
+import { resolveDreamSkinAsset } from './dream-skin-assets';
 
 type EffectiveTheme = 'ylight' | 'ydark';
 
@@ -29,6 +27,9 @@ function getSystemTheme(): EffectiveTheme {
 
 /** Built-in themes that ship as custom-theme overlays over the base classes. */
 function findBuiltInOverlay(selection: Theme) {
+  if (selection && selection in BUILT_IN_DREAM_SKIN_THEMES) {
+    return BUILT_IN_DREAM_SKIN_THEMES[selection as keyof typeof BUILT_IN_DREAM_SKIN_THEMES];
+  }
   switch (selection) {
     case 'ywarm':
       return YODA_WARM_THEME;
@@ -36,10 +37,6 @@ function findBuiltInOverlay(selection: Theme) {
       return YODA_GREEN_THEME;
     case 'ylight2':
       return YODA_LIGHT2_THEME;
-    case 'ydream':
-      return YODA_DREAM_THEME;
-    case 'ydream-night':
-      return YODA_DREAM_NIGHT_THEME;
     default:
       return undefined;
   }
@@ -57,7 +54,7 @@ export function applyThemeToDocument(
   if (dreamSkin) {
     root.classList.add('ydream');
     root.dataset.dreamShell = effective === 'ydark' ? 'dark' : 'light';
-    const image = dreamSkin.image === DREAM_SKIN_BUILTIN_IMAGE ? dreamSkinArt : dreamSkin.image;
+    const image = resolveDreamSkinAsset(dreamSkin.image);
     root.style.setProperty('--dream-skin-art', `url(${JSON.stringify(image)})`);
     root.style.setProperty('--dream-skin-brand', JSON.stringify(customTheme.name));
     root.style.setProperty('--dream-skin-tagline', JSON.stringify(dreamSkin.tagline));

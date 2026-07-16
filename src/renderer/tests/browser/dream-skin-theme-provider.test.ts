@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createDreamSkinTheme } from '@shared/custom-theme';
+import { createDreamSkinTheme, YODA_DREAM_GOLD_THEME } from '@shared/custom-theme';
 import { applyThemeToDocument } from '@renderer/lib/providers/theme-provider';
 
 vi.mock('@renderer/lib/pty/pty', () => ({ applyThemeToAll: vi.fn() }));
@@ -26,6 +26,15 @@ afterEach(() => {
 });
 
 describe('Dream Skin document theme', () => {
+  it('resolves a bundled gallery skin to its packaged artwork', () => {
+    applyThemeToDocument('ydark', YODA_DREAM_GOLD_THEME);
+
+    const root = document.documentElement;
+    expect(root.dataset.dreamShell).toBe('dark');
+    expect(root.style.getPropertyValue('--dream-skin-art')).toContain('data:image/svg+xml');
+    expect(root.style.getPropertyValue('--dream-skin-brand')).toContain('Stage Black Gold');
+  });
+
   it('applies an image-backed skin and removes it when another theme is selected', () => {
     const theme = createDreamSkinTheme({
       id: 'dream-browser',
