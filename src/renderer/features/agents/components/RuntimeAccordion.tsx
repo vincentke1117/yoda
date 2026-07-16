@@ -1,16 +1,29 @@
 import * as AccordionPrimitive from '@radix-ui/react-accordion';
-import { ChevronDown, RefreshCw } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { ChevronDown, Ellipsis, Loader2, Power, PowerOff, RefreshCw, Trash2 } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { RuntimeCustomConfigs } from '@shared/app-settings';
 import type { DependencyState } from '@shared/dependencies';
 import { isValidRuntimeId, RUNTIMES, type RuntimeId } from '@shared/runtime-registry';
-import { getAgentInstallErrorMessage } from '@renderer/lib/components/agent-selector/agent-install';
+import {
+  getAgentInstallErrorMessage,
+  getAgentUninstallErrorMessage,
+} from '@renderer/lib/components/agent-selector/agent-install';
 import { AgentInstallButton } from '@renderer/lib/components/agent-selector/agent-install-button';
 import { useToast } from '@renderer/lib/hooks/use-toast';
+import { rpc } from '@renderer/lib/ipc';
+import { useShowModal } from '@renderer/lib/modal/modal-provider';
 import { appState } from '@renderer/lib/stores/app-state';
 import { workspaceShellStore } from '@renderer/lib/stores/workspace-shell-store';
-import { Button } from '@renderer/lib/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@renderer/lib/ui/dropdown-menu';
 import { cn } from '@renderer/utils/utils';
 import { AgentDetailPanel } from './AgentDetailPanel';
 import { RuntimeLogo } from './RuntimeLogo';
@@ -21,7 +34,9 @@ type RuntimeRow = {
   detected: boolean;
   version: string | null;
   installCommand: string | null;
+  disabled: boolean;
   canUpdate: boolean;
+  canUninstall: boolean;
 };
 
 /**
@@ -30,7 +45,10 @@ type RuntimeRow = {
  * 480px master-detail — collapsed rows carry install status, expanding reveals
  * the full per-runtime detail inline.
  */
-function buildRows(statuses: Record<string, DependencyState>): RuntimeRow[] {
+function buildRows(
+  statuses: Record<string, DependencyState>,
+  configs: RuntimeCustomConfigs
+): RuntimeRow[] {
   return RUNTIMES.filter((runtime) => runtime.detectable !== false)
     .map<RuntimeRow>((runtime) => {
       const dep = statuses[runtime.id];
@@ -40,11 +58,14 @@ function buildRows(statuses: Record<string, DependencyState>): RuntimeRow[] {
         detected: dep?.status === 'available',
         version: dep?.version ?? null,
         installCommand: runtime.installCommand ?? null,
+        disabled: configs[runtime.id]?.disabled === true,
         canUpdate: Boolean(runtime.updateCommand),
+        canUninstall: Boolean(runtime.uninstallCommand),
       };
     })
     .sort((a, b) => {
       if (a.detected !== b.detected) return a.detected ? -1 : 1;
+      if (a.disabled !== b.disabled) return a.disabled ? 1 : -1;
       return a.name.localeCompare(b.name);
     });
 }
@@ -53,8 +74,15 @@ export const RuntimeAccordion: React.FC<{ focusRuntimeId?: RuntimeId }> = observ
   function RuntimeAccordion({ focusRuntimeId }) {
     const { t } = useTranslation();
     const { toast } = useToast();
+    const queryClient = useQueryClient();
+    const showConfirm = useShowModal('confirmActionModal');
     const statuses = appState.dependencies.agentStatuses;
-    const rows = useMemo(() => buildRows(statuses), [statuses]);
+    const { data: runtimeConfigs = {} } = useQuery<RuntimeCustomConfigs>({
+      queryKey: ['runtimeSettings', 'all'] as const,
+      queryFn: () => rpc.runtimeSettings.getAll() as Promise<RuntimeCustomConfigs>,
+      staleTime: 60_000,
+    });
+    const rows = useMemo(() => buildRows(statuses, runtimeConfigs), [statuses, runtimeConfigs]);
     const defaultOpen = useMemo(() => rows.find((row) => row.detected)?.id ?? rows[0]?.id, [rows]);
     const [openRuntimeId, setOpenRuntimeId] = useState<RuntimeId | null>(
       () => focusRuntimeId ?? defaultOpen ?? null
@@ -89,6 +117,93 @@ export const RuntimeAccordion: React.FC<{ focusRuntimeId?: RuntimeId }> = observ
       await workspaceShellStore.runRuntimeAction(row.id, 'update').catch(() => {});
     }, []);
 
+    const setCachedDisabled = useCallback(
+      (runtimeId: RuntimeId, disabled: boolean) => {
+        queryClient.setQueryData<RuntimeCustomConfigs>(
+          ['runtimeSettings', 'all'],
+          (current = {}) => ({
+            ...current,
+            [runtimeId]: { ...current[runtimeId], disabled },
+          })
+        );
+      },
+      [queryClient]
+    );
+
+    const handleSetDisabled = useCallback(
+      async (row: RuntimeRow, disabled: boolean) => {
+        setCachedDisabled(row.id, disabled);
+        try {
+          await rpc.runtimeSettings.updateItem(row.id, { disabled });
+          if (disabled) {
+            await (async () => {
+              const defaultRuntime = await rpc.appSettings.get('defaultRuntime');
+              const fallback = rows.find(
+                (candidate) => candidate.id !== row.id && candidate.detected && !candidate.disabled
+              );
+              if (defaultRuntime === row.id && fallback) {
+                await rpc.appSettings.update('defaultRuntime', fallback.id);
+                void queryClient.invalidateQueries({ queryKey: ['appSettings'] });
+              }
+            })().catch(() => {
+              void queryClient.invalidateQueries({ queryKey: ['appSettings'] });
+            });
+          }
+          toast({
+            title: t(
+              disabled ? 'agents.runtimeInfo.disableSuccess' : 'agents.runtimeInfo.enableSuccess',
+              { name: row.name }
+            ),
+          });
+        } catch (error) {
+          setCachedDisabled(row.id, row.disabled);
+          toast({
+            title: t('agents.runtimeInfo.stateChangeFailed'),
+            description: error instanceof Error ? error.message : String(error),
+            variant: 'destructive',
+          });
+        } finally {
+          void queryClient.invalidateQueries({ queryKey: ['runtimeSettings', row.id] });
+          void queryClient.invalidateQueries({ queryKey: ['runtimeSettings', 'all'] });
+        }
+      },
+      [queryClient, rows, setCachedDisabled, t, toast]
+    );
+
+    const performUninstall = useCallback(
+      async (row: RuntimeRow) => {
+        const result = await appState.dependencies.uninstall(row.id);
+        if (!result.success) {
+          toast({
+            title: t('agents.runtimeInfo.uninstallFailed'),
+            description: getAgentUninstallErrorMessage(result.error),
+            variant: 'destructive',
+          });
+          return;
+        }
+
+        await rpc.runtimeSettings.updateItem(row.id, { disabled: false }).catch(() => {});
+        setCachedDisabled(row.id, false);
+        toast({
+          title: t('agents.runtimeInfo.uninstallSuccess'),
+          description: t('agents.runtimeInfo.uninstallSuccessDescription', { name: row.name }),
+        });
+      },
+      [setCachedDisabled, t, toast]
+    );
+
+    const handleUninstall = useCallback(
+      (row: RuntimeRow) => {
+        showConfirm({
+          title: t('agents.runtimeInfo.uninstallTitle', { name: row.name }),
+          description: t('agents.runtimeInfo.uninstallDescription', { name: row.name }),
+          confirmLabel: t('agents.runtimeInfo.uninstall'),
+          onSuccess: () => void performUninstall(row),
+        });
+      },
+      [performUninstall, showConfirm, t]
+    );
+
     return (
       <AccordionPrimitive.Root
         type="single"
@@ -103,6 +218,8 @@ export const RuntimeAccordion: React.FC<{ focusRuntimeId?: RuntimeId }> = observ
             row={row}
             onInstall={handleInstall}
             onUpdate={handleUpdate}
+            onSetDisabled={handleSetDisabled}
+            onUninstall={handleUninstall}
           />
         ))}
       </AccordionPrimitive.Root>
@@ -114,14 +231,24 @@ const RuntimeAccordionItem: React.FC<{
   row: RuntimeRow;
   onInstall: (row: RuntimeRow) => void;
   onUpdate: (row: RuntimeRow) => void;
-}> = observer(function RuntimeAccordionItem({ row, onInstall, onUpdate }) {
+  onSetDisabled: (row: RuntimeRow, disabled: boolean) => void;
+  onUninstall: (row: RuntimeRow) => void;
+}> = observer(function RuntimeAccordionItem({
+  row,
+  onInstall,
+  onUpdate,
+  onSetDisabled,
+  onUninstall,
+}) {
   const { t } = useTranslation();
   const installing = appState.dependencies.isInstalling(row.id);
-  const statusLabel = row.detected
-    ? row.version
-      ? `v${row.version}`
-      : t('settings.agentsTab.detected')
-    : t('settings.agentsTab.notDetected');
+  const statusLabel = row.disabled
+    ? t('agents.runtimeInfo.disabled')
+    : row.detected
+      ? row.version
+        ? `v${row.version}`
+        : t('settings.agentsTab.detected')
+      : t('settings.agentsTab.notDetected');
 
   return (
     <AccordionPrimitive.Item
@@ -140,7 +267,11 @@ const RuntimeAccordionItem: React.FC<{
           <span
             className={cn(
               'h-1.5 w-1.5 shrink-0 rounded-full',
-              row.detected ? 'bg-emerald-500' : 'bg-muted-foreground/40'
+              row.disabled
+                ? 'bg-amber-500'
+                : row.detected
+                  ? 'bg-emerald-500'
+                  : 'bg-muted-foreground/40'
             )}
           />
         </AccordionPrimitive.Trigger>
@@ -154,16 +285,44 @@ const RuntimeAccordionItem: React.FC<{
             tooltipSide="top"
             onInstall={() => onInstall(row)}
           />
-        ) : row.detected && row.canUpdate ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            title={t('agents.runtimeInfo.update')}
-            onClick={() => void onUpdate(row)}
-          >
-            <RefreshCw className="size-3.5" />
-          </Button>
+        ) : row.detected ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              type="button"
+              title={t('agents.runtimeInfo.actions')}
+              aria-label={t('agents.runtimeInfo.actions')}
+              disabled={installing}
+              className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+            >
+              {installing ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Ellipsis className="size-3.5" />
+              )}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              {row.canUpdate && (
+                <DropdownMenuItem onClick={() => void onUpdate(row)}>
+                  <RefreshCw className="size-3.5" />
+                  {t('agents.runtimeInfo.update')}
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem onClick={() => void onSetDisabled(row, !row.disabled)}>
+                {row.disabled ? <Power className="size-3.5" /> : <PowerOff className="size-3.5" />}
+                {t(row.disabled ? 'agents.runtimeInfo.enable' : 'agents.runtimeInfo.disable')}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                disabled={!row.canUninstall}
+                title={row.canUninstall ? undefined : t('agents.runtimeInfo.uninstallUnavailable')}
+                onClick={() => onUninstall(row)}
+              >
+                <Trash2 className="size-3.5" />
+                {t('agents.runtimeInfo.uninstall')}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         ) : null}
       </AccordionPrimitive.Header>
       <AccordionPrimitive.Content

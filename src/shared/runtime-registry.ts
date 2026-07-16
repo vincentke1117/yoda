@@ -66,6 +66,8 @@ export type RuntimeDefinition = {
   description?: string;
   docUrl?: string;
   installCommand?: string;
+  /** Reliable command that removes an installation managed by its package manager. */
+  uninstallCommand?: string;
   /** Runtime-native command that upgrades an existing installation in place. */
   updateCommand?: string;
   commands?: string[];
@@ -333,6 +335,7 @@ export const RUNTIMES: RuntimeDefinition[] = [
       'CLI that connects to OpenAI models for project-aware code assistance and terminal workflows.',
     docUrl: 'https://github.com/openai/codex',
     installCommand: 'npm install -g @openai/codex',
+    uninstallCommand: 'npm uninstall -g @openai/codex',
     updateCommand: 'codex update',
     commands: ['codex'],
     versionArgs: ['--version'],
@@ -424,6 +427,7 @@ export const RUNTIMES: RuntimeDefinition[] = [
       'CLI that uses Google Gemini models to assist with coding, reasoning, and command-line tasks.',
     docUrl: 'https://github.com/google-gemini/gemini-cli',
     installCommand: 'npm install -g @google/gemini-cli',
+    uninstallCommand: 'npm uninstall -g @google/gemini-cli',
     commands: ['gemini'],
     versionArgs: ['--version'],
     cli: 'gemini',
@@ -441,6 +445,7 @@ export const RUNTIMES: RuntimeDefinition[] = [
       "Command-line interface to Alibaba's Qwen Code models for coding assistance and code completion.",
     docUrl: 'https://github.com/QwenLM/qwen-code',
     installCommand: 'npm install -g @qwen-code/qwen-code',
+    uninstallCommand: 'npm uninstall -g @qwen-code/qwen-code',
     commands: ['qwen'],
     versionArgs: ['--version'],
     cli: 'qwen',
@@ -474,6 +479,7 @@ export const RUNTIMES: RuntimeDefinition[] = [
       'Amp Code CLI for agentic coding sessions against your repository from the terminal.',
     docUrl: 'https://ampcode.com/manual#install',
     installCommand: 'npm install -g @sourcegraph/amp@latest',
+    uninstallCommand: 'npm uninstall -g @sourcegraph/amp',
     commands: ['amp'],
     versionArgs: ['--version'],
     cli: 'amp',
@@ -491,6 +497,7 @@ export const RUNTIMES: RuntimeDefinition[] = [
       'OpenCode CLI that interfaces with models for code generation and edits from the shell.',
     docUrl: 'https://opencode.ai/docs/cli/',
     installCommand: 'npm install -g opencode-ai',
+    uninstallCommand: 'npm uninstall -g opencode-ai',
     commands: ['opencode'],
     versionArgs: ['--version'],
     cli: 'opencode',
@@ -528,6 +535,7 @@ export const RUNTIMES: RuntimeDefinition[] = [
       'GitHub Copilot CLI brings Copilot prompts to the terminal for code, shell, and search help.',
     docUrl: 'https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli',
     installCommand: 'npm install -g @github/copilot',
+    uninstallCommand: 'npm uninstall -g @github/copilot',
     commands: ['copilot'],
     versionArgs: ['--version'],
     cli: 'copilot',
@@ -543,6 +551,7 @@ export const RUNTIMES: RuntimeDefinition[] = [
     description: 'Charm Crush agent CLI providing terminal-first AI assistance for coding tasks.',
     docUrl: 'https://github.com/charmbracelet/crush',
     installCommand: 'npm install -g @charmland/crush',
+    uninstallCommand: 'npm uninstall -g @charmland/crush',
     commands: ['crush'],
     versionArgs: ['--version'],
     cli: 'crush',
@@ -559,6 +568,7 @@ export const RUNTIMES: RuntimeDefinition[] = [
       'Augment Code CLI to run an agent against your repository for code changes and reviews.',
     docUrl: 'https://docs.augmentcode.com/cli/overview',
     installCommand: 'npm install -g @augmentcode/auggie',
+    uninstallCommand: 'npm uninstall -g @augmentcode/auggie',
     commands: ['auggie'],
     versionArgs: ['--version'],
     cli: 'auggie',
@@ -595,6 +605,7 @@ export const RUNTIMES: RuntimeDefinition[] = [
       'Kimi CLI by Moonshot AI, with shell execution, Zsh integration, ACP, and MCP support.',
     docUrl: 'https://moonshotai.github.io/kimi-cli/en/guides/getting-started.html',
     installCommand: 'uv tool install kimi-cli',
+    uninstallCommand: 'uv tool uninstall kimi-cli',
     commands: ['kimi'],
     versionArgs: ['--version'],
     cli: 'kimi',
@@ -612,6 +623,7 @@ export const RUNTIMES: RuntimeDefinition[] = [
       'Kilo AI coding assistant with multiple modes, broad model support, and checkpoint-based workflows.',
     docUrl: 'https://kilo.ai/docs/cli',
     installCommand: 'npm install -g @kilocode/cli',
+    uninstallCommand: 'npm uninstall -g @kilocode/cli',
     commands: ['kilocode'],
     versionArgs: ['--version'],
     cli: 'kilocode',
@@ -660,6 +672,7 @@ export const RUNTIMES: RuntimeDefinition[] = [
       'Cline CLI runs coding agents directly in your terminal with multi-provider model support.',
     docUrl: 'https://docs.cline.bot/cline-cli/overview',
     installCommand: 'npm install -g cline',
+    uninstallCommand: 'npm uninstall -g cline',
     commands: ['cline'],
     versionArgs: ['help'],
     cli: 'cline',
@@ -676,6 +689,7 @@ export const RUNTIMES: RuntimeDefinition[] = [
       'Continue CLI is a modular coding agent with configurable models, rules, and MCP tool support.',
     docUrl: 'https://docs.continue.dev/guides/cli',
     installCommand: 'npm i -g @continuedev/cli',
+    uninstallCommand: 'npm uninstall -g @continuedev/cli',
     commands: ['cn'],
     versionArgs: ['--version'],
     cli: 'cn',
@@ -692,6 +706,7 @@ export const RUNTIMES: RuntimeDefinition[] = [
       'Codebuff is an AI coding agent for project-directory assistance and day-to-day development tasks.',
     docUrl: 'https://www.codebuff.com/docs/help/quick-start',
     installCommand: 'npm install -g codebuff',
+    uninstallCommand: 'npm uninstall -g codebuff',
     commands: ['codebuff'],
     versionArgs: ['--version'],
     cli: 'codebuff',
@@ -723,6 +738,7 @@ export const RUNTIMES: RuntimeDefinition[] = [
       "Google's Jules CLI for managing asynchronous remote coding sessions and a terminal dashboard.",
     docUrl: 'https://jules.google/docs/cli/reference/',
     installCommand: 'npm install -g @google/jules',
+    uninstallCommand: 'npm uninstall -g @google/jules',
     commands: ['jules'],
     versionArgs: ['version'],
     cli: 'jules',
@@ -755,6 +771,7 @@ export const RUNTIMES: RuntimeDefinition[] = [
       'Minimal terminal coding agent with multi-provider model support and extensible custom tools.',
     docUrl: 'https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent',
     installCommand: 'npm install -g @mariozechner/pi-coding-agent',
+    uninstallCommand: 'npm uninstall -g @mariozechner/pi-coding-agent',
     commands: ['pi'],
     versionArgs: ['--version'],
     cli: 'pi',
@@ -771,6 +788,7 @@ export const RUNTIMES: RuntimeDefinition[] = [
       'Memory-first coding agent CLI with persistent agents that learn across sessions and portable memory across models.',
     docUrl: 'https://docs.letta.com/letta-code/cli',
     installCommand: 'npm install -g @letta-ai/letta-code',
+    uninstallCommand: 'npm uninstall -g @letta-ai/letta-code',
     commands: ['letta'],
     versionArgs: ['--version'],
     cli: 'letta',
@@ -792,6 +810,7 @@ export const RUNTIMES: RuntimeDefinition[] = [
       'Terminal coding agent with auto-commit, dry-run previews, community skills, and headless automation modes.',
     docUrl: 'https://autohand.ai/code/',
     installCommand: 'npm install -g autohand-cli',
+    uninstallCommand: 'npm uninstall -g autohand-cli',
     commands: ['autohand'],
     versionArgs: ['--version'],
     cli: 'autohand',
@@ -1215,6 +1234,10 @@ export function getInstallCommandForRuntime(id: RuntimeId): string | null {
 
 export function getUpdateCommandForRuntime(id: RuntimeId): string | null {
   return PROVIDER_MAP.get(id)?.updateCommand ?? null;
+}
+
+export function getUninstallCommandForRuntime(id: RuntimeId): string | null {
+  return PROVIDER_MAP.get(id)?.uninstallCommand ?? null;
 }
 
 /**

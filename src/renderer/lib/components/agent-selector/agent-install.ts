@@ -1,4 +1,4 @@
-import type { DependencyInstallError } from '@shared/dependencies';
+import type { DependencyInstallError, DependencyUninstallError } from '@shared/dependencies';
 import type { RuntimeId } from '@shared/runtime-registry';
 import { agentConfig } from '@renderer/utils/agentConfig';
 
@@ -23,6 +23,23 @@ export function getAgentInstallErrorMessage(error: DependencyInstallError): stri
       return `No install command is available for ${error.id}.`;
     case 'not-detected-after-install':
       return 'The agent was not detected after installation.';
+  }
+}
+
+export function getAgentUninstallErrorMessage(error: DependencyUninstallError): string {
+  switch (error.type) {
+    case 'permission-denied':
+      return error.message;
+    case 'command-failed':
+      return error.output ? `${error.message} ${error.output}` : error.message;
+    case 'pty-open-failed':
+      return error.message;
+    case 'unknown-dependency':
+      return `Unknown dependency: ${error.id}`;
+    case 'no-uninstall-command':
+      return `No safe uninstall command is available for ${error.id}.`;
+    case 'still-detected-after-uninstall':
+      return 'The agent is still detected after uninstalling.';
   }
 }
 

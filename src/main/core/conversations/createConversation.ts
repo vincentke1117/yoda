@@ -3,6 +3,7 @@ import { eq, sql } from 'drizzle-orm';
 import { type Conversation, type CreateConversationParams } from '@shared/conversations';
 import { isDangerPermissionMode, resolveRuntimePermissionModeId } from '@shared/runtime-registry';
 import { normalizeSkillSelection } from '@shared/skills/selection';
+import { runtimeOverrideSettings } from '@main/core/settings/runtime-settings-service';
 import { appSettingsService } from '@main/core/settings/settings-service';
 import { skillsService } from '@main/core/skills/SkillsService';
 import { db } from '@main/db/client';
@@ -51,6 +52,10 @@ export async function createConversation(params: CreateConversationParams): Prom
   const id = params.id ?? randomUUID();
   const task = resolveTask(params.projectId, params.taskId);
   if (!task) throw new Error('Task not found');
+  const runtimeConfig = await runtimeOverrideSettings.getItem(params.runtime);
+  if (runtimeConfig?.disabled) {
+    throw new Error(`${params.runtime} is disabled in Yoda.`);
+  }
   const [existingConversation] = await db
     .select({ id: conversations.id })
     .from(conversations)

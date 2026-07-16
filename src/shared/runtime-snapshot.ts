@@ -16,6 +16,7 @@ export type RuntimeSnapshot = {
     provider: string | null;
   };
   config: {
+    disabled: boolean;
     path: string | null;
     exists: boolean | null;
     cli: string | null;

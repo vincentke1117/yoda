@@ -109,6 +109,7 @@ function buildAgentDependencies(): DependencyDescriptor[] {
     docUrl: provider.docUrl,
     installHint: provider.installCommand ? `Run: ${provider.installCommand}` : undefined,
     installCommand: provider.installCommand,
+    uninstallCommand: provider.uninstallCommand,
     updateCommand: provider.updateCommand,
     resolveStatus: agentResolveStatus,
   }));

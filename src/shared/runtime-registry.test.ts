@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { getRuntimeAccountProfile, getUpdateCommandForRuntime } from './runtime-registry';
+import {
+  getRuntimeAccountProfile,
+  getUninstallCommandForRuntime,
+  getUpdateCommandForRuntime,
+} from './runtime-registry';
 
 describe('runtime update commands', () => {
   it('returns an explicitly registered runtime-native update command', () => {
@@ -8,6 +12,17 @@ describe('runtime update commands', () => {
 
   it('does not fall back to an install command', () => {
     expect(getUpdateCommandForRuntime('claude')).toBeNull();
+  });
+});
+
+describe('runtime uninstall commands', () => {
+  it('returns package-manager uninstall commands when they are reliable', () => {
+    expect(getUninstallCommandForRuntime('codex')).toBe('npm uninstall -g @openai/codex');
+    expect(getUninstallCommandForRuntime('kimi')).toBe('uv tool uninstall kimi-cli');
+  });
+
+  it('does not guess how to remove installer-script runtimes', () => {
+    expect(getUninstallCommandForRuntime('claude')).toBeNull();
   });
 });
 

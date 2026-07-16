@@ -5,6 +5,7 @@ import type {
   DependencyState,
   DependencyStatusMap,
   DependencyStatusUpdatedEvent,
+  DependencyUninstallResult,
 } from '@shared/dependencies';
 import { dependencyStatusUpdatedChannel } from '@shared/events/appEvents';
 import { events, rpc } from '../../lib/ipc';
@@ -15,7 +16,10 @@ export class DependenciesStore {
 
   private readonly _remoteStores = new Map<string, Resource<DependencyStatusMap>>();
   private readonly _installingDependencyKeys = observable.set<string>();
-  private readonly _inFlightInstalls = new Map<string, Promise<DependencyInstallResult>>();
+  private readonly _inFlightInstalls = new Map<
+    string,
+    Promise<DependencyInstallResult | DependencyUninstallResult>
+  >();
 
   constructor() {
     makeObservable<this, '_installingDependencyKeys'>(this, {
@@ -25,6 +29,7 @@ export class DependenciesStore {
       localInstalledAgents: computed,
       install: action,
       update: action,
+      uninstall: action,
       probeAll: action,
     });
 
@@ -111,7 +116,7 @@ export class DependenciesStore {
   async install(id: DependencyId, connectionId?: string): Promise<DependencyInstallResult> {
     const key = this.installKey(id, connectionId);
     const existing = this._inFlightInstalls.get(key);
-    if (existing) return existing;
+    if (existing) return existing as Promise<DependencyInstallResult>;
 
     const install = this.runInstall(id, connectionId, key);
     this._inFlightInstalls.set(key, install);
@@ -121,11 +126,21 @@ export class DependenciesStore {
   async update(id: DependencyId, connectionId?: string): Promise<DependencyInstallResult> {
     const key = this.installKey(id, connectionId);
     const existing = this._inFlightInstalls.get(key);
-    if (existing) return existing;
+    if (existing) return existing as Promise<DependencyInstallResult>;
 
     const update = this.runUpdate(id, connectionId, key);
     this._inFlightInstalls.set(key, update);
     return update;
+  }
+
+  async uninstall(id: DependencyId, connectionId?: string): Promise<DependencyUninstallResult> {
+    const key = this.installKey(id, connectionId);
+    const existing = this._inFlightInstalls.get(key);
+    if (existing) return existing as Promise<DependencyUninstallResult>;
+
+    const uninstall = this.runUninstall(id, connectionId, key);
+    this._inFlightInstalls.set(key, uninstall);
+    return uninstall;
   }
 
   private async runInstall(
@@ -162,6 +177,32 @@ export class DependenciesStore {
 
     try {
       const result = (await rpc.dependencies.update(id, connectionId)) as DependencyInstallResult;
+      if (!result.success) return result;
+
+      await this.refreshAgents(connectionId);
+      return result;
+    } finally {
+      this._inFlightInstalls.delete(key);
+      runInAction(() => {
+        this._installingDependencyKeys.delete(key);
+      });
+    }
+  }
+
+  private async runUninstall(
+    id: DependencyId,
+    connectionId: string | undefined,
+    key: string
+  ): Promise<DependencyUninstallResult> {
+    runInAction(() => {
+      this._installingDependencyKeys.add(key);
+    });
+
+    try {
+      const result = (await rpc.dependencies.uninstall(
+        id,
+        connectionId
+      )) as DependencyUninstallResult;
       if (!result.success) return result;
 
       await this.refreshAgents(connectionId);

@@ -92,6 +92,9 @@ export async function resolveRuntimeActionCommand({
     throw new Error(`${runtime.name} is not installed.`);
   }
   const config = await runtimeOverrideSettings.getItem(runtimeId);
+  if (config?.disabled && action !== 'update') {
+    throw new Error(`${runtime.name} is disabled in Yoda.`);
+  }
 
   let parsed: { command: string; args: string[] };
   switch (action) {

@@ -169,6 +169,60 @@ describe('DependencyManager install', () => {
     });
   });
 
+  it('runs a registered uninstall command and verifies the runtime is gone', async () => {
+    let installed = true;
+    const ctx = makeCtx(async (command, args = []) => {
+      if (command === probeCommand && args[0] === 'codex' && installed) {
+        return { stdout: `${resolvedCodex}\n`, stderr: '' };
+      }
+      if (command === resolvedCodex && args[0] === '--version' && installed) {
+        return { stdout: 'codex-cli 1.2.3\n', stderr: '' };
+      }
+      throw new Error('missing');
+    });
+    const runInstallCommand = vi.fn(async () => {
+      installed = false;
+      return ok<void>();
+    });
+    const manager = new DependencyManager(ctx, { emitEvents: false, runInstallCommand });
+
+    const result = await manager.uninstall('codex');
+
+    expect(runInstallCommand).toHaveBeenCalledWith('npm uninstall -g @openai/codex');
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.status).toBe('missing');
+  });
+
+  it('refuses to guess an uninstall command for installer-script runtimes', async () => {
+    const runInstallCommand = vi.fn(async () => ok<void>());
+    const manager = new DependencyManager(availableCtx, {
+      emitEvents: false,
+      runInstallCommand,
+    });
+
+    const result = await manager.uninstall('claude');
+
+    expect(runInstallCommand).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      success: false,
+      error: { type: 'no-uninstall-command', id: 'claude' },
+    });
+  });
+
+  it('reports when a runtime remains detectable after uninstalling', async () => {
+    const manager = new DependencyManager(availableCtx, {
+      emitEvents: false,
+      runInstallCommand: async () => ok<void>(),
+    });
+
+    const result = await manager.uninstall('codex');
+
+    expect(result).toEqual({
+      success: false,
+      error: { type: 'still-detected-after-uninstall', id: 'codex' },
+    });
+  });
+
   it('emits dependency updates with the SSH connection id', async () => {
     const manager = new DependencyManager(availableCtx, {
       connectionId: 'ssh-1',

@@ -327,6 +327,8 @@ export const keyboardSettingsSchema = z
   .default({});
 
 export const runtimeCustomConfigEntrySchema = z.object({
+  /** Disabled runtimes stay installed but cannot start new Yoda sessions. */
+  disabled: z.boolean().optional(),
   authProvider: z.enum(AGENT_ACCOUNT_PROVIDER_IDS).optional(),
   maasPlatformId: maasPlatformIdSchema.optional(),
   cli: z.string().optional(),
@@ -357,6 +359,7 @@ export const runtimeConfigDefaults = Object.fromEntries(
   ).map((p) => [
     p.id,
     {
+      disabled: false,
       ...(p.cli ? { cli: p.cli } : {}),
       ...(p.resumeFlag ? { resumeFlag: p.resumeFlag } : {}),
       ...(p.resumeSessionIdArg ? { resumeSessionIdArg: p.resumeSessionIdArg } : {}),

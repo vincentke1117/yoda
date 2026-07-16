@@ -4,6 +4,7 @@ import type {
   DependencyInstallResult,
   DependencyState,
   DependencyStatus,
+  DependencyUninstallResult,
 } from '@shared/dependencies';
 import { dependencyStatusUpdatedChannel } from '@shared/events/appEvents';
 import { err, ok } from '@shared/result';
@@ -231,6 +232,27 @@ export class DependencyManager implements IInitializable {
     const state = await this.probe(id);
     if (state.status !== 'available') {
       return err({ type: 'not-detected-after-install', id });
+    }
+    return ok(state);
+  }
+
+  /** Remove a package-manager-owned dependency and verify that it is no longer detected. */
+  async uninstall(id: DependencyId): Promise<DependencyUninstallResult> {
+    const descriptor = getDependencyDescriptor(id);
+    if (!descriptor) {
+      return err({ type: 'unknown-dependency', id });
+    }
+    if (!descriptor.uninstallCommand) {
+      return err({ type: 'no-uninstall-command', id });
+    }
+
+    log.info(`[DependencyManager] Uninstalling ${id}: ${descriptor.uninstallCommand}`);
+    const uninstallResult = await this.runInstallCommand(descriptor.uninstallCommand);
+    if (!uninstallResult.success) return err(uninstallResult.error);
+
+    const state = await this.probe(id);
+    if (state.status === 'available') {
+      return err({ type: 'still-detected-after-uninstall', id });
     }
     return ok(state);
   }

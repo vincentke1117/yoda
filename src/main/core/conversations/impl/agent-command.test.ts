@@ -16,6 +16,16 @@ function makeConfig(overrides: Partial<RuntimeCustomConfig> = {}): RuntimeCustom
 }
 
 describe('buildAgentCommand', () => {
+  it('rejects new commands for a runtime disabled in Yoda', () => {
+    expect(() =>
+      buildAgentCommand({
+        runtimeId: 'codex',
+        providerConfig: { ...runtimeConfigDefaults.codex, disabled: true },
+        sessionId: 'session-1',
+      })
+    ).toThrow('Codex is disabled in Yoda.');
+  });
+
   it('uses the current Codex bypass flag when auto-approve is enabled', () => {
     const command = buildAgentCommand({
       runtimeId: 'codex',

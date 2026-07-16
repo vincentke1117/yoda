@@ -1,6 +1,9 @@
+import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
+import type { RuntimeCustomConfigs } from '@shared/app-settings';
 import type { RuntimeId } from '@shared/runtime-registry';
 import { useToast } from '@renderer/lib/hooks/use-toast';
+import { rpc } from '@renderer/lib/ipc';
 import { appState } from '@renderer/lib/stores/app-state';
 import { agentConfig } from '@renderer/utils/agentConfig';
 import { getAgentInstallErrorMessage } from './agent-install';
@@ -18,6 +21,19 @@ export function useAgentAvailability({
     : appState.dependencies.local;
   const dependencyData = dependencyResource.data;
   const { toast } = useToast();
+  const { data: runtimeConfigs = {} } = useQuery<RuntimeCustomConfigs>({
+    queryKey: ['runtimeSettings', 'all'] as const,
+    queryFn: () => rpc.runtimeSettings.getAll() as Promise<RuntimeCustomConfigs>,
+    staleTime: 60_000,
+  });
+
+  const disabledAgents = useMemo(
+    () =>
+      Object.entries(runtimeConfigs)
+        .filter(([, config]) => config.disabled === true)
+        .map(([id]) => id),
+    [runtimeConfigs]
+  );
 
   const installedAgents = useMemo(
     () =>
@@ -35,8 +51,8 @@ export function useAgentAvailability({
   );
 
   const groups = useMemo(
-    () => buildAgentGroups(installedAgents, assumedInstalledAgents),
-    [installedAgents, assumedInstalledAgents]
+    () => buildAgentGroups(installedAgents, assumedInstalledAgents, disabledAgents),
+    [installedAgents, assumedInstalledAgents, disabledAgents]
   );
   const installingAgents = new Set<RuntimeId>();
   for (const group of groups) {

@@ -92,6 +92,7 @@ async function loadUpdateInfo(
 
 function snapshotConfig(config: RuntimeCustomConfig | undefined): RuntimeSnapshot['config'] {
   return {
+    disabled: config?.disabled === true,
     path: null,
     exists: null,
     cli: config?.cli?.trim() || null,

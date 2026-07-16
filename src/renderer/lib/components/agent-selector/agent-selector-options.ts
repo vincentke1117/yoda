@@ -17,23 +17,30 @@ export interface AgentGroup {
 
 export function buildAgentGroups(
   installedAgents: string[],
-  assumedInstalledAgents: string[] = []
+  assumedInstalledAgents: string[] = [],
+  disabledAgents: string[] = []
 ): AgentGroup[] {
+  const disabledSet = new Set(disabledAgents.filter((id) => id in agentConfig));
   const installedSet = new Set(
     [...installedAgents, ...assumedInstalledAgents].filter((id) => id in agentConfig)
   );
   const allAgentIds = Object.keys(agentConfig) as RuntimeId[];
 
   const installedOptions: AgentOption[] = allAgentIds
-    .filter((id) => installedSet.has(id))
+    .filter((id) => installedSet.has(id) && !disabledSet.has(id))
     .map((id) => ({ value: id, label: agentConfig[id].name, agentId: id, disabled: false }));
 
+  const disabledOptions: AgentOption[] = allAgentIds
+    .filter((id) => disabledSet.has(id))
+    .map((id) => ({ value: id, label: agentConfig[id].name, agentId: id, disabled: true }));
+
   const notInstalledOptions: AgentOption[] = allAgentIds
-    .filter((id) => !installedSet.has(id))
+    .filter((id) => !installedSet.has(id) && !disabledSet.has(id))
     .map((id) => ({ value: id, label: agentConfig[id].name, agentId: id, disabled: true }));
 
   return [
     { value: 'installed', label: 'Installed', items: installedOptions },
+    { value: 'disabled', label: 'Disabled', items: disabledOptions },
     { value: 'not-installed', label: 'Not installed', items: notInstalledOptions },
   ].filter((group) => group.items.length > 0);
 }

@@ -39,3 +39,11 @@ export type DependencyInstallError =
   | { type: 'not-detected-after-install'; id: string };
 
 export type DependencyInstallResult = Result<DependencyState, DependencyInstallError>;
+
+export type DependencyUninstallError =
+  | { type: 'unknown-dependency'; id: string }
+  | { type: 'no-uninstall-command'; id: string }
+  | InstallCommandError
+  | { type: 'still-detected-after-uninstall'; id: string };
+
+export type DependencyUninstallResult = Result<DependencyState, DependencyUninstallError>;

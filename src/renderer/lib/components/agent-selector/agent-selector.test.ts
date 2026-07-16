@@ -31,6 +31,20 @@ describe('buildAgentGroups', () => {
     );
   });
 
+  it('separates disabled runtimes from installed and installable runtimes', () => {
+    const groups = buildAgentGroups(['codex', 'claude'], [], ['claude']);
+
+    expect(groups.find((group) => group.value === 'installed')?.items).toEqual([
+      expect.objectContaining({ agentId: 'codex', disabled: false }),
+    ]);
+    expect(groups.find((group) => group.value === 'disabled')?.items).toEqual([
+      expect.objectContaining({ agentId: 'claude', disabled: true }),
+    ]);
+    expect(groups.find((group) => group.value === 'not-installed')?.items).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ agentId: 'claude' })])
+    );
+  });
+
   it('keeps the selected agent installed when dependency data is partial', () => {
     const assumedInstalledAgents = getAssumedInstalledAgents('codex', {
       claude: {

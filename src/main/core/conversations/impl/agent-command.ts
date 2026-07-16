@@ -269,6 +269,9 @@ export function buildAgentCommand({
   /** Concrete skill paths captured with the conversation. */
   skillPolicy?: SkillSessionPolicy;
 }): AgentCommand {
+  if (providerConfig?.disabled) {
+    throw new Error(`${getRuntime(runtimeId)?.name ?? runtimeId} is disabled in Yoda.`);
+  }
   const providerDef = getRuntime(runtimeId);
   const [command, ...args] = parseCliPrefix(providerConfig?.cli, runtimeId);
 

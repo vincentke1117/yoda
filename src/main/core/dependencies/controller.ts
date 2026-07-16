@@ -35,4 +35,8 @@ export const dependenciesController = createRPCController({
     const mgr = await getDependencyManager(connectionId);
     return mgr.update(id);
   },
+  uninstall: async (id: DependencyId, connectionId?: string) => {
+    const mgr = await getDependencyManager(connectionId);
+    return mgr.uninstall(id);
+  },
 });
