@@ -1,15 +1,32 @@
-import { ChevronDown, MessageSquare, Minus, MoreHorizontal, Plus } from 'lucide-react';
+import {
+  ChevronDown,
+  List,
+  ListTree,
+  Loader2,
+  MessageSquare,
+  Minus,
+  MoreHorizontal,
+  Plus,
+} from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { ClaudeSessionPrompt } from '@shared/conversations';
+import type { ClaudeSessionPrompt, Conversation } from '@shared/conversations';
 import { useAppSettingsKey } from '@renderer/features/settings/use-app-settings-key';
 import { displaySessionPromptText } from '@renderer/features/tasks/context-panel-prompt-display';
 import { useSessionPrompts } from '@renderer/features/tasks/session-info-panel';
 import { buildPromptPreviewItems } from '@renderer/features/tasks/session-prompts-preview';
+import { useProvisionedTask } from '@renderer/features/tasks/task-view-context';
+import { toast } from '@renderer/lib/hooks/use-toast';
 import { EmptyState } from '@renderer/lib/ui/empty-state';
+import { ToggleGroup, ToggleGroupItem } from '@renderer/lib/ui/toggle-group';
+import { log } from '@renderer/utils/logger';
 import { cn } from '@renderer/utils/utils';
 import { SessionPromptRestoreButton } from './session-prompt-restore-button';
+import { countSessionPromptTreeNodes, SessionPromptTreeView } from './session-prompt-tree';
+import { reopenArchivedConversation } from './use-archived-conversations';
+import { useConversationPromptRestore } from './use-conversation-prompt-restore';
+import { useSessionPromptTree } from './use-session-prompt-tree';
 
 /**
  * The active conversation's prompt history rendered as a scrollable list, oldest
@@ -120,13 +137,43 @@ export const DockedSessionHistory = observer(function DockedSessionHistory() {
   const { value: ui, update } = useAppSettingsKey('interface');
   const enabled = ui?.dockSessionHistory ?? true;
   const rows = Math.min(MAX_DOCK_ROWS, Math.max(MIN_DOCK_ROWS, ui?.dockSessionHistoryRows ?? 3));
+  const mode = ui?.dockSessionHistoryMode ?? 'list';
   const [collapsed, setCollapsed] = useState(false);
-  const prompts = useSessionPrompts(enabled && !collapsed);
+  const prompts = useSessionPrompts(enabled && !collapsed && mode === 'list');
+  const promptTree = useSessionPromptTree(enabled && !collapsed && mode === 'tree');
+  const { restoringPrompt, requestRestorePrompt } = useConversationPromptRestore();
+  const provisionedTask = useProvisionedTask();
 
   if (!enabled || !prompts.hasConversation) return null;
 
   const setRows = (next: number) =>
     update({ dockSessionHistoryRows: Math.min(MAX_DOCK_ROWS, Math.max(MIN_DOCK_ROWS, next)) });
+
+  const openConversation = async (conversation: Conversation) => {
+    if (provisionedTask.conversations.conversations.has(conversation.id)) {
+      provisionedTask.taskView.tabManager.openConversation(conversation.id);
+      provisionedTask.taskView.setFocusedRegion('main');
+      return;
+    }
+    try {
+      await reopenArchivedConversation(conversation);
+      provisionedTask.taskView.setFocusedRegion('main');
+    } catch (error) {
+      log.warn('DockedSessionHistory: failed to open archived branch', {
+        conversationId: conversation.id,
+        error,
+      });
+      toast({
+        title: t('tasks.bottomPanel.sessionOpenBranchFailed'),
+        description: error instanceof Error ? error.message : String(error),
+        variant: 'destructive',
+        debugInfo: error,
+      });
+    }
+  };
+
+  const promptCount =
+    mode === 'tree' ? countSessionPromptTreeNodes(promptTree.tree) : prompts.prompts.length;
 
   return (
     <div className="flex shrink-0 flex-col border-t border-border-primary/60 bg-background">
@@ -140,9 +187,36 @@ export const DockedSessionHistory = observer(function DockedSessionHistory() {
           <ChevronDown className={cn('size-3 transition-transform', collapsed && '-rotate-90')} />
           <span className="text-[11px] font-medium">{t('tasks.bottomPanel.session')}</span>
           <span className="font-mono text-[10px] tabular-nums text-foreground-passive">
-            {prompts.prompts.length}
+            {promptCount}
           </span>
         </button>
+        <ToggleGroup
+          size="icon-xs"
+          multiple={false}
+          value={[mode]}
+          onValueChange={([value]) => {
+            if (value === 'list' || value === 'tree') {
+              update({ dockSessionHistoryMode: value });
+            }
+          }}
+          className="h-5 rounded-md border-border/60 bg-transparent"
+          aria-label={t('tasks.bottomPanel.sessionViewMode')}
+        >
+          <ToggleGroupItem
+            value="list"
+            aria-label={t('tasks.bottomPanel.sessionViewList')}
+            title={t('tasks.bottomPanel.sessionViewList')}
+          >
+            <List className="size-3" />
+          </ToggleGroupItem>
+          <ToggleGroupItem
+            value="tree"
+            aria-label={t('tasks.bottomPanel.sessionViewTree')}
+            title={t('tasks.bottomPanel.sessionViewTree')}
+          >
+            <ListTree className="size-3" />
+          </ToggleGroupItem>
+        </ToggleGroup>
         {!collapsed ? (
           <div className="flex shrink-0 items-center gap-0.5">
             <button
@@ -170,7 +244,28 @@ export const DockedSessionHistory = observer(function DockedSessionHistory() {
         ) : null}
       </div>
       {!collapsed ? (
-        prompts.hasPrompts ? (
+        mode === 'tree' ? (
+          promptTree.tree ? (
+            <SessionPromptTreeView
+              tree={promptTree.tree}
+              isLoading={promptTree.isLoading}
+              activeConversationIds={promptTree.activeConversationIds}
+              restoringPrompt={restoringPrompt}
+              rows={rows}
+              onRestorePrompt={requestRestorePrompt}
+              onOpenConversation={openConversation}
+            />
+          ) : promptTree.isLoading ? (
+            <div className="flex h-12 items-center justify-center gap-1.5 text-xs text-foreground-passive">
+              <Loader2 className="size-3 animate-spin" />
+              {t('common.loading')}
+            </div>
+          ) : (
+            <div className="px-3 pb-2 text-xs text-foreground-passive">
+              {t('tasks.panel.noPrompts')}
+            </div>
+          )
+        ) : prompts.hasPrompts ? (
           <DockedSessionPromptPreview
             prompts={prompts.prompts}
             tailCount={rows}
@@ -227,7 +322,6 @@ function DockedSessionPromptPreview({
             key={item.prompt.id || `prompt-${item.promptIndex}`}
             prompt={item.prompt}
             index={item.promptIndex}
-            onClick={onOpenAll}
             onRestore={onRestorePrompt}
             isRestoring={restoringPromptId === item.prompt.id}
           />
@@ -253,6 +347,8 @@ function SessionPromptRow({
   const text = displaySessionPromptText(prompt.text).trim();
   const timestamp = prompt.timestamp ? new Date(prompt.timestamp).toLocaleTimeString() : null;
   const canRestore = Boolean(onRestore && prompt.restoreTarget);
+  const handleClick =
+    onClick ?? (canRestore && onRestore ? () => onRestore(prompt, index) : undefined);
   const className = 'flex h-6 min-w-0 flex-1 items-center gap-2 text-left';
 
   const content = (
@@ -276,14 +372,14 @@ function SessionPromptRow({
       className="group flex h-6 w-full min-w-0 items-center gap-1 px-3 transition-colors hover:bg-background-1 focus-within:bg-background-1"
       title={text}
     >
-      {onClick ? (
+      {handleClick ? (
         <button
           type="button"
           className={cn(
             className,
             'hover:text-foreground-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border'
           )}
-          onClick={onClick}
+          onClick={handleClick}
         >
           {content}
         </button>

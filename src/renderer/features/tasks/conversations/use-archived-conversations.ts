@@ -20,10 +20,15 @@ export function conversationTime(value: string | null | undefined): number {
  * demand. Re-fetches whenever an archive/unarchive event lands for this task
  * so the active and archived lists stay in sync.
  */
-export function useArchivedConversations(projectId: string, taskId: string): Conversation[] {
+export function useArchivedConversations(
+  projectId: string,
+  taskId: string,
+  enabled = true
+): Conversation[] {
   const [archived, setArchived] = useState<Conversation[]>([]);
 
   useEffect(() => {
+    if (!enabled) return;
     let cancelled = false;
 
     const refresh = () => {
@@ -60,7 +65,7 @@ export function useArchivedConversations(projectId: string, taskId: string): Con
       offArchived();
       offUnarchived();
     };
-  }, [projectId, taskId]);
+  }, [enabled, projectId, taskId]);
 
   return archived;
 }

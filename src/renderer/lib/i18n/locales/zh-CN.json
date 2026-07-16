@@ -1821,7 +1821,19 @@
       "layoutFullWidth": "底栏铺满全宽",
       "layoutBesideSidebar": "底栏避开侧边栏",
       "sessionFewerRows": "减少行数",
-      "sessionMoreRows": "增加行数"
+      "sessionMoreRows": "增加行数",
+      "sessionViewMode": "会话历史显示方式",
+      "sessionViewList": "列表：仅显示当前路径",
+      "sessionViewTree": "树状：显示全部分支路径",
+      "sessionTreeLabel": "会话历史分支树",
+      "sessionCheckpointPending": "此条尚无可切入的上下文检查点",
+      "sessionCurrentBranch": "当前分支",
+      "sessionOpenBranch": "切入分支“{{title}}”",
+      "sessionRestoreBranch": "恢复并切入分支“{{title}}”",
+      "sessionOpenBranchFailed": "切入会话分支失败",
+      "sessionCurrent": "当前",
+      "sessionRestore": "恢复切入",
+      "sessionSwitch": "切入"
     }
   },
   "commandPalette": {

@@ -1821,7 +1821,19 @@
       "layoutFullWidth": "Span full width",
       "layoutBesideSidebar": "Yield to sidebar",
       "sessionFewerRows": "Fewer rows",
-      "sessionMoreRows": "More rows"
+      "sessionMoreRows": "More rows",
+      "sessionViewMode": "Session history view",
+      "sessionViewList": "List: current path only",
+      "sessionViewTree": "Tree: all branch paths",
+      "sessionTreeLabel": "Session history branch tree",
+      "sessionCheckpointPending": "This prompt does not have a restorable context checkpoint yet",
+      "sessionCurrentBranch": "Current branch",
+      "sessionOpenBranch": "Switch to branch “{{title}}”",
+      "sessionRestoreBranch": "Restore and switch to branch “{{title}}”",
+      "sessionOpenBranchFailed": "Failed to switch conversation branch",
+      "sessionCurrent": "Current",
+      "sessionRestore": "Restore",
+      "sessionSwitch": "Switch"
     }
   },
   "commandPalette": {

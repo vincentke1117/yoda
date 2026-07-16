@@ -1,0 +1,172 @@
+import { act, createElement } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ClaudeSessionPrompt } from '@shared/conversations';
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+const prompt: ClaudeSessionPrompt = {
+  id: 'prompt-1',
+  text: 'current path prompt',
+  timestamp: null,
+  restoreTarget: { kind: 'codex-turn', turnId: 'turn-1' },
+};
+
+const mocks = vi.hoisted(() => ({
+  settings: {
+    dockSessionHistory: true,
+    dockSessionHistoryRows: 3,
+    dockSessionHistoryMode: 'list' as 'list' | 'tree',
+  },
+  update: vi.fn(),
+  useSessionPrompts: vi.fn(),
+  useSessionPromptTree: vi.fn(),
+  restoreCurrentPrompt: vi.fn(),
+}));
+
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({ t: (key: string) => key }),
+}));
+
+vi.mock('@renderer/features/settings/use-app-settings-key', async () => {
+  const { useState } = await import('react');
+  return {
+    useAppSettingsKey: () => {
+      const [value, setValue] = useState(mocks.settings);
+      return {
+        value,
+        update: (partial: Partial<typeof mocks.settings>) => {
+          mocks.update(partial);
+          setValue((current) => ({ ...current, ...partial }));
+        },
+      };
+    },
+  };
+});
+
+vi.mock('@renderer/features/tasks/session-info-panel', () => ({
+  useSessionPrompts: (active: boolean) => mocks.useSessionPrompts(active),
+}));
+
+vi.mock('@renderer/features/tasks/task-view-context', () => ({
+  useProvisionedTask: () => ({
+    conversations: { conversations: new Map() },
+    taskView: {
+      tabManager: { openConversation: vi.fn() },
+      setFocusedRegion: vi.fn(),
+    },
+  }),
+}));
+
+vi.mock('@renderer/features/tasks/conversations/session-prompt-tree', async () => {
+  const { createElement: create } = await import('react');
+  return {
+    countSessionPromptTreeNodes: () => 4,
+    SessionPromptTreeView: () => create('div', { 'data-session-prompt-tree': true }, 'tree path'),
+  };
+});
+
+vi.mock('@renderer/features/tasks/conversations/use-conversation-prompt-restore', () => ({
+  useConversationPromptRestore: () => ({
+    restoringPrompt: null,
+    requestRestorePrompt: vi.fn(),
+  }),
+}));
+
+vi.mock('@renderer/features/tasks/conversations/use-session-prompt-tree', () => ({
+  useSessionPromptTree: (active: boolean) => mocks.useSessionPromptTree(active),
+}));
+
+vi.mock('@renderer/features/tasks/conversations/use-archived-conversations', () => ({
+  reopenArchivedConversation: vi.fn(async () => {}),
+}));
+
+vi.mock('@renderer/lib/hooks/use-toast', () => ({ toast: vi.fn() }));
+vi.mock('@renderer/utils/logger', () => ({ log: { warn: vi.fn() } }));
+
+describe('DockedSessionHistory view mode', () => {
+  let host: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    mocks.settings = {
+      dockSessionHistory: true,
+      dockSessionHistoryRows: 3,
+      dockSessionHistoryMode: 'list',
+    };
+    mocks.update.mockClear();
+    mocks.restoreCurrentPrompt.mockClear();
+    mocks.useSessionPrompts.mockReset().mockReturnValue({
+      prompts: [prompt],
+      isLoading: false,
+      hasPrompts: true,
+      hasConversation: true,
+      restoringPromptId: null,
+      requestRestorePrompt: mocks.restoreCurrentPrompt,
+      openPromptsModal: vi.fn(),
+    });
+    mocks.useSessionPromptTree.mockReset().mockReturnValue({
+      tree: {},
+      isLoading: false,
+      hasConversation: true,
+      activeConversationIds: new Set<string>(),
+    });
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+  });
+
+  afterEach(async () => {
+    await act(async () => root.unmount());
+    host.remove();
+  });
+
+  it('switches the header between current-path list and complete branch tree', async () => {
+    const { DockedSessionHistory } = await import(
+      '@renderer/features/tasks/conversations/session-history-panel'
+    );
+    await act(async () => root.render(createElement(DockedSessionHistory)));
+
+    expect(host.textContent).toContain('current path prompt');
+    expect(host.querySelector('[data-session-prompt-tree]')).toBeNull();
+    expect(mocks.useSessionPrompts).toHaveBeenLastCalledWith(true);
+    expect(mocks.useSessionPromptTree).toHaveBeenLastCalledWith(false);
+
+    const currentPrompt = host.querySelector<HTMLButtonElement>(
+      'div[title="current path prompt"] > button'
+    );
+    await act(async () => currentPrompt?.click());
+    expect(mocks.restoreCurrentPrompt).toHaveBeenCalledWith(prompt, 1);
+
+    const treeMode = host.querySelector<HTMLButtonElement>(
+      'button[aria-label="tasks.bottomPanel.sessionViewTree"]'
+    );
+    await act(async () => treeMode?.click());
+
+    expect(mocks.update).toHaveBeenCalledWith({ dockSessionHistoryMode: 'tree' });
+    expect(host.textContent).not.toContain('current path prompt');
+    expect(host.querySelector('[data-session-prompt-tree]')?.textContent).toBe('tree path');
+    expect(mocks.useSessionPrompts).toHaveBeenLastCalledWith(false);
+    expect(mocks.useSessionPromptTree).toHaveBeenLastCalledWith(true);
+  });
+
+  it('keeps both mode controls available while the history body is collapsed', async () => {
+    const { DockedSessionHistory } = await import(
+      '@renderer/features/tasks/conversations/session-history-panel'
+    );
+    await act(async () => root.render(createElement(DockedSessionHistory)));
+
+    const collapse = host.querySelector<HTMLButtonElement>('button[aria-expanded="true"]');
+    await act(async () => collapse?.click());
+
+    expect(host.textContent).not.toContain('current path prompt');
+    expect(
+      host.querySelector('button[aria-label="tasks.bottomPanel.sessionViewList"]')
+    ).not.toBeNull();
+    expect(
+      host.querySelector('button[aria-label="tasks.bottomPanel.sessionViewTree"]')
+    ).not.toBeNull();
+    expect(mocks.useSessionPrompts).toHaveBeenLastCalledWith(false);
+    expect(mocks.useSessionPromptTree).toHaveBeenLastCalledWith(false);
+  });
+});

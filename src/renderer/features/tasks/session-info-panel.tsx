@@ -49,6 +49,7 @@ import {
 } from '@renderer/features/tasks/components/task-menu-session-info';
 import { displaySessionPromptText } from '@renderer/features/tasks/context-panel-prompt-display';
 import { SessionPromptRestoreButton } from '@renderer/features/tasks/conversations/session-prompt-restore-button';
+import { useConversationPromptRestore } from '@renderer/features/tasks/conversations/use-conversation-prompt-restore';
 import { useTaskStats } from '@renderer/features/tasks/hooks/useTaskStats';
 import {
   resolveSessionPrompts,
@@ -441,7 +442,6 @@ export function useSessionPrompts(active: boolean): {
   requestRestorePrompt: (prompt: ClaudeSessionPrompt, index: number) => void;
   openPromptsModal: () => void;
 } {
-  const { t } = useTranslation();
   const provisionedTask = useProvisionedTask();
   const conversation = getTaskMenuConversation(provisionedTask);
   const sessionStatus = conversation
@@ -449,19 +449,19 @@ export function useSessionPrompts(active: boolean): {
     : undefined;
   const [prompts, setPrompts] = useState<ClaudeSessionPrompt[] | undefined>();
   const [isLoading, setIsLoading] = useState(false);
-  const [restoringPromptId, setRestoringPromptId] = useState<string | null>(null);
   const showSessionPrompts = useShowModal('sessionPromptsModal');
-  const showRestoreConfirm = useShowModal('confirmActionModal');
+  const { restoringPrompt, requestRestorePrompt: requestConversationPromptRestore } =
+    useConversationPromptRestore();
 
   useEffect(() => {
     // Reset on conversation switch so a stale preview never flashes.
-    setPrompts(undefined);
+    setPrompts(undefined); // eslint-disable-line react-hooks/set-state-in-effect
   }, [conversation?.id]);
 
   useEffect(() => {
     if (!active || !conversation) return;
     let cancelled = false;
-    setIsLoading(true);
+    setIsLoading(true); // eslint-disable-line react-hooks/set-state-in-effect
     const load = () =>
       resolveSessionPrompts(conversation, provisionedTask.path)
         .then((next) => {
@@ -483,77 +483,22 @@ export function useSessionPrompts(active: boolean): {
     };
   }, [active, conversation, provisionedTask.path, sessionStatus]);
 
-  const restorePrompt = useCallback(
-    async (prompt: ClaudeSessionPrompt, index: number) => {
-      if (!conversation || !prompt.restoreTarget || restoringPromptId) return;
-      if (
-        provisionedTask.conversations.isContextForkPending({
-          conversationId: conversation.id,
-          promptIndex: index - 1,
-          target: prompt.restoreTarget,
-        })
-      ) {
-        return;
-      }
-
-      setRestoringPromptId(prompt.id);
-      try {
-        const initialSize =
-          provisionedTask.conversations.conversations.get(conversation.id)?.session.pty
-            ?.lastSentDims ?? undefined;
-        const fork = await provisionedTask.conversations.forkConversationAtPrompt({
-          projectId: conversation.projectId,
-          taskId: conversation.taskId,
-          conversationId: conversation.id,
-          promptIndex: index - 1,
-          target: prompt.restoreTarget,
-          initialSize,
-        });
-        provisionedTask.taskView.tabManager.openConversation(fork.id);
-        toast({ title: t('tasks.sessionInfo.restoreContextSuccess') });
-      } catch (error) {
-        toast({
-          title: t('tasks.sessionInfo.restoreContextFailed'),
-          description: error instanceof Error ? error.message : String(error),
-          variant: 'destructive',
-          debugInfo: error,
-        });
-      } finally {
-        setRestoringPromptId(null);
-      }
-    },
-    [conversation, provisionedTask, restoringPromptId, t]
-  );
-
   const requestRestorePrompt = useCallback(
     (prompt: ClaudeSessionPrompt, index: number) => {
-      if (!conversation || !prompt.restoreTarget || restoringPromptId) return;
-      if (
-        provisionedTask.conversations.isContextForkPending({
-          conversationId: conversation.id,
-          promptIndex: index - 1,
-          target: prompt.restoreTarget,
-        })
-      ) {
-        return;
-      }
-      showRestoreConfirm({
-        title: t('tasks.sessionInfo.restoreContextTitle', { index }),
-        description: t('tasks.sessionInfo.restoreContextDescription'),
-        confirmLabel: t('tasks.sessionInfo.restoreContextConfirm'),
-        variant: 'default',
-        onSuccess: () => void restorePrompt(prompt, index),
+      if (!conversation) return;
+      requestConversationPromptRestore({
+        conversation,
+        prompt,
+        promptIndex: index - 1,
       });
     },
-    [
-      conversation,
-      provisionedTask.conversations,
-      restorePrompt,
-      restoringPromptId,
-      showRestoreConfirm,
-      t,
-    ]
+    [conversation, requestConversationPromptRestore]
   );
+
+  const restoringPromptId =
+    restoringPrompt && restoringPrompt.conversationId === conversation?.id
+      ? restoringPrompt.promptId
+      : null;
 
   const openPromptsModal = () => {
     if (!conversation) return;
