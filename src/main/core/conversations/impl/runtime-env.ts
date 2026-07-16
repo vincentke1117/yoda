@@ -13,7 +13,6 @@ export const CLAUDE_DISABLE_ALTERNATE_SCREEN_ENV = 'CLAUDE_CODE_DISABLE_ALTERNAT
  */
 const CLAUDE_COMPATIBLE_BASE_URLS: Partial<Record<RuntimeId, string>> = {
   glm: 'https://api.z.ai/api/anthropic',
-  step: 'https://api.stepfun.com/step_plan',
 };
 
 /** Runtimes whose underlying binary is Claude Code (and thus share its tmux quirks). */
@@ -69,7 +68,7 @@ export function resolveRuntimeEnv(
     }
   }
 
-  // Pin Claude-compatible runtimes (GLM, Step) to their endpoint unless the user
+  // Pin Claude-compatible runtimes (GLM) to their endpoint unless the user
   // overrode it (the API key itself is supplied via ANTHROPIC_AUTH_TOKEN).
   const compatibleBaseUrl = options.runtimeId
     ? CLAUDE_COMPATIBLE_BASE_URLS[options.runtimeId]

@@ -3,7 +3,18 @@ import {
   getRuntimeAccountProfile,
   getUninstallCommandForRuntime,
   getUpdateCommandForRuntime,
+  isValidRuntimeId,
+  RUNTIME_IDS,
+  RUNTIMES,
 } from './runtime-registry';
+
+describe('built-in runtimes', () => {
+  it('does not register Step because it has no standalone CLI', () => {
+    expect(RUNTIME_IDS).not.toContain('step');
+    expect(RUNTIMES.map((runtime) => runtime.id)).not.toContain('step');
+    expect(isValidRuntimeId('step')).toBe(false);
+  });
+});
 
 describe('runtime update commands', () => {
   it('returns an explicitly registered runtime-native update command', () => {
