@@ -9,6 +9,12 @@ import dreamScifiArt from '@/assets/images/themes/dream-scifi.svg';
 import dreamVirtualArt from '@/assets/images/themes/dream-virtual.svg';
 import type { DREAM_SKIN_BUILTIN_IMAGES } from '@shared/custom-theme';
 
+// Chromium silently rejects CSS custom-property values at roughly 2 MiB.
+// Keep a little headroom for the wrapping url("...") token.
+export const DREAM_SKIN_CSS_DATA_URL_MAX_CHARS = 2_000_000;
+
+const dreamSkinObjectUrls = new Map<string, string>();
+
 export const DREAM_SKIN_ASSETS: Record<(typeof DREAM_SKIN_BUILTIN_IMAGES)[number], string> = {
   'builtin:dream-bloom': dreamBloomArt,
   'builtin:dream-portal': dreamSkinArt,
@@ -22,7 +28,31 @@ export const DREAM_SKIN_ASSETS: Record<(typeof DREAM_SKIN_BUILTIN_IMAGES)[number
 };
 
 export function resolveDreamSkinAsset(image: string): string {
-  return DREAM_SKIN_ASSETS[image as keyof typeof DREAM_SKIN_ASSETS] ?? image;
+  const bundledAsset = DREAM_SKIN_ASSETS[image as keyof typeof DREAM_SKIN_ASSETS];
+  if (bundledAsset) return bundledAsset;
+  if (!shouldUseObjectUrl(image)) return image;
+
+  const cached = dreamSkinObjectUrls.get(image);
+  if (cached) return cached;
+
+  const objectUrl = createImageObjectUrl(image);
+  if (!objectUrl) return image;
+  dreamSkinObjectUrls.set(image, objectUrl);
+  return objectUrl;
+}
+
+export function releaseDreamSkinAsset(image: string): void {
+  const objectUrl = dreamSkinObjectUrls.get(image);
+  if (!objectUrl) return;
+  globalThis.URL.revokeObjectURL(objectUrl);
+  dreamSkinObjectUrls.delete(image);
+}
+
+export function releaseAllDreamSkinAssets(): void {
+  for (const objectUrl of dreamSkinObjectUrls.values()) {
+    globalThis.URL.revokeObjectURL(objectUrl);
+  }
+  dreamSkinObjectUrls.clear();
 }
 
 /**
@@ -32,4 +62,33 @@ export function resolveDreamSkinAsset(image: string): string {
  */
 export function dreamSkinBackgroundImage(image: string): string {
   return `url(${JSON.stringify(resolveDreamSkinAsset(image))})`;
+}
+
+function shouldUseObjectUrl(image: string): boolean {
+  return (
+    image.length > DREAM_SKIN_CSS_DATA_URL_MAX_CHARS &&
+    image.startsWith('data:image/') &&
+    image.slice(0, 64).includes(';base64,') &&
+    typeof globalThis.URL?.createObjectURL === 'function' &&
+    typeof globalThis.atob === 'function'
+  );
+}
+
+function createImageObjectUrl(dataUrl: string): string | null {
+  const separator = dataUrl.indexOf(',');
+  if (separator === -1) return null;
+  const header = dataUrl.slice(5, separator);
+  const mimeType = header.slice(0, header.indexOf(';'));
+  if (!mimeType.startsWith('image/')) return null;
+
+  try {
+    const binary = globalThis.atob(dataUrl.slice(separator + 1));
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) {
+      bytes[index] = binary.charCodeAt(index);
+    }
+    return globalThis.URL.createObjectURL(new Blob([bytes], { type: mimeType }));
+  } catch {
+    return null;
+  }
 }

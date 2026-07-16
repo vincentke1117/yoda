@@ -32,7 +32,10 @@ import { useToast } from '@renderer/lib/hooks/use-toast';
 import { useTheme } from '@renderer/lib/hooks/useTheme';
 import { rpc } from '@renderer/lib/ipc';
 import { useShowModal } from '@renderer/lib/modal/modal-provider';
-import { dreamSkinBackgroundImage } from '@renderer/lib/providers/dream-skin-assets';
+import {
+  dreamSkinBackgroundImage,
+  releaseDreamSkinAsset,
+} from '@renderer/lib/providers/dream-skin-assets';
 import {
   analyzeDreamSkinImage,
   humanizeDreamSkinFileName,
@@ -173,6 +176,7 @@ const ThemeCard: React.FC = () => {
   const saveImportedThemes = useCallback(
     (nextThemes: CustomTheme[]) => {
       const nextItems = [...customThemes];
+      const replacedImages = new Set<string>();
       let updatedCount = 0;
 
       for (const nextTheme of nextThemes) {
@@ -184,8 +188,19 @@ const ThemeCard: React.FC = () => {
         if (duplicateIndex === -1) {
           nextItems.push(nextTheme);
         } else {
+          const previousImage = nextItems[duplicateIndex]?.skin?.image;
           nextItems[duplicateIndex] = nextTheme;
+          if (previousImage && previousImage !== nextTheme.skin?.image) {
+            replacedImages.add(previousImage);
+          }
           updatedCount += 1;
+        }
+      }
+
+      for (const image of replacedImages) {
+        const isStillUsed = nextItems.some((item) => item.skin?.image === image);
+        if (!isStillUsed) {
+          window.setTimeout(() => releaseDreamSkinAsset(image), 1_000);
         }
       }
 
@@ -384,9 +399,17 @@ const ThemeCard: React.FC = () => {
         description: t('settings.theme.deleteDescription', { name: item.name }),
         confirmLabel: t('settings.theme.deleteConfirm'),
         onSuccess: () => {
-          update({ items: customThemes.filter((themeItem) => themeItem.id !== item.id) });
+          const nextItems = customThemes.filter((themeItem) => themeItem.id !== item.id);
+          update({ items: nextItems });
           if (selectedCustomThemeId === item.id) {
             setTheme(null);
+          }
+          const deletedImage = item.skin?.image;
+          if (
+            deletedImage &&
+            !nextItems.some((themeItem) => themeItem.skin?.image === deletedImage)
+          ) {
+            window.setTimeout(() => releaseDreamSkinAsset(deletedImage), 1_000);
           }
           toast({ title: t('settings.theme.themeDeleted'), description: item.name });
         },
