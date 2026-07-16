@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   parseSparkleArchiveHistory,
+  pinSparkleAssetUrls,
   qualifySparkleDeltaArtifacts,
   removeSparkleDeltaEligibilityHints,
   sparkleHistoryFallbackUrl,
@@ -95,5 +96,21 @@ describe('Sparkle release feed', () => {
         fileName: 'yoda-0.15.4-arm64.zip',
       })
     ).toBe('https://github.com/lovstudio/yoda/releases/download/v0.15.4/yoda-0.15.4-arm64.zip');
+  });
+
+  it('pins every full and delta enclosure to its owning GitHub release', () => {
+    const result = pinSparkleAssetUrls(appcast, 'lovstudio/yoda');
+
+    expect(result).toContain(
+      'url="https://github.com/lovstudio/yoda/releases/download/v0.16.0/yoda-0.16.0-arm64.zip"'
+    );
+    expect(result).toContain(
+      'url="https://github.com/lovstudio/yoda/releases/download/v0.16.0/yoda-0.15.3-to-0.16.0-arm64.delta"'
+    );
+    expect(result).toContain(
+      'url="https://github.com/lovstudio/yoda/releases/download/v0.15.3/yoda-0.15.3-arm64.zip"'
+    );
+    expect(result).toContain('sparkle:edSignature="delta-signature"');
+    expect(result).not.toContain('https://releases.test');
   });
 });

@@ -56,6 +56,12 @@ describe('parseSparkleHelperEvent', () => {
     ).toEqual({ type: 'full-update-blocked', version: '0.16.0' });
   });
 
+  it('preserves the delta failure that happens before a full-update fallback', () => {
+    expect(
+      parseSparkleHelperEvent('YODA_EVENT {"type":"delta-failed","stage":"download","code":2001}')
+    ).toEqual({ type: 'delta-failed', stage: 'download', code: 2001 });
+  });
+
   it('parses the native install handoff', () => {
     expect(parseSparkleHelperEvent('YODA_EVENT {"type":"installing"}')).toEqual({
       type: 'installing',

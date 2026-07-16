@@ -15,6 +15,7 @@ import { R2_BASE_URL } from '../../src/shared/app-identity.ts';
 import { fail, info, step } from './lib/log.ts';
 import {
   parseSparkleArchiveHistory,
+  pinSparkleAssetUrls,
   qualifySparkleDeltaArtifacts,
   removeSparkleDeltaEligibilityHints,
   sparkleHistoryFallbackUrl,
@@ -97,7 +98,11 @@ async function generateForArch(arch: string): Promise<void> {
   );
   // These generated size and locale hints are only heuristics. Some real DMG installs can
   // fail them and make Sparkle select the full ZIP even when the signed delta is applicable.
-  const generated = removeSparkleDeltaEligibilityHints(qualified.content);
+  const withoutEligibilityHints = removeSparkleDeltaEligibilityHints(qualified.content);
+  const generated =
+    variant === 'stable'
+      ? pinSparkleAssetUrls(withoutEligibilityHints, repository)
+      : withoutEligibilityHints;
   writeFileSync(appcastPath, generated);
   validateGeneratedSparkleAppcast(
     generated,

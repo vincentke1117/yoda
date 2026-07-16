@@ -13,6 +13,25 @@ export function sparkleHistoryFallbackUrl(
   return `https://github.com/${repository}/releases/download/v${item.version}/${encodeURIComponent(item.fileName)}`;
 }
 
+export function pinSparkleAssetUrls(content: string, repository: string): string {
+  return content.replace(/(<item\b[^>]*>)([\s\S]*?)(<\/item>)/gi, (item, open, body, close) => {
+    const version = elementText(body, 'sparkle:version');
+    if (!version) throw new Error('Cannot pin Sparkle item without sparkle:version');
+    const base = `https://github.com/${repository}/releases/download/v${version}/`;
+    const pinnedBody = body.replace(
+      /(<enclosure\b[^>]*?\burl\s*=\s*)(["'])(.*?)(\2)/gi,
+      (_enclosure: string, prefix: string, quote: string, encodedUrl: string) => {
+        const parsed = new URL(decodeXml(encodedUrl));
+        const fileName = basename(parsed.pathname);
+        if (!fileName)
+          throw new Error(`Cannot pin Sparkle enclosure without a file name: ${parsed}`);
+        return `${prefix}${quote}${base}${encodeURIComponent(fileName)}${quote}`;
+      }
+    );
+    return `${open}${pinnedBody}${close}`;
+  });
+}
+
 export function qualifySparkleDeltaArtifacts(
   content: string,
   arch: string,

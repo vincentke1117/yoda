@@ -15,6 +15,7 @@ describe('Sparkle release pipeline', () => {
     expect(generator).toContain("'5'");
     expect(generator).toContain('validateGeneratedSparkleAppcast');
     expect(generator).toContain('qualifySparkleDeltaArtifacts');
+    expect(generator).toContain('pinSparkleAssetUrls');
   });
 
   it('runs the native delta installation smoke through the packaged application proxy', () => {
