@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   ptyResizeMock: vi.fn(),
   archiveConversationMock: vi.fn(),
   createConversationMock: vi.fn(),
+  forkConversationMock: vi.fn(),
   forkConversationAtPromptMock: vi.fn(),
   getConversationRuntimeStatusesMock: vi.fn(),
   getConversationsForTaskMock: vi.fn(),
@@ -35,6 +36,7 @@ vi.mock('@renderer/lib/ipc', () => ({
     conversations: {
       archiveConversation: mocks.archiveConversationMock,
       createConversation: mocks.createConversationMock,
+      forkConversation: mocks.forkConversationMock,
       forkConversationAtPrompt: mocks.forkConversationAtPromptMock,
       getConversationRuntimeStatuses: mocks.getConversationRuntimeStatusesMock,
       getConversationsForTask: mocks.getConversationsForTaskMock,
@@ -94,6 +96,14 @@ describe('ConversationManagerStore', () => {
     mocks.restartConversationMock.mockResolvedValue(undefined);
     mocks.archiveConversationMock.mockResolvedValue(undefined);
     mocks.createConversationMock.mockResolvedValue(conversation);
+    mocks.forkConversationMock.mockResolvedValue({
+      ...conversation,
+      id: 'conversation-fork',
+      title: 'Claude · #1',
+      isInitialConversation: false,
+      forkedFromConversationId: 'conversation-1',
+      forkedFromPromptIndex: 0,
+    });
     mocks.forkConversationAtPromptMock.mockResolvedValue({
       ...conversation,
       id: 'conversation-fork',
@@ -334,6 +344,30 @@ describe('ConversationManagerStore', () => {
       forkedFromPromptIndex: 0,
     });
     expect(mocks.ptyConnectMock).toHaveBeenCalled();
+  });
+
+  it('adds a full conversation fork and deduplicates repeated requests', async () => {
+    const store = new ConversationManagerStore('project-1', 'task-1', [conversation]);
+    mocks.ptyConnectMock.mockClear();
+    const params = {
+      projectId: 'project-1',
+      taskId: 'task-1',
+      conversationId: 'conversation-1',
+      initialSize: { cols: 120, rows: 36 },
+    };
+
+    const first = store.forkConversation(params);
+    const second = store.forkConversation(params);
+    const [fork] = await Promise.all([first, second]);
+
+    expect(first).toBe(second);
+    expect(mocks.forkConversationMock).toHaveBeenCalledTimes(1);
+    expect(mocks.forkConversationMock).toHaveBeenCalledWith(params);
+    expect(store.conversations.get('conversation-fork')?.data).toEqual(fork);
+    expect(mocks.ptyConnectMock).toHaveBeenCalledTimes(1);
+
+    await store.forkConversation(params);
+    expect(mocks.forkConversationMock).toHaveBeenCalledTimes(2);
   });
 
   it('leaves a restored fork disconnected when its initial backend launch failed', async () => {

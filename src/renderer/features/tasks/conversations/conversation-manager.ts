@@ -3,6 +3,7 @@ import {
   type Conversation,
   type CreateConversationParams,
   type ForkConversationAtPromptParams,
+  type ForkConversationParams,
 } from '@shared/conversations';
 import type { PendingAction } from '@shared/events/agent-run-state';
 import {
@@ -35,6 +36,7 @@ export class ConversationManagerStore {
   private offConversationArchived: (() => void) | null = null;
   private readonly pendingConversationTitles = new Map<string, string>();
   private readonly pendingContextForks = new Map<string, Promise<Conversation>>();
+  private readonly pendingConversationForks = new Map<string, Promise<Conversation>>();
   conversations = observable.map<string, ConversationStore>();
 
   constructor(
@@ -325,6 +327,19 @@ export class ConversationManagerStore {
     return pending;
   }
 
+  forkConversation(params: ForkConversationParams): Promise<Conversation> {
+    const existing = this.pendingConversationForks.get(params.conversationId);
+    if (existing) return existing;
+
+    const pending = this.createConversationFork(params).finally(() => {
+      if (this.pendingConversationForks.get(params.conversationId) === pending) {
+        this.pendingConversationForks.delete(params.conversationId);
+      }
+    });
+    this.pendingConversationForks.set(params.conversationId, pending);
+    return pending;
+  }
+
   isContextForkPending(
     params: Pick<ForkConversationAtPromptParams, 'conversationId' | 'promptIndex' | 'target'>
   ): boolean {
@@ -343,6 +358,19 @@ export class ConversationManagerStore {
     const conversation = this.consumePendingConversationTitle(
       await rpc.conversations.forkConversationAtPrompt(params)
     );
+    this.addForkedConversation(conversation);
+    return conversation;
+  }
+
+  private async createConversationFork(params: ForkConversationParams): Promise<Conversation> {
+    const conversation = this.consumePendingConversationTitle(
+      await rpc.conversations.forkConversation(params)
+    );
+    this.addForkedConversation(conversation);
+    return conversation;
+  }
+
+  private addForkedConversation(conversation: Conversation): void {
     runInAction(() => {
       const store = new ConversationStore(conversation);
       this.conversations.set(conversation.id, store);
@@ -353,7 +381,6 @@ export class ConversationManagerStore {
       }
     });
     this.onUserPromptAt?.(conversation.lastInteractedAt ?? new Date().toISOString());
-    return conversation;
   }
 
   async markConversationWorking(conversationId: string): Promise<void> {
@@ -515,6 +542,7 @@ export class ConversationManagerStore {
     this.offConversationArchived = null;
     this.pendingConversationTitles.clear();
     this.pendingContextForks.clear();
+    this.pendingConversationForks.clear();
     for (const conversation of this.conversations.values()) {
       conversation.dispose();
     }

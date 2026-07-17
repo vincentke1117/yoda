@@ -4,6 +4,7 @@ import { archiveConversation } from './archiveConversation';
 import { getClaudeStatusline, setClaudeStatusline } from './claude-statusline';
 import { createConversation } from './createConversation';
 import { deleteConversation } from './deleteConversation';
+import { forkConversation } from './forkConversation';
 import { forkConversationAtPrompt } from './forkConversationAtPrompt';
 import {
   generateConversationTitle,
@@ -66,6 +67,7 @@ export const conversationController = createRPCController({
   archiveConversation,
   unarchiveConversation,
   deleteConversation,
+  forkConversation,
   forkConversationAtPrompt,
   generateConversationTitle,
   getConversationNamingPreview,

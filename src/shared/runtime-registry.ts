@@ -154,6 +154,8 @@ export type RuntimeDefinition = {
   invertInDark?: boolean;
   terminalOnly?: boolean;
   supportsHooks?: boolean;
+  /** The provider can create a new native session from a completed conversation turn. */
+  supportsConversationFork?: boolean;
 };
 
 /** How to make a cheap authenticated request that proves an official API key works. */
@@ -356,6 +358,7 @@ export const RUNTIMES: RuntimeDefinition[] = [
     alt: 'Codex',
     terminalOnly: true,
     supportsHooks: true,
+    supportsConversationFork: true,
   },
   {
     id: 'claude',
@@ -383,6 +386,7 @@ export const RUNTIMES: RuntimeDefinition[] = [
     alt: 'Claude Code',
     terminalOnly: true,
     supportsHooks: true,
+    supportsConversationFork: true,
   },
   {
     id: 'devin',
@@ -1180,6 +1184,10 @@ export function getRuntimeAccountProfile(id: RuntimeId): RuntimeAccountProfile {
 export function supportsRuntimeMaasSwitch(id: RuntimeId): boolean {
   const maas = getRuntimeAccountProfile(id).maas;
   return maas.supported && maas.runtimeEnv !== undefined;
+}
+
+export function supportsRuntimeConversationFork(id: RuntimeId): boolean {
+  return PROVIDER_MAP.get(id)?.supportsConversationFork === true;
 }
 
 export function getInstallCommandForRuntime(id: RuntimeId): string | null {

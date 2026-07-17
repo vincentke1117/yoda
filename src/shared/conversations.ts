@@ -99,6 +99,13 @@ export type ForkConversationAtPromptParams = {
   initialSize?: { cols: number; rows: number };
 };
 
+export type ForkConversationParams = {
+  projectId: string;
+  taskId: string;
+  conversationId: string;
+  initialSize?: { cols: number; rows: number };
+};
+
 export type ClaudeMemoryFile = {
   kind: 'global-claude' | 'project-claude' | 'project-agents';
   path: string;

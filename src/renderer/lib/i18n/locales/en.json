@@ -1319,6 +1319,9 @@
       "archiveConversationDirect": "Archive directly",
       "reloadConversation": "Reload",
       "renameConversation": "Rename",
+      "forkConversation": "Fork conversation",
+      "forkConversationSuccess": "Forked into a new conversation",
+      "forkConversationFailed": "Failed to fork conversation",
       "preview": "Preview"
     },
     "overview": {

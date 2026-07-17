@@ -1319,6 +1319,9 @@
       "archiveConversationDirect": "直接归档",
       "reloadConversation": "重新加载",
       "renameConversation": "重命名",
+      "forkConversation": "Fork 会话",
+      "forkConversationSuccess": "已 Fork 为新会话",
+      "forkConversationFailed": "Fork 会话失败",
       "preview": "预览"
     },
     "overview": {
