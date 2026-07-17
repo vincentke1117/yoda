@@ -45,9 +45,22 @@ const ROOTED_SPACED_FILENAME_CANDIDATE_REGEX = new RegExp(
   `(^|[${PATH_LEADING}])(@?\\/(?:${ABSOLUTE_PATH_SEGMENT}\\/)+?${SPACED_ABSOLUTE_FILENAME}(?::\\d+(?::\\d+)?)?)(?=$|[${PATH_TRAILING}])`,
   'gu'
 );
-const FILE_PATH_CANDIDATE_REGEXES = [
+// Home-relative, extensionless multi-segment paths are commonly emitted for
+// checkout/worktree directories without a trailing slash (`~/repo/.worktrees/id`).
+// Keep this form home-rooted and space-free so ordinary relative prose remains
+// outside the link.
+const TILDE_DIRECTORY_CANDIDATE_REGEX = new RegExp(
+  `(^|[${PATH_LEADING}])(@?~\\/(?:${PATH_SEG_TOKEN}\\/)+[^${PATH_SEG_EXCLUDED}\\/.]+)(?!\\.${PATH_SEG_TOKEN})(?=$|[${PATH_TRAILING}])`,
+  'gu'
+);
+const FILE_PATH_CANDIDATE_REGEXES: readonly {
+  regex: RegExp;
+  requiresSpace: boolean;
+  isDirectory?: true;
+}[] = [
   { regex: ROOTED_SPACED_FILENAME_CANDIDATE_REGEX, requiresSpace: true },
   { regex: ROOTED_FILE_PATH_CANDIDATE_REGEX, requiresSpace: true },
+  { regex: TILDE_DIRECTORY_CANDIDATE_REGEX, requiresSpace: false, isDirectory: true },
   { regex: FILE_PATH_CANDIDATE_REGEX, requiresSpace: false },
 ];
 
@@ -68,7 +81,8 @@ export interface TerminalFileLinkTarget {
   line?: number;
   column?: number;
   /**
-   * True when the link points at a directory (the matched text ended in `/`).
+   * True when the link points at a directory (from a trailing `/` or a
+   * directory-only candidate such as an extensionless `~/...` path).
    * Directory targets carry only `absolutePath` (no `filePath`/`line`/`column`)
    * so clicking opens the folder in the OS file manager instead of routing to
    * the in-app file editor, which can only show files.
@@ -93,6 +107,7 @@ export interface TerminalFileLinkOptions {
 interface TerminalFileLinkCandidate {
   text: string;
   index: number;
+  isDirectory?: true;
 }
 
 export interface TerminalFileLinkMatch {
@@ -104,7 +119,7 @@ export interface TerminalFileLinkMatch {
 export function extractTerminalFileLinkCandidates(line: string): TerminalFileLinkCandidate[] {
   const candidates: TerminalFileLinkCandidate[] = [];
 
-  for (const { regex, requiresSpace } of FILE_PATH_CANDIDATE_REGEXES) {
+  for (const { regex, requiresSpace, isDirectory } of FILE_PATH_CANDIDATE_REGEXES) {
     for (const match of line.matchAll(regex)) {
       const text = match[2];
       if (!text) continue;
@@ -119,7 +134,7 @@ export function extractTerminalFileLinkCandidates(line: string): TerminalFileLin
       );
       if (overlapsExisting) continue;
 
-      candidates.push({ text, index });
+      candidates.push({ text, index, ...(isDirectory ? { isDirectory: true as const } : {}) });
     }
   }
 
@@ -141,7 +156,8 @@ export function getTerminalFileLinkMatches(
       candidate.text,
       options.workspaceRoot,
       options.homeDir,
-      options.workspaceRootAliases
+      options.workspaceRootAliases,
+      candidate.isDirectory
     );
     if (!target) continue;
 
@@ -431,14 +447,15 @@ export function resolveTerminalFileLinkTarget(
   text: string,
   workspaceRoot?: string,
   homeDir?: string,
-  workspaceRootAliases?: readonly string[]
+  workspaceRootAliases?: readonly string[],
+  directoryHint = false
 ): TerminalFileLinkTarget | null {
   const parsed = parsePathLocation(text);
   if (!parsed) return null;
 
   let rawPath = parsed.path.replace(/\\/g, '/');
   if (rawPath.startsWith('@')) rawPath = rawPath.slice(1);
-  const isDirectory = rawPath.endsWith('/');
+  const isDirectory = directoryHint || rawPath.endsWith('/');
   const normalizedRoot = workspaceRoot?.replace(/\\/g, '/').replace(/\/+$/g, '');
   const normalizedRootAliases = workspaceRootAliases
     ?.map((root) => root.replace(/\\/g, '/').replace(/\/+$/g, ''))

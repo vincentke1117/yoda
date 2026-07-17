@@ -352,6 +352,31 @@ describe('terminal file links', () => {
     expect(resolveTerminalFileLinkTarget('~/Documents/foo.md')).toBeNull();
   });
 
+  it('recognizes an extensionless home-relative directory without a trailing slash', () => {
+    const text = '~/lovstudio/coding/yoda/.worktrees/ykguj';
+    const line = `类似「 ${text}」之类的路径`;
+    const terminal = makeTerminal([line]);
+
+    expect(extractTerminalFileLinkCandidates(line)).toEqual([
+      { text, index: line.indexOf(text), isDirectory: true },
+    ]);
+    expect(
+      getTerminalFileLinkMatches(terminal, 1, {
+        homeDir: '/Users/mark',
+        onOpen: (): void => undefined,
+      }).map((match) => ({ text: match.text, target: match.target }))
+    ).toEqual([
+      {
+        text,
+        target: {
+          originalText: text,
+          isDirectory: true,
+          absolutePath: '/Users/mark/lovstudio/coding/yoda/.worktrees/ykguj',
+        },
+      },
+    ]);
+  });
+
   it('recognizes every ideographic-comma separated path across hard-wrapped rows', () => {
     const paths = [
       '/Users/mark/lovstudio/coding/yoda/apps/mobile/src/App.tsx:1130',
