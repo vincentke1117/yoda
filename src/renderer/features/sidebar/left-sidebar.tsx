@@ -45,7 +45,7 @@ import { ShortcutHint } from '@renderer/lib/ui/shortcut-hint';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@renderer/lib/ui/tooltip';
 import { cn } from '@renderer/utils/utils';
 import { SidebarPinnedTaskList } from './pinned-task-list';
-import { ProjectsGroupLabel } from './projects-group-label';
+import { ProjectsGroupLabel, ProjectsSettingsMenu } from './projects-group-label';
 import { SidebarAccountAnchor } from './sidebar-account-anchor';
 import {
   SidebarContainer,
@@ -204,6 +204,7 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
             <div className="group/ws flex h-8 items-center gap-1 rounded-lg pr-1 text-foreground-tertiary-muted transition-colors hover:bg-background-tertiary-1 hover:text-foreground-tertiary has-data-popup-open:bg-background-tertiary-1 has-data-popup-open:text-foreground-tertiary">
               <WorkspaceSwitcher />
               <WorkspaceReviewBadge className="shrink-0" />
+              <ProjectsSettingsMenu />
             </div>
             <div className="my-1 border-t border-border" />
             <SidebarMenuButton
