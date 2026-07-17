@@ -975,6 +975,10 @@
   animation: dream-skin-pulse 2.4s ease-in-out infinite;
 }
 
+.ydream[data-dream-motion='off'] .dream-skin-status span {
+  animation: none;
+}
+
 .ydream[data-dream-shell='dark'] body {
   background:
     radial-gradient(

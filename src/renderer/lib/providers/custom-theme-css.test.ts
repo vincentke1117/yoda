@@ -51,18 +51,25 @@ describe('custom theme CSS variables', () => {
     expect(strongAlpha).toBeGreaterThan(softAlpha);
   });
 
-  it('does not copy image data into the terminal theme fingerprint', () => {
-    const image = `data:image/png;base64,${'a'.repeat(1_000_000)}`;
-    const theme = createDreamSkinTheme({
-      id: 'dream-large-image',
-      name: 'Dream Large Image',
-      image,
-      imageName: 'large.png',
+  it('keeps image-backed theme fingerprints compact and image-sensitive', () => {
+    const first = createDreamSkinTheme({
+      id: 'dream-fingerprint',
+      name: 'Dream Fingerprint',
+      image: `data:image/png;base64,${'A'.repeat(1_000_000)}`,
+      imageName: 'first.png',
+    });
+    const second = createDreamSkinTheme({
+      id: 'dream-fingerprint',
+      name: 'Dream Fingerprint',
+      image: `data:image/png;base64,${'B'.repeat(1_000_000)}`,
+      imageName: 'second.png',
     });
 
-    const fingerprint = getCustomThemeFingerprint(theme);
+    const firstFingerprint = getCustomThemeFingerprint(first);
+    const secondFingerprint = getCustomThemeFingerprint(second);
 
-    expect(fingerprint).not.toContain(image);
-    expect(fingerprint.length).toBeLessThan(1_000);
+    expect(firstFingerprint.length).toBeLessThan(2_000);
+    expect(secondFingerprint.length).toBeLessThan(2_000);
+    expect(firstFingerprint).not.toBe(secondFingerprint);
   });
 });

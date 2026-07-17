@@ -212,10 +212,26 @@ export function buildCustomThemeCssVars(theme: CustomTheme): CssVarMap {
 
 export function getCustomThemeFingerprint(theme: CustomTheme | undefined): string {
   if (!theme) return 'builtin';
-  // Terminal and Monaco colors only depend on the palette. Including an
-  // image-backed skin here used to stringify up to 16 MB of base64 data on
-  // every ThemeProvider render even though the image cannot affect either.
-  return `${theme.id}:${theme.mode}:${Object.values(theme.colors).join(':')}`;
+  const skin = theme.skin;
+  if (!skin) {
+    return `${theme.id}:${theme.mode}:${Object.values(theme.colors).join(':')}`;
+  }
+
+  // A local Dream Skin can contain a 16 MB base64 image. Keeping that image in
+  // the fingerprint made every ThemeContext value enormous and forced React to
+  // serialize it again whenever the provider rendered. Hash the image once per
+  // selected theme instead; the remaining skin metadata is intentionally small.
+  const { image, ...skinMetadata } = skin;
+  return `${theme.id}:${theme.mode}:${Object.values(theme.colors).join(':')}:${image.length}:${hashString(image)}:${JSON.stringify(skinMetadata)}`;
+}
+
+function hashString(value: string): string {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(36);
 }
 
 function mix(foreground: string, background: string, foregroundWeight: number): string {
