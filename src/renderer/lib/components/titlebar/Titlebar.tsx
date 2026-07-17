@@ -33,13 +33,13 @@ export function Titlebar({
   return (
     <header
       className={cn(
-        'flex h-10 shrink-0 items-center bg-background-secondary pr-2 border-b border-border [-webkit-app-region:drag] dark:bg-background',
+        'flex h-10 min-w-0 max-w-full shrink-0 items-center overflow-hidden bg-background-secondary pr-2 border-b border-border [-webkit-app-region:drag] dark:bg-background',
         !isLeftOpen && 'pl-18'
       )}
     >
-      <div className="pointer-events-auto flex w-full items-center gap-1">
+      <div className="pointer-events-auto flex min-w-0 flex-1 items-center gap-1 overflow-hidden">
         {!isLeftOpen && <div className="[-webkit-app-region:no-drag]"></div>}
-        <div className="flex w-full min-w-0 items-center">
+        <div className="flex min-w-0 flex-1 items-center overflow-hidden">
           <div className="flex shrink-0 items-center justify-start [-webkit-app-region:no-drag]">
             {!isLeftOpen && !hosted && (
               <>
@@ -69,7 +69,9 @@ export function Titlebar({
           {/* App tabs share the titlebar row (browser model); blank space stays
               draggable. Hosted panes drop the global strip (which always tracks
               the routed task) and render their own per-task strip via centerSlot. */}
-          <div className="min-w-0 flex-1 px-2">{hosted ? centerSlot : <AppTabStrip />}</div>
+          <div className="min-w-0 flex-1 overflow-hidden px-2">
+            {hosted ? centerSlot : <AppTabStrip />}
+          </div>
           <div className="flex shrink-0 items-center justify-end [-webkit-app-region:no-drag]">
             {rightSlot}
           </div>

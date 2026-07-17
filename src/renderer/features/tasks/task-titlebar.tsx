@@ -122,10 +122,7 @@ const HostedTaskTabStrip = observer(function HostedTaskTabStrip() {
   const activeId = tabManager.resolvedActiveTabId;
 
   return (
-    <div
-      className="flex min-w-0 items-center gap-1 overflow-x-auto [-webkit-app-region:no-drag]"
-      style={{ scrollbarWidth: 'none' }}
-    >
+    <div className="flex min-w-0 items-center gap-1 overflow-x-auto [scrollbar-width:none] [-webkit-app-region:no-drag] [&::-webkit-scrollbar]:hidden">
       {tabManager.resolvedTabs.map((tab) => {
         const meta = getTabMeta(tab);
         const isOverview = tab.kind === 'overview';

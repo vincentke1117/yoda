@@ -153,7 +153,7 @@ export const AppTabStrip = observer(function AppTabStrip() {
     <div
       ref={dropZone.dropRef}
       className={cn(
-        'flex items-center gap-1 overflow-x-auto rounded-md',
+        'flex min-w-0 items-center gap-1 overflow-x-auto rounded-md [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
         dropZone.isOver && 'bg-background-tertiary-1'
       )}
     >
