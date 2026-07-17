@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.16.6
+
+### Patch Changes
+
+- 修复中国镜像 `latest` 安装包被 CDN 缓存为旧版本的问题：上传完成后显式刷新各平台安装包、DMG 与 blockmap 的稳定下载地址，确保官网直链、更新清单和版本化资产保持一致。
+
 ## 0.16.5
 
 ### Patch Changes
