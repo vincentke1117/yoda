@@ -25,6 +25,7 @@ import {
   PopoverDescription,
   PopoverHeader,
   PopoverTitle,
+  PopoverTrigger,
 } from '@renderer/lib/ui/popover';
 import { log } from '@renderer/utils/logger';
 import { cn } from '@renderer/utils/utils';
@@ -145,7 +146,6 @@ export const DockedSessionHistory = observer(function DockedSessionHistory() {
   const rows = Math.min(MAX_DOCK_ROWS, Math.max(MIN_DOCK_ROWS, ui?.dockSessionHistoryRows ?? 3));
   const [collapsed, setCollapsed] = useState(false);
   const [treeOpen, setTreeOpen] = useState(false);
-  const treeAnchorRef = useRef<HTMLButtonElement>(null);
   const prompts = useSessionPrompts(enabled && !collapsed);
   const promptTree = useSessionPromptTree(enabled && treeOpen);
   const { restoringPrompt, requestRestorePrompt } = useConversationPromptRestore();
@@ -194,79 +194,74 @@ export const DockedSessionHistory = observer(function DockedSessionHistory() {
   const treeConversationCount = promptTree.tree?.lineageConversations.length ?? 0;
 
   return (
-    <div className="flex shrink-0 flex-col border-t border-border-primary/60 bg-background">
-      <div className="flex h-7 shrink-0 items-center gap-1.5 px-3 text-foreground-passive">
-        <button
-          type="button"
-          className="flex min-w-0 flex-1 items-center gap-1.5 text-left transition-colors hover:text-foreground"
-          onClick={() => setCollapsed((v) => !v)}
-          aria-expanded={!collapsed}
-        >
-          <ChevronDown className={cn('size-3 transition-transform', collapsed && '-rotate-90')} />
-          <span className="text-[11px] font-medium">{t('tasks.bottomPanel.session')}</span>
-          <span className="font-mono text-[10px] tabular-nums text-foreground-passive">
-            {prompts.prompts.length}
-          </span>
-        </button>
+    <Popover open={treeOpen} onOpenChange={setTreeOpen}>
+      <div className="flex shrink-0 flex-col border-t border-border-primary/60 bg-background">
+        <div className="flex h-7 shrink-0 items-center gap-1.5 px-3 text-foreground-passive">
+          <button
+            type="button"
+            className="flex min-w-0 flex-1 items-center gap-1.5 text-left transition-colors hover:text-foreground"
+            onClick={() => setCollapsed((v) => !v)}
+            aria-expanded={!collapsed}
+          >
+            <ChevronDown className={cn('size-3 transition-transform', collapsed && '-rotate-90')} />
+            <span className="text-[11px] font-medium">{t('tasks.bottomPanel.session')}</span>
+            <span className="font-mono text-[10px] tabular-nums text-foreground-passive">
+              {prompts.prompts.length}
+            </span>
+          </button>
+          {!collapsed ? (
+            <div className="flex shrink-0 items-center gap-0.5">
+              <button
+                type="button"
+                className="flex size-4 items-center justify-center rounded-sm transition-colors hover:bg-background-2 hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+                onClick={() => setRows(rows - 1)}
+                disabled={rows <= MIN_DOCK_ROWS}
+                aria-label={t('tasks.bottomPanel.sessionFewerRows')}
+                title={t('tasks.bottomPanel.sessionFewerRows')}
+              >
+                <Minus className="size-2.5" />
+              </button>
+              <span className="w-3 text-center font-mono text-[10px] tabular-nums">{rows}</span>
+              <button
+                type="button"
+                className="flex size-4 items-center justify-center rounded-sm transition-colors hover:bg-background-2 hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+                onClick={() => setRows(rows + 1)}
+                disabled={rows >= MAX_DOCK_ROWS}
+                aria-label={t('tasks.bottomPanel.sessionMoreRows')}
+                title={t('tasks.bottomPanel.sessionMoreRows')}
+              >
+                <Plus className="size-2.5" />
+              </button>
+            </div>
+          ) : null}
+          <PopoverTrigger
+            type="button"
+            className={cn(
+              'flex size-5 shrink-0 items-center justify-center rounded-sm transition-colors hover:bg-background-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border',
+              treeOpen && 'bg-background-2 text-foreground'
+            )}
+            aria-label={t('tasks.bottomPanel.sessionViewTree')}
+            title={t('tasks.bottomPanel.sessionViewTree')}
+          >
+            <ListTree className="size-3" />
+          </PopoverTrigger>
+        </div>
         {!collapsed ? (
-          <div className="flex shrink-0 items-center gap-0.5">
-            <button
-              type="button"
-              className="flex size-4 items-center justify-center rounded-sm transition-colors hover:bg-background-2 hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
-              onClick={() => setRows(rows - 1)}
-              disabled={rows <= MIN_DOCK_ROWS}
-              aria-label={t('tasks.bottomPanel.sessionFewerRows')}
-              title={t('tasks.bottomPanel.sessionFewerRows')}
-            >
-              <Minus className="size-2.5" />
-            </button>
-            <span className="w-3 text-center font-mono text-[10px] tabular-nums">{rows}</span>
-            <button
-              type="button"
-              className="flex size-4 items-center justify-center rounded-sm transition-colors hover:bg-background-2 hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
-              onClick={() => setRows(rows + 1)}
-              disabled={rows >= MAX_DOCK_ROWS}
-              aria-label={t('tasks.bottomPanel.sessionMoreRows')}
-              title={t('tasks.bottomPanel.sessionMoreRows')}
-            >
-              <Plus className="size-2.5" />
-            </button>
-          </div>
+          prompts.hasPrompts ? (
+            <DockedSessionPromptPreview
+              prompts={prompts.prompts}
+              tailCount={rows}
+              onOpenAll={prompts.openPromptsModal}
+              onRestorePrompt={prompts.requestRestorePrompt}
+              restoringPromptId={prompts.restoringPromptId}
+            />
+          ) : (
+            <div className="px-3 pb-2 text-xs text-foreground-passive">
+              {t('tasks.panel.noPrompts')}
+            </div>
+          )
         ) : null}
-        <button
-          ref={treeAnchorRef}
-          type="button"
-          className={cn(
-            'flex size-5 shrink-0 items-center justify-center rounded-sm transition-colors hover:bg-background-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border',
-            treeOpen && 'bg-background-2 text-foreground'
-          )}
-          onClick={() => setTreeOpen(true)}
-          aria-expanded={treeOpen}
-          aria-haspopup="dialog"
-          aria-label={t('tasks.bottomPanel.sessionViewTree')}
-          title={t('tasks.bottomPanel.sessionViewTree')}
-        >
-          <ListTree className="size-3" />
-        </button>
-      </div>
-      {!collapsed ? (
-        prompts.hasPrompts ? (
-          <DockedSessionPromptPreview
-            prompts={prompts.prompts}
-            tailCount={rows}
-            onOpenAll={prompts.openPromptsModal}
-            onRestorePrompt={prompts.requestRestorePrompt}
-            restoringPromptId={prompts.restoringPromptId}
-          />
-        ) : (
-          <div className="px-3 pb-2 text-xs text-foreground-passive">
-            {t('tasks.panel.noPrompts')}
-          </div>
-        )
-      ) : null}
-      <Popover open={treeOpen} onOpenChange={setTreeOpen}>
         <PopoverContent
-          anchor={treeAnchorRef}
           align="end"
           side="top"
           sideOffset={6}
@@ -325,8 +320,8 @@ export const DockedSessionHistory = observer(function DockedSessionHistory() {
             )}
           </div>
         </PopoverContent>
-      </Popover>
-    </div>
+      </div>
+    </Popover>
   );
 });
 

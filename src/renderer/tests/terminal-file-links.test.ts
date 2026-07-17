@@ -85,6 +85,15 @@ describe('terminal file links', () => {
     ]);
   });
 
+  it('extracts a rooted path whose filename contains spaces and CJK punctuation', () => {
+    const line = '  /Users/mark/lovstudio/vault/Agent 时代，我们需要怎样的 IDE.pdf';
+    const expected = '/Users/mark/lovstudio/vault/Agent 时代，我们需要怎样的 IDE.pdf';
+
+    expect(extractTerminalFileLinkCandidates(line)).toEqual([
+      { text: expected, index: line.indexOf(expected) },
+    ]);
+  });
+
   it('keeps separate rooted paths from being merged through prose', () => {
     const first = '/Users/mark/Library/Application Support/yoda/first.log';
     const second = '/Users/mark/Library/Application Support/yoda/second.log';
@@ -341,6 +350,31 @@ describe('terminal file links', () => {
 
   it('returns null for ~/ paths when no home dir is provided', () => {
     expect(resolveTerminalFileLinkTarget('~/Documents/foo.md')).toBeNull();
+  });
+
+  it('recognizes an extensionless home-relative directory without a trailing slash', () => {
+    const text = '~/lovstudio/coding/yoda/.worktrees/ykguj';
+    const line = `类似「 ${text}」之类的路径`;
+    const terminal = makeTerminal([line]);
+
+    expect(extractTerminalFileLinkCandidates(line)).toEqual([
+      { text, index: line.indexOf(text), isDirectory: true },
+    ]);
+    expect(
+      getTerminalFileLinkMatches(terminal, 1, {
+        workspaceRoot: '/Users/mark/lovstudio/coding/yoda/.worktrees/ykguj',
+        onOpen: (): void => undefined,
+      }).map((match) => ({ text: match.text, target: match.target }))
+    ).toEqual([
+      {
+        text,
+        target: {
+          originalText: text,
+          isDirectory: true,
+          absolutePath: '/Users/mark/lovstudio/coding/yoda/.worktrees/ykguj',
+        },
+      },
+    ]);
   });
 
   it('recognizes every ideographic-comma separated path across hard-wrapped rows', () => {

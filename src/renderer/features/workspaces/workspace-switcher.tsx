@@ -172,9 +172,8 @@ function WorkspaceCounts({
 }
 
 /**
- * Far-right footer badge: number of tasks in the active workspace needing the
- * user's review. Overlaid on the view-options gear (see the sidebar footer) —
- * shown by default, fades out on row hover so the gear takes its place.
+ * Footer badge: number of tasks in the active workspace needing the user's
+ * review. It sits between the workspace switcher and the view-options button.
  */
 export const WorkspaceReviewBadge = observer(function WorkspaceReviewBadge({
   className,

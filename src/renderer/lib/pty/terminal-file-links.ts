@@ -21,6 +21,12 @@ const PATH_SEG_TOKEN = `[^${PATH_SEG_EXCLUDED}\\/]+`;
 // directory component (`Application Support/`). Keeping the allowance local
 // prevents prose such as `/project and src/main.ts` from becoming one link.
 const ABSOLUTE_PATH_SEGMENT = `${PATH_SEG_TOKEN}(?: +${PATH_SEG_TOKEN})?`;
+// A filename may contain several words and punctuation that otherwise acts as
+// a prose delimiter (`Agent 时代，我们需要怎样的 IDE.pdf`). Keep this broader
+// allowance on the basename only, and require its final word to carry the file
+// extension, so trailing prose is not absorbed into the link.
+const SPACED_FILENAME_TOKEN = `[^\\s"'\`$<>|\\\\/:]+`;
+const SPACED_ABSOLUTE_FILENAME = `${SPACED_FILENAME_TOKEN}(?: +${SPACED_FILENAME_TOKEN})* +[^\\s"'\`$<>|\\\\/:]*\\.${PATH_EXT}`;
 // A path is either a file (one or more `dir/` segments + a `name.ext`, optional
 // `:line:col`) OR a directory (one or more `dir/` segments ending in a slash,
 // no filename). Making the filename tail optional lets a trailing-slash run
@@ -35,8 +41,26 @@ const ROOTED_FILE_PATH_CANDIDATE_REGEX = new RegExp(
   `(^|[${PATH_LEADING}])(@?\\/(?:${ABSOLUTE_PATH_SEGMENT}\\/)+?[^${PATH_SEG_EXCLUDED}\\/]*\\.${PATH_EXT}(?::\\d+(?::\\d+)?)?)(?!(?:\\.| +)${PATH_SEG_TOKEN}\\/)(?=$|[${PATH_TRAILING}])`,
   'gu'
 );
-const FILE_PATH_CANDIDATE_REGEXES = [
+const ROOTED_SPACED_FILENAME_CANDIDATE_REGEX = new RegExp(
+  `(^|[${PATH_LEADING}])(@?\\/(?:${ABSOLUTE_PATH_SEGMENT}\\/)+?${SPACED_ABSOLUTE_FILENAME}(?::\\d+(?::\\d+)?)?)(?=$|[${PATH_TRAILING}])`,
+  'gu'
+);
+// Home-relative, extensionless multi-segment paths are commonly emitted for
+// checkout/worktree directories without a trailing slash (`~/repo/.worktrees/id`).
+// Keep this form home-rooted and space-free so ordinary relative prose remains
+// outside the link.
+const TILDE_DIRECTORY_CANDIDATE_REGEX = new RegExp(
+  `(^|[${PATH_LEADING}])(@?~\\/(?:${PATH_SEG_TOKEN}\\/)+[^${PATH_SEG_EXCLUDED}\\/.]+)(?!\\.${PATH_SEG_TOKEN})(?=$|[${PATH_TRAILING}])`,
+  'gu'
+);
+const FILE_PATH_CANDIDATE_REGEXES: readonly {
+  regex: RegExp;
+  requiresSpace: boolean;
+  isDirectory?: true;
+}[] = [
+  { regex: ROOTED_SPACED_FILENAME_CANDIDATE_REGEX, requiresSpace: true },
   { regex: ROOTED_FILE_PATH_CANDIDATE_REGEX, requiresSpace: true },
+  { regex: TILDE_DIRECTORY_CANDIDATE_REGEX, requiresSpace: false, isDirectory: true },
   { regex: FILE_PATH_CANDIDATE_REGEX, requiresSpace: false },
 ];
 
@@ -57,7 +81,8 @@ export interface TerminalFileLinkTarget {
   line?: number;
   column?: number;
   /**
-   * True when the link points at a directory (the matched text ended in `/`).
+   * True when the link points at a directory (from a trailing `/` or a
+   * directory-only candidate such as an extensionless `~/...` path).
    * Directory targets carry only `absolutePath` (no `filePath`/`line`/`column`)
    * so clicking opens the folder in the OS file manager instead of routing to
    * the in-app file editor, which can only show files.
@@ -82,6 +107,7 @@ export interface TerminalFileLinkOptions {
 interface TerminalFileLinkCandidate {
   text: string;
   index: number;
+  isDirectory?: true;
 }
 
 export interface TerminalFileLinkMatch {
@@ -93,7 +119,7 @@ export interface TerminalFileLinkMatch {
 export function extractTerminalFileLinkCandidates(line: string): TerminalFileLinkCandidate[] {
   const candidates: TerminalFileLinkCandidate[] = [];
 
-  for (const { regex, requiresSpace } of FILE_PATH_CANDIDATE_REGEXES) {
+  for (const { regex, requiresSpace, isDirectory } of FILE_PATH_CANDIDATE_REGEXES) {
     for (const match of line.matchAll(regex)) {
       const text = match[2];
       if (!text) continue;
@@ -108,7 +134,7 @@ export function extractTerminalFileLinkCandidates(line: string): TerminalFileLin
       );
       if (overlapsExisting) continue;
 
-      candidates.push({ text, index });
+      candidates.push({ text, index, ...(isDirectory ? { isDirectory: true as const } : {}) });
     }
   }
 
@@ -130,7 +156,8 @@ export function getTerminalFileLinkMatches(
       candidate.text,
       options.workspaceRoot,
       options.homeDir,
-      options.workspaceRootAliases
+      options.workspaceRootAliases,
+      candidate.isDirectory
     );
     if (!target) continue;
 
@@ -420,14 +447,15 @@ export function resolveTerminalFileLinkTarget(
   text: string,
   workspaceRoot?: string,
   homeDir?: string,
-  workspaceRootAliases?: readonly string[]
+  workspaceRootAliases?: readonly string[],
+  directoryHint = false
 ): TerminalFileLinkTarget | null {
   const parsed = parsePathLocation(text);
   if (!parsed) return null;
 
   let rawPath = parsed.path.replace(/\\/g, '/');
   if (rawPath.startsWith('@')) rawPath = rawPath.slice(1);
-  const isDirectory = rawPath.endsWith('/');
+  const isDirectory = directoryHint || rawPath.endsWith('/');
   const normalizedRoot = workspaceRoot?.replace(/\\/g, '/').replace(/\/+$/g, '');
   const normalizedRootAliases = workspaceRootAliases
     ?.map((root) => root.replace(/\\/g, '/').replace(/\/+$/g, ''))
@@ -436,8 +464,22 @@ export function resolveTerminalFileLinkTarget(
 
   // Expand `~/...` against the home dir when provided.
   if (rawPath.startsWith('~/')) {
-    if (!normalizedHome) return null;
-    rawPath = `${normalizedHome}/${rawPath.slice(2)}`;
+    const homeRelativePath = rawPath.slice(2).replace(/\/+$/g, '');
+    if (normalizedHome) {
+      rawPath = `${normalizedHome}/${homeRelativePath}`;
+    } else if (isDirectory && normalizedRoot && normalizedRoot.endsWith(`/${homeRelativePath}`)) {
+      // The current workspace itself is often printed as a compact `~/...`
+      // directory before the async home-directory query has completed.
+      rawPath = normalizedRoot;
+    } else {
+      return null;
+    }
+  }
+
+  // A directory equal to the workspace root has no workspace-relative tail;
+  // keep the absolute root instead of rejecting the empty relative path.
+  if (isDirectory && normalizedRoot && rawPath.replace(/\/+$/g, '') === normalizedRoot) {
+    return { originalText: text, isDirectory: true, absolutePath: normalizedRoot };
   }
 
   const base = resolveFileTarget(text, rawPath, parsed, normalizedRoot, normalizedRootAliases);
