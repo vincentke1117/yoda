@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createDreamSkinTheme, CUSTOM_THEME_EXAMPLE } from '@shared/custom-theme';
-import { buildCustomThemeCssVars } from './custom-theme-css';
+import { buildCustomThemeCssVars, getCustomThemeFingerprint } from './custom-theme-css';
 
 describe('custom theme CSS variables', () => {
   it('keeps light sidebar active rows distinct from the sidebar background', () => {
@@ -49,5 +49,20 @@ describe('custom theme CSS variables', () => {
       buildCustomThemeCssVars(strong)['--background']?.match(/, ([\d.]+)\)$/)?.[1]
     );
     expect(strongAlpha).toBeGreaterThan(softAlpha);
+  });
+
+  it('does not copy image data into the terminal theme fingerprint', () => {
+    const image = `data:image/png;base64,${'a'.repeat(1_000_000)}`;
+    const theme = createDreamSkinTheme({
+      id: 'dream-large-image',
+      name: 'Dream Large Image',
+      image,
+      imageName: 'large.png',
+    });
+
+    const fingerprint = getCustomThemeFingerprint(theme);
+
+    expect(fingerprint).not.toContain(image);
+    expect(fingerprint.length).toBeLessThan(1_000);
   });
 });

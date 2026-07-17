@@ -212,7 +212,10 @@ export function buildCustomThemeCssVars(theme: CustomTheme): CssVarMap {
 
 export function getCustomThemeFingerprint(theme: CustomTheme | undefined): string {
   if (!theme) return 'builtin';
-  return `${theme.id}:${theme.mode}:${Object.values(theme.colors).join(':')}:${JSON.stringify(theme.skin ?? null)}`;
+  // Terminal and Monaco colors only depend on the palette. Including an
+  // image-backed skin here used to stringify up to 16 MB of base64 data on
+  // every ThemeProvider render even though the image cannot affect either.
+  return `${theme.id}:${theme.mode}:${Object.values(theme.colors).join(':')}`;
 }
 
 function mix(foreground: string, background: string, foregroundWeight: number): string {
