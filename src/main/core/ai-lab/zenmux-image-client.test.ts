@@ -49,7 +49,7 @@ describe('ZenMux image edit client', () => {
     const form = init?.body as FormData;
     expect(form.get('model')).toBe('openai/gpt-image-2');
     expect(form.get('prompt')).toBe('Preserve the person and render a Riso portrait.');
-    expect(form.get('input_fidelity')).toBe('high');
+    expect(form.get('input_fidelity')).toBeNull();
     expect(form.get('n')).toBe('1');
     expect(form.get('size')).toBe('1024x1024');
     expect(form.get('quality')).toBe('high');
@@ -62,7 +62,6 @@ describe('ZenMux image edit client', () => {
       'model',
       'image[]',
       'prompt',
-      'input_fidelity',
       'n',
       'size',
       'quality',

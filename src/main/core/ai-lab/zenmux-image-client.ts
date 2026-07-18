@@ -54,7 +54,6 @@ export async function editZenmuxImage(input: {
       sourceFileName(input.sourceMimeType)
     );
     form.set('prompt', input.prompt);
-    form.set('input_fidelity', 'high');
     form.set('n', '1');
     form.set('size', input.size);
     form.set('quality', input.quality);
