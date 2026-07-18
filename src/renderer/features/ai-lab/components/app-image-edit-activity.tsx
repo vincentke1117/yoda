@@ -7,12 +7,14 @@ import {
   History,
   Loader2,
   Sparkles,
+  StickyNote,
   Trash2,
   X,
 } from 'lucide-react';
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useId, useState, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AiLabUserApp } from '@shared/ai-lab';
+import { AI_LAB_USER_NOTE_MAX_CHARS } from '@shared/ai-lab-bridge';
 import { useToast } from '@renderer/lib/hooks/use-toast';
 import { rpc } from '@renderer/lib/ipc';
 import { Button } from '@renderer/lib/ui/button';
@@ -26,6 +28,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@renderer/lib/ui/popover';
 import { Progress } from '@renderer/lib/ui/progress';
 import { Spinner } from '@renderer/lib/ui/spinner';
+import { Textarea } from '@renderer/lib/ui/textarea';
 import { appImageEditRuntime } from '../app-image-edit-runtime';
 import {
   aiLabQueryKeys,
@@ -34,13 +37,22 @@ import {
   useDeleteAppImageEdit,
 } from '../use-ai-lab';
 
-export function AppImageEditActivity({ app }: { app: AiLabUserApp }) {
+export function AppImageEditActivity({
+  app,
+  generationNote,
+  onGenerationNoteChange,
+}: {
+  app: AiLabUserApp;
+  generationNote: string;
+  onGenerationNoteChange: (note: string) => void;
+}) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const history = useAppImageEdits(app.id);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [previewId, setPreviewId] = useState<string | null>(null);
+  const generationNoteId = useId();
   const runtime = useSyncExternalStore(
     (listener) => appImageEditRuntime.subscribe(app.id, listener),
     () => appImageEditRuntime.getSnapshot(app.id)
@@ -120,6 +132,53 @@ export function AppImageEditActivity({ app }: { app: AiLabUserApp }) {
             </div>
           )}
         </div>
+        <Popover>
+          <PopoverTrigger
+            aria-label={t('aiLab.appImages.userNote')}
+            className="relative flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-border bg-background px-2 text-xs text-foreground-muted hover:bg-background-1 hover:text-foreground"
+          >
+            <StickyNote className="size-3.5" />
+            {t('aiLab.appImages.userNote')}
+            {generationNote.trim() && (
+              <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-primary" />
+            )}
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-80 gap-3 p-3">
+            <div>
+              <label htmlFor={generationNoteId} className="text-sm font-medium">
+                {t('aiLab.appImages.userNoteTitle')}
+              </label>
+              <p className="mt-0.5 text-xs leading-5 text-foreground-muted">
+                {t('aiLab.appImages.userNoteDescription')}
+              </p>
+            </div>
+            <Textarea
+              id={generationNoteId}
+              value={generationNote}
+              maxLength={AI_LAB_USER_NOTE_MAX_CHARS}
+              rows={3}
+              disabled={isRunning}
+              placeholder={t('aiLab.appImages.userNotePlaceholder')}
+              onChange={(event) => onGenerationNoteChange(event.target.value)}
+            />
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-[11px] tabular-nums text-foreground-passive">
+                {t('aiLab.appImages.userNoteCount', {
+                  count: generationNote.length,
+                  max: AI_LAB_USER_NOTE_MAX_CHARS,
+                })}
+              </span>
+              <Button
+                size="xs"
+                variant="ghost"
+                disabled={isRunning || !generationNote}
+                onClick={() => onGenerationNoteChange('')}
+              >
+                {t('aiLab.appImages.userNoteClear')}
+              </Button>
+            </div>
+          </PopoverContent>
+        </Popover>
         <Popover open={historyOpen} onOpenChange={setHistoryOpen}>
           <PopoverTrigger
             aria-label={t('aiLab.appImages.history')}
@@ -211,6 +270,8 @@ function AppImageEditPreview({
   const deleteImage = useDeleteAppImageEdit(app.id);
   const [isSaving, setIsSaving] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
+  const [regenerationNote, setRegenerationNote] = useState('');
+  const regenerationNoteId = useId();
 
   const save = async () => {
     if (!id) return;
@@ -231,7 +292,10 @@ function AppImageEditPreview({
   const remove = () => {
     if (!id || !window.confirm(t('aiLab.appImages.deleteConfirm'))) return;
     deleteImage.mutate(id, {
-      onSuccess: onClose,
+      onSuccess: () => {
+        setRegenerationNote('');
+        onClose();
+      },
       onError: () =>
         toast({
           title: t('aiLab.appImages.deleteFailed'),
@@ -245,8 +309,13 @@ function AppImageEditPreview({
     setIsRegenerating(true);
     try {
       const result = await appImageEditRuntime.run(app.id, () =>
-        rpc.aiLab.regenerateAppImage({ appId: app.id, id })
+        rpc.aiLab.regenerateAppImage({
+          appId: app.id,
+          id,
+          userNote: regenerationNote.trim() || undefined,
+        })
       );
+      setRegenerationNote('');
       if (result.historyId) onRegenerated(result.historyId);
       toast({ title: t('aiLab.appImages.regenerated') });
     } catch {
@@ -262,7 +331,14 @@ function AppImageEditPreview({
   const isBusy = isSaving || isRegenerating || isGenerating || deleteImage.isPending;
 
   return (
-    <Dialog open={id !== null} onOpenChange={(open) => !open && onClose()}>
+    <Dialog
+      open={id !== null}
+      onOpenChange={(open) => {
+        if (open) return;
+        setRegenerationNote('');
+        onClose();
+      }}
+    >
       <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle>{t('aiLab.appImages.previewTitle')}</DialogTitle>
@@ -277,6 +353,31 @@ function AppImageEditPreview({
               className="max-h-[68vh] max-w-full rounded-lg object-contain"
             />
           )}
+        </div>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <label htmlFor={regenerationNoteId} className="text-sm font-medium">
+              {t('aiLab.appImages.regenerateNote')}
+            </label>
+            <span className="text-[11px] tabular-nums text-foreground-passive">
+              {t('aiLab.appImages.userNoteCount', {
+                count: regenerationNote.length,
+                max: AI_LAB_USER_NOTE_MAX_CHARS,
+              })}
+            </span>
+          </div>
+          <Textarea
+            id={regenerationNoteId}
+            value={regenerationNote}
+            maxLength={AI_LAB_USER_NOTE_MAX_CHARS}
+            rows={2}
+            disabled={isGenerating || isRegenerating}
+            placeholder={t('aiLab.appImages.regenerateNotePlaceholder')}
+            onChange={(event) => setRegenerationNote(event.target.value)}
+          />
+          <p className="text-xs text-foreground-muted">
+            {t('aiLab.appImages.regenerateNoteDescription')}
+          </p>
         </div>
         <DialogFooter>
           <Button variant="destructive" disabled={isBusy || image.isPending} onClick={remove}>

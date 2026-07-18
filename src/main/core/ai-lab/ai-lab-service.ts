@@ -24,6 +24,7 @@ import {
   type AiLabAppImageEditHistoryItem,
   type AiLabImageEditInput,
   type AiLabImageEditResult,
+  type AiLabRegenerateImageInput,
 } from '@shared/ai-lab-bridge';
 import { resolveCommandPath } from '@main/core/dependencies/probe';
 import { LocalExecutionContext } from '@main/core/execution-context/local-execution-context';
@@ -199,7 +200,7 @@ export class AiLabService {
     };
   }
 
-  async regenerateAppImage(input: { appId: string; id: string }): Promise<AiLabImageEditResult> {
+  async regenerateAppImage(input: AiLabRegenerateImageInput): Promise<AiLabImageEditResult> {
     const row = await this.requireAppImageEdit(input);
     const sourceFileName = row.images[1] ?? requireFileName(row, 0);
     const imageDataUrl = toDataUrl(
@@ -214,6 +215,7 @@ export class AiLabService {
       imageDataUrl,
       prompt: row.prompt,
       quality: 'high',
+      userNote: input.userNote,
     });
   }
 

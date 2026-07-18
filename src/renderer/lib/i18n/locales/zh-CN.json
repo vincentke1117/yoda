@@ -3161,6 +3161,12 @@
       "completed": "图片已完成并保存到生成历史",
       "failed": "生成失败，请复制错误详情后重试。",
       "copyError": "复制错误详情",
+      "userNote": "附注",
+      "userNoteTitle": "本次生成附注",
+      "userNoteDescription": "补充必须注意的例外情况，仅用于下一次生成，成功后自动清空。",
+      "userNotePlaceholder": "例如：保留眼镜，不要改变发型，注意左手手指数目…",
+      "userNoteCount": "{{count}} / {{max}}",
+      "userNoteClear": "清空",
       "stages": {
         "preparing": "正在准备原图…",
         "uploading": "正在上传参考图…",
@@ -3174,6 +3180,9 @@
       "regenerating": "正在生成…",
       "regenerated": "已生成新图片，原记录仍保留",
       "regenerateFailed": "再次生成失败，请复制错误详情后重试",
+      "regenerateNote": "本次再次生成附注",
+      "regenerateNotePlaceholder": "例如：人物保持不变，只修正手部和背景文字…",
+      "regenerateNoteDescription": "附注会叠加到原生成要求，并保存在新记录中，方便继续迭代。",
       "delete": "删除记录",
       "deleteConfirm": "确定删除这条生成记录和图片吗？",
       "deleteFailed": "删除生成记录失败"

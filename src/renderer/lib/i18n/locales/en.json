@@ -3161,6 +3161,12 @@
       "completed": "Image completed and saved to generation history",
       "failed": "Generation failed. Copy the error details and try again.",
       "copyError": "Copy error details",
+      "userNote": "Note",
+      "userNoteTitle": "Note for this generation",
+      "userNoteDescription": "Add edge cases to honor on the next generation. It clears after success.",
+      "userNotePlaceholder": "For example: keep the glasses and hairstyle; fix the left hand…",
+      "userNoteCount": "{{count}} / {{max}}",
+      "userNoteClear": "Clear",
       "stages": {
         "preparing": "Preparing the source image…",
         "uploading": "Uploading the reference image…",
@@ -3174,6 +3180,9 @@
       "regenerating": "Generating…",
       "regenerated": "New image created; the previous result was kept",
       "regenerateFailed": "Could not generate again. Copy the error details and retry",
+      "regenerateNote": "Note for this regeneration",
+      "regenerateNotePlaceholder": "For example: keep the person unchanged; only fix the hands and background text…",
+      "regenerateNoteDescription": "This note is added to the original request and saved with the new result for further iterations.",
       "delete": "Delete record",
       "deleteConfirm": "Delete this generated image and its history record?",
       "deleteFailed": "Could not delete the generation record"
