@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, Clock3, Download, History, Loader2, Trash2, X } from 'lucide-react';
+import { CheckCircle2, Clock3, Copy, Download, History, Loader2, Trash2, X } from 'lucide-react';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AiLabUserApp } from '@shared/ai-lab';
@@ -26,6 +26,7 @@ import {
 
 export function AppImageEditActivity({ app }: { app: AiLabUserApp }) {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const queryClient = useQueryClient();
   const history = useAppImageEdits(app.id);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -42,6 +43,14 @@ export function AppImageEditActivity({ app }: { app: AiLabUserApp }) {
 
   const count = history.data?.length ?? 0;
   const isRunning = runtime.status === 'running';
+  const copyError = async () => {
+    if (!runtime.error) return;
+    const result = await rpc.app.clipboardWriteText(runtime.error);
+    toast({
+      title: result.success ? t('common.copied') : t('aiLab.bridgeCopyFailed'),
+      variant: result.success ? 'default' : 'destructive',
+    });
+  };
   return (
     <>
       <div className="flex h-11 shrink-0 items-center gap-3 border-b border-border bg-background px-3">
@@ -61,7 +70,7 @@ export function AppImageEditActivity({ app }: { app: AiLabUserApp }) {
                 {runtime.status === 'idle'
                   ? t('aiLab.appImages.historySavedHint')
                   : runtime.status === 'failed'
-                    ? runtime.error
+                    ? t('aiLab.appImages.failed')
                     : runtime.status === 'succeeded'
                       ? t('aiLab.appImages.completed')
                       : t(`aiLab.appImages.stages.${runtime.stage ?? 'preparing'}`)}
@@ -81,14 +90,24 @@ export function AppImageEditActivity({ app }: { app: AiLabUserApp }) {
             )}
           </div>
           {runtime.status === 'failed' && (
-            <Button
-              size="icon-xs"
-              variant="ghost"
-              aria-label={t('common.dismiss')}
-              onClick={() => appImageEditRuntime.reset(app.id)}
-            >
-              <X />
-            </Button>
+            <div className="flex shrink-0 items-center gap-0.5">
+              <Button
+                size="icon-xs"
+                variant="ghost"
+                aria-label={t('aiLab.appImages.copyError')}
+                onClick={() => void copyError()}
+              >
+                <Copy />
+              </Button>
+              <Button
+                size="icon-xs"
+                variant="ghost"
+                aria-label={t('common.dismiss')}
+                onClick={() => appImageEditRuntime.reset(app.id)}
+              >
+                <X />
+              </Button>
+            </div>
           )}
         </div>
         <Popover open={historyOpen} onOpenChange={setHistoryOpen}>
@@ -113,7 +132,7 @@ export function AppImageEditActivity({ app }: { app: AiLabUserApp }) {
               </div>
             ) : history.isError ? (
               <div className="rounded-lg border border-border-destructive bg-background-destructive p-3 text-xs text-foreground-destructive">
-                {history.error instanceof Error ? history.error.message : String(history.error)}
+                {t('aiLab.appImages.historyLoadFailed')}
               </div>
             ) : count === 0 ? (
               <div className="flex h-24 items-center justify-center rounded-lg border border-dashed border-border text-xs text-foreground-muted">
@@ -178,10 +197,9 @@ function AppImageEditPreview({
     try {
       const result = await rpc.aiLab.saveAppImageEdit({ appId: app.id, id });
       if (result.saved) toast({ title: t('aiLab.appImages.saved') });
-    } catch (error) {
+    } catch {
       toast({
         title: t('aiLab.appImages.saveFailed'),
-        description: error instanceof Error ? error.message : String(error),
         variant: 'destructive',
       });
     } finally {
@@ -193,10 +211,9 @@ function AppImageEditPreview({
     if (!id || !window.confirm(t('aiLab.appImages.deleteConfirm'))) return;
     deleteImage.mutate(id, {
       onSuccess: onClose,
-      onError: (error) =>
+      onError: () =>
         toast({
           title: t('aiLab.appImages.deleteFailed'),
-          description: error instanceof Error ? error.message : String(error),
           variant: 'destructive',
         }),
     });

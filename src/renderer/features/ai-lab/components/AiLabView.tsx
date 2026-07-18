@@ -7,7 +7,6 @@ import {
   Pin,
   PinOff,
   Plus,
-  ShieldCheck,
   Trash2,
 } from 'lucide-react';
 import React, { useState } from 'react';
@@ -17,7 +16,6 @@ import { getRuntime } from '@shared/runtime-registry';
 import { useToast } from '@renderer/lib/hooks/use-toast';
 import { rpc } from '@renderer/lib/ipc';
 import { useNavigate } from '@renderer/lib/layout/navigation-provider';
-import { Badge } from '@renderer/lib/ui/badge';
 import { Button } from '@renderer/lib/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@renderer/lib/ui/tooltip';
 import { cn } from '@renderer/utils/utils';
@@ -287,10 +285,6 @@ function UserAppHost({ app, onBack }: { app: AiLabUserApp; onBack: () => void })
           <h1 className="truncate text-sm font-medium">{app.name}</h1>
           <p className="truncate text-[11px] text-foreground-muted">{app.description}</p>
         </div>
-        <Badge variant="outline" className="hidden font-normal text-[10px] @lg:flex">
-          <ShieldCheck className="mr-1 size-3" />
-          {t('aiLab.sandbox')}
-        </Badge>
         <div
           role="toolbar"
           aria-label={t('aiLab.appActions')}
