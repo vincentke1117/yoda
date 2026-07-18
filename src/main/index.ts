@@ -12,6 +12,7 @@ import { createMainWindow, focusExistingFullAppWindow, markAppQuitting } from '.
 import { registerWindowIpc } from './app/window-ipc';
 import { yodaAccountService } from './core/account/services/yoda-account-service';
 import { agentHookService } from './core/agent-hooks/agent-hook-service';
+import { aiLabService } from './core/ai-lab/ai-lab-service';
 import { resolveQuitAgentSessionsDecision } from './core/app/quit-agent-sessions';
 import { appService } from './core/app/service';
 import { automationScheduler } from './core/automation/automation-scheduler';
@@ -141,6 +142,9 @@ void app.whenReady().then(async () => {
   try {
     await initializeDatabase();
     __bootMark('initializeDatabase done');
+    await aiLabService.initialize().catch((error: unknown) => {
+      log.warn('Failed to restore pending Yoda Build tasks:', error);
+    });
     sessionSummaryAutoRefreshService.initialize();
     searchService.initialize();
     __bootMark('searchService.initialize done');

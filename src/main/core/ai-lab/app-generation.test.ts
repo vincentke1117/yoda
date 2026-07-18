@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { buildAppGenerationPrompt, parseGeneratedAiLabApp } from './app-generation-contract';
+import {
+  buildAppGenerationPrompt,
+  extractGeneratedAppFromTranscript,
+  parseGeneratedAiLabApp,
+} from './app-generation-contract';
 
 describe('AI Lab app generation', () => {
   it('parses a generated single-file app', () => {
@@ -32,5 +36,27 @@ describe('AI Lab app generation', () => {
     expect(prompt).toContain('Reuse the existing product language.');
     expect(prompt).toContain('one complete HTML document');
     expect(prompt).toContain('work offline immediately');
+  });
+
+  it('extracts the app from the latest completed assistant turn', () => {
+    const app = extractGeneratedAppFromTranscript([
+      { role: 'user', content: 'Build a timer' },
+      { role: 'assistant', content: 'Working on it.' },
+      {
+        role: 'assistant',
+        content: [
+          '---YODA_APP_MANIFEST---',
+          '{"name":"Timer","description":"A focused timer"}',
+          '---YODA_APP_HTML---',
+          '<!doctype html><html><body>Timer</body></html>',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(app).toEqual({
+      name: 'Timer',
+      description: 'A focused timer',
+      html: '<!doctype html><html><body>Timer</body></html>',
+    });
   });
 });

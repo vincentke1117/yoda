@@ -1220,19 +1220,52 @@ export const HomeComposer = observer(function HomeComposer({
         if (!slot.provider) return;
         const resolvedRequirement = deferInitialPrompt ? await requirementPromise : requirement;
         if (!resolvedRequirement) return;
+        const taskId = crypto.randomUUID();
+        const conversationId = crypto.randomUUID();
+        const taskName = ensureUniqueTaskDisplayName(
+          `${taskNameFromPrompt(resolvedRequirement) || 'yoda-build'}-app`,
+          Array.from(mounted.taskManager.tasks.values(), (task) => task.data.name)
+        );
         try {
-          const app = await rpc.aiLab.createApp({
+          const plan = await rpc.aiLab.prepareBuildTask({
             prompt: resolvedRequirement,
             projectId: mounted.data.id,
+            taskId,
+            conversationId,
             runtimeId: slot.provider,
             model: slot.agent?.model,
             systemPrompt: slot.systemPrompt,
           });
-          await queryClient.invalidateQueries({ queryKey: ['aiLab', 'apps'] });
+          const createPromise = mounted.taskManager.createTask({
+            id: taskId,
+            projectId: mounted.data.id,
+            name: taskName,
+            sourceBranch:
+              selectedBranch ?? ({ type: 'local', branch: currentBranchName ?? 'main' } as const),
+            strategy: { kind: 'no-worktree' },
+            parentTaskId: taskScopedTarget?.taskId ?? parentTarget?.taskId,
+            initialConversation: {
+              id: conversationId,
+              projectId: mounted.data.id,
+              taskId,
+              runtime: slot.provider,
+              title: initialConversationTitle(slot.provider, resolvedRequirement, []),
+              initialPrompt: plan.initialPrompt,
+              imagePaths,
+              model: slot.agent?.model,
+              skillSelection: agentSkillSelection(slot.agent),
+            },
+          });
+          void createPromise.catch((error: unknown) => {
+            void rpc.aiLab.cancelBuildTask(taskId);
+            toast.error(t('home.buildFailed'), {
+              description: error instanceof Error ? error.message : t('common.unknownError'),
+            });
+          });
+          goToTask(mounted.data.id, taskId);
           resetComposer();
-          navigate('library', { section: 'apps', appId: app.id });
-          toast.success(t('home.buildCreated', { name: app.name }));
         } catch (error) {
+          void rpc.aiLab.cancelBuildTask(taskId);
           toast.error(t('home.buildFailed'), {
             description: error instanceof Error ? error.message : t('common.unknownError'),
           });

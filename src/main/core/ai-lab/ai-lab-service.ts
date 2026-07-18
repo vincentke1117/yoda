@@ -14,6 +14,8 @@ import {
   type LogoGenerationInput,
   type LogoGenerationListItem,
   type LogoGenerationStatus,
+  type PrepareAiLabBuildTaskInput,
+  type PrepareAiLabBuildTaskResult,
   type UpdateAiLabAppInput,
 } from '@shared/ai-lab';
 import { resolveCommandPath } from '@main/core/dependencies/probe';
@@ -24,8 +26,11 @@ import { db } from '@main/db/client';
 import { aiLabGenerations } from '@main/db/schema';
 import { log } from '@main/lib/logger';
 import { telemetryService } from '@main/lib/telemetry';
+import { AiLabAppBuildRunner } from './app-build-runner';
 import { generateAiLabApp } from './app-generation';
+import { buildAppGenerationPrompt } from './app-generation-contract';
 import { AiLabAppStore } from './app-store';
+import { AiLabBuildJobStore } from './build-job-store';
 import { generateCodexImages } from './codex-image-engine';
 import { buildLogoPrompt } from './logo-prompt';
 import { generateZenmuxImages } from './zenmux-image-client';
@@ -66,14 +71,60 @@ function fileNameSlug(value: string): string {
 
 export class AiLabService {
   private appStore: AiLabAppStore | null = null;
+  private buildJobStore: AiLabBuildJobStore | null = null;
+  private appBuildRunner: AiLabAppBuildRunner | null = null;
 
   private getAppStore(): AiLabAppStore {
     this.appStore ??= new AiLabAppStore(join(app.getPath('userData'), 'ai-lab', 'apps.json'));
     return this.appStore;
   }
 
+  private getAppBuildRunner(): AiLabAppBuildRunner {
+    this.buildJobStore ??= new AiLabBuildJobStore(
+      join(app.getPath('userData'), 'ai-lab', 'build-jobs.json')
+    );
+    this.appBuildRunner ??= new AiLabAppBuildRunner(this.buildJobStore, this.getAppStore());
+    return this.appBuildRunner;
+  }
+
+  async initialize(): Promise<void> {
+    await this.getAppBuildRunner().initialize();
+  }
+
   async listApps(): Promise<AiLabUserApp[]> {
     return this.getAppStore().list();
+  }
+
+  async prepareBuildTask(input: PrepareAiLabBuildTaskInput): Promise<PrepareAiLabBuildTaskResult> {
+    const prompt = input.prompt.trim();
+    if (!prompt) throw new Error('Describe the app you want to create.');
+    if (prompt.length > 4_000) throw new Error('The app description is too long.');
+    if (input.runtimeId !== 'codex' && input.runtimeId !== 'claude') {
+      throw new Error('Yoda Build currently supports Claude and Codex.');
+    }
+    const project = projectManager.getProject(input.projectId);
+    if (!project) throw new Error('Select a project for Yoda Build.');
+    if (!project.ctx.supportsLocalSpawn) {
+      throw new Error('Yoda Build currently requires a local project.');
+    }
+    const initialPrompt = buildAppGenerationPrompt(prompt, {
+      projectPath: project.repoPath,
+      systemPrompt: input.systemPrompt,
+    });
+    await this.getAppBuildRunner().prepare({
+      projectId: input.projectId,
+      taskId: input.taskId,
+      conversationId: input.conversationId,
+      prompt,
+      runtimeId: input.runtimeId,
+      model: input.model,
+      createdAt: new Date().toISOString(),
+    });
+    return { initialPrompt };
+  }
+
+  async cancelBuildTask(taskId: string): Promise<void> {
+    await this.getAppBuildRunner().cancel(taskId);
   }
 
   async createApp(input: CreateAiLabAppInput): Promise<AiLabUserApp> {

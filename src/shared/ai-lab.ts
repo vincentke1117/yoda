@@ -79,11 +79,27 @@ export type AiLabUserApp = {
   prompt: string;
   html: string;
   projectId?: string;
+  taskId?: string;
+  conversationId?: string;
   runtimeId?: RuntimeId;
   model?: string | null;
   pinned: boolean;
   createdAt: string;
   updatedAt: string;
+};
+
+export type PrepareAiLabBuildTaskInput = {
+  prompt: string;
+  projectId: string;
+  taskId: string;
+  conversationId: string;
+  runtimeId: RuntimeId;
+  model?: string | null;
+  systemPrompt?: string;
+};
+
+export type PrepareAiLabBuildTaskResult = {
+  initialPrompt: string;
 };
 
 export type CreateAiLabAppInput = {
