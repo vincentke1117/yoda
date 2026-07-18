@@ -52,6 +52,10 @@ async function getAppImageEdit(input: { appId: string; id: string }) {
   return aiLabService.getAppImageEdit(input);
 }
 
+async function regenerateAppImage(input: { appId: string; id: string }) {
+  return aiLabService.regenerateAppImage(input);
+}
+
 async function saveAppImageEdit(input: { appId: string; id: string }) {
   return aiLabService.saveAppImageEdit(input);
 }
@@ -92,6 +96,7 @@ export const aiLabController = createRPCController({
   editAppImage,
   listAppImageEdits,
   getAppImageEdit,
+  regenerateAppImage,
   saveAppImageEdit,
   deleteAppImageEdit,
   createApp,

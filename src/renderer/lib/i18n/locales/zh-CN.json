@@ -3170,6 +3170,10 @@
       "save": "保存 PNG",
       "saved": "PNG 已保存",
       "saveFailed": "保存图片失败",
+      "regenerate": "再次生成",
+      "regenerating": "正在生成…",
+      "regenerated": "已生成新图片，原记录仍保留",
+      "regenerateFailed": "再次生成失败，请复制错误详情后重试",
       "delete": "删除记录",
       "deleteConfirm": "确定删除这条生成记录和图片吗？",
       "deleteFailed": "删除生成记录失败"

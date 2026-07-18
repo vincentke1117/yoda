@@ -1,5 +1,15 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, Clock3, Copy, Download, History, Loader2, Trash2, X } from 'lucide-react';
+import {
+  CheckCircle2,
+  Clock3,
+  Copy,
+  Download,
+  History,
+  Loader2,
+  Sparkles,
+  Trash2,
+  X,
+} from 'lucide-react';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AiLabUserApp } from '@shared/ai-lab';
@@ -171,7 +181,13 @@ export function AppImageEditActivity({ app }: { app: AiLabUserApp }) {
           </PopoverContent>
         </Popover>
       </div>
-      <AppImageEditPreview app={app} id={previewId} onClose={() => setPreviewId(null)} />
+      <AppImageEditPreview
+        app={app}
+        id={previewId}
+        isGenerating={isRunning}
+        onClose={() => setPreviewId(null)}
+        onRegenerated={setPreviewId}
+      />
     </>
   );
 }
@@ -179,17 +195,22 @@ export function AppImageEditActivity({ app }: { app: AiLabUserApp }) {
 function AppImageEditPreview({
   app,
   id,
+  isGenerating,
   onClose,
+  onRegenerated,
 }: {
   app: AiLabUserApp;
   id: string | null;
+  isGenerating: boolean;
   onClose: () => void;
+  onRegenerated: (id: string) => void;
 }) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const image = useAppImageEdit(app.id, id);
   const deleteImage = useDeleteAppImageEdit(app.id);
   const [isSaving, setIsSaving] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
 
   const save = async () => {
     if (!id) return;
@@ -219,6 +240,27 @@ function AppImageEditPreview({
     });
   };
 
+  const regenerate = async () => {
+    if (!id || isGenerating) return;
+    setIsRegenerating(true);
+    try {
+      const result = await appImageEditRuntime.run(app.id, () =>
+        rpc.aiLab.regenerateAppImage({ appId: app.id, id })
+      );
+      if (result.historyId) onRegenerated(result.historyId);
+      toast({ title: t('aiLab.appImages.regenerated') });
+    } catch {
+      toast({
+        title: t('aiLab.appImages.regenerateFailed'),
+        variant: 'destructive',
+      });
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
+
+  const isBusy = isSaving || isRegenerating || isGenerating || deleteImage.isPending;
+
   return (
     <Dialog open={id !== null} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-3xl">
@@ -237,13 +279,21 @@ function AppImageEditPreview({
           )}
         </div>
         <DialogFooter>
-          <Button variant="destructive" disabled={deleteImage.isPending} onClick={remove}>
+          <Button variant="destructive" disabled={isBusy || image.isPending} onClick={remove}>
             {deleteImage.isPending ? <Loader2 className="animate-spin" /> : <Trash2 />}
             {t('aiLab.appImages.delete')}
           </Button>
-          <Button disabled={isSaving || image.isPending} onClick={() => void save()}>
+          <Button
+            variant="outline"
+            disabled={isBusy || image.isPending}
+            onClick={() => void save()}
+          >
             {isSaving ? <Loader2 className="animate-spin" /> : <Download />}
             {t('aiLab.appImages.save')}
+          </Button>
+          <Button disabled={isBusy || image.isPending} onClick={() => void regenerate()}>
+            {isRegenerating ? <Loader2 className="animate-spin" /> : <Sparkles />}
+            {t(isRegenerating ? 'aiLab.appImages.regenerating' : 'aiLab.appImages.regenerate')}
           </Button>
         </DialogFooter>
       </DialogContent>
