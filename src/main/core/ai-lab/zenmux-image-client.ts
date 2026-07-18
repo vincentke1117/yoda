@@ -7,6 +7,9 @@ import {
 import { aiLogService } from '@main/core/ai-logs/ai-log-service';
 
 const REQUEST_TIMEOUT_MS = 180_000;
+// ZenMux's OpenAI Images JSON protocol expects the OpenAI-native model name,
+// while its catalog and the rest of Yoda use the provider-qualified ID.
+const ZENMUX_OPENAI_IMAGES_MODEL = AI_LAB_APP_IMAGE_MODEL.replace(/^openai\//, '');
 
 type ApiErrorBody = {
   error?: string | { message?: string };
@@ -38,14 +41,14 @@ export async function editZenmuxImage(input: {
     purpose: 'app-image-edit',
     mode: 'api',
     runtime: 'zenmux',
-    model: AI_LAB_APP_IMAGE_MODEL,
+    model: ZENMUX_OPENAI_IMAGES_MODEL,
     command: url,
     prompt: input.prompt,
     metadata: { appId: input.appId, size: input.size, quality: input.quality },
   });
   try {
     const body = await postJson<OpenAiImagesResponse>(url, input.apiKey, {
-      model: AI_LAB_APP_IMAGE_MODEL,
+      model: ZENMUX_OPENAI_IMAGES_MODEL,
       images: [{ image_url: input.imageDataUrl }],
       prompt: input.prompt,
       input_fidelity: 'high',

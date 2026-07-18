@@ -8,6 +8,7 @@ import {
 } from '@shared/ai-lab-bridge';
 import { rpc } from '@renderer/lib/ipc';
 import { cn } from '@renderer/utils/utils';
+import { normalizeAiLabBridgeError } from '../bridge-error';
 import { applySandboxPolicy } from '../sandbox-policy';
 
 export function UserAppFrame({ app, className }: { app: AiLabUserApp; className?: string }) {
@@ -66,12 +67,13 @@ export function UserAppFrame({ app, className }: { app: AiLabUserApp; className?
           });
         })
         .catch((error: unknown) => {
+          const message = normalizeAiLabBridgeError(error);
           respond({
             channel: AI_LAB_BRIDGE_CHANNEL,
             kind: 'response',
             requestId: request.requestId,
             ok: false,
-            error: error instanceof Error ? error.message : String(error),
+            error: message,
           });
         })
         .finally(() => {

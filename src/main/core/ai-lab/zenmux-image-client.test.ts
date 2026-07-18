@@ -47,7 +47,7 @@ describe('ZenMux image edit client', () => {
       Authorization: 'Bearer secret',
     });
     expect(JSON.parse(String(init?.body))).toEqual({
-      model: 'openai/gpt-image-2',
+      model: 'gpt-image-2',
       images: [{ image_url: 'data:image/png;base64,aW1hZ2U=' }],
       prompt: 'Preserve the person and render a Riso portrait.',
       input_fidelity: 'high',
