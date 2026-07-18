@@ -48,7 +48,9 @@ export const AiLabView: React.FC<AiLabViewProps> = ({
     <Launcher apps={apps.data ?? []} onOpen={setActiveAppId} showHeader={!embedded} />
   );
 
-  if (embedded) return <div className="@container h-full min-h-0">{content}</div>;
+  if (embedded) {
+    return <div className="@container flex h-full min-h-0 flex-col">{content}</div>;
+  }
   return (
     <div className="@container flex h-full min-h-0 flex-col bg-background text-foreground">
       {content}
