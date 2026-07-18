@@ -1,4 +1,9 @@
-import type { CreateAiLabAppInput, LogoGenerationInput, UpdateAiLabAppInput } from '@shared/ai-lab';
+import type {
+  CreateAiLabAppInput,
+  LogoGenerationInput,
+  PrepareAiLabBuildTaskInput,
+  UpdateAiLabAppInput,
+} from '@shared/ai-lab';
 import { createRPCController } from '@shared/ipc/rpc';
 import { aiLabService } from './ai-lab-service';
 
@@ -38,6 +43,14 @@ async function createApp(input: CreateAiLabAppInput) {
   return aiLabService.createApp(input);
 }
 
+async function prepareBuildTask(input: PrepareAiLabBuildTaskInput) {
+  return aiLabService.prepareBuildTask(input);
+}
+
+async function cancelBuildTask(taskId: string) {
+  return aiLabService.cancelBuildTask(taskId);
+}
+
 async function updateApp(input: UpdateAiLabAppInput) {
   return aiLabService.updateApp(input);
 }
@@ -56,6 +69,8 @@ export const aiLabController = createRPCController({
   deleteGeneration,
   listApps,
   createApp,
+  prepareBuildTask,
+  cancelBuildTask,
   updateApp,
   deleteApp,
 });

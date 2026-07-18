@@ -1,4 +1,13 @@
-import { AppWindow, ArrowLeft, Pin, PinOff, Plus, ShieldCheck, Trash2 } from 'lucide-react';
+import {
+  AppWindow,
+  ArrowLeft,
+  CornerUpLeft,
+  Pin,
+  PinOff,
+  Plus,
+  ShieldCheck,
+  Trash2,
+} from 'lucide-react';
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AiLabUserApp } from '@shared/ai-lab';
@@ -209,10 +218,22 @@ function BuiltInAppHost({ app, onBack }: { app: AiLabAppDefinition; onBack: () =
 
 function UserAppHost({ app, onBack }: { app: AiLabUserApp; onBack: () => void }) {
   const { t } = useTranslation();
+  const { navigate } = useNavigate();
   const { toast } = useToast();
   const updateApp = useUpdateAiLabApp();
   const deleteApp = useDeleteAiLabApp();
   const source = useMemo(() => applySandboxPolicy(app.html), [app.html]);
+
+  const openBuildTask = () => {
+    if (!app.projectId || !app.taskId) return;
+    navigate('task', {
+      projectId: app.projectId,
+      taskId: app.taskId,
+      tab: app.conversationId
+        ? { kind: 'conversation', conversationId: app.conversationId }
+        : undefined,
+    });
+  };
 
   const handleDelete = () => {
     if (!window.confirm(t('aiLab.deleteConfirm', { name: app.name }))) return;
@@ -242,6 +263,19 @@ function UserAppHost({ app, onBack }: { app: AiLabUserApp; onBack: () => void })
           <ShieldCheck className="mr-1 size-3" />
           {t('aiLab.sandbox')}
         </Badge>
+        {app.projectId && app.taskId && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="@max-xl:w-8 @max-xl:px-0"
+            aria-label={t('aiLab.returnToBuildTask')}
+            title={t('aiLab.returnToBuildTask')}
+            onClick={openBuildTask}
+          >
+            <CornerUpLeft />
+            <span className="@max-xl:hidden">{t('aiLab.returnToBuildTask')}</span>
+          </Button>
+        )}
         <Button
           size="sm"
           variant={app.pinned ? 'secondary' : 'outline'}

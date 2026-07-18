@@ -86,6 +86,40 @@ export function parseGeneratedAiLabApp(raw: string): GeneratedAiLabApp {
   };
 }
 
+export function extractGeneratedAppFromTranscript(
+  blocks: { role: string; content: string }[]
+): GeneratedAiLabApp {
+  let lastUserIndex = -1;
+  for (let index = blocks.length - 1; index >= 0; index -= 1) {
+    if (blocks[index]?.role === 'user') {
+      lastUserIndex = index;
+      break;
+    }
+  }
+  const turnOutput = blocks
+    .slice(lastUserIndex + 1)
+    .filter((block) => block.role === 'assistant')
+    .map((block) => block.content)
+    .join('\n\n');
+  const candidates = [
+    turnOutput,
+    ...blocks
+      .filter((block) => block.role === 'assistant')
+      .map((block) => block.content)
+      .reverse(),
+  ].filter((candidate, index, all) => candidate.trim() && all.indexOf(candidate) === index);
+
+  let lastError: unknown = new Error('The Yoda Build agent did not return an app.');
+  for (const candidate of candidates) {
+    try {
+      return parseGeneratedAiLabApp(candidate);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
+}
+
 function isAppManifest(value: unknown): value is { name: string; description: string } {
   if (!value || typeof value !== 'object') return false;
   const candidate = value as { name?: unknown; description?: unknown };

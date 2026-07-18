@@ -5,6 +5,8 @@ import type { AiLabUserApp } from '@shared/ai-lab';
 import { isValidRuntimeId } from '@shared/runtime-registry';
 
 export class AiLabAppStore {
+  private mutationQueue: Promise<void> = Promise.resolve();
+
   constructor(private readonly filePath: string) {}
 
   async list(): Promise<AiLabUserApp[]> {
@@ -24,38 +26,55 @@ export class AiLabAppStore {
     prompt: string;
     html: string;
     projectId?: string;
+    taskId?: string;
+    conversationId?: string;
     runtimeId?: AiLabUserApp['runtimeId'];
     model?: string | null;
   }): Promise<AiLabUserApp> {
-    const apps = await this.list();
-    const now = new Date().toISOString();
-    const app: AiLabUserApp = {
-      id: randomUUID(),
-      ...input,
-      pinned: false,
-      createdAt: now,
-      updatedAt: now,
-    };
-    await this.write([app, ...apps]);
-    return app;
+    return this.enqueue(async () => {
+      const apps = await this.list();
+      const now = new Date().toISOString();
+      const app: AiLabUserApp = {
+        id: randomUUID(),
+        ...input,
+        pinned: false,
+        createdAt: now,
+        updatedAt: now,
+      };
+      await this.write([app, ...apps]);
+      return app;
+    });
   }
 
   async update(id: string, update: { pinned: boolean }): Promise<AiLabUserApp> {
-    const apps = await this.list();
-    const index = apps.findIndex((app) => app.id === id);
-    const current = apps[index];
-    if (!current) throw new Error('AI Lab app not found.');
-    const next = { ...current, ...update, updatedAt: new Date().toISOString() };
-    apps[index] = next;
-    await this.write(apps);
-    return next;
+    return this.enqueue(async () => {
+      const apps = await this.list();
+      const index = apps.findIndex((app) => app.id === id);
+      const current = apps[index];
+      if (!current) throw new Error('AI Lab app not found.');
+      const next = { ...current, ...update, updatedAt: new Date().toISOString() };
+      apps[index] = next;
+      await this.write(apps);
+      return next;
+    });
   }
 
   async delete(id: string): Promise<void> {
-    const apps = await this.list();
-    const next = apps.filter((app) => app.id !== id);
-    if (next.length === apps.length) throw new Error('AI Lab app not found.');
-    await this.write(next);
+    await this.enqueue(async () => {
+      const apps = await this.list();
+      const next = apps.filter((app) => app.id !== id);
+      if (next.length === apps.length) throw new Error('AI Lab app not found.');
+      await this.write(next);
+    });
+  }
+
+  private enqueue<T>(mutation: () => Promise<T>): Promise<T> {
+    const result = this.mutationQueue.then(mutation, mutation);
+    this.mutationQueue = result.then(
+      () => undefined,
+      () => undefined
+    );
+    return result;
   }
 
   private async write(apps: AiLabUserApp[]): Promise<void> {
@@ -76,6 +95,8 @@ function isStoredApp(value: unknown): value is AiLabUserApp {
     typeof app.prompt === 'string' &&
     typeof app.html === 'string' &&
     (app.projectId === undefined || typeof app.projectId === 'string') &&
+    (app.taskId === undefined || typeof app.taskId === 'string') &&
+    (app.conversationId === undefined || typeof app.conversationId === 'string') &&
     (app.runtimeId === undefined || isValidRuntimeId(app.runtimeId)) &&
     (app.model === undefined || app.model === null || typeof app.model === 'string') &&
     typeof app.pinned === 'boolean' &&
