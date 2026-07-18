@@ -3151,6 +3151,27 @@
     "bridgeNoErrorToCopy": "没有可复制的模型错误。",
     "bridgeCopyFailed": "复制错误失败。",
     "bridgeBusy": "已有图片正在生成，请等待完成后再试。",
+    "appImages": {
+      "history": "生成历史",
+      "historyDescription": "结果由 Yoda 宿主持久保存，切换页面或重启后仍可查看。",
+      "historySavedHint": "生成结果会自动保存到 Yoda",
+      "emptyHistory": "还没有生成过图片",
+      "historyImageAlt": "历史生成图片",
+      "estimatedProgress": "预计 {{progress}}%",
+      "completed": "图片已完成并保存到生成历史",
+      "stages": {
+        "preparing": "正在准备原图…",
+        "uploading": "正在上传参考图…",
+        "generating": "GPT Image 2 正在重绘…"
+      },
+      "previewTitle": "生成结果",
+      "save": "保存 PNG",
+      "saved": "PNG 已保存",
+      "saveFailed": "保存图片失败",
+      "delete": "删除记录",
+      "deleteConfirm": "确定删除这条生成记录和图片吗？",
+      "deleteFailed": "删除生成记录失败"
+    },
     "emptyTitle": "还没有自己做的应用",
     "emptyDescription": "回到首页选择 Yoda Build，复用项目与 Agent 配置生成第一个 App。",
     "comingSoonTitle": "更多应用在路上",
