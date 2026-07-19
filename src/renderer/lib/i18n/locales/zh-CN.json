@@ -1311,6 +1311,17 @@
       "deleteDescription": "“{{title}}” 将被永久删除，此操作无法撤销。",
       "sessionExited": "代理进程已退出。"
     },
+    "sessionStatus": {
+      "manage": "管理 {{count}} 个活跃或待处理会话",
+      "title": "任务会话状态",
+      "summary": "{{count}} 个会话正在运行或需要处理",
+      "attentionCount": "待处理 {{count}}",
+      "workingCount": "运行中 {{count}}",
+      "unnamedSession": "会话 {{index}}",
+      "openSession": "打开“{{title}}”",
+      "interruptSession": "打断“{{title}}”",
+      "interruptAll": "打断全部 {{count}} 个运行中会话"
+    },
     "tabs": {
       "close": "关闭",
       "closeOthers": "关闭其他",

@@ -1311,6 +1311,17 @@
       "deleteDescription": "\"{{title}}\" will be permanently deleted. This action cannot be undone.",
       "sessionExited": "The agent process exited."
     },
+    "sessionStatus": {
+      "manage": "Manage {{count}} active or pending sessions",
+      "title": "Task session status",
+      "summary": "{{count}} sessions are running or need attention",
+      "attentionCount": "{{count}} pending",
+      "workingCount": "{{count}} working",
+      "unnamedSession": "Session {{index}}",
+      "openSession": "Open “{{title}}”",
+      "interruptSession": "Interrupt “{{title}}”",
+      "interruptAll": "Interrupt all {{count}} working sessions"
+    },
     "tabs": {
       "close": "Close",
       "closeOthers": "Close others",
