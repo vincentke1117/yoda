@@ -32,15 +32,14 @@ import {
   canMoveConversationToTask,
   conversationTransferFromPayload,
 } from '@renderer/features/tasks/conversations/conversation-transfer';
+import { moveConversationToTask } from '@renderer/features/tasks/conversations/move-conversation-to-task';
 import {
   getRegisteredTaskData,
   getTaskStore,
 } from '@renderer/features/tasks/stores/task-selectors';
 import { toast } from '@renderer/lib/hooks/use-toast';
-import { rpc } from '@renderer/lib/ipc';
 import { useParams, useWorkspaceSlots } from '@renderer/lib/layout/navigation-provider';
 import { sidebarStore } from '@renderer/lib/stores/app-state';
-import { log } from '@renderer/utils/logger';
 import { cn } from '@renderer/utils/utils';
 import { SidebarProjectItem } from './project-item';
 import {
@@ -743,7 +742,6 @@ function SortableRow({ dndId, children, projectId, taskId }: SortableRowProps) {
 }
 
 function useConversationTaskDropZone(projectId?: string, taskId?: string) {
-  const { t } = useTranslation();
   return useTabDropZone({
     canDrop: (payload) => {
       if (!projectId || !taskId || !getRegisteredTaskData(projectId, taskId)) return false;
@@ -754,25 +752,13 @@ function useConversationTaskDropZone(projectId?: string, taskId?: string) {
       const transfer = conversationTransferFromPayload(payload);
       if (!transfer) return;
       const taskName = getRegisteredTaskData(projectId, taskId)?.name ?? taskId;
-      void rpc.conversations
-        .moveConversation(projectId, transfer.sourceTaskId, taskId, transfer.conversationId)
-        .then(() => {
-          toast({ title: t('tasks.conversations.moveSuccess', { task: taskName }) });
-        })
-        .catch((error: unknown) => {
-          log.warn('SidebarVirtualList: failed to move conversation', {
-            projectId,
-            sourceTaskId: transfer.sourceTaskId,
-            targetTaskId: taskId,
-            conversationId: transfer.conversationId,
-            error,
-          });
-          toast({
-            title: t('tasks.conversations.moveFailed'),
-            description: error instanceof Error ? error.message : String(error),
-            variant: 'destructive',
-          });
-        });
+      void moveConversationToTask({
+        projectId,
+        sourceTaskId: transfer.sourceTaskId,
+        targetTaskId: taskId,
+        targetTaskName: taskName,
+        conversationId: transfer.conversationId,
+      });
     },
   });
 }
