@@ -19,6 +19,7 @@ import { AgentStatusIndicator } from '../components/agent-status-indicator';
 import { usePersistedDisclosure } from '../components/persisted-disclosure';
 import { SessionUsageChip } from '../components/session-usage-chip';
 import { useProvisionedTask, useTaskViewContext } from '../task-view-context';
+import { ConversationDragHandle } from './conversation-drag-handle';
 import type { ConversationStore } from './conversation-manager';
 import { formatConversationTitleForDisplay } from './conversation-title-utils';
 import { buildConversationTree, type ConversationTreeNode } from './conversation-tree-model';
@@ -305,6 +306,14 @@ const ConversationTreeItem = observer(function ConversationTreeItem({
             >
               <ArchiveRestore className="size-3.5" />
             </Button>
+          ) : null}
+          {!isArchived ? (
+            <ConversationDragHandle
+              projectId={projectId}
+              taskId={taskId}
+              conversationId={conversation.id}
+              className="my-auto mr-1 opacity-0 transition-opacity group-hover/row:opacity-100 focus:opacity-100"
+            />
           ) : null}
         </div>
       </ChipContextMenu>
