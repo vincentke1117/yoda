@@ -2300,6 +2300,12 @@
     "noMatches": "No skills match your search.",
     "noSkills": "No skills available.",
     "disabled": "Disabled",
+    "marketplaces": {
+      "title": "Explore community skills",
+      "description": "Browse independent catalogs for more skills. Review the source and permissions before installing.",
+      "ariaLabel": "External skill marketplaces",
+      "open": "Open {{marketplace}} in your browser"
+    },
     "source": {
       "openai": "OpenAI",
       "anthropic": "Anthropic",

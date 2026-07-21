@@ -31,6 +31,7 @@ import { ToggleGroup, ToggleGroupItem } from '@renderer/lib/ui/toggle-group';
 import { cn } from '@renderer/utils/utils';
 import { skillNeedsAttention } from '../skill-health';
 import { SKILL_SORT_MODES, sortSkills, type SkillSortMode } from '../skill-sort';
+import ExternalSkillMarketplaces from './ExternalSkillMarketplaces';
 import SkillCard from './SkillCard';
 import SkillsCatalogHint from './SkillsCatalogHint';
 import SkillsTreeSection from './SkillsTreeSection';
@@ -333,6 +334,8 @@ const SkillsView: React.FC<{ embedded?: boolean; surfaceControl?: React.ReactNod
             <p className="mt-1 text-xs text-muted-foreground">{t('skills.subtitle')}</p>
           </div>
         )}
+
+        <ExternalSkillMarketplaces />
 
         {/* Toolbar */}
         <div
