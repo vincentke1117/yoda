@@ -7,6 +7,23 @@ export type GeneratedAiLabApp = {
   html: string;
 };
 
+export function buildAppRefinementRequest(input: {
+  originalPrompt: string;
+  currentHtml: string;
+  refinement: string;
+}): string {
+  return `Update the existing mini app instead of starting over. Preserve working behavior and stored user data unless the requested change requires otherwise.
+
+ORIGINAL REQUEST:
+${input.originalPrompt}
+
+CURRENT APP HTML:
+${input.currentHtml}
+
+REQUESTED CHANGE:
+${input.refinement}`;
+}
+
 export function buildAppGenerationPrompt(
   prompt: string,
   context?: { projectPath?: string; systemPrompt?: string }

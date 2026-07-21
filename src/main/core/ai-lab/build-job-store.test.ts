@@ -13,13 +13,14 @@ afterEach(async () => {
 });
 
 describe('AiLabBuildJobStore', () => {
-  it('persists one pending job per task and removes completed jobs', async () => {
+  it('persists one app binding per task and supports removal', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'yoda-ai-lab-build-'));
     directories.push(directory);
     const store = new AiLabBuildJobStore(join(directory, 'build-jobs.json'));
 
     await store.put({
       projectId: 'project-1',
+      appId: 'app-1',
       taskId: 'task-1',
       conversationId: 'conversation-1',
       prompt: 'Build a timer',
@@ -29,6 +30,7 @@ describe('AiLabBuildJobStore', () => {
     });
     await store.put({
       projectId: 'project-1',
+      appId: 'app-2',
       taskId: 'task-1',
       conversationId: 'conversation-2',
       prompt: 'Build a better timer',
@@ -37,7 +39,11 @@ describe('AiLabBuildJobStore', () => {
     });
 
     expect(await store.list()).toEqual([
-      expect.objectContaining({ taskId: 'task-1', conversationId: 'conversation-2' }),
+      expect.objectContaining({
+        taskId: 'task-1',
+        conversationId: 'conversation-2',
+        appId: 'app-2',
+      }),
     ]);
     await store.delete('task-1');
     expect(await store.list()).toEqual([]);

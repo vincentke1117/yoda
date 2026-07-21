@@ -40,6 +40,23 @@ describe('AiLabAppStore', () => {
       pinned: false,
     });
     expect(await store.update(created.id, { pinned: true })).toMatchObject({ pinned: true });
+    const replaced = await store.replaceGenerated(created.id, {
+      name: 'Packing together',
+      description: 'A shared packing list',
+      html: '<!doctype html><html><body>Updated</body></html>',
+    });
+    expect(replaced).toMatchObject({
+      changed: true,
+      app: { name: 'Packing together', pinned: true },
+    });
+    expect(replaced.app.updatedAt).not.toBe(created.updatedAt);
+    await expect(
+      store.replaceGenerated(created.id, {
+        name: replaced.app.name,
+        description: replaced.app.description,
+        html: replaced.app.html,
+      })
+    ).resolves.toMatchObject({ changed: false, app: { updatedAt: replaced.app.updatedAt } });
     expect(JSON.parse(await readFile(filePath, 'utf8'))).toHaveLength(1);
 
     await store.delete(created.id);

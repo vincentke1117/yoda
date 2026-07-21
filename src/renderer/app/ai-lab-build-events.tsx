@@ -1,7 +1,11 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { aiLabAppCreatedChannel, aiLabBuildFailedChannel } from '@shared/events/aiLabEvents';
+import {
+  aiLabAppCreatedChannel,
+  aiLabAppUpdatedChannel,
+  aiLabBuildFailedChannel,
+} from '@shared/events/aiLabEvents';
 import { aiLabQueryKeys } from '@renderer/features/ai-lab/use-ai-lab';
 import { useToast } from '@renderer/lib/hooks/use-toast';
 import { events } from '@renderer/lib/ipc';
@@ -41,9 +45,14 @@ export function AiLabBuildEvents() {
         },
       });
     });
+    const offUpdated = events.on(aiLabAppUpdatedChannel, (payload) => {
+      void queryClient.invalidateQueries({ queryKey: aiLabQueryKeys.apps });
+      toast({ title: t('home.buildUpdated', { name: payload.appName }) });
+    });
     return () => {
       offCreated();
       offFailed();
+      offUpdated();
     };
   }, [navigate, queryClient, t, toast]);
 

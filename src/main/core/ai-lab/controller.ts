@@ -2,6 +2,7 @@ import type {
   CreateAiLabAppInput,
   LogoGenerationInput,
   PrepareAiLabBuildTaskInput,
+  RefineAiLabAppInput,
   UpdateAiLabAppInput,
 } from '@shared/ai-lab';
 import type { AiLabImageEditInput, AiLabRegenerateImageInput } from '@shared/ai-lab-bridge';
@@ -68,6 +69,10 @@ async function createApp(input: CreateAiLabAppInput) {
   return aiLabService.createApp(input);
 }
 
+async function refineApp(input: RefineAiLabAppInput) {
+  return aiLabService.refineApp(input);
+}
+
 async function prepareBuildTask(input: PrepareAiLabBuildTaskInput) {
   return aiLabService.prepareBuildTask(input);
 }
@@ -100,6 +105,7 @@ export const aiLabController = createRPCController({
   saveAppImageEdit,
   deleteAppImageEdit,
   createApp,
+  refineApp,
   prepareBuildTask,
   cancelBuildTask,
   updateApp,

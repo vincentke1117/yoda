@@ -1,4 +1,8 @@
-import { aiLabAppCreatedChannel, aiLabBuildFailedChannel } from '@shared/events/aiLabEvents';
+import {
+  aiLabAppCreatedChannel,
+  aiLabAppUpdatedChannel,
+  aiLabBuildFailedChannel,
+} from '@shared/events/aiLabEvents';
 import { agentSessionRuntimeStore } from '@main/core/conversations/agent-session-runtime';
 import { loadClaudeTranscript } from '@main/core/conversations/claude-transcript';
 import { loadCodexRolloutTranscriptForConversation } from '@main/core/conversations/codex-rollout-terminal-history';
@@ -27,9 +31,33 @@ export class AiLabAppBuildRunner {
 
   async initialize(): Promise<void> {
     if (this.initialized) return;
-    const pending = await this.jobs.list();
+    const [pending, apps] = await Promise.all([this.jobs.list(), this.apps.list()]);
+    const jobsByTaskId = new Map(pending.map((job) => [job.taskId, job]));
+    for (const app of apps) {
+      if (
+        !app.projectId ||
+        !app.taskId ||
+        !app.conversationId ||
+        (app.runtimeId !== 'codex' && app.runtimeId !== 'claude') ||
+        jobsByTaskId.has(app.taskId)
+      ) {
+        continue;
+      }
+      const recovered: AiLabBuildJob = {
+        appId: app.id,
+        projectId: app.projectId,
+        taskId: app.taskId,
+        conversationId: app.conversationId,
+        prompt: app.prompt,
+        runtimeId: app.runtimeId,
+        model: app.model,
+        createdAt: app.createdAt,
+      };
+      jobsByTaskId.set(app.taskId, recovered);
+      await this.jobs.put(recovered);
+    }
     this.initialized = true;
-    for (const job of pending) this.track(job);
+    for (const job of jobsByTaskId.values()) this.track(job);
   }
 
   async prepare(job: AiLabBuildJob): Promise<void> {
@@ -75,24 +103,36 @@ export class AiLabAppBuildRunner {
     this.processing.add(job.taskId);
     try {
       const generated = await this.readGeneratedAppWithRetry(job);
-      const app = await this.apps.create({
-        ...generated,
-        prompt: job.prompt,
-        projectId: job.projectId,
-        taskId: job.taskId,
-        conversationId: job.conversationId,
-        runtimeId: job.runtimeId,
-        model: job.model,
-      });
-      await this.jobs.delete(job.taskId);
-      this.untrack(job.taskId);
-      events.emit(aiLabAppCreatedChannel, {
-        projectId: job.projectId,
-        taskId: job.taskId,
-        conversationId: job.conversationId,
-        appId: app.id,
-        appName: app.name,
-      });
+      const target = await this.resolveTargetApp(job);
+      if (target) {
+        const result = await this.apps.replaceGenerated(target.id, generated);
+        const trackedJob = { ...job, appId: target.id };
+        await this.jobs.put(trackedJob);
+        if (result.changed) {
+          events.emit(aiLabAppUpdatedChannel, {
+            appId: result.app.id,
+            appName: result.app.name,
+          });
+        }
+      } else {
+        const app = await this.apps.create({
+          ...generated,
+          prompt: job.prompt,
+          projectId: job.projectId,
+          taskId: job.taskId,
+          conversationId: job.conversationId,
+          runtimeId: job.runtimeId,
+          model: job.model,
+        });
+        await this.jobs.put({ ...job, appId: app.id });
+        events.emit(aiLabAppCreatedChannel, {
+          projectId: job.projectId,
+          taskId: job.taskId,
+          conversationId: job.conversationId,
+          appId: app.id,
+          appName: app.name,
+        });
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       log.warn('[ai-lab] failed to collect Yoda Build task output', {
@@ -110,6 +150,15 @@ export class AiLabAppBuildRunner {
     } finally {
       this.processing.delete(job.taskId);
     }
+  }
+
+  private async resolveTargetApp(job: AiLabBuildJob) {
+    const apps = await this.apps.list();
+    if (job.appId) return apps.find((app) => app.id === job.appId) ?? null;
+    return (
+      apps.find((app) => app.taskId === job.taskId && app.conversationId === job.conversationId) ??
+      null
+    );
   }
 
   private async readGeneratedAppWithRetry(job: AiLabBuildJob): Promise<GeneratedAiLabApp> {

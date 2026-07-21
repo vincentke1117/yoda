@@ -7,6 +7,7 @@ import {
   Pin,
   PinOff,
   Plus,
+  Sparkles,
   Trash2,
 } from 'lucide-react';
 import React, { useState } from 'react';
@@ -18,9 +19,15 @@ import { useToast } from '@renderer/lib/hooks/use-toast';
 import { rpc } from '@renderer/lib/ipc';
 import { useNavigate } from '@renderer/lib/layout/navigation-provider';
 import { Button } from '@renderer/lib/ui/button';
+import { Textarea } from '@renderer/lib/ui/textarea';
 import { cn } from '@renderer/utils/utils';
 import { AI_LAB_APPS, type AiLabAppDefinition } from '../app-registry';
-import { useAiLabApps, useDeleteAiLabApp, useUpdateAiLabApp } from '../use-ai-lab';
+import {
+  useAiLabApps,
+  useDeleteAiLabApp,
+  useRefineAiLabApp,
+  useUpdateAiLabApp,
+} from '../use-ai-lab';
 import { UserAppFrame } from './user-app-frame';
 
 type AiLabViewProps = {
@@ -226,7 +233,10 @@ function UserAppHost({ app, onBack }: { app: AiLabUserApp; onBack: () => void })
   const { toast } = useToast();
   const updateApp = useUpdateAiLabApp();
   const deleteApp = useDeleteAiLabApp();
+  const refineApp = useRefineAiLabApp();
   const [isOpeningWindow, setIsOpeningWindow] = useState(false);
+  const [isRefining, setIsRefining] = useState(false);
+  const [refinement, setRefinement] = useState('');
 
   const openBuildTask = () => {
     if (!app.projectId || !app.taskId) return;
@@ -274,6 +284,23 @@ function UserAppHost({ app, onBack }: { app: AiLabUserApp; onBack: () => void })
     }
   };
 
+  const handleRefine = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const prompt = refinement.trim();
+    if (!prompt || refineApp.isPending) return;
+    try {
+      await refineApp.mutateAsync({ id: app.id, prompt });
+      setRefinement('');
+      setIsRefining(false);
+    } catch (error) {
+      toast({
+        title: t('aiLab.refineFailed'),
+        description: error instanceof Error ? error.message : String(error),
+        variant: 'destructive',
+      });
+    }
+  };
+
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-background">
       <header className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2">
@@ -285,6 +312,15 @@ function UserAppHost({ app, onBack }: { app: AiLabUserApp; onBack: () => void })
           <h1 className="truncate text-sm font-medium">{app.name}</h1>
           <p className="truncate text-[11px] text-foreground-muted">{app.description}</p>
         </div>
+        <Button
+          size="sm"
+          variant={isRefining ? 'secondary' : 'default'}
+          aria-expanded={isRefining}
+          onClick={() => setIsRefining((current) => !current)}
+        >
+          <Sparkles />
+          {t('aiLab.refine')}
+        </Button>
         <HeaderActionToolbar label={t('aiLab.appActions')}>
           <HeaderActionButton
             label={t('aiLab.openInWindow')}
@@ -317,6 +353,32 @@ function UserAppHost({ app, onBack }: { app: AiLabUserApp; onBack: () => void })
           </HeaderActionButton>
         </HeaderActionToolbar>
       </header>
+      {isRefining && (
+        <form
+          className="flex shrink-0 items-end gap-2 border-b border-border bg-background-secondary px-3 py-3 @max-md:flex-col @max-md:items-stretch"
+          onSubmit={(event) => void handleRefine(event)}
+        >
+          <div className="min-w-0 flex-1">
+            <label htmlFor={`refine-${app.id}`} className="mb-1 block text-xs font-medium">
+              {t('aiLab.refineTitle')}
+            </label>
+            <Textarea
+              id={`refine-${app.id}`}
+              rows={2}
+              maxLength={4_000}
+              autoFocus
+              value={refinement}
+              placeholder={t('aiLab.refinePlaceholder')}
+              disabled={refineApp.isPending}
+              onChange={(event) => setRefinement(event.target.value)}
+            />
+          </div>
+          <Button type="submit" disabled={!refinement.trim() || refineApp.isPending}>
+            {refineApp.isPending ? <Loader2 className="animate-spin" /> : <Sparkles />}
+            {refineApp.isPending ? t('aiLab.refining') : t('aiLab.applyRefinement')}
+          </Button>
+        </form>
+      )}
       <div className="min-h-0 flex-1 bg-background-secondary p-3 @max-md:p-0">
         <UserAppFrame app={app} className="@max-md:rounded-none @max-md:border-0" />
       </div>
