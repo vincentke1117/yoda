@@ -1,5 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { LogoGenerationInput, UpdateAiLabAppInput } from '@shared/ai-lab';
+import type {
+  AiLabUserApp,
+  LogoGenerationInput,
+  RefineAiLabAppInput,
+  UpdateAiLabAppInput,
+} from '@shared/ai-lab';
 import { rpc } from '@renderer/lib/ipc';
 
 export const aiLabQueryKeys = {
@@ -30,6 +35,20 @@ export function useDeleteAiLabApp() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => rpc.aiLab.deleteApp(id),
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: aiLabQueryKeys.apps }),
+  });
+}
+
+export function useRefineAiLabApp() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: RefineAiLabAppInput) => rpc.aiLab.refineApp(input),
+    onSuccess: (app) => {
+      queryClient.setQueryData<AiLabUserApp[]>(aiLabQueryKeys.apps, (current = []) => [
+        app,
+        ...current.filter((candidate) => candidate.id !== app.id),
+      ]);
+    },
     onSettled: () => void queryClient.invalidateQueries({ queryKey: aiLabQueryKeys.apps }),
   });
 }

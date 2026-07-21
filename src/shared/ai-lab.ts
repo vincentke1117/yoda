@@ -110,6 +110,11 @@ export type CreateAiLabAppInput = {
   systemPrompt?: string;
 };
 
+export type RefineAiLabAppInput = {
+  id: string;
+  prompt: string;
+};
+
 export type UpdateAiLabAppInput = {
   id: string;
   pinned: boolean;

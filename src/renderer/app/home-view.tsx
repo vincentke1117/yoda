@@ -1262,7 +1262,11 @@ export const HomeComposer = observer(function HomeComposer({
               description: error instanceof Error ? error.message : t('common.unknownError'),
             });
           });
-          goToTask(mounted.data.id, taskId);
+          navigate('library', { section: 'apps' });
+          onSubmitted?.({ kind: 'task', projectId: mounted.data.id, taskId });
+          toast.success(t('home.buildStarted'), {
+            description: t('home.buildStartedDescription'),
+          });
           resetComposer();
         } catch (error) {
           void rpc.aiLab.cancelBuildTask(taskId);

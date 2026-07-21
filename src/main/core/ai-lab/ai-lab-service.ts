@@ -16,6 +16,7 @@ import {
   type LogoGenerationStatus,
   type PrepareAiLabBuildTaskInput,
   type PrepareAiLabBuildTaskResult,
+  type RefineAiLabAppInput,
   type UpdateAiLabAppInput,
 } from '@shared/ai-lab';
 import {
@@ -26,17 +27,19 @@ import {
   type AiLabImageEditResult,
   type AiLabRegenerateImageInput,
 } from '@shared/ai-lab-bridge';
+import { aiLabAppUpdatedChannel } from '@shared/events/aiLabEvents';
 import { resolveCommandPath } from '@main/core/dependencies/probe';
 import { LocalExecutionContext } from '@main/core/execution-context/local-execution-context';
 import { maasService } from '@main/core/maas/maas-service';
 import { projectManager } from '@main/core/projects/project-manager';
 import { db } from '@main/db/client';
 import { aiLabGenerations } from '@main/db/schema';
+import { events } from '@main/lib/events';
 import { log } from '@main/lib/logger';
 import { telemetryService } from '@main/lib/telemetry';
 import { AiLabAppBuildRunner } from './app-build-runner';
 import { generateAiLabApp } from './app-generation';
-import { buildAppGenerationPrompt } from './app-generation-contract';
+import { buildAppGenerationPrompt, buildAppRefinementRequest } from './app-generation-contract';
 import {
   normalizeAiLabImageEditInput,
   toAiLabImageEditResult,
@@ -302,11 +305,48 @@ export class AiLabService {
     });
   }
 
+  async refineApp(input: RefineAiLabAppInput): Promise<AiLabUserApp> {
+    const refinement = input.prompt.trim();
+    if (!refinement) throw new Error('Describe what you want to change.');
+    if (refinement.length > 4_000) throw new Error('The requested change is too long.');
+    const current = await this.requireApp(input.id);
+    if (!current.projectId || !current.runtimeId) {
+      throw new Error('This app cannot be updated from its current source.');
+    }
+    if (current.runtimeId !== 'codex' && current.runtimeId !== 'claude') {
+      throw new Error('This app cannot be updated with the selected agent.');
+    }
+    const project = projectManager.getProject(current.projectId);
+    if (!project || !project.ctx.supportsLocalSpawn) {
+      throw new Error('The source project is not available for this update.');
+    }
+    const generated = await generateAiLabApp({
+      prompt: buildAppRefinementRequest({
+        originalPrompt: current.prompt,
+        currentHtml: current.html,
+        refinement,
+      }),
+      projectPath: project.repoPath,
+      runtimeId: current.runtimeId,
+      model: current.model,
+    });
+    const result = await this.getAppStore().replaceGenerated(current.id, generated);
+    if (result.changed) {
+      events.emit(aiLabAppUpdatedChannel, {
+        appId: result.app.id,
+        appName: result.app.name,
+      });
+    }
+    return result.app;
+  }
+
   async updateApp(input: UpdateAiLabAppInput): Promise<AiLabUserApp> {
     return this.getAppStore().update(input.id, { pinned: input.pinned });
   }
 
   async deleteApp(id: string): Promise<void> {
+    const appToDelete = await this.requireApp(id);
+    if (appToDelete.taskId) await this.getAppBuildRunner().cancel(appToDelete.taskId);
     await this.getAppStore().delete(id);
     try {
       const rows = await db

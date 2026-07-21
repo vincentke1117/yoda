@@ -4,6 +4,10 @@ import { dirname } from 'node:path';
 import type { AiLabUserApp } from '@shared/ai-lab';
 import { isValidRuntimeId } from '@shared/runtime-registry';
 
+type GeneratedAppUpdate = Pick<AiLabUserApp, 'name' | 'description' | 'html'> & {
+  prompt?: string;
+};
+
 export class AiLabAppStore {
   private mutationQueue: Promise<void> = Promise.resolve();
 
@@ -59,6 +63,32 @@ export class AiLabAppStore {
     });
   }
 
+  async replaceGenerated(
+    id: string,
+    update: GeneratedAppUpdate
+  ): Promise<{ app: AiLabUserApp; changed: boolean }> {
+    return this.enqueue(async () => {
+      const apps = await this.list();
+      const index = apps.findIndex((app) => app.id === id);
+      const current = apps[index];
+      if (!current) throw new Error('AI Lab app not found.');
+      const changed =
+        current.name !== update.name ||
+        current.description !== update.description ||
+        current.html !== update.html ||
+        (update.prompt !== undefined && current.prompt !== update.prompt);
+      if (!changed) return { app: current, changed: false };
+      const next: AiLabUserApp = {
+        ...current,
+        ...update,
+        updatedAt: nextTimestamp(current.updatedAt),
+      };
+      apps[index] = next;
+      await this.write(apps);
+      return { app: next, changed: true };
+    });
+  }
+
   async delete(id: string): Promise<void> {
     await this.enqueue(async () => {
       const apps = await this.list();
@@ -83,6 +113,14 @@ export class AiLabAppStore {
     await writeFile(tempPath, `${JSON.stringify(apps, null, 2)}\n`, 'utf8');
     await rename(tempPath, this.filePath);
   }
+}
+
+function nextTimestamp(previous: string): string {
+  const previousTime = Date.parse(previous);
+  const now = Date.now();
+  return new Date(
+    Number.isFinite(previousTime) ? Math.max(now, previousTime + 1) : now
+  ).toISOString();
 }
 
 function isStoredApp(value: unknown): value is AiLabUserApp {

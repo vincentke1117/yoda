@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildAppGenerationPrompt,
+  buildAppRefinementRequest,
   extractGeneratedAppFromTranscript,
   parseGeneratedAiLabApp,
 } from './app-generation-contract';
@@ -67,5 +68,17 @@ describe('AI Lab app generation', () => {
       description: 'A focused timer',
       html: '<!doctype html><html><body>Timer</body></html>',
     });
+  });
+
+  it('keeps the current app as context for a refinement', () => {
+    const prompt = buildAppRefinementRequest({
+      originalPrompt: 'Build a timer',
+      currentHtml: '<!doctype html><html><body>Timer</body></html>',
+      refinement: 'Add laps without losing saved settings',
+    });
+    expect(prompt).toContain('Build a timer');
+    expect(prompt).toContain('<body>Timer</body>');
+    expect(prompt).toContain('Add laps without losing saved settings');
+    expect(prompt).toContain('Preserve working behavior');
   });
 });
