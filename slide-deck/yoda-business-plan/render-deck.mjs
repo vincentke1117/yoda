@@ -11,7 +11,6 @@ function dataUri(filePath, mime) {
 }
 
 const yodaLogo = dataUri(path.join(deckDir, 'assets/yoda-logo.svg'), 'image/svg+xml');
-const yodaMark = dataUri(path.join(deckDir, 'assets/yoda-mark-dark.svg'), 'image/svg+xml');
 const shougongchuanLogo = dataUri(
   path.join(deckDir, 'assets/shougongchuan-logo.svg'),
   'image/svg+xml'
@@ -79,10 +78,9 @@ const slides = [
   {
     filename: '01-slide-cover.png',
     html: `<section class="slide">
-      <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;transform:translateY(-18px)">
-        <img src="${yodaMark}" alt="Yoda Logo" style="display:block;width:72px;height:72px">
-        <div style="margin-top:28px;font-size:64px;line-height:1;font-weight:760;letter-spacing:.04em;color:var(--deep)">Yoda</div>
-        <div style="margin-top:29px;font-size:31px;line-height:1.3;font-weight:620;letter-spacing:.01em;color:#303531">Agent 时代的集成委托环境</div>
+      <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;transform:translateY(-8px)">
+        <h1 style="font-size:64px;line-height:1.12;font-weight:760;letter-spacing:-.035em;text-align:center;color:var(--ink)">Agent 时代的集成委托环境</h1>
+        <img src="${yodaLogo}" alt="Yoda" style="display:block;width:250px;height:auto;margin-top:54px">
       </div>
     </section>`,
   },

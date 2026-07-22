@@ -52,10 +52,9 @@ Layout Rules:
 **Type**: Cover
 **Filename**: 01-slide-cover.png
 
-Headline: Yoda
-Sub-headline: Agent 时代的集成委托环境
-Visual: 图形 Logo、产品名与一句简介三层居中，不放置其他辅助信息。
-Layout: centered-brand-cover
+Headline: Agent 时代的集成委托环境
+Visual: 主标题放大居中，下方放置完整的 Yoda 横向 Logo，不放置其他辅助信息。
+Layout: centered-title-with-logo
 
 ---
 
