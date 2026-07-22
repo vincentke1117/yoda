@@ -42,11 +42,11 @@ const css = `
   .brand-lockup { display:flex; align-items:center; gap:12px; }
   .brand-lockup .brand-divider { width:1px; height:22px; background:#c6c8c3; }
   .brand-lockup .yoda-logo { display:block; width:98px; height:auto; }
-  .brand-lockup .shougongchuan-logo { display:block; width:70px; height:auto; }
+  .brand-lockup .shougongchuan-logo { display:block; width:100px; height:auto; }
   .brand-lockup.cover { gap:18px; }
   .brand-lockup.cover .brand-divider { height:32px; }
   .brand-lockup.cover .yoda-logo { width:142px; }
-  .brand-lockup.cover .shougongchuan-logo { width:104px; }
+  .brand-lockup.cover .shougongchuan-logo { width:144px; }
   .mini-brand { position:absolute; right:88px; top:62px; }
   .muted { color:var(--muted); }
   .deep { color:var(--deep); }
