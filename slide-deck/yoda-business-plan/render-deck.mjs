@@ -83,21 +83,15 @@ const slides = [
     filename: '01-slide-cover.png',
     html: `<section class="slide">
       ${brandLockup('cover')}
-      <div style="position:absolute;left:88px;top:220px;width:1010px">
-        <div style="font-size:22px;color:var(--deep);font-weight:750;margin-bottom:22px">INTEGRATED DELEGATION ENVIRONMENT</div>
-        <h1>Agent 时代的<br><span class="deep">集成委托环境</span></h1>
-        <p class="sub" style="margin-top:28px;font-size:30px">面向超级开发者与 AI 原生团队的开源桌面工作区</p>
+      <div style="position:absolute;left:88px;top:248px;width:1280px">
+        <div style="font-size:18px;color:var(--deep);font-weight:780;letter-spacing:.14em;margin-bottom:24px">INTEGRATED DELEGATION ENVIRONMENT</div>
+        <h1 style="font-size:88px;line-height:1.02;letter-spacing:-.052em">Agent 时代的<br><span class="deep">集成委托环境</span></h1>
+        <p class="sub" style="margin-top:32px;font-size:29px">面向超级开发者与 AI 原生团队的开源桌面工作区</p>
       </div>
-      <div style="position:absolute;right:90px;top:250px;width:330px;border-left:1px solid var(--grid);padding-left:34px">
-        ${['Intention', 'Delegation', 'Evidence', 'Delivery']
-          .map(
-            (item, index) =>
-              `<div style="display:grid;grid-template-columns:36px 1fr;align-items:center;margin-bottom:58px"><span style="font-size:14px;color:${index === 3 ? '#278258' : '#888'}">0${index + 1}</span><span style="font-size:25px;font-weight:700;color:${index === 3 ? '#173d2a' : '#111'}">${item}</span></div>`
-          )
-          .join('')}
+      <div style="position:absolute;left:88px;right:88px;bottom:58px;border-top:1px solid var(--grid);padding-top:22px;display:flex;align-items:center;justify-content:space-between">
+        <div style="font-size:15px;font-weight:760;letter-spacing:.14em;color:#535953">YODA BUSINESS PLAN</div>
+        <div style="font-size:16px;color:#737873">SEED ROUND · 2026.07</div>
       </div>
-      <div style="position:absolute;left:88px;bottom:60px;font-size:19px;font-weight:680">让人管理意图、委托、证据与交付，而不只是编辑代码</div>
-      <div style="position:absolute;right:90px;bottom:60px;color:#7a7e79;font-size:16px">融资版 BP · 2026.07</div>
     </section>`,
   },
   {

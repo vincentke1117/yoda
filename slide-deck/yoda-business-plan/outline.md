@@ -54,9 +54,8 @@ Layout Rules:
 
 Headline: Yoda｜Agent 时代的集成委托环境
 Sub-headline: 面向超级开发者与 AI 原生团队的开源桌面工作区
-Key line: 让人管理意图、委托、证据与交付，而不只是编辑代码
-Visual: 用一条细轨道连接 Intention → Delegation → Evidence → Delivery；右侧标注 Integrated Delegation Environment。
-Layout: title-hero
+Visual: Yoda × 手工川双品牌、核心定位与种子轮版本信息；用大面积留白建立专业感。
+Layout: minimal-title-cover
 
 ---
 
