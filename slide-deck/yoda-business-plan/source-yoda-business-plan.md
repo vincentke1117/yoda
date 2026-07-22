@@ -14,3 +14,10 @@
 - `/Users/mark/lovstudio/products/yoda/demo.png`
 - `/Users/mark/lovstudio/vault/profile/album/work/2026-04-26-手工川是如何使用AI的.jpg`
 - `/Users/mark/lovstudio/vault/profile/album/work/2026-05-22-手工川 AI 创造营 EP03.JPG`
+
+品牌与联系素材：
+
+- `src/assets/images/yoda/yoda_logo.svg`
+- `/Users/mark/lovstudio/branding/手工川 - 横向/手工川-logo-orange.svg`
+- `/Users/mark/lovstudio/branding/手工川 - 二维码/qrcode_for_gh_e3ebf1f03e05_1280.jpg`
+- `https://yoda.lovstudio.ai`（Yoda 官网二维码）

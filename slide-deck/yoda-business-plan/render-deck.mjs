@@ -5,13 +5,21 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 
 const deckDir = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(deckDir, '../..');
 
 function dataUri(filePath, mime) {
   return `data:${mime};base64,${fs.readFileSync(filePath).toString('base64')}`;
 }
 
-const logo = dataUri(path.join(repoRoot, 'docs/public/yoda-mark.svg'), 'image/svg+xml');
+const yodaLogo = dataUri(path.join(deckDir, 'assets/yoda-logo.svg'), 'image/svg+xml');
+const shougongchuanLogo = dataUri(
+  path.join(deckDir, 'assets/shougongchuan-logo.svg'),
+  'image/svg+xml'
+);
+const yodaWebsiteQr = dataUri(path.join(deckDir, 'assets/yoda-website-qr.png'), 'image/png');
+const shougongchuanOfficialAccountQr = dataUri(
+  path.join(deckDir, 'assets/shougongchuan-official-account-qr.jpg'),
+  'image/jpeg'
+);
 const taskScreenshot = dataUri(path.join(deckDir, 'assets/yoda-tasks.jpg'), 'image/jpeg');
 const featureScreenshot = dataUri(path.join(deckDir, 'assets/yoda-feature.jpg'), 'image/jpeg');
 const founderPhoto = dataUri(
@@ -31,10 +39,15 @@ const css = `
   h2 { max-width:1320px; font-size:56px; line-height:1.12; letter-spacing:-.035em; font-weight:770; }
   .sub { margin-top:16px; max-width:1180px; color:#424642; font-size:26px; line-height:1.42; font-weight:510; }
   .eyebrow { margin-bottom:16px; color:var(--deep); font-size:16px; font-weight:780; letter-spacing:.16em; text-transform:uppercase; }
-  .brand { display:flex; align-items:center; gap:13px; color:#506057; font-size:19px; font-weight:760; letter-spacing:.15em; }
-  .brand img { width:29px; height:29px; }
-  .mini-brand { position:absolute; right:88px; top:64px; display:flex; align-items:center; gap:9px; color:#7a817c; font-size:14px; font-weight:730; letter-spacing:.12em; }
-  .mini-brand img { width:20px; height:20px; }
+  .brand-lockup { display:flex; align-items:center; gap:12px; }
+  .brand-lockup .brand-divider { width:1px; height:22px; background:#c6c8c3; }
+  .brand-lockup .yoda-logo { display:block; width:98px; height:auto; }
+  .brand-lockup .shougongchuan-logo { display:block; width:70px; height:auto; }
+  .brand-lockup.cover { gap:18px; }
+  .brand-lockup.cover .brand-divider { height:32px; }
+  .brand-lockup.cover .yoda-logo { width:142px; }
+  .brand-lockup.cover .shougongchuan-logo { width:104px; }
+  .mini-brand { position:absolute; right:88px; top:62px; }
   .muted { color:var(--muted); }
   .deep { color:var(--deep); }
   .green { color:#278258; }
@@ -57,19 +70,19 @@ function doc(content) {
   return `<!doctype html><html><head><meta charset="utf-8"><style>${css}</style></head><body>${content}</body></html>`;
 }
 
-function mark(size = 54) {
-  return `<img src="${logo}" style="width:${size}px;height:${size}px" alt="Yoda">`;
+function brandLockup(variant = '') {
+  return `<div class="brand-lockup ${variant}"><img class="yoda-logo" src="${yodaLogo}" alt="Yoda"><span class="brand-divider"></span><img class="shougongchuan-logo" src="${shougongchuanLogo}" alt="手工川"></div>`;
 }
 
 function miniBrand() {
-  return `<div class="mini-brand">${mark(20)} YODA</div>`;
+  return `<div class="mini-brand">${brandLockup()}</div>`;
 }
 
 const slides = [
   {
     filename: '01-slide-cover.png',
     html: `<section class="slide">
-      <div class="brand">${mark(34)} YODA</div>
+      ${brandLockup('cover')}
       <div style="position:absolute;left:88px;top:220px;width:1010px">
         <div style="font-size:22px;color:var(--deep);font-weight:750;margin-bottom:22px">INTEGRATED DELEGATION ENVIRONMENT</div>
         <h1>Agent 时代的<br><span class="deep">集成委托环境</span></h1>
@@ -433,17 +446,17 @@ const slides = [
     html: `<section class="slide">${miniBrand()}
       <div class="eyebrow">Financing</div><h2 style="font-size:52px">融资 200 万元，<br>验证“集成委托环境”能否形成可重复增长</h2>
       <p class="sub">或 30 万美元，出让 10% 股权；购买 18–24 个月验证窗口</p>
-      <div style="position:absolute;left:90px;right:90px;top:315px;bottom:70px;display:grid;grid-template-columns:43% 57%;gap:75px">
-        <div style="display:grid;grid-template-columns:260px 1fr;align-items:center">
+      <div style="position:absolute;left:90px;right:90px;top:315px;bottom:70px;display:grid;grid-template-columns:34% 45% 21%;gap:42px">
+        <div style="display:grid;grid-template-columns:235px 1fr;align-items:center">
           <div style="width:250px;height:250px;border-radius:50%;background:conic-gradient(var(--deep) 0 60%,var(--green) 60% 90%,#b6b7b2 90% 100%);position:relative"><div style="position:absolute;inset:48px;border-radius:50%;background:var(--paper);display:flex;flex-direction:column;align-items:center;justify-content:center"><div class="metric-sm" style="font-size:65px">200</div><div style="font-size:20px;font-weight:700">万元</div></div></div>
-          <div style="padding-left:28px">${[
+          <div style="padding-left:24px">${[
             ['60%', '#173d2a', '技术研发与产品体验'],
             ['30%', '#5dc98f', '市场推广'],
             ['10%', '#b6b7b2', '基础设施与运营'],
           ]
             .map(
               ([v, c, l]) =>
-                `<div style="display:grid;grid-template-columns:28px 58px 1fr;gap:10px;align-items:center;margin:22px 0"><span style="width:16px;height:16px;background:${c}"></span><b style="font-size:19px">${v}</b><span style="font-size:18px;color:var(--muted)">${l}</span></div>`
+                `<div style="display:grid;grid-template-columns:22px 52px 1fr;gap:8px;align-items:center;margin:22px 0"><span style="width:14px;height:14px;background:${c}"></span><b style="font-size:18px">${v}</b><span style="font-size:16px;line-height:1.3;color:var(--muted)">${l}</span></div>`
             )
             .join('')}</div>
         </div>
@@ -457,9 +470,19 @@ const slides = [
           ]
             .map(
               ([n, t, d], i) =>
-                `<div style="display:grid;grid-template-columns:44px 170px 1fr 24px;gap:12px;align-items:center;padding:16px 0;border-bottom:1px solid var(--grid)"><span style="font-size:14px;color:#888">${n}</span><b style="font-size:21px">${t}</b><span style="font-size:18px;color:var(--muted)">${d}</span><span style="width:14px;height:14px;border-radius:50%;border:2px solid ${i === 0 ? '#173d2a' : '#a9aaa5'}"></span></div>`
+                `<div style="display:grid;grid-template-columns:34px 136px 1fr 18px;gap:10px;align-items:center;padding:16px 0;border-bottom:1px solid var(--grid)"><span style="font-size:13px;color:#888">${n}</span><b style="font-size:19px">${t}</b><span style="font-size:16px;line-height:1.3;color:var(--muted)">${d}</span><span style="width:13px;height:13px;border-radius:50%;border:2px solid ${i === 0 ? '#173d2a' : '#a9aaa5'}"></span></div>`
             )
             .join('')}
+        </div>
+        <div style="border-left:1px solid var(--grid);padding-left:34px;display:grid;grid-template-rows:1fr 1fr;gap:20px;align-items:center">
+          <div style="display:grid;grid-template-columns:150px 1fr;gap:16px;align-items:center">
+            <img src="${yodaWebsiteQr}" alt="Yoda 官网二维码" style="display:block;width:150px;height:150px;background:white;border:1px solid var(--grid);padding:6px">
+            <div><div style="font-size:20px;font-weight:750">Yoda 官网</div><div style="margin-top:7px;font-size:15px;line-height:1.4;color:var(--muted)">产品、文档<br>与下载</div></div>
+          </div>
+          <div style="display:grid;grid-template-columns:150px 1fr;gap:16px;align-items:center">
+            <img src="${shougongchuanOfficialAccountQr}" alt="手工川公众号二维码" style="display:block;width:150px;height:150px;object-fit:cover;background:white;border:1px solid var(--grid);padding:6px">
+            <div><div style="font-size:20px;font-weight:750">手工川</div><div style="margin-top:7px;font-size:15px;line-height:1.4;color:var(--muted)">公众号<br>联系与更新</div></div>
+          </div>
         </div>
       </div>
       <div style="position:absolute;left:90px;bottom:28px;font-size:16px;font-weight:760;letter-spacing:.08em">YODA.LOVSTUDIO.AI</div>

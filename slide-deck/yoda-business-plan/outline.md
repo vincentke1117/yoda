@@ -278,4 +278,5 @@ Chart: 资金用途环形图
 - 30% 市场推广
 - 10% 基础设施与运营
 Milestones: 留存成立 / 个人付费成立 / 机构年约成立 / 增长效率可测量
-Layout: closing-ask
+Visual: 资金用途环形图 + 四项验证问题 + Yoda 官网与手工川公众号双二维码。
+Layout: closing-ask-with-contact
