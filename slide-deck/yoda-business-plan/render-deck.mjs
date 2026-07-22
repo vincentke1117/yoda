@@ -446,23 +446,27 @@ const slides = [
     html: `<section class="slide">${miniBrand()}
       <div class="eyebrow">Financing</div><h2 style="font-size:52px">融资 200 万元，<br>验证“集成委托环境”能否形成可重复增长</h2>
       <p class="sub">或 30 万美元，出让 10% 股权；购买 18–24 个月验证窗口</p>
-      <div style="position:absolute;left:90px;right:90px;top:315px;bottom:70px;display:grid;grid-template-columns:34% 45% 21%;gap:42px">
-        <div style="display:grid;grid-template-columns:235px 1fr;align-items:center">
-          <div style="width:250px;height:250px;border-radius:50%;background:conic-gradient(var(--deep) 0 60%,var(--green) 60% 90%,#b6b7b2 90% 100%);position:relative"><div style="position:absolute;inset:48px;border-radius:50%;background:var(--paper);display:flex;flex-direction:column;align-items:center;justify-content:center"><div class="metric-sm" style="font-size:65px">200</div><div style="font-size:20px;font-weight:700">万元</div></div></div>
-          <div style="padding-left:24px">${[
-            ['60%', '#173d2a', '技术研发与产品体验'],
-            ['30%', '#5dc98f', '市场推广'],
-            ['10%', '#b6b7b2', '基础设施与运营'],
-          ]
-            .map(
-              ([v, c, l]) =>
-                `<div style="display:grid;grid-template-columns:22px 52px 1fr;gap:8px;align-items:center;margin:22px 0"><span style="width:14px;height:14px;background:${c}"></span><b style="font-size:18px">${v}</b><span style="font-size:16px;line-height:1.3;color:var(--muted)">${l}</span></div>`
-            )
-            .join('')}</div>
+      <div style="position:absolute;left:90px;right:90px;top:315px;bottom:58px;display:grid;grid-template-columns:35% 65%;gap:70px">
+        <div style="border-top:1px solid var(--grid);padding-top:22px">
+          <div style="display:flex;justify-content:space-between;align-items:center;font-size:17px;color:var(--muted)"><span>资金用途</span><span>18–24 个月验证窗口</span></div>
+          <div style="display:grid;grid-template-columns:265px 1fr;align-items:center;margin-top:38px">
+            <div style="width:248px;height:248px;border-radius:50%;background:conic-gradient(var(--deep) 0 60%,var(--green) 60% 90%,#b6b7b2 90% 100%);position:relative"><div style="position:absolute;inset:48px;border-radius:50%;background:var(--paper);display:flex;flex-direction:column;align-items:center;justify-content:center"><div class="metric-sm" style="font-size:65px">200</div><div style="font-size:20px;font-weight:700">万元</div></div></div>
+            <div>${[
+              ['60%', '#173d2a', '技术研发与产品体验'],
+              ['30%', '#5dc98f', '市场推广'],
+              ['10%', '#b6b7b2', '基础设施与运营'],
+            ]
+              .map(
+                ([v, c, l]) =>
+                  `<div style="display:grid;grid-template-columns:22px 52px 1fr;gap:8px;align-items:center;margin:22px 0"><span style="width:14px;height:14px;background:${c}"></span><b style="font-size:18px">${v}</b><span style="font-size:17px;line-height:1.35;color:var(--muted)">${l}</span></div>`
+              )
+              .join('')}</div>
+          </div>
+          <div style="margin-top:36px;border-top:1px solid var(--grid);padding-top:18px;font-size:18px;line-height:1.45;font-weight:680;color:var(--deep)">目标不是买时间，而是验证一套可重复的增长模型。</div>
         </div>
-        <div style="border-top:1px solid var(--grid)">
-          <div style="font-size:18px;color:#777;margin:22px 0 12px">本轮资金要回答四个问题</div>
-          ${[
+        <div style="border-top:1px solid var(--grid);padding-top:22px">
+          <div style="font-size:17px;color:var(--muted)">本轮资金要回答四个问题</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;margin-top:14px;border-top:1px solid var(--grid)">${[
             ['01', '留存成立', '用户是否持续把真实任务交给 Yoda'],
             ['02', '个人付费成立', 'Relay / Pro 是否形成经常性收入'],
             ['03', '机构年约成立', '教育与团队产品能否标准化交付'],
@@ -470,22 +474,21 @@ const slides = [
           ]
             .map(
               ([n, t, d], i) =>
-                `<div style="display:grid;grid-template-columns:34px 136px 1fr 18px;gap:10px;align-items:center;padding:16px 0;border-bottom:1px solid var(--grid)"><span style="font-size:13px;color:#888">${n}</span><b style="font-size:19px">${t}</b><span style="font-size:16px;line-height:1.3;color:var(--muted)">${d}</span><span style="width:13px;height:13px;border-radius:50%;border:2px solid ${i === 0 ? '#173d2a' : '#a9aaa5'}"></span></div>`
+                `<div style="min-height:100px;padding:${i % 2 === 0 ? '18px 28px 18px 0' : '18px 0 18px 28px'};border-bottom:1px solid var(--grid);${i % 2 === 1 ? 'border-left:1px solid var(--grid);' : ''}"><div style="display:flex;align-items:baseline;gap:14px"><span style="font-size:13px;color:#888">${n}</span><b style="font-size:21px">${t}</b></div><div style="margin:8px 0 0 36px;font-size:16px;line-height:1.35;color:var(--muted)">${d}</div></div>`
             )
-            .join('')}
-        </div>
-        <div style="border-left:1px solid var(--grid);padding-left:34px;display:grid;grid-template-rows:1fr 1fr;gap:20px;align-items:center">
-          <div style="display:grid;grid-template-columns:150px 1fr;gap:16px;align-items:center">
-            <img src="${yodaWebsiteQr}" alt="Yoda 官网二维码" style="display:block;width:150px;height:150px;background:white;border:1px solid var(--grid);padding:6px">
-            <div><div style="font-size:20px;font-weight:750">Yoda 官网</div><div style="margin-top:7px;font-size:15px;line-height:1.4;color:var(--muted)">产品、文档<br>与下载</div></div>
-          </div>
-          <div style="display:grid;grid-template-columns:150px 1fr;gap:16px;align-items:center">
-            <img src="${shougongchuanOfficialAccountQr}" alt="手工川公众号二维码" style="display:block;width:150px;height:150px;object-fit:cover;background:white;border:1px solid var(--grid);padding:6px">
-            <div><div style="font-size:20px;font-weight:750">手工川</div><div style="margin-top:7px;font-size:15px;line-height:1.4;color:var(--muted)">公众号<br>联系与更新</div></div>
+            .join('')}</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:38px;margin-top:28px;padding-top:24px;border-top:1px solid var(--grid)">
+            <div style="display:grid;grid-template-columns:150px 1fr;gap:20px;align-items:center">
+              <img src="${yodaWebsiteQr}" alt="Yoda 官网二维码" style="display:block;width:150px;height:150px;background:white;border:1px solid var(--grid);padding:6px">
+              <div><div style="font-size:21px;font-weight:750">Yoda 官网</div><div style="margin-top:8px;font-size:16px;line-height:1.45;color:var(--muted)">产品、文档与下载<br>yoda.lovstudio.ai</div></div>
+            </div>
+            <div style="display:grid;grid-template-columns:150px 1fr;gap:20px;align-items:center">
+              <img src="${shougongchuanOfficialAccountQr}" alt="手工川公众号二维码" style="display:block;width:150px;height:150px;object-fit:cover;background:white;border:1px solid var(--grid);padding:6px">
+              <div><div style="font-size:21px;font-weight:750">手工川公众号</div><div style="margin-top:8px;font-size:16px;line-height:1.45;color:var(--muted)">项目动态、文章<br>与持续联系</div></div>
+            </div>
           </div>
         </div>
       </div>
-      <div style="position:absolute;left:90px;bottom:28px;font-size:16px;font-weight:760;letter-spacing:.08em">YODA.LOVSTUDIO.AI</div>
     </section>`,
   },
 ];
