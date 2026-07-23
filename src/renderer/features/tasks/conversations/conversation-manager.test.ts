@@ -237,10 +237,26 @@ describe('ConversationManagerStore', () => {
       'task-1',
       'conversation-1',
       { cols: 120, rows: 30 },
+      undefined,
       undefined
     );
     expect(mocks.ptyReconnectMock).toHaveBeenCalled();
     expect(mocks.ptyResizeMock).toHaveBeenCalledWith('project-1:task-1:conversation-1', 120, 30);
+  });
+
+  it('passes a newly installed skill when reloading the current session', async () => {
+    const store = new ConversationManagerStore('project-1', 'task-1', [conversation]);
+
+    await store.restartConversation('conversation-1', undefined, undefined, 'skill:local:new');
+
+    expect(mocks.restartConversationMock).toHaveBeenCalledWith(
+      'project-1',
+      'task-1',
+      'conversation-1',
+      undefined,
+      undefined,
+      'skill:local:new'
+    );
   });
 
   it('refreshes loaded conversations when ensuring an externally added conversation', async () => {

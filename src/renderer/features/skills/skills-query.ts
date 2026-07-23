@@ -1,0 +1,10 @@
+import type { CatalogIndex } from '@shared/skills/types';
+import { rpc } from '@renderer/lib/ipc';
+
+export const skillsCatalogQueryKey = ['skills', 'catalog'] as const;
+
+export async function fetchSkillsCatalog(): Promise<CatalogIndex> {
+  const result = await rpc.skills.getCatalog();
+  if (result.success && result.data) return result.data;
+  throw new Error(result.error ?? 'Failed to load catalog');
+}

@@ -527,7 +527,8 @@ export class ConversationManagerStore {
   async restartConversation(
     conversationId: string,
     initialSize?: { cols: number; rows: number },
-    tmuxOverride?: boolean
+    tmuxOverride?: boolean,
+    enableSkillKey?: string
   ): Promise<void> {
     const store = this.conversations.get(conversationId);
     if (!store) return;
@@ -542,7 +543,8 @@ export class ConversationManagerStore {
         this.taskId,
         conversationId,
         effectiveSize,
-        tmuxOverride
+        tmuxOverride,
+        enableSkillKey
       );
       store.setSessionExited(false);
       await store.session.reconnect();

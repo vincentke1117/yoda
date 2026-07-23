@@ -8,6 +8,7 @@ import { skillFamilyKey } from '@shared/skills/grouping';
 import type {
   CatalogIndex,
   CatalogSkill,
+  ClawHubSkillSearchResult,
   DetectedAgent,
   SkillCatalogSource,
   SkillFileSnapshot,
@@ -24,6 +25,12 @@ import {
 import { log } from '@main/lib/logger';
 import bundledCatalog from './bundled-catalog.json';
 import {
+  clawHubSkillUrl,
+  clawHubSourceKey,
+  downloadClawHubSkill,
+  searchClawHubSkills,
+} from './clawhub-client';
+import {
   auditSkillDirectory,
   downloadGitHubSkillDirectory,
   makeSkillKey,
@@ -33,6 +40,7 @@ import {
 } from './skill-assets';
 
 const SKILLS_ROOT = path.join(os.homedir(), '.agentskills');
+const SHARED_AGENT_SKILLS_ROOT = path.join(os.homedir(), '.agents', 'skills');
 const YODA_META = path.join(SKILLS_ROOT, '.yoda');
 const CATALOG_INDEX_PATH = path.join(YODA_META, 'catalog-index.json');
 const SKILL_MD_FILENAME = 'SKILL.md';
@@ -136,6 +144,7 @@ export class SkillsService {
 
   async initialize(): Promise<void> {
     await fs.promises.mkdir(SKILLS_ROOT, { recursive: true });
+    await fs.promises.mkdir(SHARED_AGENT_SKILLS_ROOT, { recursive: true });
     await fs.promises.mkdir(YODA_META, { recursive: true });
   }
 
@@ -333,7 +342,7 @@ export class SkillsService {
         const manifest = await readManagedSkillManifest(entry.skillDir);
         // Direct children of ~/.agentskills are Yoda's managed namespace. A manifest
         // links catalog provenance; legacy/local Yoda skills remain manageable without one.
-        const managed = this.isYodaManagedSkillPath(entry.skillDir);
+        const managed = await this.isYodaOwnedSkillPath(entry.skillDir);
         const scope: Exclude<SkillScope, 'catalog'> = managed
           ? 'managed'
           : entry.pluginScoped ||
@@ -518,13 +527,91 @@ export class SkillsService {
     }
   }
 
+  async searchClawHub(query: string, limit?: number): Promise<ClawHubSkillSearchResult[]> {
+    return searchClawHubSkills(query, limit);
+  }
+
+  async installClawHubSkill(slug: string, ownerHandle: string): Promise<CatalogSkill> {
+    await this.initialize();
+    if (!isValidSkillName(slug)) {
+      throw new Error(`ClawHub returned an invalid skill slug: ${slug}`);
+    }
+    if (!ownerHandle.trim()) throw new Error('ClawHub publisher is required');
+
+    const catalog = await this.getCatalogIndex();
+    const conflictingSkill = catalog.skills.find((skill) => skill.installed && skill.id === slug);
+    if (conflictingSkill) {
+      throw new Error(
+        `Cannot install "${slug}": a skill with the same runtime name is already installed at ${conflictingSkill.localPath ?? 'another location'}.`
+      );
+    }
+
+    const sourceKey = clawHubSourceKey(ownerHandle, slug);
+    const sourceUrl = clawHubSkillUrl(ownerHandle, slug);
+    const skillDir = path.join(SHARED_AGENT_SKILLS_ROOT, slug);
+    const tmpDir = path.join(
+      SHARED_AGENT_SKILLS_ROOT,
+      `.yoda-${slug}.tmp-${Date.now()}-${process.pid}`
+    );
+    try {
+      try {
+        await fs.promises.lstat(skillDir);
+        throw new Error(
+          `Cannot install "${slug}": ${skillDir} already exists. Resolve the same-name skill first.`
+        );
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      }
+
+      await fs.promises.mkdir(tmpDir, { recursive: true });
+      await downloadClawHubSkill({ slug, ownerHandle, targetDir: tmpDir });
+      const content = await fs.promises.readFile(path.join(tmpDir, SKILL_MD_FILENAME), 'utf8');
+      const parsed = parseFrontmatter(content);
+      const validationIssues = validateSkillFrontmatter(parsed.frontmatter, {
+        skillFilePath: path.join(skillDir, SKILL_MD_FILENAME),
+        hasFrontmatter: parsed.hasFrontmatter,
+        unknownFields: parsed.unknownFields,
+      });
+      if (validationIssues.some((issue) => issue.severity === 'error')) {
+        throw new Error(
+          `Skill package is invalid: ${validationIssues
+            .filter((issue) => issue.severity === 'error')
+            .map((issue) => issue.message)
+            .join('; ')}`
+        );
+      }
+      await auditSkillDirectory(tmpDir, parsed.frontmatter);
+
+      await writeManagedSkillManifest(tmpDir, {
+        schemaVersion: 1,
+        sourceKey,
+        sourceUrl,
+        installedAt: new Date().toISOString(),
+      });
+      await fs.promises.rename(tmpDir, skillDir);
+      await this.syncToAgents(slug, skillDir);
+      this.invalidateCaches();
+
+      const installed = await this.buildLocalSkill(slug, skillDir, content, {
+        managed: true,
+        scope: 'managed',
+        runtimeIds: [],
+        sourceKey,
+      });
+      return { ...installed, sourceUrl };
+    } catch (error) {
+      await fs.promises.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+      throw error;
+    }
+  }
+
   async uninstallSkill(skillKey: string): Promise<void> {
     const catalog = await this.getCatalogIndex();
     const skill = this.findSkill(catalog.skills, skillKey);
     if (!skill?.installed || !skill.localPath) {
       throw new Error(`Skill "${skillKey}" is not installed`);
     }
-    if (!skill.managed || !this.isYodaManagedSkillPath(skill.localPath)) {
+    if (!skill.managed || !(await this.isYodaOwnedSkillPath(skill.localPath))) {
       throw new Error(
         `Yoda does not own this external installation. Remove it from ${skill.localPath}.`
       );
@@ -713,8 +800,8 @@ export class SkillsService {
         await this.assertMissingFile(activePath, 'active skill file');
         await fs.promises.rename(disabledPath, activePath);
       }
-      if (this.isYodaManagedSkillPath(skill.localPath)) {
-        await this.syncToAgents(skill.id);
+      if (await this.isYodaOwnedSkillPath(skill.localPath)) {
+        await this.syncToAgents(skill.id, skill.localPath);
       }
     }
 
@@ -724,8 +811,10 @@ export class SkillsService {
     return updated;
   }
 
-  async syncToAgents(skillId: string): Promise<void> {
-    const skillDir = path.join(SKILLS_ROOT, skillId);
+  async syncToAgents(
+    skillId: string,
+    skillDir: string = path.join(SKILLS_ROOT, skillId)
+  ): Promise<void> {
     for (const target of agentTargets) {
       try {
         // Only sync if the agent's config dir exists (agent is installed)
@@ -747,7 +836,7 @@ export class SkillsService {
           }
           const linkTarget = await fs.promises.readlink(targetDir);
           const resolved = path.resolve(path.dirname(targetDir), linkTarget);
-          if (!isPathInside(SKILLS_ROOT, resolved)) {
+          if (!(await this.isYodaOwnedSkillPath(resolved))) {
             log.warn(`Skipping skill sync: unrelated symlink already exists at ${targetDir}`);
             continue;
           }
@@ -784,7 +873,7 @@ export class SkillsService {
       if (!stat.isSymbolicLink()) return;
       const linkTarget = await fs.promises.readlink(targetDir);
       const resolved = path.resolve(path.dirname(targetDir), linkTarget);
-      if (isPathInside(SKILLS_ROOT, resolved)) await fs.promises.unlink(targetDir);
+      if (await this.isYodaOwnedSkillPath(resolved)) await fs.promises.unlink(targetDir);
     } catch {
       // Missing or user-inaccessible paths are left untouched.
     }
@@ -971,6 +1060,14 @@ export class SkillsService {
 
   private isYodaManagedSkillPath(skillPath: string): boolean {
     return isPathInside(SKILLS_ROOT, skillPath) && !isPathInside(YODA_META, skillPath);
+  }
+
+  private async isYodaOwnedSkillPath(skillPath: string): Promise<boolean> {
+    if (this.isYodaManagedSkillPath(skillPath)) return true;
+    return (
+      isPathInside(SHARED_AGENT_SKILLS_ROOT, skillPath) &&
+      (await readManagedSkillManifest(skillPath)) !== null
+    );
   }
 
   private loadBundledCatalog(): CatalogIndex {

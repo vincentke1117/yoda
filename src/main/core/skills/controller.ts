@@ -73,6 +73,30 @@ export const skillsController = createRPCController({
     }
   },
 
+  searchClawHub: async (args: { query: string; limit?: number }) => {
+    try {
+      return {
+        success: true,
+        data: await skillsService.searchClawHub(args.query, args.limit),
+      };
+    } catch (error) {
+      log.error('Failed to search ClawHub:', error);
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  },
+
+  installClawHub: async (args: { slug: string; ownerHandle: string }) => {
+    try {
+      return {
+        success: true,
+        data: await skillsService.installClawHubSkill(args.slug, args.ownerHandle),
+      };
+    } catch (error) {
+      log.error('Failed to install ClawHub skill:', error);
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  },
+
   uninstall: async (args: { skillKey: string }) => {
     try {
       await skillsService.uninstallSkill(args.skillKey);

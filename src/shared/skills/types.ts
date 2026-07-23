@@ -139,6 +139,18 @@ export interface CatalogIndex {
   skills: CatalogSkill[];
 }
 
+export interface ClawHubSkillSearchResult {
+  source: 'clawhub';
+  slug: string;
+  displayName: string;
+  description: string;
+  ownerHandle: string;
+  ownerDisplayName?: string;
+  version?: string;
+  downloads?: number;
+  sourceUrl: string;
+}
+
 /**
  * Agent-authored selection before paths and runtime capabilities are resolved.
  * When both lists are empty, callers normalize the profile to no restriction.
@@ -157,7 +169,7 @@ export interface SkillSessionEntry {
   scope: Exclude<SkillScope, 'catalog'>;
 }
 
-/** Immutable snapshot persisted with a conversation and reused on resume. */
+/** Snapshot persisted with a conversation and reused until skills are explicitly reloaded. */
 export interface SkillSessionPolicy {
   source: 'agent-profile';
   /** Present on explicit Agent allowlists, including an allowlist that resolves to zero entries. */

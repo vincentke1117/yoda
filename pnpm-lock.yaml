@@ -11,6 +11,9 @@ importers:
 
   .:
     dependencies:
+      '@electron-internal/extract-zip':
+        specifier: 1.0.4
+        version: 1.0.4
       '@parcel/watcher':
         specifier: ^2.5.6
         version: 2.5.6

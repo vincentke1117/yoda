@@ -1,8 +1,35 @@
 import { and, eq } from 'drizzle-orm';
+import type { Conversation } from '@shared/conversations';
+import { skillsService } from '@main/core/skills/SkillsService';
 import { db } from '@main/db/client';
 import { conversations } from '@main/db/schema';
 import { resolveTask } from '../projects/utils';
+import { skillSelectionForReload } from './restart-skill-policy';
+import type { ConversationConfig } from './types';
 import { mapConversationRowToConversation } from './utils';
+
+async function refreshSkillPolicy(
+  conversation: Conversation,
+  rawConfig: string | null,
+  skillKey: string,
+  taskPath: string
+): Promise<Conversation> {
+  const config: ConversationConfig = rawConfig ? JSON.parse(rawConfig) : {};
+  const selection = skillSelectionForReload(config.skillPolicy, skillKey);
+  if (!selection) return conversation;
+
+  const skillPolicy = await skillsService.resolveSessionPolicy(
+    selection,
+    taskPath,
+    conversation.runtimeId
+  );
+  config.skillPolicy = skillPolicy;
+  await db
+    .update(conversations)
+    .set({ config: JSON.stringify(config) })
+    .where(eq(conversations.id, conversation.id));
+  return { ...conversation, skillPolicy };
+}
 
 export async function restartConversation(
   projectId: string,
@@ -10,7 +37,9 @@ export async function restartConversation(
   conversationId: string,
   initialSize?: { cols: number; rows: number },
   /** Override tmux for the restarted session only; omit to keep the task default. */
-  tmuxOverride?: boolean
+  tmuxOverride?: boolean,
+  /** Add a newly installed skill to an explicit session allowlist before restarting. */
+  enableSkillKey?: string
 ): Promise<void> {
   const [row] = await db
     .select()
@@ -33,7 +62,15 @@ export async function restartConversation(
     throw new Error(`Task not provisioned: ${taskId}`);
   }
 
-  const conversation = mapConversationRowToConversation(row, true);
+  let conversation = mapConversationRowToConversation(row, true);
+  if (enableSkillKey) {
+    conversation = await refreshSkillPolicy(
+      conversation,
+      row.config,
+      enableSkillKey,
+      task.conversations.taskPath
+    );
+  }
   await task.conversations.stopSession(conversationId);
   await task.conversations.startSession(conversation, initialSize, true, undefined, tmuxOverride);
 }

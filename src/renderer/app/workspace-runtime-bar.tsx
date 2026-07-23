@@ -27,6 +27,7 @@ import { YODA_ACCOUNT_USAGE_DOC_URL } from '@shared/urls';
 import { MaasGlobalSelector } from '@renderer/features/maas/components/MaasGlobalSelector';
 import { useMaasGlobalBinding } from '@renderer/features/maas/useMaas';
 import { useAppSettingsKey } from '@renderer/features/settings/use-app-settings-key';
+import { SkillQuickSearchPopover } from '@renderer/features/skills/components/SkillQuickSearchPopover';
 import { useTaskStats } from '@renderer/features/tasks/hooks/useTaskStats';
 import {
   resolveSessionPrompts,
@@ -79,13 +80,13 @@ export const WorkspaceRuntimeBar = observer(function WorkspaceRuntimeBar() {
   const [isCompacting, setIsCompacting] = useState(false);
   const [isResettingAccountUsage, setIsResettingAccountUsage] = useState(false);
   const [isResourcePopoverOpen, setIsResourcePopoverOpen] = useState(false);
+  const [isSkillPopoverOpen, setIsSkillPopoverOpen] = useState(false);
   const [isCleaningWorktrees, setIsCleaningWorktrees] = useState(false);
   const [sessionPromptCount, setSessionPromptCount] = useState<{
     conversationId: string;
     count: number;
   } | null>(null);
   const route = appState.navigation.currentViewId;
-  const skillActive = route === 'skills' || route === 'skill' || route === 'skillCompare';
   const params = appState.navigation.viewParamsStore[route] as
     | { projectId?: string; taskId?: string }
     | undefined;
@@ -397,6 +398,24 @@ export const WorkspaceRuntimeBar = observer(function WorkspaceRuntimeBar() {
       confirmLabel: t('workspaceRuntime.resources.cleanup'),
       variant: 'default',
       onSuccess: () => void cleanupWorktrees(),
+    });
+  };
+
+  const handleSkillInstalled = (skill: { key: string; displayName: string }) => {
+    setIsSkillPopoverOpen(false);
+    if (!provisionedTask || !activeConversation || connectionId) return;
+    showConfirmActionModal({
+      title: t('skills.quickSearch.reloadTitle'),
+      description: t('skills.quickSearch.reloadDescription', { name: skill.displayName }),
+      confirmLabel: t('skills.quickSearch.reloadConfirm'),
+      variant: 'default',
+      onSuccess: () =>
+        void provisionedTask.conversations.restartConversation(
+          activeConversation.id,
+          undefined,
+          undefined,
+          skill.key
+        ),
     });
   };
 
@@ -867,20 +886,27 @@ export const WorkspaceRuntimeBar = observer(function WorkspaceRuntimeBar() {
           </div>
         </PopoverContent>
       </Popover>
-      <button
-        type="button"
-        title={t('workspaceRuntime.skill')}
-        aria-label={t('workspaceRuntime.skill')}
-        aria-pressed={skillActive}
-        onClick={() => appState.navigation.navigate('skills')}
-        className={cn(
-          'flex h-5 items-center gap-1 rounded px-1.5 transition-colors hover:bg-background-2 hover:text-foreground',
-          skillActive && 'bg-background-2 text-foreground'
-        )}
-      >
-        <Sparkles className="size-3.5" />
-        <span>{t('workspaceRuntime.skill')}</span>
-      </button>
+      <Popover open={isSkillPopoverOpen} onOpenChange={setIsSkillPopoverOpen}>
+        <PopoverTrigger
+          aria-label={t('workspaceRuntime.skill')}
+          className={cn(
+            'flex h-5 items-center gap-1 rounded px-1.5 transition-colors hover:bg-background-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border',
+            isSkillPopoverOpen && 'bg-background-2 text-foreground'
+          )}
+          title={t('workspaceRuntime.skill')}
+        >
+          <Sparkles className="size-3.5" />
+          <span>{t('workspaceRuntime.skill')}</span>
+        </PopoverTrigger>
+        <PopoverContent
+          align="end"
+          side="top"
+          sideOffset={8}
+          className="w-[26rem] gap-0 border border-border bg-background p-0 text-foreground shadow-lg"
+        >
+          <SkillQuickSearchPopover onInstalled={handleSkillInstalled} />
+        </PopoverContent>
+      </Popover>
       <button
         type="button"
         title={rendererSwitchLabel}

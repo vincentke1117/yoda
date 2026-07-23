@@ -5,8 +5,7 @@ import { useToast } from '@renderer/lib/hooks/use-toast';
 import { rpc } from '@renderer/lib/ipc';
 import { log } from '@renderer/utils/logger';
 import { captureTelemetry } from '@renderer/utils/telemetryClient';
-
-const CATALOG_QUERY_KEY = ['skills', 'catalog'] as const;
+import { fetchSkillsCatalog, skillsCatalogQueryKey } from '../skills-query';
 
 export function useSkills() {
   const { toast } = useToast();
@@ -14,12 +13,8 @@ export function useSkills() {
   const [searchQuery, setSearchQuery] = useState('');
 
   const { data: catalog = null, isPending: isLoading } = useQuery({
-    queryKey: CATALOG_QUERY_KEY,
-    queryFn: async () => {
-      const result = await rpc.skills.getCatalog();
-      if (result.success && result.data) return result.data;
-      throw new Error(result.error ?? 'Failed to load catalog');
-    },
+    queryKey: skillsCatalogQueryKey,
+    queryFn: fetchSkillsCatalog,
   });
 
   const refreshMutation = useMutation({
@@ -29,7 +24,7 @@ export function useSkills() {
       throw new Error(result.error ?? 'Failed to refresh catalog');
     },
     onSuccess: (data) => {
-      queryClient.setQueryData(CATALOG_QUERY_KEY, data);
+      queryClient.setQueryData(skillsCatalogQueryKey, data);
     },
     onError: (error) => {
       log.error('Failed to refresh catalog:', error);
@@ -53,7 +48,7 @@ export function useSkills() {
     },
     onSuccess: (skillKey) => {
       const skill = queryClient
-        .getQueryData<CatalogIndex>(CATALOG_QUERY_KEY)
+        .getQueryData<CatalogIndex>(skillsCatalogQueryKey)
         ?.skills.find((s) => s.key === skillKey);
 
       captureTelemetry('skill_installed', { source: skill?.source });
@@ -126,7 +121,7 @@ export function useSkills() {
     },
     onSuccess: ({ skillKey, disabled }) => {
       const skill = queryClient
-        .getQueryData<CatalogIndex>(CATALOG_QUERY_KEY)
+        .getQueryData<CatalogIndex>(skillsCatalogQueryKey)
         ?.skills.find((candidate) => candidate.key === skillKey);
       const label = skill?.displayName ?? skillKey;
       captureTelemetry(disabled ? 'skill_disabled' : 'skill_enabled');
