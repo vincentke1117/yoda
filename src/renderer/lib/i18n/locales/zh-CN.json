@@ -3687,6 +3687,10 @@
     "goForward": "前进",
     "toggleLeftSidebar": "切换左侧边栏"
   },
+  "workspaceStatus": {
+    "productMenu": "Yoda 产品菜单",
+    "quickAccess": "全局快捷入口"
+  },
   "workspaceRuntime": {
     "skill": "Skill",
     "terminal": "终端",

@@ -3687,6 +3687,10 @@
     "goForward": "Go forward",
     "toggleLeftSidebar": "Toggle left sidebar"
   },
+  "workspaceStatus": {
+    "productMenu": "Yoda product menu",
+    "quickAccess": "Global shortcuts"
+  },
   "workspaceRuntime": {
     "skill": "Skill",
     "terminal": "Terminal",

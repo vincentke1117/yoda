@@ -12,6 +12,7 @@ const MAIN_PANEL_MIN_SIZE = '30%';
 interface WorkspaceLayoutProps {
   leftSidebar: ReactNode;
   mainContent: ReactNode;
+  bottomBar: ReactNode;
   /**
    * Shell-level right side pane (cross-route pins). Pass null to collapse the
    * column entirely. Lives at the workspace level so main-area navigation
@@ -20,7 +21,12 @@ interface WorkspaceLayoutProps {
   rightPane?: ReactNode;
 }
 
-export function WorkspaceLayout({ leftSidebar, mainContent, rightPane }: WorkspaceLayoutProps) {
+export function WorkspaceLayout({
+  leftSidebar,
+  mainContent,
+  bottomBar,
+  rightPane,
+}: WorkspaceLayoutProps) {
   const { leftPanelRef, setIsLeftOpen, isLeftOpen } = useWorkspaceLayoutContext();
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
     id: 'workspace-outer',
@@ -28,69 +34,71 @@ export function WorkspaceLayout({ leftSidebar, mainContent, rightPane }: Workspa
   });
 
   return (
-    <ResizablePanelGroup
-      id="workspace-outer"
-      data-yoda-surface="workspace"
-      orientation="horizontal"
-      className="h-full w-full overflow-hidden"
-      defaultLayout={defaultLayout}
-      onLayoutChanged={onLayoutChanged}
-    >
-      <ResizablePanel
-        id="workspace-left"
-        panelRef={leftPanelRef}
-        defaultSize={LEFT_PANEL_DEFAULT_SIZE}
-        minSize={LEFT_SIDEBAR_MIN_SIZE}
-        maxSize={LEFT_SIDEBAR_MAX_SIZE}
-        collapsedSize="0%"
-        onResize={() => {
-          const open = !leftPanelRef.current?.isCollapsed();
-          if (open !== isLeftOpen) setIsLeftOpen(open);
-        }}
-        collapsible
+    <div data-yoda-surface="workspace" className="flex h-full w-full flex-col overflow-hidden">
+      <ResizablePanelGroup
+        id="workspace-outer"
+        data-yoda-surface="workspace-panels"
+        orientation="horizontal"
+        className="min-h-0 w-full flex-1 overflow-hidden"
+        defaultLayout={defaultLayout}
+        onLayoutChanged={onLayoutChanged}
       >
-        <div data-yoda-surface="workspace-sidebar" className="h-full">
-          {leftSidebar}
-        </div>
-      </ResizablePanel>
-      <ResizableHandle
-        className={cn(
-          'items-center justify-center transition-colors hover:bg-border/80',
-          isLeftOpen ? 'flex' : 'hidden'
-        )}
-      />
-      <ResizablePanel
-        id="workspace-main"
-        data-yoda-surface="workspace-main"
-        minSize={MAIN_PANEL_MIN_SIZE}
-        className="relative bg-background text-foreground"
-        data-modal-scope-root
-      >
-        {mainContent}
-      </ResizablePanel>
-      {rightPane ? (
-        <>
-          <ResizableHandle className="items-center justify-center transition-colors hover:bg-border/80" />
-          <ResizablePanel
-            id="workspace-right-pane"
-            data-yoda-surface="workspace-right-pane"
-            defaultSize="30%"
-            minSize="280px"
-            maxSize="50%"
-            className="min-h-0 min-w-0 overflow-hidden border-l border-border bg-background text-foreground"
-          >
-            {rightPane}
-          </ResizablePanel>
-        </>
-      ) : null}
-    </ResizablePanelGroup>
+        <ResizablePanel
+          id="workspace-left"
+          panelRef={leftPanelRef}
+          defaultSize={LEFT_PANEL_DEFAULT_SIZE}
+          minSize={LEFT_SIDEBAR_MIN_SIZE}
+          maxSize={LEFT_SIDEBAR_MAX_SIZE}
+          collapsedSize="0%"
+          onResize={() => {
+            const open = !leftPanelRef.current?.isCollapsed();
+            if (open !== isLeftOpen) setIsLeftOpen(open);
+          }}
+          collapsible
+        >
+          <div data-yoda-surface="workspace-sidebar" className="h-full">
+            {leftSidebar}
+          </div>
+        </ResizablePanel>
+        <ResizableHandle
+          className={cn(
+            'items-center justify-center transition-colors hover:bg-border/80',
+            isLeftOpen ? 'flex' : 'hidden'
+          )}
+        />
+        <ResizablePanel
+          id="workspace-main"
+          data-yoda-surface="workspace-main"
+          minSize={MAIN_PANEL_MIN_SIZE}
+          className="relative bg-background text-foreground"
+          data-modal-scope-root
+        >
+          {mainContent}
+        </ResizablePanel>
+        {rightPane ? (
+          <>
+            <ResizableHandle className="items-center justify-center transition-colors hover:bg-border/80" />
+            <ResizablePanel
+              id="workspace-right-pane"
+              data-yoda-surface="workspace-right-pane"
+              defaultSize="30%"
+              minSize="280px"
+              maxSize="50%"
+              className="min-h-0 min-w-0 overflow-hidden border-l border-border bg-background text-foreground"
+            >
+              {rightPane}
+            </ResizablePanel>
+          </>
+        ) : null}
+      </ResizablePanelGroup>
+      {bottomBar}
+    </div>
   );
 }
 
 interface WorkspaceContentLayoutProps {
   titlebarSlot: ReactNode;
   mainPanel: ReactNode;
-  bottomBar?: ReactNode;
   bottomPane?: ReactNode;
   isBottomPaneOpen?: boolean;
   onBottomPaneOpenChange?: (open: boolean) => void;
@@ -99,7 +107,6 @@ interface WorkspaceContentLayoutProps {
 export function WorkspaceContentLayout({
   titlebarSlot,
   mainPanel,
-  bottomBar,
   bottomPane,
   isBottomPaneOpen = false,
   onBottomPaneOpenChange,
@@ -155,7 +162,6 @@ export function WorkspaceContentLayout({
           </ResizablePanel>
         </ResizablePanelGroup>
       </div>
-      {bottomBar}
     </div>
   );
 }

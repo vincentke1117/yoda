@@ -23,7 +23,7 @@ export function SidebarAccountAnchor() {
     <button
       type="button"
       onClick={() => navigate('settings', { tab: 'account' })}
-      className="flex h-11 w-full min-w-0 items-center gap-2 rounded-lg px-2 text-left text-foreground-tertiary-muted transition-colors hover:bg-background-tertiary-1 hover:text-foreground-tertiary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="group/account flex min-h-14 w-full min-w-0 items-center gap-2.5 rounded-2xl border border-border/60 bg-background-tertiary-1/70 px-3 py-2.5 text-left text-foreground-tertiary-muted shadow-[0_1px_0_rgb(255_255_255_/_0.04)] transition-[background-color,border-color,box-shadow,transform] hover:-translate-y-px hover:border-border hover:bg-background-tertiary-2/80 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       aria-label={t('sidebar.manageLovStudioAccount')}
       title={t('sidebar.manageLovStudioAccount')}
     >
@@ -31,23 +31,23 @@ export function SidebarAccountAnchor() {
         <img
           src={user.avatarUrl}
           alt=""
-          className="size-7 shrink-0 rounded-full border border-border/70 object-cover"
+          className="size-8 shrink-0 rounded-full border border-border/70 object-cover shadow-sm"
         />
       ) : (
-        <span className="flex size-7 shrink-0 items-center justify-center rounded-full border border-border/70 bg-background-tertiary-1">
-          <CircleUserRound className="size-4" />
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-full border border-border/70 bg-background-tertiary-2 shadow-sm">
+          <CircleUserRound className="size-[17px]" />
         </span>
       )}
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-xs font-medium text-foreground-tertiary">
+        <span className="block truncate text-[13px] font-medium leading-4 text-foreground-tertiary">
           {displayName}
         </span>
-        <span className="block truncate text-[10px] text-foreground-tertiary-passive">
+        <span className="mt-0.5 block truncate text-[10px] leading-3 text-foreground-tertiary-passive">
           {subtitle}
         </span>
       </span>
       {commerce.data ? (
-        <span className="flex shrink-0 items-center gap-1 text-[10px] tabular-nums text-foreground-tertiary-passive">
+        <span className="flex shrink-0 items-center gap-1 rounded-full border border-border/60 bg-background-tertiary px-2 py-1 text-[10px] tabular-nums text-foreground-tertiary-passive transition-colors group-hover/account:text-foreground-tertiary-muted">
           <Coins className="size-3" />
           {commerce.data.credits.balance}
         </span>

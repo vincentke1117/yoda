@@ -2,8 +2,8 @@ import { observer } from 'mobx-react-lite';
 import { AppSidePane } from '@renderer/app/app-side-pane';
 import { moveDraggedTabToStrip } from '@renderer/app/open-task-target';
 import { useTabDropZone } from '@renderer/app/tab-drag';
-import { WorkspaceRuntimeBar } from '@renderer/app/workspace-runtime-bar';
 import { WorkspaceShellPanel } from '@renderer/app/workspace-shell-panel';
+import { WorkspaceStatusBar } from '@renderer/app/workspace-status-bar';
 import { LeftSidebar } from '@renderer/features/sidebar/left-sidebar';
 import { splitViewStore } from '@renderer/features/tasks/split-view/split-view-store';
 import { TiledTaskGrid } from '@renderer/features/tasks/split-view/tiled-task-grid';
@@ -83,6 +83,7 @@ export const Workspace = observer(function Workspace() {
             </ErrorBoundary>
           ) : null
         }
+        bottomBar={<WorkspaceStatusBar />}
       />
       <Toaster />
     </>
@@ -118,7 +119,6 @@ const WorkspaceViewContent = observer(function WorkspaceViewContent() {
       <WorkspaceContentLayout
         titlebarSlot={<TitlebarSlot />}
         mainPanel={isTiled ? <TiledTaskGrid primary={<MainPanel />} /> : <MainPanel />}
-        bottomBar={<WorkspaceRuntimeBar />}
         bottomPane={<WorkspaceShellPanel />}
         isBottomPaneOpen={workspaceShellStore.isOpen}
         onBottomPaneOpenChange={(open) => {

@@ -1,24 +1,8 @@
-import {
-  AppWindow,
-  BookOpen,
-  ExternalLink,
-  FolderInput,
-  Globe,
-  Library,
-  MessageSquareShare,
-  PanelRightOpen,
-  RefreshCw,
-  Search,
-  Settings,
-  Smartphone,
-  SquarePen,
-} from 'lucide-react';
+import { AppWindow, FolderInput, Library, Search, SquarePen } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { skillIssueAgentLabel } from '@shared/skills/validation';
-import { YODA_DOCS_URL, YODA_WEBSITE_URL } from '@shared/urls';
-import type { ViewId } from '@renderer/app/view-registry';
 import { useAiLabApps } from '@renderer/features/ai-lab/use-ai-lab';
 import {
   useSkillValidationIssues,
@@ -28,7 +12,6 @@ import {
   WorkspaceReviewBadge,
   WorkspaceSwitcher,
 } from '@renderer/features/workspaces/workspace-switcher';
-import { rpc } from '@renderer/lib/ipc';
 import {
   isCurrentView,
   useNavigate,
@@ -37,73 +20,24 @@ import {
 } from '@renderer/lib/layout/navigation-provider';
 import { useShowModal } from '@renderer/lib/modal/modal-provider';
 import { appState, sidebarStore } from '@renderer/lib/stores/app-state';
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuTrigger,
-} from '@renderer/lib/ui/context-menu';
 import { ShortcutHint } from '@renderer/lib/ui/shortcut-hint';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@renderer/lib/ui/tooltip';
 import { cn } from '@renderer/utils/utils';
+import { GlobalSidePaneTarget } from './global-side-pane-target';
 import { SidebarPinnedTaskList } from './pinned-task-list';
 import { ProjectsGroupLabel, ProjectsSettingsMenu } from './projects-group-label';
 import { SidebarAccountAnchor } from './sidebar-account-anchor';
 import {
   SidebarContainer,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarMenu,
   SidebarMenuButton,
 } from './sidebar-primitives';
 import { SidebarSpace } from './sidebar-space';
-import { SidebarVersionAnchor } from './sidebar-version-anchor';
 import { SidebarVirtualList } from './sidebar-virtual-list';
 import { useAltKeyHeld } from './use-alt-key-held';
 import { useSidebarDrop } from './use-sidebar-drop';
-
-/**
- * Wraps a sidebar control that routes to a registered view: right-click offers
- * "open in global sidebar" (copy semantics — the pane gets an independent
- * instance), and while Alt/Option is held a hover tooltip hints that clicking
- * pins the view into the shell side pane instead of navigating.
- */
-const GlobalSidePaneTarget: React.FC<{
-  viewId: ViewId;
-  params?: Record<string, unknown>;
-  altHeld: boolean;
-  tooltipSide?: 'top' | 'right';
-  children: React.ReactElement;
-}> = ({ viewId, params, altHeld, tooltipSide = 'right', children }) => {
-  const { t } = useTranslation();
-  const [hovered, setHovered] = React.useState(false);
-  const label = t('appTabs.openInGlobalSidePane');
-  return (
-    <ContextMenu>
-      <ContextMenuTrigger
-        className="shrink-0"
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-      >
-        <Tooltip open={altHeld && hovered}>
-          <TooltipTrigger render={children} />
-          <TooltipContent side={tooltipSide}>{label}</TooltipContent>
-        </Tooltip>
-      </ContextMenuTrigger>
-      <ContextMenuContent>
-        <ContextMenuItem
-          className="whitespace-nowrap"
-          onClick={() => appState.sidePane.pinView(viewId, params ?? {})}
-        >
-          <PanelRightOpen className="size-4" />
-          {label}
-        </ContextMenuItem>
-      </ContextMenuContent>
-    </ContextMenu>
-  );
-};
 
 export const LeftSidebar: React.FC = observer(function LeftSidebar() {
   const { t } = useTranslation();
@@ -111,23 +45,7 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
   const { currentView } = useWorkspaceSlots();
   const altHeld = useAltKeyHeld();
 
-  // The nav section opened by the version anchor behaves like a popover:
-  // clicking anywhere outside the footer block dismisses it.
-  const footerRef = React.useRef<HTMLDivElement>(null);
-  const navSectionVisible = !sidebarStore.navSectionHidden;
-  React.useEffect(() => {
-    if (!navSectionVisible) return;
-    const onPointerDown = (e: PointerEvent) => {
-      if (footerRef.current && !footerRef.current.contains(e.target as Node)) {
-        sidebarStore.setNavSectionHidden(true);
-      }
-    };
-    document.addEventListener('pointerdown', onPointerDown);
-    return () => document.removeEventListener('pointerdown', onPointerDown);
-  }, [navSectionVisible]);
-
   const showCommandPalette = useShowModal('commandPaletteModal');
-  const showFeedbackModal = useShowModal('feedbackModal');
   const { count: skillIssueCount, firstIssue: firstSkillIssue } = useSkillValidationIssues();
   const { isDragOver, onDragOver, onDragEnter, onDragLeave, onDrop } = useSidebarDrop();
 
@@ -157,31 +75,6 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
     navigate('home');
   }, [currentProjectId, navigate]);
 
-  // Quick-access icons docked to the right of the account row. Each view is
-  // also reachable as an embedded settings tab.
-  const quickNavItems: {
-    key: 'mobile' | 'settings';
-    icon: React.ComponentType<{ className?: string }>;
-    label: string;
-    title?: string;
-    onClick: () => void;
-    pinParams?: Record<string, unknown>;
-    showIssueDot?: boolean;
-  }[] = [
-    {
-      key: 'mobile',
-      icon: Smartphone,
-      label: t('sidebar.mobile'),
-      onClick: () => navigate('mobile'),
-    },
-    {
-      key: 'settings',
-      icon: Settings,
-      label: t('sidebar.settings'),
-      onClick: () => navigate('settings'),
-    },
-  ];
-
   return (
     <div
       data-yoda-surface="left-sidebar"
@@ -203,8 +96,11 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
         </div>
       )}
       <SidebarSpace />
+      <div className="px-2 pb-2">
+        <SidebarAccountAnchor />
+      </div>
       <SidebarContainer className="w-full border-r-0 flex-1 min-h-0">
-        <SidebarFooter className="mt-0 border-t-0 px-2 pb-0">
+        <div className="px-2">
           <SidebarMenu>
             <div className="group/ws flex h-8 items-center gap-1 rounded-lg pr-1 text-foreground-tertiary-muted transition-colors hover:bg-background-tertiary-1 hover:text-foreground-tertiary has-data-popup-open:bg-background-tertiary-1 has-data-popup-open:text-foreground-tertiary">
               <WorkspaceSwitcher />
@@ -293,7 +189,7 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
             ))}
             <div className="my-1 border-t border-border" />
           </SidebarMenu>
-        </SidebarFooter>
+        </div>
         <SidebarContent className="flex flex-col overflow-y-auto">
           <SidebarPinnedTaskList />
           <SidebarGroup className="mb-0 flex flex-col shrink-0">
@@ -307,97 +203,6 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
             )}
           </SidebarGroup>
         </SidebarContent>
-        <div ref={footerRef} className="flex flex-col">
-          {/* Single separator for the footer block. */}
-          <div className="mx-2 my-1 border-t border-border" />
-          {!sidebarStore.navSectionHidden && (
-            <SidebarMenu className="px-2">
-              <SidebarMenuButton
-                onClick={() => void rpc.app.openExternal(YODA_WEBSITE_URL)}
-                aria-label={t('sidebar.website')}
-                className="w-full justify-between"
-              >
-                <span className="flex items-center gap-2 min-w-0">
-                  <Globe className="h-5 w-5 sm:h-4 sm:w-4 shrink-0" />
-                  <span className="truncate">{t('sidebar.website')}</span>
-                </span>
-                <ExternalLink className="ml-auto h-3 w-3 shrink-0 text-foreground-tertiary-passive" />
-              </SidebarMenuButton>
-              <SidebarMenuButton
-                onClick={() => void rpc.app.openExternal(YODA_DOCS_URL)}
-                aria-label={t('sidebar.docs')}
-                className="w-full justify-between"
-              >
-                <span className="flex items-center gap-2 min-w-0">
-                  <BookOpen className="h-5 w-5 sm:h-4 sm:w-4 shrink-0" />
-                  <span className="truncate">{t('sidebar.docs')}</span>
-                </span>
-                <ExternalLink className="ml-auto h-3 w-3 shrink-0 text-foreground-tertiary-passive" />
-              </SidebarMenuButton>
-              <SidebarMenuButton
-                onClick={() => showFeedbackModal({})}
-                aria-label={t('sidebar.giveFeedback')}
-                className="w-full justify-start"
-              >
-                <MessageSquareShare className="h-5 w-5 sm:h-4 sm:w-4" />
-                {t('sidebar.giveFeedback')}
-              </SidebarMenuButton>
-              <SidebarMenuButton
-                onClick={() => void appState.update.check({ notify: true })}
-                disabled={appState.update.state.status === 'checking'}
-                aria-label={t('settings.update.checkForUpdates')}
-                className="w-full justify-start"
-              >
-                <RefreshCw
-                  className={cn(
-                    'h-5 w-5 sm:h-4 sm:w-4',
-                    appState.update.state.status === 'checking' && 'animate-spin'
-                  )}
-                />
-                {t('settings.update.checkForUpdates')}
-              </SidebarMenuButton>
-            </SidebarMenu>
-          )}
-          <div className="px-2 pb-0.5">
-            <SidebarAccountAnchor />
-          </div>
-          <div className="flex items-center gap-0.5 pr-2">
-            <div className="min-w-0 flex-1">
-              <SidebarVersionAnchor />
-            </div>
-            {quickNavItems.map(
-              ({ key, icon: Icon, label, title, onClick, pinParams, showIssueDot }) => (
-                <GlobalSidePaneTarget
-                  key={key}
-                  viewId={key}
-                  params={pinParams}
-                  altHeld={altHeld}
-                  tooltipSide="top"
-                >
-                  <button
-                    type="button"
-                    onClick={(e) =>
-                      e.altKey ? appState.sidePane.pinView(key, pinParams ?? {}) : onClick()
-                    }
-                    aria-label={label}
-                    // Native title would fight the Alt-hint tooltip.
-                    title={altHeld ? undefined : (title ?? label)}
-                    className={cn(
-                      'relative flex size-7 shrink-0 items-center justify-center rounded-md text-foreground-tertiary-passive transition-colors hover:bg-background-tertiary-1 hover:text-foreground-tertiary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                      isCurrentView(currentView, key) &&
-                        'bg-background-tertiary-1 text-foreground-tertiary'
-                    )}
-                  >
-                    <Icon className="size-4" />
-                    {showIssueDot && (
-                      <span className="absolute right-1 top-1 size-1.5 rounded-full bg-amber-500" />
-                    )}
-                  </button>
-                </GlobalSidePaneTarget>
-              )
-            )}
-          </div>
-        </div>
       </SidebarContainer>
     </div>
   );
