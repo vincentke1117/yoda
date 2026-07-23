@@ -3,6 +3,7 @@ import { dirname } from 'node:path';
 import { isValidRuntimeId, type RuntimeId } from '@shared/runtime-registry';
 
 export type AiLabBuildJob = {
+  appId?: string;
   projectId: string;
   taskId: string;
   conversationId: string;
@@ -62,6 +63,7 @@ function isStoredJob(value: unknown): value is AiLabBuildJob {
   if (!value || typeof value !== 'object') return false;
   const job = value as Partial<AiLabBuildJob>;
   return (
+    (job.appId === undefined || typeof job.appId === 'string') &&
     typeof job.projectId === 'string' &&
     typeof job.taskId === 'string' &&
     typeof job.conversationId === 'string' &&
