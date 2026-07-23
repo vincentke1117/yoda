@@ -35,6 +35,7 @@ import {
   SidebarMenuButton,
 } from './sidebar-primitives';
 import { SidebarSpace } from './sidebar-space';
+import { SidebarStatusBar } from './sidebar-status-bar';
 import { SidebarVirtualList } from './sidebar-virtual-list';
 import { useAltKeyHeld } from './use-alt-key-held';
 import { useSidebarDrop } from './use-sidebar-drop';
@@ -204,6 +205,7 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
           </SidebarGroup>
         </SidebarContent>
       </SidebarContainer>
+      <SidebarStatusBar />
     </div>
   );
 });

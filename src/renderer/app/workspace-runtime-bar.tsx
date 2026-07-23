@@ -425,7 +425,10 @@ export const WorkspaceRuntimeBar = observer(function WorkspaceRuntimeBar() {
   };
 
   return (
-    <div className="flex h-full min-w-0 flex-1 items-center gap-2 px-2 text-[11px] text-foreground-muted">
+    <footer
+      data-yoda-surface="workspace-runtime-bar"
+      className="flex h-7 shrink-0 items-center gap-2 border-t border-border bg-background-secondary px-2 text-[11px] text-foreground-muted"
+    >
       {runtimeId ? (
         <div className="flex min-w-0 items-center gap-1.5">
           <Popover>
@@ -940,7 +943,7 @@ export const WorkspaceRuntimeBar = observer(function WorkspaceRuntimeBar() {
         <Terminal className="size-3.5" />
         <span>{t('workspaceRuntime.terminal')}</span>
       </button>
-    </div>
+    </footer>
   );
 });
 

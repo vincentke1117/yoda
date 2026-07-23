@@ -17,9 +17,6 @@ import yodaIcon from '@/assets/images/yoda/icon-light.png';
 import { PRODUCT_NAME } from '@shared/app-identity';
 import { YODA_DOCS_URL, YODA_WEBSITE_URL } from '@shared/urls';
 import type { ViewId } from '@renderer/app/view-registry';
-import { WorkspaceRuntimeBar } from '@renderer/app/workspace-runtime-bar';
-import { GlobalSidePaneTarget } from '@renderer/features/sidebar/global-side-pane-target';
-import { useAltKeyHeld } from '@renderer/features/sidebar/use-alt-key-held';
 import { rpc } from '@renderer/lib/ipc';
 import {
   isCurrentView,
@@ -30,8 +27,10 @@ import { useShowModal } from '@renderer/lib/modal/modal-provider';
 import { appState } from '@renderer/lib/stores/app-state';
 import { Popover, PopoverContent, PopoverTrigger } from '@renderer/lib/ui/popover';
 import { cn } from '@renderer/utils/utils';
+import { GlobalSidePaneTarget } from './global-side-pane-target';
+import { useAltKeyHeld } from './use-alt-key-held';
 
-export const WorkspaceStatusBar = observer(function WorkspaceStatusBar() {
+export const SidebarStatusBar = observer(function SidebarStatusBar() {
   const { t } = useTranslation();
   const { navigate } = useNavigate();
   const { currentView } = useWorkspaceSlots();
@@ -47,47 +46,45 @@ export const WorkspaceStatusBar = observer(function WorkspaceStatusBar() {
 
   return (
     <footer
-      data-yoda-surface="workspace-status-bar"
-      className="flex h-7 shrink-0 items-stretch border-t border-border bg-background-secondary text-[11px] text-foreground-muted"
+      data-yoda-surface="sidebar-status-bar"
+      className="flex h-7 shrink-0 items-stretch justify-between border-t border-border/70 bg-background-tertiary text-[11px] text-foreground-tertiary-muted"
     >
-      <div className="flex shrink-0 items-center border-r border-border/70">
-        <WorkspaceProductMenu />
-        <div
-          role="toolbar"
-          aria-label={t('workspaceStatus.quickAccess')}
-          className="flex items-center gap-0.5 pr-1"
-        >
-          {quickNavItems.map(({ viewId, icon: Icon, label }) => (
-            <GlobalSidePaneTarget
-              key={viewId}
-              viewId={viewId}
-              altHeld={altHeld}
-              tooltipSide="top"
-              tooltipLabel={label}
+      <SidebarProductMenu />
+      <div
+        role="toolbar"
+        aria-label={t('workspaceStatus.quickAccess')}
+        className="flex shrink-0 items-center gap-0.5 px-1"
+      >
+        {quickNavItems.map(({ viewId, icon: Icon, label }) => (
+          <GlobalSidePaneTarget
+            key={viewId}
+            viewId={viewId}
+            altHeld={altHeld}
+            tooltipSide="top"
+            tooltipLabel={label}
+          >
+            <button
+              type="button"
+              onClick={(event) =>
+                event.altKey ? appState.sidePane.pinView(viewId, {}) : navigate(viewId)
+              }
+              aria-label={label}
+              className={cn(
+                'flex size-6 items-center justify-center rounded-md text-foreground-tertiary-passive transition-colors hover:bg-background-tertiary-1 hover:text-foreground-tertiary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border',
+                isCurrentView(currentView, viewId) &&
+                  'bg-background-tertiary-1 text-foreground-tertiary'
+              )}
             >
-              <button
-                type="button"
-                onClick={(event) =>
-                  event.altKey ? appState.sidePane.pinView(viewId, {}) : navigate(viewId)
-                }
-                aria-label={label}
-                className={cn(
-                  'flex size-6 items-center justify-center rounded-md text-foreground-passive transition-colors hover:bg-background-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border',
-                  isCurrentView(currentView, viewId) && 'bg-background-2 text-foreground'
-                )}
-              >
-                <Icon className="size-3.5" />
-              </button>
-            </GlobalSidePaneTarget>
-          ))}
-        </div>
+              <Icon className="size-3.5" />
+            </button>
+          </GlobalSidePaneTarget>
+        ))}
       </div>
-      <WorkspaceRuntimeBar />
     </footer>
   );
 });
 
-const WorkspaceProductMenu = observer(function WorkspaceProductMenu() {
+const SidebarProductMenu = observer(function SidebarProductMenu() {
   const { t } = useTranslation();
   const { navigate } = useNavigate();
   const showFeedbackModal = useShowModal('feedbackModal');
@@ -105,21 +102,19 @@ const WorkspaceProductMenu = observer(function WorkspaceProductMenu() {
       <PopoverTrigger
         aria-label={t('workspaceStatus.productMenu')}
         title={t('workspaceStatus.productMenu')}
-        className="group/product flex h-full min-w-0 items-center gap-1.5 px-2 text-foreground-muted transition-colors hover:bg-background-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-border"
+        className="group/product flex h-full min-w-0 items-center gap-1.5 px-2 text-foreground-tertiary-muted transition-colors hover:bg-background-tertiary-1 hover:text-foreground-tertiary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-border"
       >
         <img src={yodaIcon} alt="" className="size-4 shrink-0 rounded-[3px]" />
-        <span className="max-w-24 truncate font-medium text-foreground max-[720px]:hidden">
-          {PRODUCT_NAME}
-        </span>
+        <span className="truncate font-medium text-foreground-tertiary">{PRODUCT_NAME}</span>
         <span
           className={cn(
-            'font-mono text-[10px] text-foreground-passive',
+            'shrink-0 font-mono text-[10px] text-foreground-tertiary-passive',
             update.hasUpdate && 'text-accent'
           )}
         >
           {versionLabel}
         </span>
-        <ChevronUp className="size-3 text-foreground-passive transition-transform group-data-popup-open/product:rotate-180" />
+        <ChevronUp className="size-3 shrink-0 text-foreground-tertiary-passive transition-transform group-data-popup-open/product:rotate-180" />
       </PopoverTrigger>
       <PopoverContent
         align="start"
