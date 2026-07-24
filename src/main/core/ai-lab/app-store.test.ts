@@ -23,6 +23,7 @@ describe('AiLabAppStore', () => {
       description: 'A packing list',
       prompt: 'Build a packing list',
       html: '<!doctype html><html></html>',
+      projectKind: 'app',
       projectId: 'travel-project',
       taskId: 'build-task',
       conversationId: 'build-conversation',
@@ -32,6 +33,7 @@ describe('AiLabAppStore', () => {
 
     expect((await store.list())[0]).toMatchObject({
       id: created.id,
+      projectKind: 'app',
       projectId: 'travel-project',
       taskId: 'build-task',
       conversationId: 'build-conversation',
@@ -57,6 +59,13 @@ describe('AiLabAppStore', () => {
         html: replaced.app.html,
       })
     ).resolves.toMatchObject({ changed: false, app: { updatedAt: replaced.app.updatedAt } });
+    const reassigned = await store.assignProject(created.id, 'packing-app-project');
+    expect(reassigned).toMatchObject({
+      projectKind: 'app',
+      projectId: 'packing-app-project',
+    });
+    expect(reassigned).not.toHaveProperty('taskId');
+    expect(reassigned).not.toHaveProperty('conversationId');
     expect(JSON.parse(await readFile(filePath, 'utf8'))).toHaveLength(1);
 
     await store.delete(created.id);

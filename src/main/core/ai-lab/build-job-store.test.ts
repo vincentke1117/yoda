@@ -21,6 +21,7 @@ describe('AiLabBuildJobStore', () => {
     await store.put({
       projectId: 'project-1',
       appId: 'app-1',
+      projectKind: 'app',
       taskId: 'task-1',
       conversationId: 'conversation-1',
       prompt: 'Build a timer',
@@ -31,6 +32,7 @@ describe('AiLabBuildJobStore', () => {
     await store.put({
       projectId: 'project-1',
       appId: 'app-2',
+      projectKind: 'app',
       taskId: 'task-1',
       conversationId: 'conversation-2',
       prompt: 'Build a better timer',
@@ -43,6 +45,7 @@ describe('AiLabBuildJobStore', () => {
         taskId: 'task-1',
         conversationId: 'conversation-2',
         appId: 'app-2',
+        projectKind: 'app',
       }),
     ]);
     await store.delete('task-1');

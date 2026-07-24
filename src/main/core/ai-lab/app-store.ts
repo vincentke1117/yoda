@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import type { AiLabUserApp } from '@shared/ai-lab';
+import type { AiLabProjectKind, AiLabUserApp } from '@shared/ai-lab';
 import { isValidRuntimeId } from '@shared/runtime-registry';
 
 type GeneratedAppUpdate = Pick<AiLabUserApp, 'name' | 'description' | 'html'> & {
@@ -29,6 +29,7 @@ export class AiLabAppStore {
     description: string;
     prompt: string;
     html: string;
+    projectKind?: AiLabProjectKind;
     projectId?: string;
     taskId?: string;
     conversationId?: string;
@@ -57,6 +58,29 @@ export class AiLabAppStore {
       const current = apps[index];
       if (!current) throw new Error('AI Lab app not found.');
       const next = { ...current, ...update, updatedAt: new Date().toISOString() };
+      apps[index] = next;
+      await this.write(apps);
+      return next;
+    });
+  }
+
+  async assignProject(id: string, projectId: string): Promise<AiLabUserApp> {
+    return this.enqueue(async () => {
+      const apps = await this.list();
+      const index = apps.findIndex((app) => app.id === id);
+      const current = apps[index];
+      if (!current) throw new Error('AI Lab app not found.');
+      const {
+        taskId: _legacyTaskId,
+        conversationId: _legacyConversationId,
+        ...appWithoutLegacyBuildSource
+      } = current;
+      const next: AiLabUserApp = {
+        ...appWithoutLegacyBuildSource,
+        projectKind: 'app',
+        projectId,
+        updatedAt: nextTimestamp(current.updatedAt),
+      };
       apps[index] = next;
       await this.write(apps);
       return next;
@@ -132,6 +156,7 @@ function isStoredApp(value: unknown): value is AiLabUserApp {
     typeof app.description === 'string' &&
     typeof app.prompt === 'string' &&
     typeof app.html === 'string' &&
+    (app.projectKind === undefined || app.projectKind === 'app') &&
     (app.projectId === undefined || typeof app.projectId === 'string') &&
     (app.taskId === undefined || typeof app.taskId === 'string') &&
     (app.conversationId === undefined || typeof app.conversationId === 'string') &&

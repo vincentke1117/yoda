@@ -14,6 +14,7 @@ import {
   extractGeneratedAppFromTranscript,
   type GeneratedAiLabApp,
 } from './app-generation-contract';
+import { writeAiLabProjectHtml } from './app-project-files';
 import type { AiLabAppStore } from './app-store';
 import type { AiLabBuildJob, AiLabBuildJobStore } from './build-job-store';
 
@@ -45,6 +46,7 @@ export class AiLabAppBuildRunner {
       }
       const recovered: AiLabBuildJob = {
         appId: app.id,
+        projectKind: app.projectKind,
         projectId: app.projectId,
         taskId: app.taskId,
         conversationId: app.conversationId,
@@ -103,6 +105,9 @@ export class AiLabAppBuildRunner {
     this.processing.add(job.taskId);
     try {
       const generated = await this.readGeneratedAppWithRetry(job);
+      if (job.projectKind === 'app') {
+        await this.writeProjectSource(job.projectId, generated.html);
+      }
       const target = await this.resolveTargetApp(job);
       if (target) {
         const result = await this.apps.replaceGenerated(target.id, generated);
@@ -112,12 +117,15 @@ export class AiLabAppBuildRunner {
           events.emit(aiLabAppUpdatedChannel, {
             appId: result.app.id,
             appName: result.app.name,
+            projectId: result.app.projectId,
+            appProject: result.app.projectKind === 'app',
           });
         }
       } else {
         const app = await this.apps.create({
           ...generated,
           prompt: job.prompt,
+          projectKind: job.projectKind,
           projectId: job.projectId,
           taskId: job.taskId,
           conversationId: job.conversationId,
@@ -131,6 +139,7 @@ export class AiLabAppBuildRunner {
           conversationId: job.conversationId,
           appId: app.id,
           appName: app.name,
+          appProject: app.projectKind === 'app',
         });
       }
     } catch (error) {
@@ -191,6 +200,12 @@ export class AiLabAppBuildRunner {
           });
     if (!blocks?.length) throw new Error('The Yoda Build transcript is empty.');
     return extractGeneratedAppFromTranscript(blocks);
+  }
+
+  private async writeProjectSource(projectId: string, html: string): Promise<void> {
+    const project = projectManager.getProject(projectId);
+    if (!project) throw new Error('The App project is not available.');
+    await writeAiLabProjectHtml(project.repoPath, html);
   }
 }
 

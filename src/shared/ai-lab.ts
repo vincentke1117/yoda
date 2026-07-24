@@ -71,6 +71,8 @@ export type LogoGenerationListItem = LogoGenerationRecord & {
   thumbnails: string[];
 };
 
+export type AiLabProjectKind = 'app';
+
 /** A user-created, single-file app hosted by AI Lab's isolated web sandbox. */
 export type AiLabUserApp = {
   id: string;
@@ -78,6 +80,8 @@ export type AiLabUserApp = {
   description: string;
   prompt: string;
   html: string;
+  /** Marks a dedicated project owned by this App, rather than a legacy source project. */
+  projectKind?: AiLabProjectKind;
   projectId?: string;
   taskId?: string;
   conversationId?: string;
@@ -113,6 +117,11 @@ export type CreateAiLabAppInput = {
 export type RefineAiLabAppInput = {
   id: string;
   prompt: string;
+};
+
+export type AssignAiLabAppProjectInput = {
+  id: string;
+  projectId: string;
 };
 
 export type UpdateAiLabAppInput = {

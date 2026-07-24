@@ -1,8 +1,8 @@
 import {
   AppWindow,
   ArrowLeft,
-  CornerUpLeft,
   ExternalLink,
+  FolderOpen,
   Loader2,
   Pin,
   PinOff,
@@ -22,8 +22,10 @@ import { Button } from '@renderer/lib/ui/button';
 import { Textarea } from '@renderer/lib/ui/textarea';
 import { cn } from '@renderer/utils/utils';
 import { AI_LAB_APPS, type AiLabAppDefinition } from '../app-registry';
+import { createAiLabProject } from '../create-ai-lab-project';
 import {
   useAiLabApps,
+  useAssignAiLabAppProject,
   useDeleteAiLabApp,
   useRefineAiLabApp,
   useUpdateAiLabApp,
@@ -234,19 +236,17 @@ function UserAppHost({ app, onBack }: { app: AiLabUserApp; onBack: () => void })
   const updateApp = useUpdateAiLabApp();
   const deleteApp = useDeleteAiLabApp();
   const refineApp = useRefineAiLabApp();
+  const assignAppProject = useAssignAiLabAppProject();
   const [isOpeningWindow, setIsOpeningWindow] = useState(false);
   const [isRefining, setIsRefining] = useState(false);
+  const [isPreparingRefinement, setIsPreparingRefinement] = useState(false);
   const [refinement, setRefinement] = useState('');
+  const refinementPending =
+    isPreparingRefinement || assignAppProject.isPending || refineApp.isPending;
 
-  const openBuildTask = () => {
-    if (!app.projectId || !app.taskId) return;
-    navigate('task', {
-      projectId: app.projectId,
-      taskId: app.taskId,
-      tab: app.conversationId
-        ? { kind: 'conversation', conversationId: app.conversationId }
-        : undefined,
-    });
+  const openAppProject = () => {
+    if (!app.projectId || app.projectKind !== 'app') return;
+    navigate('project', { projectId: app.projectId });
   };
 
   const handleDelete = () => {
@@ -287,8 +287,13 @@ function UserAppHost({ app, onBack }: { app: AiLabUserApp; onBack: () => void })
   const handleRefine = async (event: React.FormEvent) => {
     event.preventDefault();
     const prompt = refinement.trim();
-    if (!prompt || refineApp.isPending) return;
+    if (!prompt || refinementPending) return;
+    setIsPreparingRefinement(true);
     try {
+      if (app.projectKind !== 'app' || !app.projectId) {
+        const project = await createAiLabProject(app.name);
+        await assignAppProject.mutateAsync({ id: app.id, projectId: project.data.id });
+      }
       await refineApp.mutateAsync({ id: app.id, prompt });
       setRefinement('');
       setIsRefining(false);
@@ -298,6 +303,8 @@ function UserAppHost({ app, onBack }: { app: AiLabUserApp; onBack: () => void })
         description: error instanceof Error ? error.message : String(error),
         variant: 'destructive',
       });
+    } finally {
+      setIsPreparingRefinement(false);
     }
   };
 
@@ -316,6 +323,7 @@ function UserAppHost({ app, onBack }: { app: AiLabUserApp; onBack: () => void })
           size="sm"
           variant={isRefining ? 'secondary' : 'default'}
           aria-expanded={isRefining}
+          disabled={refinementPending}
           onClick={() => setIsRefining((current) => !current)}
         >
           <Sparkles />
@@ -329,9 +337,9 @@ function UserAppHost({ app, onBack }: { app: AiLabUserApp; onBack: () => void })
           >
             {isOpeningWindow ? <Loader2 className="animate-spin" /> : <ExternalLink />}
           </HeaderActionButton>
-          {app.projectId && app.taskId && (
-            <HeaderActionButton label={t('aiLab.returnToBuildTask')} onClick={openBuildTask}>
-              <CornerUpLeft />
+          {app.projectKind === 'app' && app.projectId && (
+            <HeaderActionButton label={t('aiLab.openAppProject')} onClick={openAppProject}>
+              <FolderOpen />
             </HeaderActionButton>
           )}
           <HeaderActionButton
@@ -369,13 +377,13 @@ function UserAppHost({ app, onBack }: { app: AiLabUserApp; onBack: () => void })
               autoFocus
               value={refinement}
               placeholder={t('aiLab.refinePlaceholder')}
-              disabled={refineApp.isPending}
+              disabled={refinementPending}
               onChange={(event) => setRefinement(event.target.value)}
             />
           </div>
-          <Button type="submit" disabled={!refinement.trim() || refineApp.isPending}>
-            {refineApp.isPending ? <Loader2 className="animate-spin" /> : <Sparkles />}
-            {refineApp.isPending ? t('aiLab.refining') : t('aiLab.applyRefinement')}
+          <Button type="submit" disabled={!refinement.trim() || refinementPending}>
+            {refinementPending ? <Loader2 className="animate-spin" /> : <Sparkles />}
+            {refinementPending ? t('aiLab.refining') : t('aiLab.applyRefinement')}
           </Button>
         </form>
       )}

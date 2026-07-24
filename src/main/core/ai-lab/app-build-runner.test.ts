@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -10,6 +10,7 @@ import { AiLabBuildJobStore } from './build-job-store';
 const mocks = vi.hoisted(() => ({
   listener: null as ((state: RunState) => void) | null,
   emit: vi.fn(),
+  projectPath: '/project',
   status: 'idle' as RunState['status'],
   transcript: [
     { role: 'user', content: 'Build a timer' },
@@ -47,7 +48,7 @@ vi.mock('@main/core/conversations/getConversationsForTask', () => ({
   ]),
 }));
 vi.mock('@main/core/projects/project-manager', () => ({
-  projectManager: { getProject: vi.fn(() => ({ repoPath: '/project' })) },
+  projectManager: { getProject: vi.fn(() => ({ repoPath: mocks.projectPath })) },
 }));
 vi.mock('@main/lib/events', () => ({ events: { emit: mocks.emit } }));
 
@@ -56,6 +57,7 @@ const directories: string[] = [];
 beforeEach(() => {
   mocks.listener = null;
   mocks.emit.mockReset();
+  mocks.projectPath = '/project';
   mocks.status = 'idle';
   mocks.transcript = [
     { role: 'user', content: 'Build a timer' },
@@ -77,11 +79,13 @@ describe('AiLabAppBuildRunner', () => {
   it('persists the completed task output with source navigation metadata', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'yoda-ai-lab-runner-'));
     directories.push(directory);
+    mocks.projectPath = directory;
     const jobs = new AiLabBuildJobStore(join(directory, 'jobs.json'));
     const apps = new AiLabAppStore(join(directory, 'apps.json'));
     const runner = new AiLabAppBuildRunner(jobs, apps);
 
     await runner.prepare({
+      projectKind: 'app',
       projectId: 'project-1',
       taskId: 'task-1',
       conversationId: 'conversation-1',
@@ -103,11 +107,13 @@ describe('AiLabAppBuildRunner', () => {
     expect(await apps.list()).toEqual([
       expect.objectContaining({
         name: 'Timer',
+        projectKind: 'app',
         projectId: 'project-1',
         taskId: 'task-1',
         conversationId: 'conversation-1',
       }),
     ]);
+    await expect(readFile(join(directory, 'index.html'), 'utf8')).resolves.toContain('Timer');
     expect(await jobs.list()).toEqual([
       expect.objectContaining({ taskId: 'task-1', appId: expect.any(String) }),
     ]);
@@ -149,6 +155,7 @@ describe('AiLabAppBuildRunner', () => {
   it('recovers an existing app binding after restart', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'yoda-ai-lab-runner-'));
     directories.push(directory);
+    mocks.projectPath = directory;
     const jobs = new AiLabBuildJobStore(join(directory, 'jobs.json'));
     const apps = new AiLabAppStore(join(directory, 'apps.json'));
     const existing = await apps.create({
@@ -156,6 +163,7 @@ describe('AiLabAppBuildRunner', () => {
       description: 'A focused timer',
       prompt: 'Build a timer',
       html: '<!doctype html><html><body>Old</body></html>',
+      projectKind: 'app',
       projectId: 'project-1',
       taskId: 'task-1',
       conversationId: 'conversation-1',

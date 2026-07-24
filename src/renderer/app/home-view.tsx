@@ -66,6 +66,7 @@ import { resolveHomeProjectId } from '@renderer/app/home-project-selection';
 import { FeatureWorkflowPreview } from '@renderer/features/agent-room/feature-workflow-rail';
 import { invalidateTeamRoomQueries } from '@renderer/features/agent-room/team-room-queries';
 import { useAgents } from '@renderer/features/agents-config/use-agents';
+import { createAiLabProject } from '@renderer/features/ai-lab/create-ai-lab-project';
 import {
   effectiveGlobalEnabled,
   setGlobalOverride,
@@ -1016,7 +1017,8 @@ export const HomeComposer = observer(function HomeComposer({
     },
     [projectPromptPrinciples, saveProjectPromptPrinciples]
   );
-  const modeCanRunWithoutProject = runMode === 'normal' || runMode === 'brainstorm';
+  const modeCanRunWithoutProject =
+    runMode === 'normal' || runMode === 'brainstorm' || runMode === 'build';
   const modeRequiresWorktree =
     !taskScopedTarget &&
     (runMode === 'team' || (runMode === 'review' && effectiveReviewStrategyKind === 'new-branch'));
@@ -1077,15 +1079,13 @@ export const HomeComposer = observer(function HomeComposer({
     modeHasAgents &&
     !featureWorkflowNeedsBrief &&
     compareVariantsReady &&
-    (runMode !== 'build' || (trimmed.length > 0 && mounted?.data.type === 'local')) &&
-    (taskScopedTarget
-      ? runMode === 'build'
-        ? !!mounted
-        : !!targetProvisionedTask
-      : modeCanRunWithoutProject
-        ? !mounted || !!defaultBranch
-        : runMode === 'build'
-          ? !!mounted
+    (runMode !== 'build' || trimmed.length > 0) &&
+    (runMode === 'build'
+      ? true
+      : taskScopedTarget
+        ? !!targetProvisionedTask
+        : modeCanRunWithoutProject
+          ? !mounted || !!defaultBranch
           : !!mounted && (needsInitialCommit || !!defaultBranch));
 
   const handleSubmit = useCallback(async () => {
@@ -1215,38 +1215,38 @@ export const HomeComposer = observer(function HomeComposer({
         });
 
       if (runMode === 'build') {
-        if (!mounted || mounted.data.type !== 'local') return;
         const slot = resolveSlot(BUILD_PROMPT_KEY, runtimeId);
         if (!slot.provider) return;
         const resolvedRequirement = deferInitialPrompt ? await requirementPromise : requirement;
         if (!resolvedRequirement) return;
         const taskId = crypto.randomUUID();
         const conversationId = crypto.randomUUID();
-        const taskName = ensureUniqueTaskDisplayName(
-          `${taskNameFromPrompt(resolvedRequirement) || 'yoda-build'}-app`,
-          Array.from(mounted.taskManager.tasks.values(), (task) => task.data.name)
-        );
+        const projectName =
+          taskNameFromPrompt(resolvedRequirement) || t('home.defaultAppProjectName');
         try {
+          const appProject = await createAiLabProject(projectName);
+          const taskName = ensureUniqueTaskDisplayName(
+            t('home.buildTaskName'),
+            Array.from(appProject.taskManager.tasks.values(), (task) => task.data.name)
+          );
           const plan = await rpc.aiLab.prepareBuildTask({
             prompt: resolvedRequirement,
-            projectId: mounted.data.id,
+            projectId: appProject.data.id,
             taskId,
             conversationId,
             runtimeId: slot.provider,
             model: slot.agent?.model,
             systemPrompt: slot.systemPrompt,
           });
-          const createPromise = mounted.taskManager.createTask({
+          const createPromise = appProject.taskManager.createTask({
             id: taskId,
-            projectId: mounted.data.id,
+            projectId: appProject.data.id,
             name: taskName,
-            sourceBranch:
-              selectedBranch ?? ({ type: 'local', branch: currentBranchName ?? 'main' } as const),
+            sourceBranch: { type: 'local', branch: appProject.data.baseRef },
             strategy: { kind: 'no-worktree' },
-            parentTaskId: taskScopedTarget?.taskId ?? parentTarget?.taskId,
             initialConversation: {
               id: conversationId,
-              projectId: mounted.data.id,
+              projectId: appProject.data.id,
               taskId,
               runtime: slot.provider,
               title: initialConversationTitle(slot.provider, resolvedRequirement, []),
@@ -1263,7 +1263,7 @@ export const HomeComposer = observer(function HomeComposer({
             });
           });
           navigate('library', { section: 'apps' });
-          onSubmitted?.({ kind: 'task', projectId: mounted.data.id, taskId });
+          onSubmitted?.({ kind: 'task', projectId: appProject.data.id, taskId });
           toast.success(t('home.buildStarted'), {
             description: t('home.buildStartedDescription'),
           });
@@ -2402,7 +2402,7 @@ export const HomeComposer = observer(function HomeComposer({
         )}
         {compareVariants.length === 0 && (
           <div className="flex flex-wrap items-center gap-2">
-            {isProjectLocked ? (
+            {runMode === 'build' ? null : isProjectLocked ? (
               <TaskScopedProjectButton
                 label={lockedProjectName ?? selectedProjectId ?? ''}
                 tooltip={
@@ -2425,17 +2425,14 @@ export const HomeComposer = observer(function HomeComposer({
                 }
               />
             )}
-            <RunHostSelector
-              kind={runHostKind}
-              onSelectKind={isProjectLocked ? undefined : selectRunHostProject}
-            />
+            {runMode !== 'build' && (
+              <RunHostSelector
+                kind={runHostKind}
+                onSelectKind={isProjectLocked ? undefined : selectRunHostProject}
+              />
+            )}
             {runMode === 'brainstorm' && <Chip icon={Lightbulb}>{t('home.brainstormPolicy')}</Chip>}
             {runMode === 'build' && <Chip icon={AppWindow}>{t('home.buildDestination')}</Chip>}
-            {runMode === 'build' && runHostKind === 'ssh' && (
-              <span className="flex h-7 items-center rounded-md border border-destructive/25 bg-destructive/10 px-2.5 text-xs font-medium text-destructive">
-                {t('home.buildLocalOnly')}
-              </span>
-            )}
             {runMode === 'build' && submitting && (
               <span className="flex h-7 items-center gap-1.5 rounded-md border border-amber-500/25 bg-amber-500/10 px-2.5 text-xs font-medium text-amber-700 ydark:text-amber-300">
                 <Loader2 className="size-3.5 animate-spin" />

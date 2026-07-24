@@ -7,6 +7,7 @@ import {
   aiLabBuildFailedChannel,
 } from '@shared/events/aiLabEvents';
 import { aiLabQueryKeys } from '@renderer/features/ai-lab/use-ai-lab';
+import { getProjectManagerStore } from '@renderer/features/projects/stores/project-selectors';
 import { useToast } from '@renderer/lib/hooks/use-toast';
 import { events } from '@renderer/lib/ipc';
 import { useNavigate } from '@renderer/lib/layout/navigation-provider';
@@ -21,6 +22,11 @@ export function AiLabBuildEvents() {
   useEffect(() => {
     const offCreated = events.on(aiLabAppCreatedChannel, (payload) => {
       void queryClient.invalidateQueries({ queryKey: aiLabQueryKeys.apps });
+      if (payload.appProject) {
+        void getProjectManagerStore()
+          .updateProjectAlias(payload.projectId, payload.appName)
+          .catch(() => {});
+      }
       toast({
         title: t('home.buildCreated', { name: payload.appName }),
         action: {
@@ -47,6 +53,11 @@ export function AiLabBuildEvents() {
     });
     const offUpdated = events.on(aiLabAppUpdatedChannel, (payload) => {
       void queryClient.invalidateQueries({ queryKey: aiLabQueryKeys.apps });
+      if (payload.appProject && payload.projectId) {
+        void getProjectManagerStore()
+          .updateProjectAlias(payload.projectId, payload.appName)
+          .catch(() => {});
+      }
       toast({ title: t('home.buildUpdated', { name: payload.appName }) });
     });
     return () => {

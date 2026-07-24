@@ -10,6 +10,7 @@ import {
   type AiLabEngineStatus,
   type AiLabUserApp,
   type AiLabZenmuxModel,
+  type AssignAiLabAppProjectInput,
   type CreateAiLabAppInput,
   type LogoGenerationInput,
   type LogoGenerationListItem,
@@ -45,6 +46,7 @@ import {
   toAiLabImageEditResult,
   type AiLabImageMimeType,
 } from './app-image-edit';
+import { writeAiLabProjectHtml } from './app-project-files';
 import { AiLabAppStore } from './app-store';
 import { AiLabBuildJobStore } from './build-job-store';
 import { generateCodexImages } from './codex-image-engine';
@@ -265,6 +267,7 @@ export class AiLabService {
       systemPrompt: input.systemPrompt,
     });
     await this.getAppBuildRunner().prepare({
+      projectKind: 'app',
       projectId: input.projectId,
       taskId: input.taskId,
       conversationId: input.conversationId,
@@ -305,6 +308,16 @@ export class AiLabService {
     });
   }
 
+  async assignAppProject(input: AssignAiLabAppProjectInput): Promise<AiLabUserApp> {
+    const current = await this.requireApp(input.id);
+    const project = projectManager.getProject(input.projectId);
+    if (!project || !project.ctx.supportsLocalSpawn) {
+      throw new Error('The App project is not available.');
+    }
+    await writeAiLabProjectHtml(project.repoPath, current.html);
+    return this.getAppStore().assignProject(current.id, input.projectId);
+  }
+
   async refineApp(input: RefineAiLabAppInput): Promise<AiLabUserApp> {
     const refinement = input.prompt.trim();
     if (!refinement) throw new Error('Describe what you want to change.');
@@ -330,11 +343,16 @@ export class AiLabService {
       runtimeId: current.runtimeId,
       model: current.model,
     });
+    if (current.projectKind === 'app') {
+      await writeAiLabProjectHtml(project.repoPath, generated.html);
+    }
     const result = await this.getAppStore().replaceGenerated(current.id, generated);
     if (result.changed) {
       events.emit(aiLabAppUpdatedChannel, {
         appId: result.app.id,
         appName: result.app.name,
+        projectId: result.app.projectId,
+        appProject: result.app.projectKind === 'app',
       });
     }
     return result.app;

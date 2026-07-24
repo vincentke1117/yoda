@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   AiLabUserApp,
+  AssignAiLabAppProjectInput,
   LogoGenerationInput,
   RefineAiLabAppInput,
   UpdateAiLabAppInput,
@@ -43,6 +44,20 @@ export function useRefineAiLabApp() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: RefineAiLabAppInput) => rpc.aiLab.refineApp(input),
+    onSuccess: (app) => {
+      queryClient.setQueryData<AiLabUserApp[]>(aiLabQueryKeys.apps, (current = []) => [
+        app,
+        ...current.filter((candidate) => candidate.id !== app.id),
+      ]);
+    },
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: aiLabQueryKeys.apps }),
+  });
+}
+
+export function useAssignAiLabAppProject() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: AssignAiLabAppProjectInput) => rpc.aiLab.assignAppProject(input),
     onSuccess: (app) => {
       queryClient.setQueryData<AiLabUserApp[]>(aiLabQueryKeys.apps, (current = []) => [
         app,

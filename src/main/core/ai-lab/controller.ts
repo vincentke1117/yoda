@@ -1,4 +1,5 @@
 import type {
+  AssignAiLabAppProjectInput,
   CreateAiLabAppInput,
   LogoGenerationInput,
   PrepareAiLabBuildTaskInput,
@@ -69,6 +70,10 @@ async function createApp(input: CreateAiLabAppInput) {
   return aiLabService.createApp(input);
 }
 
+async function assignAppProject(input: AssignAiLabAppProjectInput) {
+  return aiLabService.assignAppProject(input);
+}
+
 async function refineApp(input: RefineAiLabAppInput) {
   return aiLabService.refineApp(input);
 }
@@ -105,6 +110,7 @@ export const aiLabController = createRPCController({
   saveAppImageEdit,
   deleteAppImageEdit,
   createApp,
+  assignAppProject,
   refineApp,
   prepareBuildTask,
   cancelBuildTask,

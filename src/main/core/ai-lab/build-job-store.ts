@@ -1,9 +1,11 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
+import type { AiLabProjectKind } from '@shared/ai-lab';
 import { isValidRuntimeId, type RuntimeId } from '@shared/runtime-registry';
 
 export type AiLabBuildJob = {
   appId?: string;
+  projectKind?: AiLabProjectKind;
   projectId: string;
   taskId: string;
   conversationId: string;
@@ -64,6 +66,7 @@ function isStoredJob(value: unknown): value is AiLabBuildJob {
   const job = value as Partial<AiLabBuildJob>;
   return (
     (job.appId === undefined || typeof job.appId === 'string') &&
+    (job.projectKind === undefined || job.projectKind === 'app') &&
     typeof job.projectId === 'string' &&
     typeof job.taskId === 'string' &&
     typeof job.conversationId === 'string' &&
