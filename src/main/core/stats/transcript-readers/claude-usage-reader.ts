@@ -35,6 +35,7 @@ export const claudeUsageReader: TranscriptUsageReader = {
     return dir ? listClaudeSessionTranscriptPaths(dir, conversationId) : [];
   },
   parseUsage: parseClaudeUsage,
+  parseUsageLines: parseClaudeUsageLines,
 };
 
 async function exists(path: string): Promise<boolean> {
@@ -47,38 +48,56 @@ async function exists(path: string): Promise<boolean> {
 }
 
 export function parseClaudeUsage(raw: string): SessionTokenUsage | null {
-  const byMessage = new Map<string, UsageEntry>();
-  let fallbackIndex = 0;
-
+  const state = createClaudeUsageState();
   for (const line of iterateLines(raw)) {
-    // Cheap pre-filter — most rows (user, tool_result, attachments) have no usage.
-    if (!line || !line.includes('"usage"')) continue;
-    const row = safeParse(line);
-    if (!row || row.type !== 'assistant') continue;
-    const message = objectValue(row.message);
-    const usage = objectValue(message?.usage);
-    if (!usage) continue;
-
-    const messageId = stringValue(message?.id) ?? `row-${fallbackIndex++}`;
-    // `<synthetic>` marks locally-generated rows with no real model (ccusage parity).
-    const model = stringValue(message?.model);
-    byMessage.set(
-      messageId,
-      makeUsageEntry(
-        {
-          input: numberValue(usage.input_tokens),
-          output: numberValue(usage.output_tokens),
-          cacheRead: numberValue(usage.cache_read_input_tokens),
-          cacheCreation: numberValue(usage.cache_creation_input_tokens),
-          reasoning: 0,
-        },
-        stringValue(row.timestamp),
-        model === '<synthetic>' ? null : model
-      )
-    );
+    consumeClaudeUsageLine(state, line);
   }
+  return aggregateUsageEntries(state.byMessage.values());
+}
 
-  return aggregateUsageEntries(byMessage.values());
+export async function parseClaudeUsageLines(
+  lines: Iterable<string> | AsyncIterable<string>
+): Promise<SessionTokenUsage | null> {
+  const state = createClaudeUsageState();
+  for await (const line of lines) consumeClaudeUsageLine(state, line);
+  return aggregateUsageEntries(state.byMessage.values());
+}
+
+type ClaudeUsageState = {
+  byMessage: Map<string, UsageEntry>;
+  fallbackIndex: number;
+};
+
+function createClaudeUsageState(): ClaudeUsageState {
+  return { byMessage: new Map(), fallbackIndex: 0 };
+}
+
+function consumeClaudeUsageLine(state: ClaudeUsageState, line: string): void {
+  // Cheap pre-filter — most rows (user, tool_result, attachments) have no usage.
+  if (!line || !line.includes('"usage"')) return;
+  const row = safeParse(line);
+  if (!row || row.type !== 'assistant') return;
+  const message = objectValue(row.message);
+  const usage = objectValue(message?.usage);
+  if (!usage) return;
+
+  const messageId = stringValue(message?.id) ?? `row-${state.fallbackIndex++}`;
+  // `<synthetic>` marks locally-generated rows with no real model (ccusage parity).
+  const model = stringValue(message?.model);
+  state.byMessage.set(
+    messageId,
+    makeUsageEntry(
+      {
+        input: numberValue(usage.input_tokens),
+        output: numberValue(usage.output_tokens),
+        cacheRead: numberValue(usage.cache_read_input_tokens),
+        cacheCreation: numberValue(usage.cache_creation_input_tokens),
+        reasoning: 0,
+      },
+      stringValue(row.timestamp),
+      model === '<synthetic>' ? null : model
+    )
+  );
 }
 
 function safeParse(line: string): Record<string, unknown> | null {

@@ -57,7 +57,6 @@ export class ConversationManagerStore {
       for (const conversation of owned) {
         const store = new ConversationStore(conversation);
         this.conversations.set(conversation.id, store);
-        void store.session.connect();
       }
       void this.hydrateRuntimeStatuses(owned.map((conversation) => conversation.id));
     }
@@ -294,7 +293,10 @@ export class ConversationManagerStore {
       }
       const store = new ConversationStore(nextConversation);
       this.conversations.set(conversation.id, store);
-      void store.session.connect();
+      // Historical conversations are status-hydrated without eagerly creating
+      // xterm instances or subscribing to transcript-backed PTY history. The
+      // visible ConversationSession observes `session.status`, which connects
+      // this PTY on demand; new/forked conversations still connect immediately.
     }
   }
 

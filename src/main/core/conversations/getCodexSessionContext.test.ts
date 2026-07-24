@@ -125,6 +125,76 @@ describe('getCodexSessionContext', () => {
     expect(context?.skillsListing).toContain('- local-skill: Local skill description');
   });
 
+  it('skips oversized payload rows without losing later context', async () => {
+    const rows = [
+      {
+        timestamp: '2026-06-02T11:00:00.000Z',
+        type: 'session_meta',
+        payload: { id: 'conversation-1', cwd, model_provider: 'openai' },
+      },
+      {
+        timestamp: '2026-06-02T11:00:01.000Z',
+        type: 'event_msg',
+        payload: { type: 'task_started', turn_id: 'turn-1' },
+      },
+      {
+        timestamp: '2026-06-02T11:00:02.000Z',
+        type: 'event_msg',
+        payload: { type: 'user_message', message: 'Before oversized payload' },
+      },
+    ];
+    const oversizedRow = JSON.stringify({
+      timestamp: '2026-06-02T11:00:03.000Z',
+      type: 'response_item',
+      payload: { type: 'function_call_output', output: 'x'.repeat(5 * 1024 * 1024) },
+    });
+    const finalRow = JSON.stringify({
+      timestamp: '2026-06-02T11:00:04.000Z',
+      type: 'event_msg',
+      payload: {
+        type: 'task_complete',
+        turn_id: 'turn-1',
+        last_agent_message: 'After oversized payload',
+      },
+    });
+    writeFileSync(
+      rolloutPath,
+      `${rows.map((row) => JSON.stringify(row)).join('\n')}\n${oversizedRow}\n${finalRow}`
+    );
+    insertThread(statePath, rolloutPath, {
+      id: 'conversation-1',
+      cwd,
+      title: 'Thread title',
+      firstUserMessage: 'Before oversized payload',
+    });
+
+    const context = await getConfiguredCodexSessionContext(cwd, 'conversation-1');
+
+    expect(context?.prompts[0]?.text).toBe('Before oversized payload');
+    expect(context?.messages.at(-1)?.text).toBe('After oversized payload');
+    expect(context?.completedTurnCount).toBe(1);
+  });
+
+  it('loads bounded harness metadata without transcript messages', async () => {
+    writeRollout(rolloutPath);
+    insertThread(statePath, rolloutPath, {
+      id: 'conversation-1',
+      cwd,
+      title: 'Thread title',
+      firstUserMessage: 'Fallback prompt',
+    });
+
+    const context = await getCodexSessionContext(cwd, 'conversation-1', undefined, undefined, {
+      codexHome,
+      transcriptMode: 'harness',
+    });
+
+    expect(context?.baseInstructions).toBe('Base instructions');
+    expect(context?.developerMessages[0]?.text).toBe('Developer instructions');
+    expect(context?.prompts).toEqual([]);
+    expect(context?.messages).toEqual([]);
+  });
+
   it('only exposes the last prompt of a completed turn as a restore checkpoint', async () => {
     writeFileSync(
       rolloutPath,

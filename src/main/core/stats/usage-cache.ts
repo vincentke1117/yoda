@@ -1,4 +1,5 @@
-import { readFile, stat } from 'node:fs/promises';
+import { stat } from 'node:fs/promises';
+import { iterateFileLines } from '@main/utils/file-lines';
 import { getTranscriptUsageReader } from './transcript-readers/registry';
 import {
   mergeSessionUsages,
@@ -85,16 +86,14 @@ class SessionUsageCache {
     const cached = this.byPath.get(path);
     if (cached && cached.mtimeMs === mtimeMs) return cached.usage;
 
-    let raw: string;
     try {
-      raw = await readFile(path, 'utf8');
+      const usage = await reader.parseUsageLines(iterateFileLines(path));
+      this.byPath.set(path, { mtimeMs, usage });
+      this.evict();
+      return usage;
     } catch {
       return null;
     }
-    const usage = reader.parseUsage(raw);
-    this.byPath.set(path, { mtimeMs, usage });
-    this.evict();
-    return usage;
   }
 
   private evict(): void {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { formatLocalDateKey } from '../local-date';
-import { parseClaudeUsage } from './claude-usage-reader';
+import { parseClaudeUsage, parseClaudeUsageLines } from './claude-usage-reader';
 
 const DAY_ONE = '2026-03-01T12:00:00.000Z';
 const DAY_TWO = '2026-03-03T12:00:00.000Z';
@@ -19,6 +19,20 @@ function assistantRow(
 }
 
 describe('parseClaudeUsage', () => {
+  it('preserves usage semantics when transcript lines arrive asynchronously', async () => {
+    const lines = [
+      assistantRow('msg-1', { input_tokens: 100, output_tokens: 50 }),
+      assistantRow('msg-2', { input_tokens: 10, output_tokens: 5 }),
+    ];
+    async function* stream() {
+      for (const row of lines) yield row;
+    }
+
+    await expect(parseClaudeUsageLines(stream())).resolves.toEqual(
+      parseClaudeUsage(lines.join('\n'))
+    );
+  });
+
   it('aggregates usage across assistant messages', () => {
     const raw = [
       JSON.stringify({ type: 'user', message: { content: 'hi' } }),

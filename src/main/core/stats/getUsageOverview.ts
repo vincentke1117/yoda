@@ -19,13 +19,14 @@ import { db } from '@main/db/client';
 import { conversations, projects, projectSettings, tasks } from '@main/db/schema';
 import { log } from '@main/lib/logger';
 import { resolveTaskCwd } from './task-cwd';
-import { getTaskDiffTotals } from './task-diff-snapshot';
+import { getStoredTaskDiffTotals, getTaskDiffTotals } from './task-diff-snapshot';
 import { listClaudeSessionsForDirectory } from './transcript-readers/claude-session-files';
 import { TRANSCRIPT_USAGE_PROVIDER_IDS } from './transcript-readers/registry';
 import type { SessionTokenUsage } from './transcript-readers/types';
 import { sessionUsageCache } from './usage-cache';
 
 const TOP_TASKS_LIMIT = 10;
+const LIVE_DIFF_CONCURRENCY = 4;
 const PARSE_CONCURRENCY = 8;
 
 async function mapWithConcurrency<T, R>(
@@ -80,7 +81,13 @@ export async function getUsageOverview(projectId?: string): Promise<UsageOvervie
     : await db.select().from(tasks);
   const tasksArchived = allTasks.filter((task) => task.archivedAt !== null).length;
 
-  const diffTotals = await Promise.all(allTasks.map((task) => getTaskDiffTotals(task)));
+  // Global overview is a startup surface and can include thousands of tasks.
+  // Session/status hooks already persist diff snapshots, so do not fan out live
+  // Git commands across every mounted workspace here. A project-scoped card is
+  // small enough to refresh live, but keep that work explicitly bounded.
+  const diffTotals = projectId
+    ? await mapWithConcurrency(allTasks, LIVE_DIFF_CONCURRENCY, getTaskDiffTotals)
+    : allTasks.map(getStoredTaskDiffTotals);
   let linesAdded = 0;
   let linesDeleted = 0;
   for (const { totals } of diffTotals) {

@@ -1,5 +1,10 @@
 import { open, readFile, stat } from 'node:fs/promises';
 import type { Conversation } from '@shared/conversations';
+import {
+  readCodexThreadRolloutPath,
+  resolveCodexStatePath,
+} from '@main/core/session-title/codex-title-source';
+import { resolveCodexThreadForConversation } from './codex-session-id';
 import { getCodexSessionContext } from './getCodexSessionContext';
 
 const MAX_COMMAND_OUTPUT_CHARS = 16 * 1024;
@@ -58,17 +63,17 @@ export async function loadCodexRolloutTerminalHistoryForConversation({
 }): Promise<string | null> {
   if (conversation.runtimeId !== 'codex') return null;
 
-  const context = await getCodexSessionContext(
-    cwd,
-    conversation.id,
-    conversation.title,
-    conversation.createdAt
-  );
+  const context = await resolveCodexRolloutContext(conversation, cwd);
   if (!context?.rolloutPath) return null;
 
   let snapshot: RolloutFileSnapshot;
   try {
-    snapshot = await readRolloutSnapshot(context.rolloutPath);
+    // Renderer startup subscribes every preloaded conversation. Historical
+    // rollouts can be hundreds of megabytes while the terminal surface retains
+    // at most MAX_HISTORY_CHARS, so loading the full file here multiplies into
+    // a multi-gigabyte main-process spike. The bounded tail contains more than
+    // enough source material for the capped terminal replay.
+    snapshot = await readRolloutTailSnapshot(context.rolloutPath);
   } catch {
     return null;
   }
@@ -217,14 +222,41 @@ async function readRolloutTail(rolloutPath: string, size: number): Promise<strin
 
 async function resolveCodexRolloutContext(conversation: Conversation, cwd: string) {
   if (conversation.runtimeId !== 'codex') return null;
-  const context = await getCodexSessionContext(
+  const statePath = resolveCodexStatePath();
+  const thread = resolveCodexThreadForConversation({
+    conversationId: conversation.id,
+    cwd,
+    title: conversation.title,
+    createdAt: conversation.createdAt,
+    statePath,
+  });
+  if (thread) {
+    const rolloutPath = readCodexThreadRolloutPath(statePath, thread.id);
+    if (rolloutPath) {
+      return {
+        threadId: thread.id,
+        title: thread.title ?? conversation.title,
+        rolloutPath,
+      };
+    }
+  }
+
+  // Older or externally moved Codex state may not have a resolvable threads
+  // row. Keep that compatibility path bounded to harness metadata rather than
+  // loading transcript messages just to locate the rollout.
+  const fallback = await getCodexSessionContext(
     cwd,
     conversation.id,
     conversation.title,
-    conversation.createdAt
-  );
-  if (!context?.rolloutPath) return null;
-  return { ...context, rolloutPath: context.rolloutPath };
+    conversation.createdAt,
+    { transcriptMode: 'harness' }
+  ).catch(() => null);
+  if (!fallback?.rolloutPath) return null;
+  return {
+    threadId: fallback.threadId,
+    title: fallback.title,
+    rolloutPath: fallback.rolloutPath,
+  };
 }
 
 function trimCache<T>(cache: Map<string, CachedValue<T>>): void {

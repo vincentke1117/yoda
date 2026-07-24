@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { formatLocalDateKey } from '../local-date';
-import { parseCodexUsage } from './codex-usage-reader';
+import { parseCodexUsage, parseCodexUsageLines } from './codex-usage-reader';
 
 const DAY_ONE = '2026-03-01T12:00:00.000Z';
 const DAY_TWO = '2026-03-03T12:00:00.000Z';
@@ -42,6 +42,20 @@ function tokenCountRow(
 }
 
 describe('parseCodexUsage', () => {
+  it('preserves usage semantics when transcript lines arrive asynchronously', async () => {
+    const lines = [
+      tokenCountRow({ input_tokens: 100, cached_input_tokens: 40, output_tokens: 10 }),
+      tokenCountRow({ input_tokens: 160, cached_input_tokens: 50, output_tokens: 15 }),
+    ];
+    async function* stream() {
+      for (const row of lines) yield row;
+    }
+
+    await expect(parseCodexUsageLines(stream())).resolves.toEqual(
+      parseCodexUsage(lines.join('\n'))
+    );
+  });
+
   it('diffs cumulative totals so repeated mid-turn updates never double-count', () => {
     const raw = [
       tokenCountRow({ input_tokens: 100, cached_input_tokens: 40, output_tokens: 10 }),

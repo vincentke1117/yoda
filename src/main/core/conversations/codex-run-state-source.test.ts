@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   classifyCodexRollout,
   initialCodexTailEvents,
@@ -11,6 +11,7 @@ import {
   readCodexTurnVerdict,
   readCodexTurnVerdictFile,
   resolveCodexRolloutPathForConversation,
+  watchCodexRunState,
 } from './codex-run-state-source';
 
 const ts = '2026-06-08T17:49:25.314Z';
@@ -358,6 +359,49 @@ describe('resolveCodexRolloutPathForConversation', () => {
         statePath,
       })
     ).toBe('/rollouts/resumed.jsonl');
+  });
+
+  it('initializes a watcher from the bounded tail of a large historical rollout', async () => {
+    dir = mkdtempSync(join(tmpdir(), 'yoda-codex-run-state-'));
+    const statePath = join(dir, 'state_5.sqlite');
+    const rolloutPath = join(dir, 'rollout.jsonl');
+    createStateDb(statePath);
+    insertThread(statePath, {
+      id: 'large-thread',
+      cwd: '/large-repo',
+      rolloutPath,
+      createdAtMs: at,
+      updatedAtMs: at,
+    });
+    writeFileSync(
+      rolloutPath,
+      `${line({ type: 'task_started', turn_id: 'active' })}\n${JSON.stringify({
+        type: 'response_item',
+        payload: { type: 'function_call_output', output: 'x'.repeat(5_000_000) },
+      })}\n`
+    );
+    const events: unknown[] = [];
+    const watcher = watchCodexRunState(
+      {
+        conversationId: 'conversation-large',
+        cwd: '/large-repo',
+        startedAtMs: at + 60_000,
+        threadId: 'large-thread',
+      },
+      (event) => events.push(event),
+      { statePath }
+    );
+
+    try {
+      await vi.waitFor(
+        () => {
+          expect(events).toEqual([{ kind: 'turn-started', at, force: true }]);
+        },
+        { timeout: 2_000 }
+      );
+    } finally {
+      watcher.stop();
+    }
   });
 });
 

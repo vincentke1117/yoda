@@ -273,7 +273,7 @@ function CodexHarnessSection({
   const { t } = useTranslation();
   const { data, isPending } = useQuery<CodexSessionContext | null>({
     queryKey: [
-      'codexSessionContext',
+      'codexHarnessContext',
       cwd,
       conversationId,
       conversationTitle,
@@ -284,7 +284,8 @@ function CodexHarnessSection({
         cwd,
         conversationId,
         conversationTitle,
-        conversationCreatedAt
+        conversationCreatedAt,
+        'harness'
       ),
     refetchInterval: CONTEXT_REFRESH_MS,
     refetchIntervalInBackground: true,

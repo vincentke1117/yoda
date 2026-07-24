@@ -1,5 +1,5 @@
 import { existsSync, type Dirent } from 'node:fs';
-import { readdir, readFile } from 'node:fs/promises';
+import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import type {
@@ -18,6 +18,7 @@ import {
   resolveCodexStatePath,
 } from '@main/core/session-title/codex-title-source';
 import { log } from '@main/lib/logger';
+import { iterateFileLines, readFirstFileLine } from '@main/utils/file-lines';
 import { resolveRuntimeStateDirectory } from './impl/runtime-env';
 import { getCodexInstructionFiles } from './instruction-files';
 import { scanCodexSkills } from './scanCodexSkills';
@@ -71,6 +72,7 @@ type CodexRolloutMeta = {
 };
 
 const MAX_CODEX_ROLLOUT_SCAN_FILES = 500;
+const CODEX_HARNESS_PREFIX_BYTES = 8 * 1024 * 1024;
 const CODEX_CREATED_AT_MATCH_MAX_DISTANCE_MS = 2 * 60_000;
 const SQLITE_TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
 
@@ -79,7 +81,7 @@ export async function getCodexSessionContext(
   conversationId: string,
   conversationTitle?: string,
   conversationCreatedAt?: string | null,
-  options: { codexHome?: string } = {}
+  options: { codexHome?: string; transcriptMode?: 'full' | 'harness' } = {}
 ): Promise<CodexSessionContext | null> {
   const codexHome = options.codexHome ?? resolveCodexHome();
   const statePath = resolveCodexStatePath(codexHome);
@@ -100,15 +102,19 @@ export async function getCodexSessionContext(
     }));
   if (!thread) return null;
 
-  const [rollout, memoryFiles, dbDynamicTools, skills] = await Promise.all([
-    loadRollout(thread.rolloutPath),
+  const [parsed, memoryFiles, dbDynamicTools, skills] = await Promise.all([
+    loadRolloutContext(
+      thread.rolloutPath,
+      thread.firstUserMessage,
+      options.transcriptMode ?? 'full'
+    ),
     getCodexInstructionFiles(cwd),
     loadDynamicTools(statePath, thread.id),
     scanCodexSkills(cwd, { codexHome }),
   ]);
 
-  const parsed = rollout ? parseCodexRollout(rollout, thread.firstUserMessage) : emptyRollout();
-  const dynamicTools = dbDynamicTools.length > 0 ? dbDynamicTools : parsed.dynamicTools;
+  const rollout = parsed ?? emptyRollout();
+  const dynamicTools = dbDynamicTools.length > 0 ? dbDynamicTools : rollout.dynamicTools;
 
   return {
     threadId: thread.id,
@@ -116,22 +122,22 @@ export async function getCodexSessionContext(
     title: thread.title,
     cwd: thread.cwd,
     model: thread.model,
-    modelProvider: parsed.modelProvider ?? thread.modelProvider,
-    cliVersion: parsed.cliVersion ?? thread.cliVersion,
+    modelProvider: rollout.modelProvider ?? thread.modelProvider,
+    cliVersion: rollout.cliVersion ?? thread.cliVersion,
     memoryMode: thread.memoryMode,
     approvalMode: thread.approvalMode,
     sandboxPolicy: thread.sandboxPolicy,
-    baseInstructions: parsed.baseInstructions,
-    developerMessages: parsed.developerMessages,
+    baseInstructions: rollout.baseInstructions,
+    developerMessages: rollout.developerMessages,
     memoryFiles,
     dynamicTools,
     skills,
     skillsListing: formatSkillListing(skills),
-    prompts: parsed.prompts,
-    messages: parsed.messages,
-    turnContexts: parsed.turnContexts,
-    completedTurnCount: parsed.completedTurnCount,
-    summary: parsed.summary,
+    prompts: rollout.prompts,
+    messages: rollout.messages,
+    turnContexts: rollout.turnContexts,
+    completedTurnCount: rollout.completedTurnCount,
+    summary: rollout.summary,
   };
 }
 
@@ -189,14 +195,8 @@ async function resolveCodexThreadFromRollouts({
   let hasMultipleMovedPathRows = false;
 
   for (const rolloutPath of rolloutPaths) {
-    let raw: string;
-    try {
-      raw = await readFile(rolloutPath, 'utf8');
-    } catch {
-      continue;
-    }
-
-    const meta = parseCodexRolloutMeta(raw);
+    const firstLine = await readFirstFileLine(rolloutPath).catch(() => null);
+    const meta = firstLine ? parseCodexRolloutMeta(firstLine) : null;
     if (!meta) continue;
 
     const sameCwd = meta.cwd === cwd;
@@ -213,7 +213,7 @@ async function resolveCodexThreadFromRollouts({
       movedPathDistanceMs <= CODEX_CREATED_AT_MATCH_MAX_DISTANCE_MS;
     if (!sameCwd && meta.id !== conversationId && !canCheckMovedPath) continue;
 
-    const parsed = parseCodexRollout(raw, null);
+    const parsed = (await loadRolloutContext(rolloutPath, null)) ?? emptyRollout();
     const firstUserMessage = parsed.prompts[0]?.text ?? null;
     const lastTurnContext = parsed.turnContexts.at(-1);
     const row: CodexThreadContextRow = {
@@ -501,13 +501,45 @@ function parseCodexThreadContextRow(row: unknown): CodexThreadContextRow | null 
   };
 }
 
-async function loadRollout(path: string | null): Promise<string | null> {
+async function loadRolloutContext(
+  path: string | null,
+  firstUserMessage: string | null,
+  mode: 'full' | 'harness' = 'full'
+): Promise<ParsedCodexRollout | null> {
   if (!path) return null;
   try {
-    return await readFile(path, 'utf8');
+    const relevantLines: string[] = [];
+    const lines = iterateFileLines(
+      path,
+      mode === 'harness' ? { maxReadBytes: CODEX_HARNESS_PREFIX_BYTES } : undefined
+    );
+    for await (const line of lines) {
+      if (isCodexContextLine(line, mode)) relevantLines.push(line);
+    }
+    return parseCodexRolloutLines(relevantLines, mode === 'harness' ? null : firstUserMessage);
   } catch {
     return null;
   }
+}
+
+function isCodexContextLine(line: string, mode: 'full' | 'harness'): boolean {
+  if (line.includes('"session_meta"') || line.includes('"turn_context"')) return true;
+  if (mode === 'harness') {
+    return (
+      line.includes('"response_item"') && line.includes('"message"') && line.includes('"developer"')
+    );
+  }
+  if (line.includes('"event_msg"')) {
+    return (
+      line.includes('"task_started"') ||
+      line.includes('"turn_started"') ||
+      line.includes('"task_complete"') ||
+      line.includes('"turn_complete"') ||
+      line.includes('"user_message"') ||
+      line.includes('"thread_rolled_back"')
+    );
+  }
+  return line.includes('"response_item"') && line.includes('"message"');
 }
 
 async function loadDynamicTools(statePath: string, threadId: string): Promise<CodexDynamicTool[]> {
@@ -551,7 +583,10 @@ function parseDynamicTool(row: unknown): CodexDynamicTool | null {
   };
 }
 
-function parseCodexRollout(raw: string, firstUserMessage: string | null): ParsedCodexRollout {
+function parseCodexRolloutLines(
+  lines: Iterable<string>,
+  firstUserMessage: string | null
+): ParsedCodexRollout {
   let baseInstructions: string | null = null;
   let cliVersion: string | null = null;
   let modelProvider: string | null = null;
@@ -610,7 +645,7 @@ function parseCodexRollout(raw: string, firstUserMessage: string | null): Parsed
     summary = null;
   };
 
-  for (const line of raw.split('\n')) {
+  for (const line of lines) {
     if (!line) continue;
     const parsed = safeParse(line);
     if (!parsed) continue;

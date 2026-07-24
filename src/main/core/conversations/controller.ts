@@ -54,11 +54,13 @@ async function getConfiguredCodexSessionContext(
   cwd: string,
   conversationId: string,
   conversationTitle?: string,
-  conversationCreatedAt?: string | null
+  conversationCreatedAt?: string | null,
+  transcriptMode: 'full' | 'harness' = 'full'
 ) {
   const providerConfig = await runtimeOverrideSettings.getItem('codex');
   return getCodexSessionContext(cwd, conversationId, conversationTitle, conversationCreatedAt, {
     codexHome: resolveRuntimeStateDirectory('codex', providerConfig),
+    transcriptMode,
   });
 }
 

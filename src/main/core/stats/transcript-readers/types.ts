@@ -38,6 +38,14 @@ export interface TranscriptUsageReader {
   resolveTranscriptPaths(ctx: UsageReaderContext): Promise<string[]>;
   /** Null when the transcript contains no token usage. */
   parseUsage(raw: string): SessionTokenUsage | null;
+  /**
+   * Streaming variant used for real transcript files. A rollout may be
+   * hundreds of megabytes, so production callers must not materialize the
+   * whole file as one UTF-8 string before parsing it.
+   */
+  parseUsageLines(
+    lines: Iterable<string> | AsyncIterable<string>
+  ): Promise<SessionTokenUsage | null>;
 }
 
 export type UsageEntry = {

@@ -118,6 +118,12 @@ describe('ConversationManagerStore', () => {
     mocks.getConversationsForTaskMock.mockResolvedValue([]);
   });
 
+  it('does not eagerly connect a preloaded historical conversation PTY', () => {
+    new ConversationManagerStore('project-1', 'task-1', [conversation]);
+
+    expect(mocks.ptyConnectMock).not.toHaveBeenCalled();
+  });
+
   it('propagates user prompt timestamps to the owning task', async () => {
     const onUserPromptAt = vi.fn();
     const store = new ConversationManagerStore(

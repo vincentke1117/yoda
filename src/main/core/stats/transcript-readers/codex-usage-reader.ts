@@ -41,6 +41,7 @@ export const codexUsageReader: TranscriptUsageReader = {
     return Promise.resolve(path ? [path] : []);
   },
   parseUsage: parseCodexUsage,
+  parseUsageLines: parseCodexUsageLines,
 };
 
 type CumulativeUsage = {
@@ -51,62 +52,83 @@ type CumulativeUsage = {
 };
 
 export function parseCodexUsage(raw: string): SessionTokenUsage | null {
-  const entries: UsageEntry[] = [];
-  let previous: CumulativeUsage = { input: 0, cached: 0, output: 0, reasoning: 0 };
-  let context: SessionContextUsage | null = null;
-  // Rollouts carry the active model on `turn_context` rows; each token_count
-  // delta is attributed to the most recent one (ccusage parity).
-  let currentModel: string | null = null;
+  const state = createCodexUsageState();
+  for (const line of iterateLines(raw)) consumeCodexUsageLine(state, line);
+  return finishCodexUsage(state);
+}
 
-  for (const line of iterateLines(raw)) {
-    // Cheap pre-filter — rollouts are dominated by response_item rows.
-    if (!line) continue;
-    const isTokenCount = line.includes('"token_count"');
-    if (!isTokenCount && !line.includes('"turn_context"')) continue;
-    const row = safeParse(line);
-    if (!row) continue;
-    if (row.type === 'turn_context') {
-      currentModel = stringValue(objectValue(row.payload)?.model) ?? currentModel;
-      continue;
-    }
-    if (!isTokenCount || row.type !== 'event_msg') continue;
-    const payload = objectValue(row.payload);
-    if (payload?.type !== 'token_count') continue;
-    const total = objectValue(objectValue(payload.info)?.total_token_usage);
-    if (!total) continue;
+export async function parseCodexUsageLines(
+  lines: Iterable<string> | AsyncIterable<string>
+): Promise<SessionTokenUsage | null> {
+  const state = createCodexUsageState();
+  for await (const line of lines) consumeCodexUsageLine(state, line);
+  return finishCodexUsage(state);
+}
 
-    const nextContext = readContextUsage(payload, stringValue(row.timestamp), context);
-    if (nextContext) {
-      context = nextContext;
-    }
+type CodexUsageState = {
+  entries: UsageEntry[];
+  previous: CumulativeUsage;
+  context: SessionContextUsage | null;
+  currentModel: string | null;
+};
 
-    const current: CumulativeUsage = {
-      input: numberValue(total.input_tokens),
-      cached: numberValue(total.cached_input_tokens),
-      output: numberValue(total.output_tokens),
-      reasoning: numberValue(total.reasoning_output_tokens),
-    };
-    const delta = diffCumulative(previous, current);
-    previous = current;
-    if (!delta) continue;
+function createCodexUsageState(): CodexUsageState {
+  return {
+    entries: [],
+    previous: { input: 0, cached: 0, output: 0, reasoning: 0 },
+    context: null,
+    currentModel: null,
+  };
+}
 
-    entries.push(
-      makeUsageEntry(
-        {
-          input: Math.max(0, delta.input - delta.cached),
-          output: delta.output,
-          cacheRead: delta.cached,
-          cacheCreation: 0,
-          reasoning: delta.reasoning,
-        },
-        stringValue(row.timestamp),
-        currentModel
-      )
-    );
+function consumeCodexUsageLine(state: CodexUsageState, line: string): void {
+  // Cheap pre-filter — rollouts are dominated by response_item rows.
+  if (!line) return;
+  const isTokenCount = line.includes('"token_count"');
+  if (!isTokenCount && !line.includes('"turn_context"')) return;
+  const row = safeParse(line);
+  if (!row) return;
+  if (row.type === 'turn_context') {
+    state.currentModel = stringValue(objectValue(row.payload)?.model) ?? state.currentModel;
+    return;
   }
+  if (!isTokenCount || row.type !== 'event_msg') return;
+  const payload = objectValue(row.payload);
+  if (payload?.type !== 'token_count') return;
+  const total = objectValue(objectValue(payload.info)?.total_token_usage);
+  if (!total) return;
 
-  const usage = aggregateUsageEntries(entries);
-  return usage ? { ...usage, context } : null;
+  const nextContext = readContextUsage(payload, stringValue(row.timestamp), state.context);
+  if (nextContext) state.context = nextContext;
+
+  const current: CumulativeUsage = {
+    input: numberValue(total.input_tokens),
+    cached: numberValue(total.cached_input_tokens),
+    output: numberValue(total.output_tokens),
+    reasoning: numberValue(total.reasoning_output_tokens),
+  };
+  const delta = diffCumulative(state.previous, current);
+  state.previous = current;
+  if (!delta) return;
+
+  state.entries.push(
+    makeUsageEntry(
+      {
+        input: Math.max(0, delta.input - delta.cached),
+        output: delta.output,
+        cacheRead: delta.cached,
+        cacheCreation: 0,
+        reasoning: delta.reasoning,
+      },
+      stringValue(row.timestamp),
+      state.currentModel
+    )
+  );
+}
+
+function finishCodexUsage(state: CodexUsageState): SessionTokenUsage | null {
+  const usage = aggregateUsageEntries(state.entries);
+  return usage ? { ...usage, context: state.context } : null;
 }
 
 function readContextUsage(

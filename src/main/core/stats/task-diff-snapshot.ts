@@ -65,6 +65,18 @@ export async function getTaskDiffTotals(
 ): Promise<{ totals: TaskDiffTotals; source: TaskDiffStatsSource }> {
   const live = await getLiveTaskDiffTotals(task);
   if (live) return { totals: live, source: 'live' };
+  return getStoredTaskDiffTotals(task);
+}
+
+/**
+ * Read the last lifecycle snapshot without touching a workspace. Global usage
+ * rollups call this for every historical task; launching live Git work for all
+ * mounted tasks at once can exhaust the Electron main process.
+ */
+export function getStoredTaskDiffTotals(task: TaskRow): {
+  totals: TaskDiffTotals;
+  source: TaskDiffStatsSource;
+} {
   if (task.diffAdditions !== null || task.diffDeletions !== null) {
     return {
       totals: { additions: task.diffAdditions ?? 0, deletions: task.diffDeletions ?? 0 },

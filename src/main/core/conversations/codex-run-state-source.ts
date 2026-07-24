@@ -1,5 +1,6 @@
 import { watch, type FSWatcher } from 'node:fs';
 import { open, type FileHandle } from 'node:fs/promises';
+import { StringDecoder } from 'node:string_decoder';
 import {
   initialRunState,
   reduceRunState,
@@ -87,6 +88,8 @@ class CodexRolloutTailer implements CodexRunStateWatcher {
   private rolloutPath: string | undefined;
   private offset = 0;
   private buffer = '';
+  private decoder = new StringDecoder('utf8');
+  private discardingOversizedLine = false;
   private reading = false;
   private pendingRead = false;
   private initialized = false;
@@ -198,23 +201,19 @@ class CodexRolloutTailer implements CodexRunStateWatcher {
       if (stats.size < this.offset) {
         this.offset = 0;
         this.buffer = '';
+        this.decoder = new StringDecoder('utf8');
+        this.discardingOversizedLine = false;
+        this.initialized = false;
       }
       if (stats.size === this.offset) return;
-      const length = stats.size - this.offset;
-      const buf = Buffer.alloc(length);
-      await fileHandle.read(buf, 0, length, this.offset);
-      this.offset = stats.size;
-      this.buffer += buf.toString('utf8');
-
-      const lines: string[] = [];
-      let nl = this.buffer.indexOf('\n');
-      while (nl !== -1) {
-        const line = this.buffer.slice(0, nl).trim();
-        this.buffer = this.buffer.slice(nl + 1);
-        if (line) lines.push(line);
-        nl = this.buffer.indexOf('\n');
-      }
+      const targetSize = stats.size;
       if (!this.initialized) {
+        // A resumed thread may have a rollout hundreds of megabytes long. Its
+        // full history is irrelevant to the current run state and many session
+        // watchers initialize in parallel at startup. Reuse the bounded reverse
+        // scan, then tail only bytes appended after this snapshot.
+        const lines = await readRecentRunStateLines(fileHandle, targetSize);
+        this.offset = targetSize;
         this.initialized = true;
         for (const event of initialCodexTailEvents(
           lines,
@@ -225,10 +224,45 @@ class CodexRolloutTailer implements CodexRunStateWatcher {
         }
         return;
       }
-      for (const line of lines) this.handleLine(line);
+      while (this.offset < targetSize) {
+        const length = Math.min(RUN_STATE_SCAN_CHUNK_BYTES, targetSize - this.offset);
+        const buf = Buffer.allocUnsafe(length);
+        const { bytesRead } = await fileHandle.read(buf, 0, length, this.offset);
+        if (bytesRead === 0) break;
+        this.offset += bytesRead;
+        this.buffer += this.decoder.write(buf.subarray(0, bytesRead));
+        this.drainLines();
+      }
     } finally {
       await fileHandle.close();
     }
+  }
+
+  private drainLines(): void {
+    let newline = this.buffer.indexOf('\n');
+    while (newline !== -1) {
+      if (this.discardingOversizedLine) {
+        this.buffer = this.buffer.slice(newline + 1);
+        this.discardingOversizedLine = false;
+        newline = this.buffer.indexOf('\n');
+        continue;
+      }
+      const line = newline <= MAX_RUN_STATE_LINE_BYTES ? this.buffer.slice(0, newline).trim() : '';
+      this.buffer = this.buffer.slice(newline + 1);
+      if (line) this.consumeLine(line);
+      newline = this.buffer.indexOf('\n');
+    }
+
+    if (this.buffer.length > MAX_RUN_STATE_LINE_BYTES) {
+      // Tool/image payload rows can be hundreds of megabytes and cannot affect
+      // run state once they exceed the bounded parser contract.
+      this.buffer = '';
+      this.discardingOversizedLine = true;
+    }
+  }
+
+  private consumeLine(line: string): void {
+    this.handleLine(line);
   }
 
   private handleLine(line: string): void {
@@ -255,22 +289,47 @@ export function initialCodexTailEvents(
   watcherStartedAtMs: number,
   pendingRequestUserInputCallIds = new Set<string>()
 ): RunStateEvent[] {
-  let state = initialRunState();
-  const freshEvents: RunStateEvent[] = [];
-
+  const accumulator = createInitialTailAccumulator();
   for (const line of lines) {
-    const event = parseCodexRunStateEvent(line, pendingRequestUserInputCallIds);
-    if (!event) continue;
-    state = reduceRunState(state, event);
-    if (event.at >= watcherStartedAtMs) freshEvents.push(event);
+    accumulateInitialTail(accumulator, line, watcherStartedAtMs, pendingRequestUserInputCallIds);
   }
+  return finishInitialTail(accumulator);
+}
 
-  if (freshEvents.length > 0) return freshEvents;
-  if (state.status === 'working') {
-    return [{ kind: 'turn-started', at: state.updatedAt, force: true }];
+type InitialTailAccumulator = {
+  state: ReturnType<typeof initialRunState>;
+  freshEvents: RunStateEvent[];
+};
+
+function createInitialTailAccumulator(): InitialTailAccumulator {
+  return { state: initialRunState(), freshEvents: [] };
+}
+
+function accumulateInitialTail(
+  accumulator: InitialTailAccumulator,
+  line: string,
+  watcherStartedAtMs: number,
+  pendingRequestUserInputCallIds: Set<string>
+): void {
+  const event = parseCodexRunStateEvent(line, pendingRequestUserInputCallIds);
+  if (!event) return;
+  accumulator.state = reduceRunState(accumulator.state, event);
+  if (event.at >= watcherStartedAtMs) accumulator.freshEvents.push(event);
+}
+
+function finishInitialTail(accumulator: InitialTailAccumulator): RunStateEvent[] {
+  if (accumulator.freshEvents.length > 0) return accumulator.freshEvents;
+  if (accumulator.state.status === 'working') {
+    return [{ kind: 'turn-started', at: accumulator.state.updatedAt, force: true }];
   }
-  if (state.status === 'awaiting-input' && state.pendingAction) {
-    return [{ kind: 'awaiting-input', at: state.updatedAt, pendingAction: state.pendingAction }];
+  if (accumulator.state.status === 'awaiting-input' && accumulator.state.pendingAction) {
+    return [
+      {
+        kind: 'awaiting-input',
+        at: accumulator.state.updatedAt,
+        pendingAction: accumulator.state.pendingAction,
+      },
+    ];
   }
   return [];
 }
