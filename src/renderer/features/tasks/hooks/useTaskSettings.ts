@@ -14,7 +14,6 @@ import { useAppSettingsKey } from '@renderer/features/settings/use-app-settings-
 
 export interface TaskSettingsModel {
   autoGenerateName: boolean;
-  initTaskNameFromSession: boolean;
   branchNaming: 'hash' | 'ai';
   namingAgentId: string;
   promptRewriteAgentId: string;
@@ -41,7 +40,6 @@ export interface TaskSettingsModel {
   isFieldOverridden: (
     field:
       | 'autoGenerateName'
-      | 'initTaskNameFromSession'
       | 'branchNaming'
       | 'inputPromptLanguage'
       | 'promptRewriteEnabled'
@@ -56,7 +54,6 @@ export interface TaskSettingsModel {
       | 'autoTrustWorktrees'
   ) => boolean;
   updateAutoGenerateName: (next: boolean) => void;
-  updateInitTaskNameFromSession: (next: boolean) => void;
   updateBranchNaming: (next: 'hash' | 'ai') => void;
   updateNamingAgentId: (next: string) => void;
   updatePromptRewriteAgentId: (next: string) => void;
@@ -72,7 +69,6 @@ export interface TaskSettingsModel {
   updateNamingRequestTimeoutMs: (next: number) => void;
   updateAutoTrustWorktrees: (next: boolean) => void;
   resetAutoGenerateName: () => void;
-  resetInitTaskNameFromSession: () => void;
   resetBranchNaming: () => void;
   resetPromptRewriteEnabled: () => void;
   resetAutoGenerateSummary: () => void;
@@ -96,7 +92,6 @@ export function useTaskSettings(): TaskSettingsModel {
 
   return {
     autoGenerateName: tasks?.autoGenerateName ?? false,
-    initTaskNameFromSession: tasks?.initTaskNameFromSession ?? true,
     branchNaming: tasks?.branchNaming ?? 'hash',
     namingAgentId: tasks?.namingAgentId ?? '',
     promptRewriteAgentId: tasks?.promptRewriteAgentId ?? '',
@@ -122,7 +117,6 @@ export function useTaskSettings(): TaskSettingsModel {
     saving,
     isFieldOverridden,
     updateAutoGenerateName: (next) => update({ autoGenerateName: next }),
-    updateInitTaskNameFromSession: (next) => update({ initTaskNameFromSession: next }),
     updateBranchNaming: (next) => update({ branchNaming: next }),
     updateNamingAgentId: (next) => update({ namingAgentId: next }),
     updatePromptRewriteAgentId: (next) => update({ promptRewriteAgentId: next }),
@@ -158,7 +152,6 @@ export function useTaskSettings(): TaskSettingsModel {
       update({ namingRequestTimeoutMs: normalizeTaskNamingTimeoutMs(next) }),
     updateAutoTrustWorktrees: (next) => update({ autoTrustWorktrees: next }),
     resetAutoGenerateName: () => resetField('autoGenerateName'),
-    resetInitTaskNameFromSession: () => resetField('initTaskNameFromSession'),
     resetBranchNaming: () => resetField('branchNaming'),
     resetPromptRewriteEnabled: () => resetField('promptRewriteEnabled'),
     resetAutoGenerateSummary: () => resetField('autoGenerateSummary'),

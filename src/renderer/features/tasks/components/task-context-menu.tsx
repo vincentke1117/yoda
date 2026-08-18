@@ -27,6 +27,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ProjectFacet } from '@shared/project-facets';
 import type { RuntimeId } from '@shared/runtime-registry';
+import type { ForkTaskMode } from '@shared/tasks';
 import {
   WorkspaceAssignContextSubmenu,
   WorkspaceAssignDropdownSubmenu,
@@ -49,6 +50,7 @@ import {
   DropdownMenuTrigger,
 } from '@renderer/lib/ui/dropdown-menu';
 import { FacetAssignContextSubmenu, FacetAssignDropdownSubmenu } from './facet-assign-submenu';
+import { ForkTaskContextSubmenu, ForkTaskDropdownSubmenu } from './fork-task-submenu';
 import {
   MoveToProjectContextSubmenu,
   MoveToProjectDropdownSubmenu,
@@ -128,6 +130,11 @@ export interface TaskMenuActions extends TaskMenuInfoFields {
   onSetParent?: () => void;
   /** Create a new session-less grouping parent and nest this task under it. */
   onCreateParent?: () => void;
+  /**
+   * Fork the task's session into a new task, on the source branch (shared
+   * worktree) or on a branch of its own. Unset when the runtime cannot fork.
+   */
+  onFork?: (mode: ForkTaskMode) => void;
   /** Show this task in an extra pane beside the routed task. */
   onOpenBeside?: () => void;
   /** Tile all of this task's children (compare candidates) side by side. */
@@ -553,6 +560,7 @@ export function TaskContextMenuItems(actions: TaskMenuActions) {
           showSeparator={!actions.onMoveToProject || !actions.projectId}
         />
       )}
+      {actions.onFork && <ForkTaskContextSubmenu onFork={actions.onFork} />}
       {actions.onAssignFacet && (
         <FacetAssignContextSubmenu
           facets={actions.facets ?? []}
@@ -641,6 +649,7 @@ export function TaskActionsMenu({
             showSeparator={!actions.onMoveToProject || !actions.projectId}
           />
         )}
+        {actions.onFork && <ForkTaskDropdownSubmenu onFork={actions.onFork} />}
         {actions.onAssignFacet && (
           <FacetAssignDropdownSubmenu
             facets={actions.facets ?? []}

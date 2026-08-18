@@ -73,6 +73,7 @@ vi.mock('@renderer/features/tasks/components/task-menu-session-info', () => ({
   buildTaskMenuSessionFields: vi.fn(),
   getTaskMenuConversation: () => mocks.conversation,
   resolveTaskMenuSessionFields: vi.fn(),
+  selectPreferredConversation: vi.fn(),
 }));
 
 vi.mock('@renderer/features/tasks/task-view-context', () => ({

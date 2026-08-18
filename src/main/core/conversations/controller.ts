@@ -18,8 +18,6 @@ import {
   restoreRuntimeInstructionFileVersion,
   saveEditableRuntimeInstructionFile,
 } from './editable-instruction-files';
-import { forkConversation } from './forkConversation';
-import { forkConversationAtPrompt } from './forkConversationAtPrompt';
 import {
   generateConversationTitle,
   getConversationNamingPreview,
@@ -239,8 +237,6 @@ export const conversationController = createRPCController({
   archiveConversation,
   unarchiveConversation,
   deleteConversation,
-  forkConversation,
-  forkConversationAtPrompt,
   generateConversationTitle,
   getConversationNamingPreview,
   getConversationNamingSnapshot,

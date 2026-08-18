@@ -1,4 +1,4 @@
-import type { CreateConversationParams } from '@shared/conversations';
+import type { CreateConversationParams, SessionContextRestoreTarget } from '@shared/conversations';
 import type { ProvisionStep } from '@shared/events/taskEvents';
 import type { Branch, CreateBranchError, FetchPrForReviewError, PushError } from '@shared/git';
 import type { ParadigmKindId } from '@shared/paradigms/contract';
@@ -236,6 +236,34 @@ export type CreateTaskWarning =
 export type CreateTaskSuccess = {
   task: Task;
   warning?: CreateTaskWarning;
+};
+
+export type ForkTaskMode =
+  /** Shares the source task's worktree and branch (refcounted, no new git work). */
+  | 'same-branch'
+  /** Branches off the source task's branch into its own worktree. */
+  | 'new-branch';
+
+export type ForkTaskCheckpoint = {
+  /** Zero-based prompt index in the source session. */
+  promptIndex: number;
+  target: SessionContextRestoreTarget;
+};
+
+export type ForkTaskParams = {
+  projectId: string;
+  taskId: string;
+  conversationId: string;
+  mode: ForkTaskMode;
+  /** Omitted forks at the source session's latest completed turn. */
+  checkpoint?: ForkTaskCheckpoint;
+  initialSize?: { cols: number; rows: number };
+};
+
+export type ForkTaskResult = {
+  task: Task;
+  /** The forked session. A task is its session, so this is the task's only one. */
+  conversationId: string;
 };
 
 export type ProvisionTaskResult = {

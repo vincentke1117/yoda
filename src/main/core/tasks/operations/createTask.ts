@@ -135,7 +135,6 @@ async function applyBackgroundTaskNaming(input: {
     }
   }
 
-  const taskSettings = await appSettingsService.get('tasks');
   const row = await loadTaskRow(input.taskId);
   if (!row) return;
   if (row.isUserNamed) {
@@ -169,7 +168,8 @@ async function applyBackgroundTaskNaming(input: {
     }
   }
 
-  const nextName = taskSettings.initTaskNameFromSession ? sessionTitle : row.name;
+  // A task is its session: the generated session title is the task name.
+  const nextName = sessionTitle;
   if (nextName === row.name && nextBranch === row.taskBranch) return;
 
   const [updatedRow] = await db

@@ -1,9 +1,12 @@
 import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ClaudeSessionPrompt, Conversation } from '@shared/conversations';
+import type { ForkTaskResult } from '@shared/tasks';
+import { forkTaskIntoNewTask, isTaskForkPending } from '@renderer/features/tasks/fork-task';
 import type { ProvisionedTask } from '@renderer/features/tasks/stores/task';
 import { useRequireProvisionedTask } from '@renderer/features/tasks/task-view-context';
 import { toast } from '@renderer/lib/hooks/use-toast';
+import { useNavigate, type NavigateFnTyped } from '@renderer/lib/layout/navigation-provider';
 import { useShowModal } from '@renderer/lib/modal/modal-provider';
 
 export type ConversationPromptLocation = {
@@ -21,27 +24,29 @@ export type RestoringConversationPrompt = {
 
 /**
  * Shared execution path for every surface that forks a prompt checkpoint.
- * Callers own confirmation, navigation and success/error messaging.
+ * Callers own confirmation and success/error messaging; the fork itself lands as
+ * a new same-branch task and routes there.
  */
-export async function forkConversationAtPromptIntoNewTab(
+export async function forkTaskAtPrompt(
   provisionedTask: ProvisionedTask,
-  { conversation, prompt, promptIndex }: ConversationPromptLocation
-): Promise<Conversation | null> {
+  { conversation, prompt, promptIndex }: ConversationPromptLocation,
+  navigate: NavigateFnTyped
+): Promise<ForkTaskResult | null> {
   if (!prompt.restoreTarget) return null;
   const initialSize =
     provisionedTask.conversations.conversations.get(conversation.id)?.session.pty?.lastSentDims ??
     undefined;
-  const fork = await provisionedTask.conversations.forkConversationAtPrompt({
-    projectId: conversation.projectId,
-    taskId: conversation.taskId,
-    conversationId: conversation.id,
-    promptIndex,
-    target: prompt.restoreTarget,
-    initialSize,
-  });
-  provisionedTask.taskView.tabManager.openConversation(fork.id);
-  provisionedTask.taskView.setFocusedRegion('main');
-  return fork;
+  return forkTaskIntoNewTask(
+    {
+      projectId: conversation.projectId,
+      taskId: conversation.taskId,
+      conversationId: conversation.id,
+      mode: 'same-branch',
+      checkpoint: { promptIndex, target: prompt.restoreTarget },
+      initialSize,
+    },
+    navigate
+  );
 }
 
 /**
@@ -54,19 +59,22 @@ export function useConversationPromptRestore(): {
   requestRestorePrompt: (location: ConversationPromptLocation) => void;
 } {
   const { t } = useTranslation();
+  const { navigate } = useNavigate();
   const provisionedTask = useRequireProvisionedTask();
   const showRestoreConfirm = useShowModal('confirmActionModal');
   const pendingRef = useRef(false);
   const [restoringPrompt, setRestoringPrompt] = useState<RestoringConversationPrompt | null>(null);
 
   const restorePrompt = useCallback(
-    async ({ conversation, prompt, promptIndex }: ConversationPromptLocation) => {
+    async (location: ConversationPromptLocation) => {
+      const { conversation, prompt, promptIndex } = location;
       if (!prompt.restoreTarget || pendingRef.current) return;
       if (
-        provisionedTask.conversations.isContextForkPending({
+        isTaskForkPending({
+          projectId: conversation.projectId,
+          taskId: conversation.taskId,
           conversationId: conversation.id,
-          promptIndex,
-          target: prompt.restoreTarget,
+          checkpoint: { promptIndex, target: prompt.restoreTarget },
         })
       ) {
         return;
@@ -79,11 +87,7 @@ export function useConversationPromptRestore(): {
         promptIndex,
       });
       try {
-        await forkConversationAtPromptIntoNewTab(provisionedTask, {
-          conversation,
-          prompt,
-          promptIndex,
-        });
+        await forkTaskAtPrompt(provisionedTask, location, navigate);
         toast({ title: t('tasks.sessionInfo.restoreContextSuccess') });
       } catch (error) {
         toast({
@@ -97,7 +101,7 @@ export function useConversationPromptRestore(): {
         setRestoringPrompt(null);
       }
     },
-    [provisionedTask, t]
+    [navigate, provisionedTask, t]
   );
 
   const requestRestorePrompt = useCallback(
@@ -105,10 +109,11 @@ export function useConversationPromptRestore(): {
       const { conversation, prompt, promptIndex } = location;
       if (!prompt.restoreTarget || pendingRef.current) return;
       if (
-        provisionedTask.conversations.isContextForkPending({
+        isTaskForkPending({
+          projectId: conversation.projectId,
+          taskId: conversation.taskId,
           conversationId: conversation.id,
-          promptIndex,
-          target: prompt.restoreTarget,
+          checkpoint: { promptIndex, target: prompt.restoreTarget },
         })
       ) {
         return;
@@ -122,7 +127,7 @@ export function useConversationPromptRestore(): {
         onSuccess: () => void restorePrompt(location),
       });
     },
-    [provisionedTask.conversations, restorePrompt, showRestoreConfirm, t]
+    [restorePrompt, showRestoreConfirm, t]
   );
 
   return { restoringPrompt, requestRestorePrompt };

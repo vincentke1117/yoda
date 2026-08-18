@@ -68,7 +68,7 @@ vi.mock('@renderer/features/projects/components/sessions-view/project-session-op
 }));
 
 vi.mock('@renderer/features/tasks/conversations/use-conversation-prompt-restore', () => ({
-  forkConversationAtPromptIntoNewTab: vi.fn(),
+  forkTaskAtPrompt: vi.fn(),
 }));
 
 vi.mock('@renderer/lib/hooks/use-toast', () => ({

@@ -1286,8 +1286,6 @@
       "workspacesEnabledDescription": "启用后可按工作区整理和筛选任务；未归类的任务会显示在「默认」工作区。",
       "autoGenerateName": "自动生成会话名",
       "autoGenerateNameDescription": "会话收到首条 Prompt 后，自动生成可读的会话名。",
-      "initTaskNameFromSession": "基于会话名初始化任务名",
-      "initTaskNameFromSessionDescription": "初始会话生成会话名后，用它初始化任务名；手动命名过的任务不受影响。",
       "branchNaming": "分支自动命名",
       "branchNamingDescription": "自动创建分支时分支名的生成方式：时间哈希在创建时即定型；AI 语义命名在会话命名完成后重命名分支。",
       "branchNamingHash": "时间哈希",
@@ -1788,6 +1786,13 @@
       "interruptSession": "打断“{{title}}”",
       "interruptAll": "打断全部 {{count}} 个运行中会话"
     },
+    "fork": {
+      "menu": "Fork…",
+      "sameBranch": "Fork 到同分支子任务",
+      "newBranch": "Fork 到新分支",
+      "success": "已 Fork 为新任务",
+      "failed": "Fork 失败"
+    },
     "tabs": {
       "close": "关闭",
       "closeOthers": "关闭其他",
@@ -1814,9 +1819,6 @@
       "archiveConversationDirect": "直接归档",
       "reloadConversation": "重新加载",
       "renameConversation": "重命名",
-      "forkConversation": "Fork 会话",
-      "forkConversationSuccess": "已 Fork 为新会话",
-      "forkConversationFailed": "Fork 会话失败",
       "preview": "预览"
     },
     "details": {

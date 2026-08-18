@@ -196,23 +196,6 @@ export type SessionContextRestoreTarget =
   | { kind: 'claude-message'; messageId: string }
   | { kind: 'codex-turn'; turnId: string };
 
-export type ForkConversationAtPromptParams = {
-  projectId: string;
-  taskId: string;
-  conversationId: string;
-  /** Zero-based index used to revalidate the checkpoint against the source transcript. */
-  promptIndex: number;
-  target: SessionContextRestoreTarget;
-  initialSize?: { cols: number; rows: number };
-};
-
-export type ForkConversationParams = {
-  projectId: string;
-  taskId: string;
-  conversationId: string;
-  initialSize?: { cols: number; rows: number };
-};
-
 export type ClaudeMemoryFile = {
   kind: 'global-claude' | 'project-claude' | 'project-agents';
   path: string;

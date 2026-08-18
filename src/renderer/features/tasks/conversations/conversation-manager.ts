@@ -3,8 +3,6 @@ import {
   type Conversation,
   type ConversationResumeBlockReason,
   type CreateConversationParams,
-  type ForkConversationAtPromptParams,
-  type ForkConversationParams,
   type SessionRuntimeOverrides,
 } from '@shared/conversations';
 import type { PendingAction } from '@shared/events/agent-run-state';
@@ -238,8 +236,6 @@ export class ConversationManagerStore {
   private offConversationArchived: (() => void) | null = null;
   private offConversationMoved: (() => void) | null = null;
   private readonly pendingConversationTitles = new Map<string, string>();
-  private readonly pendingContextForks = new Map<string, Promise<Conversation>>();
-  private readonly pendingConversationForks = new Map<string, Promise<Conversation>>();
   private readonly resumeLeases = new WeakMap<ConversationStore, object>();
   private readonly openPreparationLeases = new WeakMap<ConversationStore, object>();
   private readonly runtimeStatusRevisions = new Map<string, number>();
@@ -733,74 +729,6 @@ export class ConversationManagerStore {
     });
     this.onUserPromptAt?.(conversation.lastInteractedAt ?? new Date().toISOString());
     return conversation;
-  }
-
-  forkConversationAtPrompt(params: ForkConversationAtPromptParams): Promise<Conversation> {
-    const key = this.contextForkKey(params);
-    const existing = this.pendingContextForks.get(key);
-    if (existing) return existing;
-
-    const pending = this.createContextFork(params).finally(() => {
-      if (this.pendingContextForks.get(key) === pending) {
-        this.pendingContextForks.delete(key);
-      }
-    });
-    this.pendingContextForks.set(key, pending);
-    return pending;
-  }
-
-  forkConversation(params: ForkConversationParams): Promise<Conversation> {
-    const existing = this.pendingConversationForks.get(params.conversationId);
-    if (existing) return existing;
-
-    const pending = this.createConversationFork(params).finally(() => {
-      if (this.pendingConversationForks.get(params.conversationId) === pending) {
-        this.pendingConversationForks.delete(params.conversationId);
-      }
-    });
-    this.pendingConversationForks.set(params.conversationId, pending);
-    return pending;
-  }
-
-  isContextForkPending(
-    params: Pick<ForkConversationAtPromptParams, 'conversationId' | 'promptIndex' | 'target'>
-  ): boolean {
-    return this.pendingContextForks.has(this.contextForkKey(params));
-  }
-
-  private contextForkKey(
-    params: Pick<ForkConversationAtPromptParams, 'conversationId' | 'promptIndex' | 'target'>
-  ): string {
-    const targetId =
-      params.target.kind === 'claude-message' ? params.target.messageId : params.target.turnId;
-    return `${params.conversationId}:${params.promptIndex}:${params.target.kind}:${targetId}`;
-  }
-
-  private async createContextFork(params: ForkConversationAtPromptParams): Promise<Conversation> {
-    const conversation = this.consumePendingConversationTitle(
-      await rpc.conversations.forkConversationAtPrompt(params)
-    );
-    this.addForkedConversation(conversation);
-    return conversation;
-  }
-
-  private async createConversationFork(params: ForkConversationParams): Promise<Conversation> {
-    const conversation = this.consumePendingConversationTitle(
-      await rpc.conversations.forkConversation(params)
-    );
-    this.addForkedConversation(conversation);
-    return conversation;
-  }
-
-  private addForkedConversation(conversation: Conversation): void {
-    runInAction(() => {
-      const store = this.createConversationStore(conversation);
-      this.conversations.set(conversation.id, store);
-      if (conversation.resume) {
-        store.setSessionExited(true);
-      }
-    });
-    this.onUserPromptAt?.(conversation.lastInteractedAt ?? new Date().toISOString());
   }
 
   async markConversationWorking(conversationId: string): Promise<void> {
@@ -1455,8 +1383,6 @@ export class ConversationManagerStore {
     this.offConversationMoved?.();
     this.offConversationMoved = null;
     this.pendingConversationTitles.clear();
-    this.pendingContextForks.clear();
-    this.pendingConversationForks.clear();
     this.runtimeStatusRevisions.clear();
     for (const conversation of this.conversations.values()) {
       conversation.dispose();

@@ -127,7 +127,6 @@ export const taskSettingsSchema = z.object({
   workspacesEnabled: z.boolean().catch(false),
   autoGenerateName: z.boolean(),
   /** Initialize the task name from the initial session's auto-generated title. */
-  initTaskNameFromSession: z.boolean().catch(true),
   /**
    * How auto-created branches are named: 'hash' = short time hash at creation
    * (stable, never renamed); 'ai' = semantic slug from the naming agent,

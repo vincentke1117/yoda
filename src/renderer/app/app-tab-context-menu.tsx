@@ -3,7 +3,6 @@ import {
   Archive,
   ArrowRightToLine,
   CopyX,
-  GitFork,
   Link,
   ListX,
   LocateFixed,
@@ -33,10 +32,6 @@ import { archiveConversationFlow } from '@renderer/features/tasks/archive-task';
 import { TaskContextMenuItems } from '@renderer/features/tasks/components/task-context-menu';
 import { useTaskMenuActions } from '@renderer/features/tasks/components/use-task-menu-actions';
 import { ConversationMoveSubmenu } from '@renderer/features/tasks/conversations/conversation-move-submenu';
-import {
-  canForkConversation,
-  forkConversationIntoNewTab,
-} from '@renderer/features/tasks/conversations/fork-conversation-tab';
 import { isUnprovisioned, type ProvisionedTask } from '@renderer/features/tasks/stores/task';
 import {
   asProvisioned,
@@ -466,29 +461,6 @@ export function buildConversationSections(
         {t('tasks.tabs.renameConversation')}
       </ContextMenuItem>
     );
-    if (canForkConversation(provisioned, conversationId)) {
-      management.push(
-        <ContextMenuItem
-          key="fork"
-          className="whitespace-nowrap"
-          onClick={() =>
-            void forkConversationIntoNewTab({
-              provisioned,
-              projectId,
-              taskId,
-              conversationId,
-              messages: {
-                success: t('tasks.tabs.forkConversationSuccess'),
-                failure: t('tasks.tabs.forkConversationFailed'),
-              },
-            })
-          }
-        >
-          <GitFork className="size-4" />
-          {t('tasks.tabs.forkConversation')}
-        </ContextMenuItem>
-      );
-    }
     management.push(
       <ConversationMoveSubmenu
         key="move"

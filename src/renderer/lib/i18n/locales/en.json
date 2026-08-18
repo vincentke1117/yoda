@@ -1286,8 +1286,6 @@
       "workspacesEnabledDescription": "Organize and filter tasks by workspace. Unassigned tasks appear in the Default workspace.",
       "autoGenerateName": "Auto-generate session titles",
       "autoGenerateNameDescription": "Generate a readable session title from a session's first prompt.",
-      "initTaskNameFromSession": "Initialize task names from session titles",
-      "initTaskNameFromSessionDescription": "When the initial session's title is generated, use it as the task name. Tasks you renamed yourself are left untouched.",
       "branchNaming": "Branch auto-naming",
       "branchNamingDescription": "How auto-created branches are named: a time hash is final at creation; AI semantic naming renames the branch once the session title is generated.",
       "branchNamingHash": "Time hash",
@@ -1788,6 +1786,13 @@
       "interruptSession": "Interrupt “{{title}}”",
       "interruptAll": "Interrupt all {{count}} working sessions"
     },
+    "fork": {
+      "menu": "Fork…",
+      "sameBranch": "Fork into a same-branch subtask",
+      "newBranch": "Fork onto a new branch",
+      "success": "Forked into a new task",
+      "failed": "Fork failed"
+    },
     "tabs": {
       "close": "Close",
       "closeOthers": "Close others",
@@ -1814,9 +1819,6 @@
       "archiveConversationDirect": "Archive directly",
       "reloadConversation": "Reload",
       "renameConversation": "Rename",
-      "forkConversation": "Fork conversation",
-      "forkConversationSuccess": "Forked into a new conversation",
-      "forkConversationFailed": "Failed to fork conversation",
       "preview": "Preview"
     },
     "details": {

@@ -7,6 +7,7 @@ import {
 import { archiveTask } from './operations/archiveTask';
 import { createTask, retryTaskSetup } from './operations/createTask';
 import { deleteTask } from './operations/deleteTask';
+import { forkTask } from './operations/forkTask';
 import { generateTaskCommitMessage } from './operations/generateTaskCommitMessage';
 import { getTaskPreview } from './operations/getTaskPreview';
 import {
@@ -75,4 +76,5 @@ export const taskController = createRPCController({
   setTaskParadigm,
   setTaskParent,
   moveTaskToProject,
+  forkTask,
 });

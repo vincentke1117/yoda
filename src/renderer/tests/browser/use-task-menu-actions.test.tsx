@@ -48,6 +48,8 @@ vi.mock('@renderer/features/tasks/open-task-when-ready', () => ({
 vi.mock('@renderer/lib/clipboard', () => ({
   copyYodaLink: vi.fn(),
 }));
+vi.mock('@renderer/lib/i18n', () => ({ default: { t: (key: string) => key } }));
+vi.mock('@renderer/lib/hooks/use-toast', () => ({ toast: vi.fn() }));
 vi.mock('@renderer/features/tasks/components/task-menu-session-info', () => ({
   buildTaskMenuSessionFields: () => ({}),
   getTaskMenuConversation: () => undefined,

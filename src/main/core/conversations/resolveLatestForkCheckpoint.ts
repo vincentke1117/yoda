@@ -1,9 +1,6 @@
 import { and, eq } from 'drizzle-orm';
-import type {
-  Conversation,
-  ForkConversationParams,
-  SessionContextRestoreTarget,
-} from '@shared/conversations';
+import type { Conversation, SessionContextRestoreTarget } from '@shared/conversations';
+import type { ForkTaskCheckpoint } from '@shared/tasks';
 import { db } from '@main/db/client';
 import { conversations } from '@main/db/schema';
 import { resolveTask } from '../projects/utils';
@@ -12,13 +9,16 @@ import {
   getConversationAgentSessionId,
   getConversationRuntimeStateRoot,
 } from './conversation-session-source';
-import { forkConversationAtPrompt } from './forkConversationAtPrompt';
 import { getClaudeSessionContext } from './getClaudeSessionContext';
 import { getCodexSessionContext } from './getCodexSessionContext';
 import { mapConversationRowToConversation } from './utils';
 
-/** Forks a conversation at its latest completed provider-native turn. */
-export async function forkConversation(params: ForkConversationParams): Promise<Conversation> {
+/** Locates the session's latest completed provider-native turn to fork at. */
+export async function resolveLatestForkCheckpoint(params: {
+  projectId: string;
+  taskId: string;
+  conversationId: string;
+}): Promise<ForkTaskCheckpoint> {
   const [row] = await db
     .select()
     .from(conversations)
@@ -44,11 +44,7 @@ export async function forkConversation(params: ForkConversationParams): Promise<
     throw new Error('Conversation has no completed turn to fork.');
   }
 
-  return forkConversationAtPrompt({
-    ...params,
-    promptIndex,
-    target: checkpoint.target,
-  });
+  return { promptIndex, target: checkpoint.target };
 }
 
 async function loadForkablePrompts(

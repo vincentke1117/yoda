@@ -13,7 +13,7 @@ import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from
 import { useTranslation } from 'react-i18next';
 import type { ClaudeSessionPrompt, ProjectPromptSource } from '@shared/conversations';
 import { displaySessionPromptText } from '@renderer/features/tasks/context-panel-prompt-display';
-import { forkConversationAtPromptIntoNewTab } from '@renderer/features/tasks/conversations/use-conversation-prompt-restore';
+import { forkTaskAtPrompt } from '@renderer/features/tasks/conversations/use-conversation-prompt-restore';
 import AgentLogo from '@renderer/lib/components/agent-logo';
 import { toast } from '@renderer/lib/hooks/use-toast';
 import { rpc } from '@renderer/lib/ipc';
@@ -194,13 +194,16 @@ export const ProjectPromptsCard = observer(function ProjectPromptsCard({
         taskArchivedAt: entry.taskArchivedAt,
       });
       if (!provisioned) throw new Error(t('projects.promptHistory.taskUnavailable'));
-      const fork = await forkConversationAtPromptIntoNewTab(provisioned, {
-        conversation: entry.conversation,
-        prompt: entry.prompt,
-        promptIndex: entry.promptIndex,
-      });
+      const fork = await forkTaskAtPrompt(
+        provisioned,
+        {
+          conversation: entry.conversation,
+          prompt: entry.prompt,
+          promptIndex: entry.promptIndex,
+        },
+        navigate
+      );
       if (!fork) return;
-      navigate('task', { projectId: entry.projectId, taskId: entry.taskId });
       toast({ title: t('tasks.sessionInfo.restoreContextSuccess') });
     } catch (forkError) {
       toast({
