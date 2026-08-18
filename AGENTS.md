@@ -124,6 +124,7 @@ optional_env:
 - renderer 里改后端 PTY 尺寸只能走 `src/renderer/lib/pty/pty-resize-authority.ts`，禁止直接调 `rpc.pty.resize` / `resizeForRenderer`：一个 PTY 只有一份 grid，观察者窗口（独立看板）改了会连带改窄主窗口的 TUI（2026-08-18, c429a81）。
 - 列表既有筛选又有数量上限时，必须先筛后截断，跨窗口推送的候选列表保持不截断（2026-08-18, c429a81）。
 - 任务列表 surface 的筛选/排序只能走 `@shared/task-view-options` + `TaskViewOptionsMenu`，禁止在单个 surface 里另写一份（2026-08-18, 7d40aff）。
+- 一个任务只有一个会话：`createConversation` 会拒绝往已有未归档会话的任务里再插一条，同分支再上一个 Agent 走 `createSiblingTask`（共享 worktree，refCount），唯一例外是 team room 的 `teamRoomMemberSeat`（2026-08-18, e363505）。
 
 ## 注意
 - 我正在以开发模式运行与迭代 yoda，不要打开我已安装的 yoda
@@ -134,3 +135,6 @@ optional_env:
 - 排序键 locale collation 陷阱：未排序哨兵必须是字母（如 'z'），不能是标点（ICU 将标点排在数字前，会使未排序项浮到顶部）（2026-08-18, 359a1b9）
 - dnd-kit 测试每个指针步骤必须独立 act()：拖拽开始后 droppable rects 在 effect 里测量，批量手势会在 over 变为非 null 前结束（2026-08-18, 359a1b9）
 - Base UI 弹层退场动画：卸载前必须先关闭弹层（Esc + 250ms 等待），否则全局 bookkeeping 认为菜单还开着，下次 trigger 拒绝打开（2026-08-18, 359a1b9）
+- `new-task-modal-responsive.test.ts` 是源码文本契约测试（grep `home-view.tsx` 里的 JSX 字面量），改那段 JSX 必须同步改断言（2026-08-18, e363505）
+- `new ConversationManagerStore(p, t, [])` 传空 preloaded 会把 `_loaded` 置真，`load()` 直接返回不拉数据；要测加载路径就别传第三个参数（2026-08-18, e363505）
+- `createTask.ts` 里有两处 `shouldGenerate` 自动命名门（`createTask` 用 `params`、`retryTaskSetup` 用 `row`），改命名策略必须两处都改（2026-08-18, e363505）
