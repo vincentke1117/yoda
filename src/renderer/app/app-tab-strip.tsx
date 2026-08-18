@@ -1,5 +1,4 @@
 import {
-  Archive,
   BookText,
   Bot,
   ChartColumn,
@@ -14,7 +13,6 @@ import {
   LayoutDashboard,
   Library as LibraryIcon,
   ListTodo,
-  Loader2,
   MessageSquare,
   Milestone,
   Plus,
@@ -48,7 +46,6 @@ import {
   projectDisplayName,
 } from '@renderer/features/projects/stores/project-selectors';
 import { useAppSettingsKey } from '@renderer/features/settings/use-app-settings-key';
-import { archiveConversationFlow } from '@renderer/features/tasks/archive-task';
 import { AgentStatusIndicator } from '@renderer/features/tasks/components/agent-status-indicator';
 import { formatConversationTitleForDisplay } from '@renderer/features/tasks/conversations/conversation-title-utils';
 import {
@@ -74,7 +71,6 @@ import {
   DropdownMenuTrigger,
 } from '@renderer/lib/ui/dropdown-menu';
 import { agentConfig } from '@renderer/utils/agentConfig';
-import { log } from '@renderer/utils/logger';
 import { cn } from '@renderer/utils/utils';
 
 /**
@@ -146,7 +142,6 @@ export const AppTabStrip = observer(function AppTabStrip() {
       )}
     >
       {visibleTabs.map((tab) => {
-        const dismiss = describeDismiss(tab, t);
         return (
           <AppTabContextMenu key={tab.id} tab={tab}>
             <AppTab
@@ -155,11 +150,9 @@ export const AppTabStrip = observer(function AppTabStrip() {
               // Sticky tabs are closeable even when index-kind: closing just
               // un-sticks them from the strip.
               closeable={!isIndexTab(tab) || appState.appTabs.isSticky(tab.id)}
-              closeLabel={dismiss.label}
-              closeIcon={dismiss.icon}
-              closePending={dismiss.pending}
+              closeLabel={t('appTabs.closeTab')}
               onSelect={() => appState.appTabs.activateTab(tab.id)}
-              onClose={dismiss.onDismiss}
+              onClose={() => closeTaskTopTab(tab)}
               drag={tabDragSource(() => stripDragPayload(tab))}
             />
           </AppTabContextMenu>
@@ -274,56 +267,11 @@ function stripDragPayload(tab: AppTabEntry): TabDragPayload {
   return { kind: 'view', from: 'strip', appTab: tab };
 }
 
-/**
- * Per-tab dismiss behavior for the × slot. Session tabs dismiss by archiving
- * directly; running the pre-archive skill remains an explicit choice in the
- * context menu. Every other tab plainly closes. The plain-close path for
- * session tabs also stays available via the context menu.
- */
-function describeDismiss(
-  tab: AppTabEntry,
-  t: (key: string) => string
-): { label: string; icon?: ReactNode; pending: boolean; onDismiss: () => void } {
-  const { projectId, taskId } = tab.params as { projectId?: string; taskId?: string };
-  const target = tab.params.tab as TaskWindowTabTarget | undefined;
-  if (tab.viewId === 'task' && projectId && taskId && target?.kind === 'conversation') {
-    const { conversationId } = target;
-    const isArchiving =
-      asProvisioned(getTaskStore(projectId, taskId))?.conversations.conversations.get(
-        conversationId
-      )?.isArchiving ?? false;
-    return {
-      label: t('tasks.tabs.archiveConversation'),
-      icon: isArchiving ? (
-        <Loader2 className="size-3 animate-spin" />
-      ) : (
-        <Archive className="size-3" />
-      ),
-      pending: isArchiving,
-      onDismiss: () => {
-        void archiveConversationFlow(projectId, taskId, conversationId, {
-          skipPreCommand: true,
-        }).catch((error: unknown) => {
-          log.warn('AppTabStrip: archive conversation failed', {
-            projectId,
-            taskId,
-            conversationId,
-            error,
-          });
-        });
-      },
-    };
-  }
-  return { label: t('appTabs.closeTab'), pending: false, onDismiss: () => closeTaskTopTab(tab) };
-}
-
 const AppTab = observer(function AppTab({
   tab,
   isActive,
   closeable,
   closeLabel,
-  closeIcon,
-  closePending = false,
   onSelect,
   onClose,
   drag,
@@ -332,8 +280,6 @@ const AppTab = observer(function AppTab({
   isActive: boolean;
   closeable: boolean;
   closeLabel: string;
-  closeIcon?: ReactNode;
-  closePending?: boolean;
   onSelect: () => void;
   onClose: () => void;
   drag?: TabDragSourceProps;
@@ -365,16 +311,11 @@ const AppTab = observer(function AppTab({
         if (event.key === 'Enter' || event.key === ' ') onSelect();
       }}
     >
-      {/* One leading slot: the icon morphs into the close action on hover —
-          or persistently while dismissal is pending (e.g. a session being
-          archived) — so tabs never spend an extra slot on a trailing ×. */}
+      {/* One leading slot: the icon morphs into the close action on hover, so
+          tabs never spend an extra slot on a trailing ×. */}
       <span className="relative flex size-4 shrink-0 items-center justify-center">
         <span
-          className={cn(
-            'flex items-center justify-center',
-            closeable && 'group-hover:invisible',
-            closePending && 'invisible'
-          )}
+          className={cn('flex items-center justify-center', closeable && 'group-hover:invisible')}
         >
           {icon}
         </span>
@@ -383,17 +324,13 @@ const AppTab = observer(function AppTab({
             type="button"
             aria-label={closeLabel}
             title={closeLabel}
-            disabled={closePending}
-            className={cn(
-              'absolute inset-0 items-center justify-center rounded-sm text-foreground-passive hover:bg-background-2 hover:text-foreground',
-              closePending ? 'flex' : 'hidden group-hover:flex'
-            )}
+            className="absolute inset-0 hidden items-center justify-center rounded-sm text-foreground-passive group-hover:flex hover:bg-background-2 hover:text-foreground"
             onClick={(event) => {
               event.stopPropagation();
               onClose();
             }}
           >
-            {closeIcon ?? <X className="size-3" />}
+            <X className="size-3" />
           </button>
         ) : null}
       </span>

@@ -19,6 +19,7 @@ import {
   PinOff,
   RefreshCw,
   RotateCcw,
+  Share2,
   Sparkles,
   Star,
   StarOff,
@@ -108,6 +109,8 @@ export interface TaskMenuActions extends TaskMenuInfoFields {
    */
   onArchiveWithSkill?: () => void;
   onCopyYodaLink?: () => void;
+  /** Publish the task's session as a public read-only link and copy it. */
+  onSharePublicLink?: () => void;
   onRestore?: () => void;
   onReconnect?: () => void;
   /** Restart the session. Pass a tmux override to force tmux on/off for this restart only. */
@@ -385,6 +388,15 @@ function useMenuItems(actions: TaskMenuActions): MenuItemDescriptor[] {
       icon: Link2,
       label: t('tasks.context.copyYodaLink'),
       onSelect: actions.onCopyYodaLink,
+    });
+  }
+  if (actions.onSharePublicLink) {
+    items.push({
+      key: 'share-public-link',
+      group: 4,
+      icon: Share2,
+      label: t('tasks.tabs.sharePublicLink'),
+      onSelect: actions.onSharePublicLink,
     });
   }
 

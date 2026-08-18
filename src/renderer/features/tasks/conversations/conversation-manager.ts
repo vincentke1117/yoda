@@ -19,7 +19,6 @@ import {
 } from '@shared/events/agentEvents';
 import {
   conversationArchivedChannel,
-  conversationMovedChannel,
   conversationRenamedChannel,
 } from '@shared/events/conversationEvents';
 import { getAgentNotificationKind } from '@shared/notification-settings';
@@ -234,7 +233,6 @@ export class ConversationManagerStore {
   private offSessionExited: (() => void) | null = null;
   private offConversationRenamed: (() => void) | null = null;
   private offConversationArchived: (() => void) | null = null;
-  private offConversationMoved: (() => void) | null = null;
   private readonly pendingConversationTitles = new Map<string, string>();
   private readonly resumeLeases = new WeakMap<ConversationStore, object>();
   private readonly openPreparationLeases = new WeakMap<ConversationStore, object>();
@@ -282,7 +280,6 @@ export class ConversationManagerStore {
     this.offSessionExited = this.listenToSessionExited();
     this.offConversationRenamed = this.listenToConversationRenamed();
     this.offConversationArchived = this.listenToConversationArchived();
-    this.offConversationMoved = this.listenToConversationMoved();
   }
 
   private listenToAgentEvents(): () => void {
@@ -507,33 +504,6 @@ export class ConversationManagerStore {
         this.conversations.delete(event.conversationId);
       });
       conversationStore.dispose();
-    });
-  }
-
-  private listenToConversationMoved(): () => void {
-    return events.on(conversationMovedChannel, (event) => {
-      if (event.conversation.projectId !== this.projectId) return;
-
-      if (event.sourceTaskId === this.taskId) {
-        const moved = this.conversations.get(event.conversation.id);
-        if (moved) {
-          runInAction(() => this.conversations.delete(event.conversation.id));
-          moved.dispose();
-        }
-        return;
-      }
-
-      if (event.targetTaskId !== this.taskId || event.conversation.archivedAt) return;
-      runInAction(() => {
-        const existing = this.conversations.get(event.conversation.id);
-        if (existing) {
-          existing.data = event.conversation;
-          return;
-        }
-        const moved = this.createConversationStore(event.conversation);
-        this.conversations.set(event.conversation.id, moved);
-      });
-      void this.hydrateRuntimeStatuses([event.conversation.id]);
     });
   }
 
@@ -1380,8 +1350,6 @@ export class ConversationManagerStore {
     this.offConversationRenamed = null;
     this.offConversationArchived?.();
     this.offConversationArchived = null;
-    this.offConversationMoved?.();
-    this.offConversationMoved = null;
     this.pendingConversationTitles.clear();
     this.runtimeStatusRevisions.clear();
     for (const conversation of this.conversations.values()) {

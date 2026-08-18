@@ -10,6 +10,7 @@ import {
 } from '@renderer/features/projects/stores/project-selectors';
 import { useArchiveTask } from '@renderer/features/tasks/archive-task';
 import { canForkSession, runTaskFork } from '@renderer/features/tasks/fork-task';
+import { shareTaskSessionPublicly } from '@renderer/features/tasks/share-session-publicly';
 import { splitViewStore } from '@renderer/features/tasks/split-view/split-view-store';
 import { registeredTaskData } from '@renderer/features/tasks/stores/task';
 import {
@@ -179,6 +180,10 @@ export function useTaskMenuActions(projectId: string, taskId: string): TaskMenuA
     // command and optional note.
     onArchiveWithSkill: () => showArchiveWithNote({ projectId, taskId, taskName, withSkill: true }),
     onCopyYodaLink: () => void copyYodaLink(buildTaskDeepLink({ projectId, taskId }), t),
+    onSharePublicLink:
+      provisionedTask && menuConversation
+        ? () => void shareTaskSessionPublicly(projectId, taskId, menuConversation.id, t)
+        : undefined,
     onRestore: () => void taskManager?.restoreTask(taskId),
     onReconnect: workspace?.connectionState != null ? () => workspace.reconnect() : undefined,
     onRestartSession:

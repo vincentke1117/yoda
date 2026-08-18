@@ -1,4 +1,4 @@
-import type { Conversation, ConversationNamingSnapshot } from '@shared/conversations';
+import type { ConversationNamingSnapshot } from '@shared/conversations';
 import { defineEvent } from '@shared/ipc/events';
 
 export const conversationRenamedChannel = defineEvent<{
@@ -24,17 +24,6 @@ export const conversationUnarchivedChannel = defineEvent<{
   taskId: string;
 }>('conversation:unarchived');
 
-export const conversationMovedChannel = defineEvent<{
-  conversation: Conversation;
-  sourceTaskId: string;
-  targetTaskId: string;
-}>('conversation:moved');
-
-/**
- * The on-disk transcript (Claude session JSONL / Codex rollout) of a
- * subscribed conversation changed. Topic = conversationId; subscribers
- * refetch via `conversations.getConversationTranscript`.
- */
 export const conversationTranscriptChangedChannel = defineEvent<{
   conversationId: string;
 }>('conversation:transcript-changed');

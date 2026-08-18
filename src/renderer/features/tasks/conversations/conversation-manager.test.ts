@@ -7,7 +7,6 @@ import {
 } from '@shared/events/agentEvents';
 import {
   conversationArchivedChannel,
-  conversationMovedChannel,
   conversationRenamedChannel,
 } from '@shared/events/conversationEvents';
 import type { FrontendPty } from '@renderer/lib/pty/pty';
@@ -1963,40 +1962,5 @@ describe('ConversationManagerStore', () => {
 
     expect(store.conversations.has('conversation-1')).toBe(false);
     expect(mocks.ptyDisposeMock).toHaveBeenCalled();
-  });
-
-  it('removes a conversation when it moves out of this task', () => {
-    const store = new ConversationManagerStore('project-1', 'task-1', [conversation]);
-    const listener = mocks.listeners.get(conversationMovedChannel.name);
-
-    listener?.({
-      conversation: { ...conversation, taskId: 'task-2' },
-      sourceTaskId: 'task-1',
-      targetTaskId: 'task-2',
-    });
-
-    expect(store.conversations.has('conversation-1')).toBe(false);
-    expect(mocks.ptyDisposeMock).toHaveBeenCalled();
-  });
-
-  it('registers a moved conversation lazily with its new PTY identity', async () => {
-    const store = new ConversationManagerStore('project-1', 'task-2');
-    const listener = mocks.listeners.get(conversationMovedChannel.name);
-    mocks.ptyConnectMock.mockClear();
-
-    listener?.({
-      conversation: { ...conversation, taskId: 'task-2' },
-      sourceTaskId: 'task-1',
-      targetTaskId: 'task-2',
-    });
-    await flushPromises();
-
-    expect(store.conversations.get('conversation-1')?.session.sessionId).toBe(
-      'project-1:task-2:conversation-1'
-    );
-    expect(mocks.ptyConnectMock).not.toHaveBeenCalled();
-    expect(mocks.getConversationRuntimeStatusesMock).toHaveBeenCalledWith('project-1', 'task-2', [
-      'conversation-1',
-    ]);
   });
 });

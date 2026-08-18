@@ -577,7 +577,6 @@ export const keyboardSettingsSchema = z
       tab7: z.string().nullable().optional(),
       tab8: z.string().nullable().optional(),
       tab9: z.string().nullable().optional(),
-      newConversation: z.string().nullable().optional(),
       newTerminal: z.string().nullable().optional(),
       confirm: z.string().nullable().optional(),
       toggleTerminalDrawer: z.string().nullable().optional(),

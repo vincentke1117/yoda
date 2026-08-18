@@ -962,7 +962,6 @@ const OverviewTitleInline = observer(function OverviewTitleInline({
   conversation: Conversation;
 }) {
   const { t } = useTranslation();
-  const provisionedTask = useRequireProvisionedTask();
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -973,7 +972,9 @@ const OverviewTitleInline = observer(function OverviewTitleInline({
     if (!next || next === conversation.title || isSaving) return;
     setIsSaving(true);
     try {
-      await provisionedTask.conversations.renameConversation(conversation.id, next);
+      // A task is its session: naming it here names the task, which mirrors the
+      // title back onto the session row.
+      await rpc.tasks.renameTask(conversation.projectId, conversation.taskId, next);
     } catch (error) {
       toast({
         title: t('tasks.sessionInfo.renameFailed'),

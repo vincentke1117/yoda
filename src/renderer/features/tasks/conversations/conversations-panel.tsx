@@ -3,35 +3,29 @@ import { MessageSquare } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Conversation } from '@shared/conversations';
 import { TaskRoomChat } from '@renderer/features/agent-room/task-room-chat';
 import { taskRoomQueryKey } from '@renderer/features/agent-room/team-room-queries';
 import { useAppSettingsKey } from '@renderer/features/settings/use-app-settings-key';
 import { DockedSessionHistory } from '@renderer/features/tasks/conversations/session-history-panel';
 import { useIsActiveTask } from '@renderer/features/tasks/hooks/use-is-active-task';
 import { splitViewStore } from '@renderer/features/tasks/split-view/split-view-store';
-import type { ProvisionedTask } from '@renderer/features/tasks/stores/task';
 import {
   useRequireProvisionedTask,
   useTaskViewContext,
 } from '@renderer/features/tasks/task-view-context';
 import { rpc } from '@renderer/lib/ipc';
 import { useParams } from '@renderer/lib/layout/navigation-provider';
-import { useShowModal } from '@renderer/lib/modal/modal-provider';
 import { PaneSizingProvider } from '@renderer/lib/pty/pane-sizing-context';
 import type { FrontendPty } from '@renderer/lib/pty/pty';
 import { canResizeBackendPty } from '@renderer/lib/pty/pty-resize-authority';
 import { Button } from '@renderer/lib/ui/button';
 import { EmptyState } from '@renderer/lib/ui/empty-state';
-import { ShortcutHint } from '@renderer/lib/ui/shortcut-hint';
 import { log } from '@renderer/utils/logger';
 import { cn } from '@renderer/utils/utils';
 import { taskOpenTransitionStore } from '../task-open-transition-store';
 import type { ConversationManagerStore, ConversationStore } from './conversation-manager';
 import { ConversationSession } from './conversation-session';
 import { isConversationSurfaceVisible } from './conversation-surface-visibility';
-import { ConversationTree } from './conversation-tree';
-import { useArchivedConversations } from './use-archived-conversations';
 
 export { getResumeInitialSize } from './conversation-session';
 
@@ -408,6 +402,11 @@ function usePostPaintSessionFrame(enabled: boolean, pty: FrontendPty | null): bo
   return enabled && pty !== null && paintedToken === revealToken;
 }
 
+/**
+ * A task is its session, so there is no session list to land on: the surface is
+ * either the task's own group chat (team rooms work through one) or, for the
+ * legacy case of a task whose session is gone, a dead end that says so.
+ */
 const ConversationLandingSurface = observer(function ConversationLandingSurface({
   projectId,
   taskId,
@@ -416,139 +415,18 @@ const ConversationLandingSurface = observer(function ConversationLandingSurface(
   taskId: string;
 }) {
   const { t } = useTranslation();
-  const provisioned = useRequireProvisionedTask();
-  const { conversations } = provisioned;
-  const { tabManager: tm } = provisioned.taskView;
-  const showNewConversationModal = useShowModal('newConversationModal');
-  const conversationStores = Array.from(conversations.conversations.values());
-  const archivedConversations = useArchivedConversations(projectId, taskId);
-  const conversationCount = conversationStores.length + archivedConversations.length;
-  // A team-room task works through its group chat, so that IS the task's own
-  // surface — the same way a single-session task lands on its session.
   const { data: teamRoom } = useQuery({
     queryKey: taskRoomQueryKey(projectId, taskId),
     queryFn: () => rpc.teamRooms.getRoomForTask(projectId, taskId),
   });
 
-  const handleCreate = () => {
-    log.debug('[conversation-panel] create requested', { projectId, taskId });
-    showNewConversationModal({
-      projectId,
-      taskId,
-      onSuccess: ({ conversationIds }) => {
-        const conversationId = conversationIds[0];
-        if (conversationId) {
-          log.debug('[conversation-panel] create succeeded; opening conversation', {
-            projectId,
-            taskId,
-            conversationId,
-          });
-          tm.openConversation(conversationId);
-        }
-        provisioned.taskView.setFocusedRegion('main');
-      },
-    });
-  };
-
   if (teamRoom) return <TaskRoomChat projectId={projectId} taskId={taskId} />;
 
-  if (conversationCount === 0) {
-    return (
-      <EmptyState
-        icon={<MessageSquare className="h-5 w-5 text-muted-foreground" />}
-        label={t('tasks.conversations.emptyTitle')}
-        description={t('tasks.conversations.emptyDescription')}
-        action={
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleCreate}
-            className="flex items-center gap-2"
-          >
-            {t('tasks.conversations.createConversation')}
-            <ShortcutHint settingsKey="newConversation" />
-          </Button>
-        }
-      />
-    );
-  }
-
   return (
-    <ConversationSessionList
-      owner={{ projectId, taskId, provisioned }}
-      conversations={conversationStores}
-      archivedConversations={archivedConversations}
-      activeConversationId={tm.activeConversationId}
-      title={t('tasks.conversations.sessions')}
-      createLabel={t('tasks.conversations.createConversation')}
-      createAction={handleCreate}
-      onOpen={(conversationId) => {
-        log.debug('[conversation-panel] open requested', {
-          projectId,
-          taskId,
-          conversationId,
-          activeConversationId: tm.activeConversationId ?? null,
-        });
-        tm.openConversation(conversationId);
-        provisioned.taskView.setFocusedRegion('main');
-      }}
-      onArchivedRestored={() => provisioned.taskView.setFocusedRegion('main')}
+    <EmptyState
+      icon={<MessageSquare className="h-5 w-5 text-muted-foreground" />}
+      label={t('tasks.conversations.emptyTitle')}
+      description={t('tasks.conversations.emptyDescription')}
     />
-  );
-});
-
-const ConversationSessionList = observer(function ConversationSessionList({
-  owner,
-  conversations,
-  archivedConversations,
-  activeConversationId,
-  title,
-  createLabel,
-  createAction,
-  onOpen,
-  onArchivedRestored,
-}: {
-  owner: { projectId: string; taskId: string; provisioned?: ProvisionedTask };
-  conversations: ConversationStore[];
-  archivedConversations: Conversation[];
-  activeConversationId?: string | null;
-  title: string;
-  createLabel: string;
-  createAction: () => void;
-  onOpen: (conversationId: string) => void;
-  onArchivedRestored: (conversationId: string) => void;
-}) {
-  return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      <div className="flex min-w-0 shrink-0 items-center justify-between gap-2 overflow-hidden border-b border-border px-3 py-2">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="truncate text-sm font-medium text-foreground">{title}</span>
-          <span className="shrink-0 text-xs tabular-nums text-foreground-passive">
-            {conversations.length + archivedConversations.length}
-          </span>
-        </div>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={createAction}
-          className="min-w-0 max-w-[60%] gap-2 overflow-hidden"
-        >
-          <span className="truncate">{createLabel}</span>
-          <ShortcutHint settingsKey="newConversation" className="shrink-0" />
-        </Button>
-      </div>
-      <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-3">
-        <div className="mx-auto flex w-full max-w-3xl flex-col gap-1">
-          <ConversationTree
-            owner={owner}
-            activeConversations={conversations}
-            archivedConversations={archivedConversations}
-            activeConversationId={activeConversationId}
-            onOpenActive={onOpen}
-            onArchivedRestored={onArchivedRestored}
-          />
-        </div>
-      </div>
-    </div>
   );
 });

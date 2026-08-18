@@ -50,7 +50,6 @@ import {
   getLocalAgentSessionTranscript,
   listLocalAgentSessions,
 } from './local-agent-session-operations';
-import { moveConversation } from './moveConversation';
 import { getProjectConversationPrompts, getProjectPromptSources } from './project-prompts';
 import { getProjectSessionSources } from './project-sessions';
 import { renameConversation } from './renameConversation';
@@ -286,7 +285,6 @@ export const conversationController = createRPCController({
   getActiveRuntimeStatuses,
   listLocalAgentSessions,
   getLocalAgentSessionTranscript,
-  moveConversation,
   getConversationRuntimeStatuses,
   getProjectPromptSources,
   getProjectConversationPrompts,
