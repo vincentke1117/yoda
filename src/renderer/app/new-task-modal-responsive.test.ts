@@ -33,9 +33,7 @@ describe('new task modal responsive contract', () => {
     expect(home).not.toContain('<DropdownMenuCheckboxItem');
     // Gated on the selected paradigm's kind, not the persisted run mode: editing a
     // roster can move a paradigm between kinds, and the mode only seeds the pick.
-    expect(home).toContain(
-      "{!taskScopedTarget && activeKind.kindId === 'single' && renderAddCompareButton()}"
-    );
+    expect(home).toContain("{activeKind.kindId === 'single' && renderAddCompareButton()}");
     expect(home).not.toContain('data-yoda-surface="home-composer-actions"');
   });
 });

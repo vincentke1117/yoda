@@ -2130,6 +2130,7 @@
       "archiveTask": "归档任务",
       "errorNotMergeable": "该任务没有可合并的分支。",
       "errorNothingToMerge": "没有可合并的内容。",
+      "agentTaskFailed": "无法启动该 Agent 任务。",
       "errorBaseNotCheckedOut": "请先在项目主目录切到 {{branch}}（当前在 {{current}}）。",
       "errorBaseDirty": "项目主目录的 {{branch}} 有未提交改动。",
       "errorConflict": "合并到 {{branch}} 时发生冲突。"

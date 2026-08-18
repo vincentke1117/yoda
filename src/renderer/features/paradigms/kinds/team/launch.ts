@@ -8,8 +8,7 @@ import type { ParadigmLauncher } from '../../launch-context';
 
 /**
  * An Agent Team instantiated on one task. The task itself carries no session —
- * the room conductor drives @-routing between members, and each member surfaces
- * as one of the task's conversations.
+ * the room conductor drives @-routing between members.
  */
 export const teamLauncher: ParadigmLauncher = {
   descriptor: teamParadigmKind,
@@ -43,8 +42,6 @@ export const teamLauncher: ParadigmLauncher = {
         // localized name, which main cannot resolve, so the room borrows it here.
         fallbackName: ctx.t(teamParadigmKind.labelKey),
       });
-      // The room now drives this task, whether it was created here or joined.
-      ctx.claimJoinedTask();
       await invalidateTeamRoomQueries(ctx.queryClient, task.projectId, task.taskId);
       ctx.finish();
     } catch (error) {

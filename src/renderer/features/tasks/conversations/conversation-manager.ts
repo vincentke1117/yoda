@@ -2,7 +2,6 @@ import { action, computed, makeObservable, observable, onBecomeObserved, runInAc
 import {
   type Conversation,
   type ConversationResumeBlockReason,
-  type CreateConversationParams,
   type SessionRuntimeOverrides,
 } from '@shared/conversations';
 import type { PendingAction } from '@shared/events/agent-run-state';
@@ -687,18 +686,6 @@ export class ConversationManagerStore {
         error,
       });
     }
-  }
-
-  async createConversation(params: CreateConversationParams): Promise<Conversation> {
-    const conversation = this.consumePendingConversationTitle(
-      await rpc.conversations.createConversation(params)
-    );
-    runInAction(() => {
-      const store = this.createConversationStore(conversation);
-      this.conversations.set(conversation.id, store);
-    });
-    this.onUserPromptAt?.(conversation.lastInteractedAt ?? new Date().toISOString());
-    return conversation;
   }
 
   async markConversationWorking(conversationId: string): Promise<void> {

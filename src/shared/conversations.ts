@@ -527,4 +527,10 @@ export type CreateConversationParams = {
    * Opening the resulting Yoda conversation resumes this source on demand.
    */
   sessionSource?: AgentSessionSource;
+  /**
+   * Team-room member seat. A task is its session everywhere else, so this is the
+   * only caller allowed to put a second session in a task: a room task holds one
+   * session per teammate and the conductor routes between them.
+   */
+  teamRoomMemberSeat?: boolean;
 };

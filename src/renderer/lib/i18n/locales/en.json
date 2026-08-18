@@ -2130,6 +2130,7 @@
       "archiveTask": "Archive task",
       "errorNotMergeable": "This task has no mergeable branch.",
       "errorNothingToMerge": "There is nothing to merge.",
+      "agentTaskFailed": "Could not start the agent task.",
       "errorBaseNotCheckedOut": "Check out {{branch}} in the project root first (currently on {{current}}).",
       "errorBaseDirty": "The project root checkout on {{branch}} has uncommitted changes.",
       "errorConflict": "Merging into {{branch}} hit conflicts."

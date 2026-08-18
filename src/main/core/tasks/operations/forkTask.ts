@@ -1,22 +1,16 @@
 import { randomUUID } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
-import type { Branch } from '@shared/git';
 import type { ParadigmStamp } from '@shared/paradigms/stamp';
-import type {
-  CreateTaskStrategy,
-  ForkTaskCheckpoint,
-  ForkTaskParams,
-  ForkTaskResult,
-} from '@shared/tasks';
+import type { ForkTaskCheckpoint, ForkTaskParams, ForkTaskResult } from '@shared/tasks';
 import { forkSessionIntoTask } from '@main/core/conversations/forkSessionIntoTask';
 import { resolveLatestForkCheckpoint } from '@main/core/conversations/resolveLatestForkCheckpoint';
-import { projectManager } from '@main/core/projects/project-manager';
 import { mapTaskRowToTask } from '@main/core/tasks/utils/utils';
 import { db } from '@main/db/client';
 import { tasks } from '@main/db/schema';
 import { log } from '@main/lib/logger';
 import { createTask } from './createTask';
 import { deleteTask } from './deleteTask';
+import { resolveDerivedTaskTarget } from './derived-task-target';
 
 /**
  * Forks in flight, keyed by source checkpoint. A double click must not create
@@ -66,7 +60,11 @@ async function runFork(params: ForkTaskParams): Promise<ForkTaskResult> {
     }));
 
   const forkName = `${sourceTask.name} · #${checkpoint.promptIndex + 1}`;
-  const { strategy, sourceBranch } = await resolveForkTarget(params, sourceTask);
+  const { strategy, sourceBranch } = await resolveDerivedTaskTarget(
+    params.projectId,
+    sourceTask,
+    params.mode
+  );
   const paradigm: ParadigmStamp | undefined =
     sourceTask.paradigmId && sourceTask.paradigmKind
       ? {
@@ -118,39 +116,6 @@ async function runFork(params: ForkTaskParams): Promise<ForkTaskResult> {
     await rollbackForkTask(params.projectId, forkTaskId);
     throw error;
   }
-}
-
-/**
- * `same-branch` hits the same `localWorkspaceId` key as the source task, so the
- * worktree is shared by refcount instead of cloned. A source task without a
- * branch has no worktree to share or branch off, so its forks stay worktree-less.
- */
-async function resolveForkTarget(
-  params: ForkTaskParams,
-  sourceTask: { name: string; taskBranch?: string; sourceBranch: Branch | undefined }
-): Promise<{ strategy: CreateTaskStrategy; sourceBranch: Branch }> {
-  if (!sourceTask.taskBranch) {
-    return {
-      strategy: { kind: 'no-worktree' },
-      sourceBranch: sourceTask.sourceBranch ?? (await currentBranchOf(params.projectId)),
-    };
-  }
-  const sourceBranch: Branch = { type: 'local', branch: sourceTask.taskBranch };
-  return {
-    strategy:
-      params.mode === 'same-branch'
-        ? { kind: 'checkout-existing' }
-        : { kind: 'new-branch', taskBranch: sourceTask.name },
-    sourceBranch,
-  };
-}
-
-async function currentBranchOf(projectId: string): Promise<Branch> {
-  const project = projectManager.getProject(projectId);
-  if (!project) throw new Error(`Project not found: ${projectId}`);
-  const { currentBranch } = await project.repository.getRepositoryInfo();
-  if (!currentBranch) throw new Error(`Project has no current branch: ${projectId}`);
-  return { type: 'local', branch: currentBranch };
 }
 
 /** Best-effort cleanup of the empty task a failed fork left behind. */

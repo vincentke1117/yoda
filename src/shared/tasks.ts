@@ -4,6 +4,7 @@ import type { Branch, CreateBranchError, FetchPrForReviewError, PushError } from
 import type { ParadigmKindId } from '@shared/paradigms/contract';
 import type { ParadigmStamp } from '@shared/paradigms/stamp';
 import type { PullRequest } from '@shared/pull-requests';
+import type { RuntimeId } from '@shared/runtime-registry';
 
 export type TaskLifecycleStatus = 'todo' | 'in_progress' | 'review' | 'done' | 'cancelled';
 export type TaskSetupStatus = 'ready' | 'pending' | 'naming_failed' | 'branch_failed';
@@ -167,6 +168,12 @@ export type CreateTaskParams = {
   quickActionId?: string;
   /** The development paradigm driving this task, recorded at launch. */
   paradigm?: ParadigmStamp;
+  /**
+   * The caller picked this name on purpose (an internal follow-up like an
+   * acceptance review), so auto-naming must not rewrite it. Stored as
+   * `isUserNamed` — a deliberate name is not advisory, whoever chose it.
+   */
+  nameIsExplicit?: boolean;
 };
 
 export type SetTaskParentError =
@@ -263,6 +270,22 @@ export type ForkTaskParams = {
 export type ForkTaskResult = {
   task: Task;
   /** The forked session. A task is its session, so this is the task's only one. */
+  conversationId: string;
+};
+
+export type CreateSiblingTaskParams = {
+  projectId: string;
+  /** The task this one works alongside; becomes its parent. */
+  taskId: string;
+  /** Stated by the caller, never auto-named over. */
+  name: string;
+  runtime: RuntimeId;
+  initialPrompt: string;
+};
+
+export type CreateSiblingTaskResult = {
+  task: Task;
+  /** The new task's session. A task is its session, so this is its only one. */
   conversationId: string;
 };
 

@@ -27,7 +27,6 @@ const mocks = vi.hoisted(() => ({
   ptyResizeMock: vi.fn(),
   resizeForRendererMock: vi.fn(),
   archiveConversationMock: vi.fn(),
-  createConversationMock: vi.fn(),
   getConversationSessionInfoMock: vi.fn(),
   getConversationRuntimeStatusesMock: vi.fn(),
   getConversationsForTaskMock: vi.fn(),
@@ -51,7 +50,6 @@ vi.mock('@renderer/lib/ipc', () => ({
   rpc: {
     conversations: {
       archiveConversation: mocks.archiveConversationMock,
-      createConversation: mocks.createConversationMock,
       getConversationSessionInfo: mocks.getConversationSessionInfoMock,
       getConversationRuntimeStatuses: mocks.getConversationRuntimeStatusesMock,
       getConversationsForTask: mocks.getConversationsForTaskMock,
@@ -125,7 +123,6 @@ describe('ConversationManagerStore', () => {
     mocks.resumeConversationMock.mockResolvedValue({ running: true, generation: 1 });
     mocks.restartConversationMock.mockResolvedValue({ generation: 1 });
     mocks.archiveConversationMock.mockResolvedValue(undefined);
-    mocks.createConversationMock.mockResolvedValue(conversation);
     mocks.touchConversationMock.mockResolvedValue(undefined);
     mocks.getConversationSessionInfoMock.mockResolvedValue({ running: false });
     mocks.getConversationRuntimeStatusesMock.mockResolvedValue({});
@@ -1901,35 +1898,21 @@ describe('ConversationManagerStore', () => {
     expect(store.conversations.get('conversation-1')?.data.title).toBe('Synced Codex title');
   });
 
-  it('keeps auto-rename events that arrive before a created conversation is merged', async () => {
-    const createdConversation: Conversation = {
-      ...conversation,
-      id: 'conversation-2',
-      runtimeId: 'codex',
-      title: 'Codex',
-      isInitialConversation: false,
-    };
-    mocks.createConversationMock.mockImplementationOnce(async () => {
-      const listener = mocks.listeners.get(conversationRenamedChannel.name);
-      listener?.({
-        conversationId: 'conversation-2',
-        projectId: 'project-1',
-        taskId: 'task-1',
-        title: 'Synced Codex title',
-      });
-      return createdConversation;
-    });
-    const store = new ConversationManagerStore('project-1', 'task-1', [conversation]);
-
-    await store.createConversation({
-      id: 'conversation-2',
+  it('keeps auto-rename events that arrive before the session snapshot is merged', async () => {
+    // The session is created in main together with its task, so its provider
+    // title can land here before the renderer has ever seen the session.
+    const store = new ConversationManagerStore('project-1', 'task-1');
+    mocks.listeners.get(conversationRenamedChannel.name)?.({
+      conversationId: 'conversation-1',
       projectId: 'project-1',
       taskId: 'task-1',
-      runtime: 'codex',
-      title: 'Codex',
+      title: 'Synced Codex title',
     });
+    mocks.getConversationsForTaskMock.mockResolvedValue([conversation]);
 
-    expect(store.conversations.get('conversation-2')?.data.title).toBe('Synced Codex title');
+    await store.load();
+
+    expect(store.conversations.get('conversation-1')?.data.title).toBe('Synced Codex title');
     expect(mocks.ptyConnectMock).not.toHaveBeenCalled();
   });
 

@@ -21,6 +21,7 @@ import {
   buildSmartMergePrompt,
 } from '@renderer/features/tasks/finish-flow/finish-prompts';
 import { useTaskStats } from '@renderer/features/tasks/hooks/useTaskStats';
+import { openTaskWhenReady } from '@renderer/features/tasks/open-task-when-ready';
 import type { ProvisionedTask } from '@renderer/features/tasks/stores/task';
 import {
   getRegisteredTaskData,
@@ -31,7 +32,9 @@ import {
   useRequireProvisionedTask,
   useTaskViewContext,
 } from '@renderer/features/tasks/task-view-context';
+import { toast } from '@renderer/lib/hooks/use-toast';
 import { rpc } from '@renderer/lib/ipc';
+import { useNavigate } from '@renderer/lib/layout/navigation-provider';
 import { useShowModal } from '@renderer/lib/modal/modal-provider';
 import { Button } from '@renderer/lib/ui/button';
 import { MicroLabel } from '@renderer/lib/ui/label';
@@ -153,6 +156,7 @@ const FinishPanel = observer(function FinishPanel({
 }) {
   const { t } = useTranslation();
   const showCreatePrModal = useShowModal('createPrModal');
+  const { navigate } = useNavigate();
   const { value: defaultRuntime } = useAppSettingsKey('defaultRuntime');
 
   const [commitMessage, setCommitMessage] = useState('');
@@ -187,24 +191,35 @@ const FinishPanel = observer(function FinishPanel({
     onClose();
   };
 
-  const startAgentSession = async (title: string, prompt: string) => {
+  /**
+   * Puts a second agent on this task's work (acceptance review, conflict
+   * resolution). A task is its session, so that agent gets a subtask sharing
+   * this task's branch and worktree, not a second session in here.
+   */
+  const startAgentTask = async (title: string, prompt: string) => {
     if (!defaultRuntime || startingSession) return;
     setStartingSession(true);
     try {
-      const id = crypto.randomUUID();
-      await provisioned.conversations.createConversation({
-        id,
+      const result = await rpc.tasks.createSiblingTask({
         projectId,
         taskId,
+        name: title,
         runtime: defaultRuntime,
-        title,
         initialPrompt: prompt,
       });
-      provisioned.conversations.conversations.get(id)?.setWorking({ force: true });
-      provisioned.taskView.tabManager.openConversation(id);
       onClose();
+      await openTaskWhenReady(result.task.projectId, result.task.id, navigate, {
+        kind: 'conversation',
+        conversationId: result.conversationId,
+      });
     } catch (error) {
-      log.warn('FinishPanel: failed to start agent session', { taskId, error });
+      log.warn('FinishPanel: failed to start agent task', { taskId, error });
+      toast({
+        title: t('tasks.finish.agentTaskFailed'),
+        description: error instanceof Error ? error.message : String(error),
+        variant: 'destructive',
+        debugInfo: error,
+      });
     } finally {
       setStartingSession(false);
     }
@@ -288,7 +303,7 @@ const FinishPanel = observer(function FinishPanel({
           icon={<ShieldCheck className="size-3.5" />}
           disabled={startingSession || !defaultRuntime}
           onClick={() =>
-            void startAgentSession(
+            void startAgentTask(
               t('tasks.finish.aiReviewSessionTitle'),
               buildAcceptanceReviewPrompt({ taskName, taskBranch, baseBranch })
             )
@@ -342,7 +357,7 @@ const FinishPanel = observer(function FinishPanel({
                 error={mergeError}
                 startingSession={startingSession}
                 onSmartMerge={() =>
-                  void startAgentSession(
+                  void startAgentTask(
                     t('tasks.finish.smartMergeSessionTitle'),
                     buildSmartMergePrompt({
                       taskBranch,

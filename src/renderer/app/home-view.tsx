@@ -151,13 +151,12 @@ import { promptRewriteFailureDescription } from './submit-prompt-rewrite';
 type HomeRunMode = LegacyRunMode;
 type RunHostKind = 'local' | 'ssh';
 
-type HomeComposerSubmitTarget =
-  | { kind: 'new-task'; parentTask?: { projectId: string; taskId: string } }
-  | { kind: 'existing-task'; projectId: string; taskId: string };
+type HomeComposerSubmitTarget = {
+  kind: 'new-task';
+  parentTask?: { projectId: string; taskId: string };
+};
 
-export type HomeComposerSubmitResult =
-  | { kind: 'task'; projectId: string; taskId: string }
-  | { kind: 'conversation'; projectId: string; taskId: string; conversationIds: string[] };
+export type HomeComposerSubmitResult = { kind: 'task'; projectId: string; taskId: string };
 
 function branchLabel(branch: Branch | undefined, fallback = 'main'): string {
   if (!branch) return fallback;
@@ -336,9 +335,10 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
 });
 
 /**
- * The home prompt composer. By default it creates tasks; in task-scoped hosts
- * it reuses the same UI to create conversations inside the existing task.
- * Drafts persist to the shared `homeDraft` setting in both hosts.
+ * The home prompt composer. Every submit creates a task — a task is its session,
+ * so there is no "add a session to the task I am in" mode; working alongside an
+ * existing task means creating a subtask of it. Drafts persist to the shared
+ * `homeDraft` setting in every host.
  */
 export const HomeComposer = observer(function HomeComposer({
   className,
@@ -355,10 +355,9 @@ export const HomeComposer = observer(function HomeComposer({
   const { t, i18n } = useTranslation();
   const { navigate } = useNavigate();
   const { setCollapsed } = useWorkspaceLayoutContext();
-  const taskScopedTarget = submitTarget.kind === 'existing-task' ? submitTarget : null;
   // Subtask mode: still creates tasks, but locked to the parent's project and
   // linked via parentTaskId; new branches fork off the parent's branch.
-  const parentTarget = submitTarget.kind === 'new-task' ? (submitTarget.parentTask ?? null) : null;
+  const parentTarget = submitTarget.parentTask ?? null;
 
   const projectManager = getProjectManagerStore();
   const showAddProjectModal = useShowModal('addProjectModal');
@@ -381,9 +380,9 @@ export const HomeComposer = observer(function HomeComposer({
   const { value: draft, update: updateDraft } = useAppSettingsKey('homeDraft');
   const { value: taskSettings, update: updateTaskSettings } = useAppSettingsKey('tasks');
 
-  const isProjectLocked = !!(taskScopedTarget || parentTarget);
+  const isProjectLocked = !!parentTarget;
   const selectedProjectId = resolveHomeProjectId({
-    lockedProjectId: taskScopedTarget?.projectId ?? parentTarget?.projectId,
+    lockedProjectId: parentTarget?.projectId,
     homeProjectId,
     navigationProjectId: navProjectId,
     draftProjectId: draft?.selectedProjectId,
@@ -441,9 +440,6 @@ export const HomeComposer = observer(function HomeComposer({
   const mounted = asMounted(projectStore);
   const projectData = mounted?.data;
   const connectionId = projectData?.type === 'ssh' ? projectData.connectionId : undefined;
-  const taskScopedTaskStore = taskScopedTarget
-    ? getTaskStore(taskScopedTarget.projectId, taskScopedTarget.taskId)
-    : undefined;
   const lockedProjectName = isProjectLocked
     ? (projectDisplayName(projectStore) ?? selectedProjectId)
     : undefined;
@@ -884,7 +880,6 @@ export const HomeComposer = observer(function HomeComposer({
       return [...prev, makeVariantFromBase()];
     });
   }, [makeVariantFromBase]);
-  const targetProvisionedTask = asProvisioned(taskScopedTaskStore);
   const setAttachImagesAsPathsGlobal = useCallback(
     (next: boolean) => {
       updateDraft({ attachImagesAsPaths: next });
@@ -961,7 +956,6 @@ export const HomeComposer = observer(function HomeComposer({
   // Only a paradigm that refuses to degrade on an unborn repo needs a real
   // branch up front; the rest silently fall back to running in place.
   const modeRequiresWorktree =
-    !taskScopedTarget &&
     paradigmCapabilities.unbornPolicy === 'seed-commit' &&
     projectSubmitStrategyKind === 'new-branch';
   const appPromptLanguage = useMemo(
@@ -996,16 +990,13 @@ export const HomeComposer = observer(function HomeComposer({
         // towards having anyone to run.
         Boolean(activeTeam && enabledTeamMembers(activeTeam).length > 0)
       : activeKind.slots.every((slot) => hasSlotAgent(slot.storageKey));
-  // Multi-config compare only fires in plain (normal, non-task-scoped) submits;
-  // every variant must target a real project before it can spawn a task.
-  const compareActive =
-    activeKind.kindId === 'single' && !taskScopedTarget && compareVariants.length > 0;
+  // Every variant must target a real project before it can spawn a task.
+  const compareActive = activeKind.kindId === 'single' && compareVariants.length > 0;
   const compareVariantsReady =
     !compareActive ||
     (Boolean(selectedProjectId) && compareVariants.every((variant) => Boolean(variant.projectId)));
   const quickActionModeAvailable =
     activeKind.kindId === 'single' &&
-    !taskScopedTarget &&
     compareVariants.length === 0 &&
     projectData?.type === 'local' &&
     (runtimeId === 'codex' || runtimeId === 'claude');
@@ -1029,11 +1020,9 @@ export const HomeComposer = observer(function HomeComposer({
     (!scaffoldsOwnProject || promptHasText) &&
     (scaffoldsOwnProject
       ? true
-      : taskScopedTarget
-        ? !!targetProvisionedTask
-        : modeCanRunWithoutProject
-          ? !mounted || !!projectSubmitSourceBranch
-          : !!mounted && (needsInitialCommit || !!projectSubmitSourceBranch));
+      : modeCanRunWithoutProject
+        ? !mounted || !!projectSubmitSourceBranch
+        : !!mounted && (needsInitialCommit || !!projectSubmitSourceBranch));
 
   const handleSubmit = useCallback(async () => {
     if (!canSubmit || submitting) return;
@@ -1105,9 +1094,6 @@ export const HomeComposer = observer(function HomeComposer({
           navigate('task', { projectId, taskId });
           onSubmitted?.({ kind: 'task', projectId, taskId });
         },
-        onConversationsStarted: (projectId: string, taskId: string, conversationIds: string[]) => {
-          onSubmitted?.({ kind: 'conversation', projectId, taskId, conversationIds });
-        },
         resetComposer: () => {
           promptInputRef.current?.setValue('');
           updateDraft({ prompt: '', promptTokens: [] });
@@ -1124,30 +1110,12 @@ export const HomeComposer = observer(function HomeComposer({
             ...shared,
             target: { kind: 'new-project' },
             baseName: '',
-            provisionedTask: null,
             project: null,
             baseDefaultBranch: undefined,
             parentBranchName: null,
             parentTaskId: undefined,
             // No project of its own to define facets, and no parent to inherit from.
             facetId: null,
-          }),
-          params
-        );
-        return;
-      }
-
-      if (taskScopedTarget) {
-        if (!targetProvisionedTask) return;
-        await paradigmLauncher(kindId).launch(
-          createParadigmLaunchContext({
-            ...shared,
-            target: taskScopedTarget,
-            baseName: '',
-            provisionedTask: targetProvisionedTask,
-            project: mounted ?? null,
-            baseDefaultBranch: undefined,
-            parentBranchName: parentBranchName ?? null,
           }),
           params
         );
@@ -1173,7 +1141,6 @@ export const HomeComposer = observer(function HomeComposer({
             ...shared,
             target: { kind: 'new-task', projectId: INTERNAL_PROJECT_ID },
             baseName,
-            provisionedTask: null,
             project: internalProject,
             strategyKind: 'no-worktree',
             selectedBranch: undefined,
@@ -1212,7 +1179,6 @@ export const HomeComposer = observer(function HomeComposer({
           ...shared,
           target: { kind: 'new-task', projectId: mounted.data.id },
           baseName,
-          provisionedTask: null,
           project: mounted,
           baseDefaultBranch,
           parentBranchName: parentBranchName ?? null,
@@ -1225,10 +1191,8 @@ export const HomeComposer = observer(function HomeComposer({
   }, [
     canSubmit,
     mounted,
-    taskScopedTarget,
     parentTarget,
     parentBranchName,
-    targetProvisionedTask,
     runtimeId,
     defaultBranch,
     currentBranchName,
@@ -1427,7 +1391,7 @@ export const HomeComposer = observer(function HomeComposer({
       : null;
 
   const environmentBranchConfiguration: EnvironmentBranchConfiguration | undefined =
-    !taskScopedTarget && mounted && strategyFieldConfig
+    mounted && strategyFieldConfig
       ? {
           projectId: mounted.data.id,
           strategyKind: strategyFieldConfig.strategyKind,
@@ -1526,7 +1490,7 @@ export const HomeComposer = observer(function HomeComposer({
         {/* Compare mode: the base config is migrated into this uniform, reorderable
             list, so every row is an equal config. The plain base chip row below is
             hidden while comparing. */}
-        {!taskScopedTarget && activeKind.kindId === 'single' && compareVariants.length > 0 && (
+        {activeKind.kindId === 'single' && compareVariants.length > 0 && (
           <div className="flex flex-col gap-2">
             {compareVariants.map((variant, index) => {
               const variantProject = asMounted(
@@ -1614,11 +1578,7 @@ export const HomeComposer = observer(function HomeComposer({
             {scaffoldsOwnProject ? null : isProjectLocked ? (
               <TaskScopedProjectButton
                 label={lockedProjectName ?? selectedProjectId ?? ''}
-                tooltip={
-                  taskScopedTarget
-                    ? t('home.taskConversationScopeTooltip')
-                    : t('home.subtaskScopeTooltip')
-                }
+                tooltip={t('home.subtaskScopeTooltip')}
               />
             ) : (
               <div className="flex h-7 items-stretch overflow-hidden rounded-md border border-border bg-background-1 transition-[border-color,box-shadow] focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50">
@@ -1668,7 +1628,7 @@ export const HomeComposer = observer(function HomeComposer({
                 {t('home.buildGenerating')}
               </span>
             )}
-            {!taskScopedTarget && mounted && activeKind.kindId === 'team' && (
+            {mounted && activeKind.kindId === 'team' && (
               <Chip icon={GitFork}>{t('home.teamBranchPolicy')}</Chip>
             )}
             <ParadigmSelector
@@ -1679,7 +1639,7 @@ export const HomeComposer = observer(function HomeComposer({
               onChange={setParadigm}
             />
             {renderComposerSettingsButton()}
-            {!taskScopedTarget && activeKind.kindId === 'single' && renderAddCompareButton()}
+            {activeKind.kindId === 'single' && renderAddCompareButton()}
           </div>
         )}
       </div>
