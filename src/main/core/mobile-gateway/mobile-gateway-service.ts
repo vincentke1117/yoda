@@ -88,6 +88,7 @@ import {
 } from '@main/core/account/services/yoda-account-service';
 import { yodaCommerceService } from '@main/core/account/services/yoda-commerce-service';
 import { agentsConfigService } from '@main/core/agents-config/agents-config-service';
+import { backendProcessRegistry } from '@main/core/backend-processes/backend-process-registry';
 import { agentSessionRuntimeStore } from '@main/core/conversations/agent-session-runtime';
 import {
   loadClaudeTranscript,
@@ -130,7 +131,7 @@ import { setTaskLongTerm } from '@main/core/tasks/operations/setTaskLongTerm';
 import { setTaskNeedsReview } from '@main/core/tasks/operations/setTaskNeedsReview';
 import { setTaskPinned } from '@main/core/tasks/operations/setTaskPinned';
 import { taskManager } from '@main/core/tasks/task-manager';
-import { workspaceRegistry } from '@main/core/workspaces/workspace-registry';
+import { workspaceRegistry, type TeardownMode } from '@main/core/workspaces/workspace-registry';
 import { log } from '@main/lib/logger';
 import { MobileDashboardSnapshotCache } from './mobile-dashboard-snapshot-cache';
 import {
@@ -162,6 +163,7 @@ import {
 import { mobileGatewayNetworkUrls } from './network-addresses';
 
 const MAX_BODY_BYTES = 128 * 1024;
+const METRO_PROCESS_KEY = 'metro';
 const MOBILE_METRO_DEFAULT_PORT = 8081;
 const METRO_STATUS_TIMEOUT_MS = 1000;
 const METRO_STOP_TIMEOUT_MS = 3000;
@@ -1006,15 +1008,30 @@ export class MobileGatewayService {
     killStaleMetroFromPidFile();
   }
 
-  dispose(): void {
+  dispose(mode: TeardownMode = 'terminate'): void {
     this.lifecycleGeneration += 1;
     this.dashboardSnapshotCache.clear();
-    this.disposeMetroProcess();
+    if (mode === 'detach' && process.platform !== 'win32' && this.metroProcess) {
+      // Keep Metro running across the app's exit: its detached process group
+      // and pid file survive, and the next startup reclaims it via
+      // killStaleMetroFromPidFile(). Drop the in-memory refs so this instance
+      // stops owning it.
+      this.metroProcess = null;
+      this.metroHost = null;
+      backendProcessRegistry.unregister(METRO_PROCESS_KEY);
+    } else {
+      this.disposeMetroProcess();
+    }
     for (const stream of [...this.sessionEventStreams]) stream.close();
     this.sessionInputRequests.clear();
     if (!this.server) return;
     this.server.close();
     this.server = null;
+  }
+
+  /** Stop the owned Metro now (user action, not shutdown). */
+  stopMetro(): void {
+    this.disposeMetroProcess();
   }
 
   // Metro costs ~450MB RSS, so it is started lazily: only when the user opens
@@ -1094,15 +1111,31 @@ export class MobileGatewayService {
     this.metroProcess = child;
     this.metroHost = metroHost;
     if (child.pid) writeMetroPidFile(child.pid, args.join(' '));
+    backendProcessRegistry.register(METRO_PROCESS_KEY, {
+      id: 'metro',
+      kind: 'metro',
+      label: 'Expo Metro',
+      projectId: null,
+      projectName: null,
+      url: `exp://${metroHost}:${MOBILE_METRO_DEFAULT_PORT}`,
+      pid: child.pid ?? null,
+      detachable: process.platform !== 'win32',
+    });
     pipeMetroLog(child.stdout, 'info', 'MobileGateway: Expo Metro');
     pipeMetroLog(child.stderr, 'warn', 'MobileGateway: Expo Metro');
 
     child.on('error', (error) => {
-      if (this.metroProcess === child) this.metroProcess = null;
+      if (this.metroProcess === child) {
+        this.metroProcess = null;
+        backendProcessRegistry.unregister(METRO_PROCESS_KEY);
+      }
       log.warn('MobileGateway: Expo Metro failed to start', { error: String(error) });
     });
     child.on('exit', (code, signal) => {
-      if (this.metroProcess === child) this.metroProcess = null;
+      if (this.metroProcess === child) {
+        this.metroProcess = null;
+        backendProcessRegistry.unregister(METRO_PROCESS_KEY);
+      }
       removeMetroPidFile();
       log.info('MobileGateway: Expo Metro exited', { code, signal });
     });
@@ -1143,6 +1176,7 @@ export class MobileGatewayService {
     if (!child) return;
     this.metroProcess = null;
     this.metroHost = null;
+    backendProcessRegistry.unregister(METRO_PROCESS_KEY);
 
     try {
       if (process.platform !== 'win32' && child.pid) {

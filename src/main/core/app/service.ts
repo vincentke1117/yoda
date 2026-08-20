@@ -55,6 +55,7 @@ import {
   getMainWindow,
   getStandaloneKanbanWindow,
 } from '@main/app/window';
+import { backendProcessRegistry } from '@main/core/backend-processes/backend-process-registry';
 import { LocalExecutionContext } from '@main/core/execution-context/local-execution-context';
 import { ptySessionRegistry } from '@main/core/pty/pty-session-registry';
 import {
@@ -311,6 +312,7 @@ class AppService implements IInitializable, IDisposable {
       memoryBytes:
         processes.reduce((total, item) => total + item.memoryBytes, 0) + agentMemoryBytes,
       agentSessions: agentSessionResources,
+      backendProcesses: backendProcessRegistry.list(),
       processes,
       mainEventLoop,
       rendererPerformance: this.rendererPerformance,

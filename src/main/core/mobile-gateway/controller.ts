@@ -6,6 +6,10 @@ import { getMobileSyncMode, setMobileSyncMode } from './mobile-sync-mode';
 
 export const mobileGatewayController = createRPCController({
   getConnectionInfo: () => mobileGatewayService.getConnectionInfo(),
+  stopMetro: () => {
+    mobileGatewayService.stopMetro();
+    return { success: true };
+  },
   getRelayStatus: () => mobileRelayService.getStatus(),
   getSyncMode: () => getMobileSyncMode(),
   setSyncMode: (mode: MobileSyncMode) => {

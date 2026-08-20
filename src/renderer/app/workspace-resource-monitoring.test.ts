@@ -102,6 +102,7 @@ describe('workspace resource monitoring', () => {
       cpuPercent: 1,
       memoryBytes: 2,
       agentSessions: [],
+      backendProcesses: [],
       processes: [],
       mainEventLoop: { p50Ms: 0, p95Ms: 0, p99Ms: 0, maxMs: 0 },
       rendererPerformance: null,

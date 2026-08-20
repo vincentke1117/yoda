@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { get } from 'node:http';
 import net from 'node:net';
+import { backendProcessRegistry } from '@main/core/backend-processes/backend-process-registry';
 import { resolveCommandPath } from '@main/core/dependencies/probe';
 import { LocalExecutionContext } from '@main/core/execution-context/local-execution-context';
 import { buildTerminalEnv } from '@main/core/pty/pty-env';
@@ -11,11 +12,18 @@ const PREVIEW_PROBE_INTERVAL_MS = 150;
 const PREVIEW_PROBE_TIMEOUT_MS = 500;
 const MAX_START_OUTPUT_CHARS = 8_000;
 
+export type AppPreviewMeta = {
+  label: string;
+  projectId: string;
+  projectName: string;
+};
+
 type PreviewSession = {
   child: ChildProcess;
   projectPath: string;
   url: string;
   output: string;
+  meta?: AppPreviewMeta;
   startupError?: Error;
 };
 
@@ -23,7 +31,7 @@ export class AiLabAppPreviewService {
   private readonly sessions = new Map<string, PreviewSession>();
   private readonly starts = new Map<string, Promise<string>>();
 
-  async start(appId: string, projectPath: string): Promise<string> {
+  async start(appId: string, projectPath: string, meta?: AppPreviewMeta): Promise<string> {
     const current = this.sessions.get(appId);
     if (current && current.projectPath === projectPath && isRunning(current.child)) {
       return current.url;
@@ -33,7 +41,7 @@ export class AiLabAppPreviewService {
     const pending = this.starts.get(appId);
     if (pending) return pending;
 
-    const start = this.startProcess(appId, projectPath).finally(() => {
+    const start = this.startProcess(appId, projectPath, meta).finally(() => {
       this.starts.delete(appId);
     });
     this.starts.set(appId, start);
@@ -44,6 +52,7 @@ export class AiLabAppPreviewService {
     const session = this.sessions.get(appId);
     if (!session) return;
     this.sessions.delete(appId);
+    backendProcessRegistry.unregister(`app-preview:${appId}`);
     if (isRunning(session.child)) session.child.kill('SIGTERM');
   }
 
@@ -51,7 +60,11 @@ export class AiLabAppPreviewService {
     for (const appId of this.sessions.keys()) this.stop(appId);
   }
 
-  private async startProcess(appId: string, projectPath: string): Promise<string> {
+  private async startProcess(
+    appId: string,
+    projectPath: string,
+    meta?: AppPreviewMeta
+  ): Promise<string> {
     const context = new LocalExecutionContext();
     const pnpmPath = await resolveCommandPath('pnpm', context);
     context.dispose();
@@ -76,8 +89,18 @@ export class AiLabAppPreviewService {
         stdio: ['ignore', 'pipe', 'pipe'],
       }
     );
-    const session: PreviewSession = { child, projectPath, url, output: '' };
+    const session: PreviewSession = { child, projectPath, url, output: '', meta };
     this.sessions.set(appId, session);
+    backendProcessRegistry.register(`app-preview:${appId}`, {
+      id: appId,
+      kind: 'app-preview',
+      label: meta?.label ?? appId,
+      projectId: meta?.projectId ?? null,
+      projectName: meta?.projectName ?? null,
+      url,
+      pid: child.pid ?? null,
+      detachable: false,
+    });
 
     const appendOutput = (chunk: Buffer | string) => {
       session.output = `${session.output}${chunk.toString()}`.slice(-MAX_START_OUTPUT_CHARS);
@@ -89,7 +112,10 @@ export class AiLabAppPreviewService {
       appendOutput(error.message);
     });
     child.once('exit', (code, signal) => {
-      if (this.sessions.get(appId) === session) this.sessions.delete(appId);
+      if (this.sessions.get(appId) === session) {
+        this.sessions.delete(appId);
+        backendProcessRegistry.unregister(`app-preview:${appId}`);
+      }
       log.info('[ai-lab] App preview stopped', { appId, code, signal });
     });
 

@@ -28,6 +28,7 @@ import {
   type AiLabImageEditResult,
   type AiLabRegenerateImageInput,
 } from '@shared/ai-lab-bridge';
+import { projectDisplayName } from '@shared/projects';
 import { resolveCommandPath } from '@main/core/dependencies/probe';
 import { LocalExecutionContext } from '@main/core/execution-context/local-execution-context';
 import { maasService } from '@main/core/maas/maas-service';
@@ -321,8 +322,16 @@ export class AiLabService {
     }
     return {
       kind: 'url',
-      url: await aiLabAppPreviewService.start(current.id, project.path),
+      url: await aiLabAppPreviewService.start(current.id, project.path, {
+        label: current.name,
+        projectId: project.id,
+        projectName: projectDisplayName(project),
+      }),
     };
+  }
+
+  async stopAppPreview(id: string): Promise<void> {
+    aiLabAppPreviewService.stop(id);
   }
 
   async assignAppProject(input: AssignAiLabAppProjectInput): Promise<AiLabUserApp> {
