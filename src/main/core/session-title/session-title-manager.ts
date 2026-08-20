@@ -5,6 +5,7 @@ import { normalizeTaskDisplayName as normalizeSessionTitle } from '@shared/task-
 import { conversationEvents } from '@main/core/conversations/conversation-events';
 import { createLocalAgentSessionCatalogId } from '@main/core/conversations/local-agent-session-catalog';
 import { storeConversationSessionSource } from '@main/core/conversations/stored-conversation-session-source';
+import { syncTaskNameFromSession } from '@main/core/tasks/operations/task-name-sync';
 import { db } from '@main/db/client';
 import { conversations } from '@main/db/schema';
 import { events } from '@main/lib/events';
@@ -117,6 +118,9 @@ class SessionTitleManager {
         taskId: ctx.taskId,
         title: displayTitle,
       });
+      // A task is its session: the title the CLI reported names the task too,
+      // unless the user already named it by hand.
+      await syncTaskNameFromSession(ctx.projectId, ctx.taskId, displayTitle);
     }
   }
 

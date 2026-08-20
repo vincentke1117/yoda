@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { buildTaskDeepLink } from '@shared/deep-links';
 import { INTERNAL_PROJECT_ID } from '@shared/projects';
+import type { ForkTaskMode } from '@shared/tasks';
 import { openNewTaskFromCurrentContext } from '@renderer/app/open-new-task';
 import {
   getProjectSettingsStore,
@@ -8,6 +9,8 @@ import {
   getRepositoryStore,
 } from '@renderer/features/projects/stores/project-selectors';
 import { useArchiveTask } from '@renderer/features/tasks/archive-task';
+import { canForkSession, runTaskFork } from '@renderer/features/tasks/fork-task';
+import { shareTaskSessionPublicly } from '@renderer/features/tasks/share-session-publicly';
 import { splitViewStore } from '@renderer/features/tasks/split-view/split-view-store';
 import { registeredTaskData } from '@renderer/features/tasks/stores/task';
 import {
@@ -84,6 +87,12 @@ export function useTaskMenuActions(projectId: string, taskId: string): TaskMenuA
   const sessionFields = menuConversation
     ? buildTaskMenuSessionFields(menuConversation, sessionInfoCwd)
     : {};
+  // Fork the session into the size the source terminal is already using, so the
+  // destination does not open at a default grid and immediately reflow.
+  const menuConversationDims = menuConversation
+    ? provisionedTask?.conversations.conversations.get(menuConversation.id)?.session.pty
+        ?.lastSentDims
+    : undefined;
   const hasStoredConversations = Object.values(task.conversationStats).some((count) => count > 0);
   const resolveSessionInfo = menuConversation
     ? () => resolveTaskMenuSessionFields(menuConversation, sessionInfoCwd)
@@ -171,6 +180,10 @@ export function useTaskMenuActions(projectId: string, taskId: string): TaskMenuA
     // command and optional note.
     onArchiveWithSkill: () => showArchiveWithNote({ projectId, taskId, taskName, withSkill: true }),
     onCopyYodaLink: () => void copyYodaLink(buildTaskDeepLink({ projectId, taskId }), t),
+    onSharePublicLink:
+      provisionedTask && menuConversation
+        ? () => void shareTaskSessionPublicly(projectId, taskId, menuConversation.id, t)
+        : undefined,
     onRestore: () => void taskManager?.restoreTask(taskId),
     onReconnect: workspace?.connectionState != null ? () => workspace.reconnect() : undefined,
     onRestartSession:
@@ -216,6 +229,22 @@ export function useTaskMenuActions(projectId: string, taskId: string): TaskMenuA
       task.state !== 'unregistered' &&
       Boolean(repoDefaultBranch)
         ? () => showCreateParent({ projectId, taskId, defaultName: taskName })
+        : undefined,
+    // A fork is a new task, never a second session here: the source's context up
+    // to its latest completed turn, continued somewhere else.
+    onFork:
+      !isArchived && menuConversation && canForkSession(menuConversation)
+        ? (mode: ForkTaskMode) =>
+            runTaskFork(
+              {
+                projectId,
+                taskId,
+                conversationId: menuConversation.id,
+                mode,
+                initialSize: menuConversationDims ?? undefined,
+              },
+              navigate
+            )
         : undefined,
     // Show this task in an extra pane beside whatever is currently routed.
     onOpenBeside:

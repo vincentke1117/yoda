@@ -135,7 +135,6 @@ async function applyBackgroundTaskNaming(input: {
     }
   }
 
-  const taskSettings = await appSettingsService.get('tasks');
   const row = await loadTaskRow(input.taskId);
   if (!row) return;
   if (row.isUserNamed) {
@@ -169,7 +168,8 @@ async function applyBackgroundTaskNaming(input: {
     }
   }
 
-  const nextName = taskSettings.initTaskNameFromSession ? sessionTitle : row.name;
+  // A task is its session: the generated session title is the task name.
+  const nextName = sessionTitle;
   if (nextName === row.name && nextBranch === row.taskBranch) return;
 
   const [updatedRow] = await db
@@ -409,6 +409,7 @@ export async function createTask(
       id: params.id,
       projectId: params.projectId,
       name: params.name,
+      isUserNamed: params.nameIsExplicit ? 1 : 0,
       status: initialStatus,
       sourceBranch: toStoredBranch(dbSourceBranch),
       linkedIssue: params.linkedIssue ? JSON.stringify(params.linkedIssue) : null,
@@ -455,7 +456,10 @@ export async function createTask(
   // name and surface that slug as the "First user prompt" — the user can trigger
   // naming manually later once the task has content.
   const hasInitialPrompt = Boolean(params.initialConversation?.initialPrompt?.trim());
-  const shouldGenerate = hasInitialPrompt && (await resolveAutoTaskNamingEnabled(params.projectId));
+  const shouldGenerate =
+    hasInitialPrompt &&
+    !params.nameIsExplicit &&
+    (await resolveAutoTaskNamingEnabled(params.projectId));
   // When auto-naming owns the branch: 'hash' mode passes an empty seed so the
   // branch is just `prefix/<suffix>`; 'ai' mode keeps the placeholder seed and
   // renames the branch in the background once the naming agent returns a slug.
@@ -655,7 +659,8 @@ export async function retryTaskSetup(
 
   const displayName = row.name;
   const hasInitialPrompt = Boolean(params.initialConversation?.initialPrompt?.trim());
-  const shouldGenerate = hasInitialPrompt && (await resolveAutoTaskNamingEnabled(projectId));
+  const shouldGenerate =
+    hasInitialPrompt && !row.isUserNamed && (await resolveAutoTaskNamingEnabled(projectId));
   // Naming runs in the background and never blocks provisioning. 'hash' branch
   // naming uses a suffix-only branch name; 'ai' renames the branch later.
   const autoNamesBranch =

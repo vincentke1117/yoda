@@ -1,9 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Conversation } from '@shared/conversations';
-import { forkConversation } from './forkConversation';
+import { resolveLatestForkCheckpoint } from './resolveLatestForkCheckpoint';
 
 const mocks = vi.hoisted(() => ({
-  forkConversationAtPrompt: vi.fn(),
   getClaudeSessionContext: vi.fn(),
   getCodexSessionContext: vi.fn(),
   getRuntimeConfig: vi.fn(),
@@ -23,9 +22,6 @@ vi.mock('@main/db/client', () => ({
 vi.mock('../projects/utils', () => ({ resolveTask: mocks.resolveTask }));
 vi.mock('../settings/runtime-settings-service', () => ({
   runtimeOverrideSettings: { getItem: mocks.getRuntimeConfig },
-}));
-vi.mock('./forkConversationAtPrompt', () => ({
-  forkConversationAtPrompt: mocks.forkConversationAtPrompt,
 }));
 vi.mock('./getClaudeSessionContext', () => ({
   getClaudeSessionContext: mocks.getClaudeSessionContext,
@@ -48,17 +44,16 @@ const source: Conversation = {
   title: 'Source title',
   createdAt: '2026-07-17T10:00:00.000Z',
   lastInteractedAt: '2026-07-17T10:00:00.000Z',
-  isInitialConversation: false,
+  isInitialConversation: true,
 };
 
 const params = {
   projectId: 'project-1',
   taskId: 'task-1',
   conversationId: 'source-conversation',
-  initialSize: { cols: 132, rows: 40 },
 };
 
-describe('forkConversation', () => {
+describe('resolveLatestForkCheckpoint', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.selectChain.from.mockReturnThis();
@@ -69,10 +64,9 @@ describe('forkConversation', () => {
     mocks.resolveRuntimeStateDirectory.mockImplementation((runtimeId: string) =>
       runtimeId === 'codex' ? '/state/codex' : '/state/claude'
     );
-    mocks.forkConversationAtPrompt.mockResolvedValue({ ...source, id: 'forked-conversation' });
   });
 
-  it('forks Codex from the latest completed turn and ignores an in-flight prompt', async () => {
+  it('picks the latest completed Codex turn and ignores an in-flight prompt', async () => {
     mocks.getCodexSessionContext.mockResolvedValue({
       prompts: [
         { restoreTarget: { kind: 'codex-turn', turnId: 'turn-1' } },
@@ -81,8 +75,10 @@ describe('forkConversation', () => {
       ],
     });
 
-    await forkConversation(params);
-
+    await expect(resolveLatestForkCheckpoint(params)).resolves.toEqual({
+      promptIndex: 1,
+      target: { kind: 'codex-turn', turnId: 'turn-2' },
+    });
     expect(mocks.getCodexSessionContext).toHaveBeenCalledWith(
       '/repo',
       source.id,
@@ -90,42 +86,33 @@ describe('forkConversation', () => {
       source.createdAt,
       { codexHome: '/state/codex' }
     );
-    expect(mocks.forkConversationAtPrompt).toHaveBeenCalledWith({
-      ...params,
-      promptIndex: 1,
-      target: { kind: 'codex-turn', turnId: 'turn-2' },
-    });
   });
 
-  it('forks Claude from its latest completed transcript turn', async () => {
+  it('picks the latest completed Claude transcript turn', async () => {
     mocks.mapConversationRowToConversation.mockReturnValue({ ...source, runtimeId: 'claude' });
     mocks.getClaudeSessionContext.mockResolvedValue({
       prompts: [{ restoreTarget: { kind: 'claude-message', messageId: 'answer-1' } }],
     });
 
-    await forkConversation(params);
-
-    expect(mocks.getClaudeSessionContext).toHaveBeenCalledWith('/repo', source.id, {
-      claudeConfigDir: '/state/claude',
-    });
-    expect(mocks.forkConversationAtPrompt).toHaveBeenCalledWith({
-      ...params,
+    await expect(resolveLatestForkCheckpoint(params)).resolves.toEqual({
       promptIndex: 0,
       target: { kind: 'claude-message', messageId: 'answer-1' },
+    });
+    expect(mocks.getClaudeSessionContext).toHaveBeenCalledWith('/repo', source.id, {
+      claudeConfigDir: '/state/claude',
     });
   });
 
   it('rejects sessions without a completed turn', async () => {
     mocks.getCodexSessionContext.mockResolvedValue({ prompts: [{}] });
 
-    await expect(forkConversation(params)).rejects.toThrow('no completed turn');
-    expect(mocks.forkConversationAtPrompt).not.toHaveBeenCalled();
+    await expect(resolveLatestForkCheckpoint(params)).rejects.toThrow('no completed turn');
   });
 
   it('rejects runtimes without native fork support', async () => {
     mocks.mapConversationRowToConversation.mockReturnValue({ ...source, runtimeId: 'gemini' });
 
-    await expect(forkConversation(params)).rejects.toThrow(
+    await expect(resolveLatestForkCheckpoint(params)).rejects.toThrow(
       'Runtime does not support conversation fork: gemini'
     );
   });

@@ -2,8 +2,6 @@ import {
   Check,
   ChevronDown,
   Copy,
-  ListTree,
-  Loader2,
   Maximize2,
   MessageSquare,
   Minus,
@@ -21,7 +19,7 @@ import {
   type PointerEvent,
 } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { ClaudeSessionPrompt, Conversation, SessionCompaction } from '@shared/conversations';
+import type { ClaudeSessionPrompt, SessionCompaction } from '@shared/conversations';
 import { useAppSettingsKey } from '@renderer/features/settings/use-app-settings-key';
 import { displaySessionPromptText } from '@renderer/features/tasks/context-panel-prompt-display';
 import {
@@ -30,30 +28,15 @@ import {
 } from '@renderer/features/tasks/session-compactions';
 import { useSessionPrompts } from '@renderer/features/tasks/session-info-panel';
 import { buildPromptPreviewItems } from '@renderer/features/tasks/session-prompts-preview';
-import { useRequireProvisionedTask } from '@renderer/features/tasks/task-view-context';
 import { copyTextToClipboard, toast } from '@renderer/lib/hooks/use-toast';
 import { useShowModal } from '@renderer/lib/modal/modal-provider';
 import { Button } from '@renderer/lib/ui/button';
 import { EmptyState } from '@renderer/lib/ui/empty-state';
-import {
-  Popover,
-  PopoverClose,
-  PopoverContent,
-  PopoverDescription,
-  PopoverHeader,
-  PopoverTitle,
-  PopoverTrigger,
-} from '@renderer/lib/ui/popover';
 import { RelativeTime } from '@renderer/lib/ui/relative-time';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@renderer/lib/ui/tooltip';
-import { log } from '@renderer/utils/logger';
 import { cn } from '@renderer/utils/utils';
 import { SessionCompactionMarker } from './session-compaction-marker';
 import { SessionPromptRestoreButton } from './session-prompt-restore-button';
-import { countSessionPromptTreeNodes, SessionPromptTreeView } from './session-prompt-tree';
-import { reopenArchivedConversation } from './use-archived-conversations';
-import { useConversationPromptRestore } from './use-conversation-prompt-restore';
-import { useSessionPromptTree } from './use-session-prompt-tree';
 
 /**
  * The active conversation's prompt history rendered as a scrollable list, oldest
@@ -196,8 +179,8 @@ function getDockedSessionHistoryHeight(rows: number, collapsed = false): number 
  * The same prompt history docked at the bottom of the conversation pane, gated
  * behind the `interface.dockSessionHistory` setting (toggled from the context
  * popover). Shows the first prompt and N latest prompts — adjustable inline
- * via the header. The action menu opens the complete branch tree in a separate
- * floating panel, while collapsing stops the current-path background fetch.
+ * via the header; the full history opens in a modal. Collapsing stops the
+ * background transcript fetch.
  */
 export const DockedSessionHistory = observer(function DockedSessionHistory({
   active = true,
@@ -210,11 +193,7 @@ export const DockedSessionHistory = observer(function DockedSessionHistory({
   const enabled = ui?.dockSessionHistory ?? true;
   const rows = clampDockRows(ui?.dockSessionHistoryRows ?? 3);
   const [collapsed, setCollapsed] = useState(false);
-  const [treeOpen, setTreeOpen] = useState(false);
   const prompts = useSessionPrompts(active && enabled && !collapsed);
-  const promptTree = useSessionPromptTree(active && enabled && treeOpen);
-  const { restoringPrompt, requestRestorePrompt } = useConversationPromptRestore();
-  const provisionedTask = useRequireProvisionedTask();
 
   if (!enabled) return null;
 
@@ -240,178 +219,69 @@ export const DockedSessionHistory = observer(function DockedSessionHistory({
 
   const setRows = (next: number) => update({ dockSessionHistoryRows: clampDockRows(next) });
 
-  const openConversation = async (conversation: Conversation): Promise<boolean> => {
-    if (provisionedTask.conversations.conversations.has(conversation.id)) {
-      provisionedTask.taskView.tabManager.openConversation(conversation.id);
-      provisionedTask.taskView.setFocusedRegion('main');
-      return true;
-    }
-    try {
-      await reopenArchivedConversation(conversation);
-      provisionedTask.taskView.setFocusedRegion('main');
-      return true;
-    } catch (error) {
-      log.warn('DockedSessionHistory: failed to open archived branch', {
-        conversationId: conversation.id,
-        error,
-      });
-      toast({
-        title: t('tasks.bottomPanel.sessionOpenBranchFailed'),
-        description: error instanceof Error ? error.message : String(error),
-        variant: 'destructive',
-        debugInfo: error,
-      });
-      return false;
-    }
-  };
-
-  const openTreeConversation = async (conversation: Conversation) => {
-    if (await openConversation(conversation)) setTreeOpen(false);
-  };
-
-  const restoreTreePrompt: typeof requestRestorePrompt = (location) => {
-    setTreeOpen(false);
-    requestRestorePrompt(location);
-  };
-
-  const treePromptCount = countSessionPromptTreeNodes(promptTree.tree);
-  const treeConversationCount = promptTree.tree?.lineageConversations.length ?? 0;
-
   return (
-    <Popover open={treeOpen} onOpenChange={setTreeOpen}>
-      <div
-        data-session-history-dock
-        data-session-history-ready="true"
-        className="flex shrink-0 flex-col overflow-hidden border-t border-border-primary/60 bg-background"
-        style={dockStyle}
-      >
-        <div className="flex h-7 shrink-0 items-center gap-1.5 px-3 text-foreground-passive">
-          <button
-            type="button"
-            className="flex min-w-0 flex-1 items-center gap-1.5 text-left transition-colors hover:text-foreground"
-            onClick={() => setCollapsed((v) => !v)}
-            aria-expanded={!collapsed}
-          >
-            <ChevronDown className={cn('size-3 transition-transform', collapsed && '-rotate-90')} />
-            <span className="text-[11px] font-medium">{t('tasks.bottomPanel.session')}</span>
-            <span className="font-mono text-[10px] tabular-nums text-foreground-passive">
-              {prompts.prompts.length}
-            </span>
-          </button>
-          {!collapsed ? (
-            <div className="flex shrink-0 items-center gap-0.5">
-              <button
-                type="button"
-                className="flex size-4 items-center justify-center rounded-sm transition-colors hover:bg-background-2 hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
-                onClick={() => setRows(rows - 1)}
-                disabled={rows <= MIN_DOCK_ROWS}
-                aria-label={t('tasks.bottomPanel.sessionFewerRows')}
-                title={t('tasks.bottomPanel.sessionFewerRows')}
-              >
-                <Minus className="size-2.5" />
-              </button>
-              <span className="w-3 text-center font-mono text-[10px] tabular-nums">{rows}</span>
-              <button
-                type="button"
-                className="flex size-4 items-center justify-center rounded-sm transition-colors hover:bg-background-2 hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
-                onClick={() => setRows(rows + 1)}
-                disabled={rows >= MAX_DOCK_ROWS}
-                aria-label={t('tasks.bottomPanel.sessionMoreRows')}
-                title={t('tasks.bottomPanel.sessionMoreRows')}
-              >
-                <Plus className="size-2.5" />
-              </button>
-            </div>
-          ) : null}
-          <PopoverTrigger
-            type="button"
-            className={cn(
-              'flex size-5 shrink-0 items-center justify-center rounded-sm transition-colors hover:bg-background-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border',
-              treeOpen && 'bg-background-2 text-foreground'
-            )}
-            aria-label={t('tasks.bottomPanel.sessionViewTree')}
-            title={t('tasks.bottomPanel.sessionViewTree')}
-          >
-            <ListTree className="size-3" />
-          </PopoverTrigger>
-        </div>
-        {!collapsed ? (
-          prompts.hasPrompts ? (
-            <DockedSessionPromptPreview
-              prompts={prompts.prompts}
-              compactions={prompts.compactions}
-              tailCount={rows}
-              onOpenAll={prompts.openPromptsModal}
-              onRestorePrompt={prompts.requestRestorePrompt}
-              restoringPromptId={prompts.restoringPromptId}
-            />
-          ) : (
-            <div className="px-3 pb-2 text-xs text-foreground-passive">
-              {t('tasks.panel.noPrompts')}
-            </div>
-          )
-        ) : null}
-        <PopoverContent
-          align="end"
-          side="top"
-          sideOffset={6}
-          className="w-[min(44rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] gap-0 overflow-hidden p-0"
+    <div
+      data-session-history-dock
+      data-session-history-ready="true"
+      className="flex shrink-0 flex-col overflow-hidden border-t border-border-primary/60 bg-background"
+      style={dockStyle}
+    >
+      <div className="flex h-7 shrink-0 items-center gap-1.5 px-3 text-foreground-passive">
+        <button
+          type="button"
+          className="flex min-w-0 flex-1 items-center gap-1.5 text-left transition-colors hover:text-foreground"
+          onClick={() => setCollapsed((v) => !v)}
+          aria-expanded={!collapsed}
         >
-          <PopoverHeader className="border-b border-border-primary/60 px-3 py-2.5">
-            <div className="flex min-w-0 items-start gap-3">
-              <div className="min-w-0 flex-1">
-                <PopoverTitle className="text-xs font-medium">
-                  {t('tasks.bottomPanel.sessionTreeTitle')}
-                </PopoverTitle>
-                <PopoverDescription className="mt-0.5 text-[11px] leading-4">
-                  {t(
-                    promptTree.tree && treeConversationCount <= 1
-                      ? 'tasks.bottomPanel.sessionTreeSingleConversationDescription'
-                      : 'tasks.bottomPanel.sessionTreeDescription'
-                  )}
-                </PopoverDescription>
-              </div>
-              <PopoverClose
-                className="shrink-0 rounded px-1.5 py-0.5 text-[11px] text-foreground-passive transition-colors hover:bg-background-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border"
-                aria-label={t('common.close')}
-              >
-                {t('common.close')}
-              </PopoverClose>
-            </div>
-            {promptTree.tree ? (
-              <span className="font-mono text-[10px] tabular-nums text-foreground-passive">
-                {t('tasks.bottomPanel.sessionTreeSummary', {
-                  promptCount: treePromptCount,
-                  conversationCount: treeConversationCount,
-                })}
-              </span>
-            ) : null}
-          </PopoverHeader>
-          <div className="min-h-24 bg-background">
-            {promptTree.tree ? (
-              <SessionPromptTreeView
-                tree={promptTree.tree}
-                isLoading={promptTree.isLoading}
-                activeConversationIds={promptTree.activeConversationIds}
-                restoringPrompt={restoringPrompt}
-                maxHeight="min(60vh, 32rem)"
-                onRestorePrompt={restoreTreePrompt}
-                onOpenConversation={openTreeConversation}
-              />
-            ) : promptTree.isLoading ? (
-              <div className="flex h-24 items-center justify-center gap-1.5 text-xs text-foreground-passive">
-                <Loader2 className="size-3 animate-spin" />
-                {t('common.loading')}
-              </div>
-            ) : (
-              <div className="flex h-24 items-center justify-center px-3 text-xs text-foreground-passive">
-                {t('tasks.panel.noPrompts')}
-              </div>
-            )}
+          <ChevronDown className={cn('size-3 transition-transform', collapsed && '-rotate-90')} />
+          <span className="text-[11px] font-medium">{t('tasks.bottomPanel.session')}</span>
+          <span className="font-mono text-[10px] tabular-nums text-foreground-passive">
+            {prompts.prompts.length}
+          </span>
+        </button>
+        {!collapsed ? (
+          <div className="flex shrink-0 items-center gap-0.5">
+            <button
+              type="button"
+              className="flex size-4 items-center justify-center rounded-sm transition-colors hover:bg-background-2 hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+              onClick={() => setRows(rows - 1)}
+              disabled={rows <= MIN_DOCK_ROWS}
+              aria-label={t('tasks.bottomPanel.sessionFewerRows')}
+              title={t('tasks.bottomPanel.sessionFewerRows')}
+            >
+              <Minus className="size-2.5" />
+            </button>
+            <span className="w-3 text-center font-mono text-[10px] tabular-nums">{rows}</span>
+            <button
+              type="button"
+              className="flex size-4 items-center justify-center rounded-sm transition-colors hover:bg-background-2 hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+              onClick={() => setRows(rows + 1)}
+              disabled={rows >= MAX_DOCK_ROWS}
+              aria-label={t('tasks.bottomPanel.sessionMoreRows')}
+              title={t('tasks.bottomPanel.sessionMoreRows')}
+            >
+              <Plus className="size-2.5" />
+            </button>
           </div>
-        </PopoverContent>
+        ) : null}
       </div>
-    </Popover>
+      {!collapsed ? (
+        prompts.hasPrompts ? (
+          <DockedSessionPromptPreview
+            prompts={prompts.prompts}
+            compactions={prompts.compactions}
+            tailCount={rows}
+            onOpenAll={prompts.openPromptsModal}
+            onRestorePrompt={prompts.requestRestorePrompt}
+            restoringPromptId={prompts.restoringPromptId}
+          />
+        ) : (
+          <div className="px-3 pb-2 text-xs text-foreground-passive">
+            {t('tasks.panel.noPrompts')}
+          </div>
+        )
+      ) : null}
+    </div>
   );
 });
 

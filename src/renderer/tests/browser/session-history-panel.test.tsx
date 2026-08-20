@@ -20,7 +20,6 @@ const mocks = vi.hoisted(() => ({
   },
   update: vi.fn(),
   useSessionPrompts: vi.fn(),
-  useSessionPromptTree: vi.fn(),
   restoreCurrentPrompt: vi.fn(),
   copyTextToClipboard: vi.fn(),
 }));
@@ -56,27 +55,11 @@ vi.mock('@renderer/features/tasks/task-view-context', () => ({
   }),
 }));
 
-vi.mock('@renderer/features/tasks/conversations/session-prompt-tree', async () => {
-  const { createElement: create } = await import('react');
-  return {
-    countSessionPromptTreeNodes: () => 4,
-    SessionPromptTreeView: () => create('div', { 'data-session-prompt-tree': true }, 'tree path'),
-  };
-});
-
 vi.mock('@renderer/features/tasks/conversations/use-conversation-prompt-restore', () => ({
   useConversationPromptRestore: () => ({
     restoringPrompt: null,
     requestRestorePrompt: vi.fn(),
   }),
-}));
-
-vi.mock('@renderer/features/tasks/conversations/use-session-prompt-tree', () => ({
-  useSessionPromptTree: (active: boolean) => mocks.useSessionPromptTree(active),
-}));
-
-vi.mock('@renderer/features/tasks/conversations/use-archived-conversations', () => ({
-  reopenArchivedConversation: vi.fn(async () => {}),
 }));
 
 vi.mock('@renderer/lib/hooks/use-toast', () => ({
@@ -95,7 +78,7 @@ async function waitForElementToDisappear(selector: string): Promise<void> {
   throw new Error(`Element did not disappear: ${selector}`);
 }
 
-describe('DockedSessionHistory conversation tree menu', () => {
+describe('DockedSessionHistory prompt dock', () => {
   let host: HTMLDivElement;
   let root: Root;
 
@@ -116,12 +99,6 @@ describe('DockedSessionHistory conversation tree menu', () => {
       requestRestorePrompt: mocks.restoreCurrentPrompt,
       openPromptsModal: vi.fn(),
     });
-    mocks.useSessionPromptTree.mockReset().mockReturnValue({
-      tree: { lineageConversations: [{ id: 'branch-1' }] },
-      isLoading: false,
-      hasConversation: true,
-      activeConversationIds: new Set<string>(),
-    });
     host = document.createElement('div');
     document.body.appendChild(host);
     root = createRoot(host);
@@ -133,16 +110,14 @@ describe('DockedSessionHistory conversation tree menu', () => {
     host.remove();
   });
 
-  it('keeps the current path list visible and opens the complete tree from the icon', async () => {
+  it('pins a prompt preview open on click instead of forking behind the reader', async () => {
     const { DockedSessionHistory } = await import(
       '@renderer/features/tasks/conversations/session-history-panel'
     );
     await act(async () => root.render(createElement(DockedSessionHistory)));
 
     expect(host.textContent).toContain('current path prompt');
-    expect(host.querySelector('[data-session-prompt-tree]')).toBeNull();
     expect(mocks.useSessionPrompts).toHaveBeenLastCalledWith(true);
-    expect(mocks.useSessionPromptTree).toHaveBeenLastCalledWith(false);
 
     const currentPrompt = host.querySelector<HTMLButtonElement>(
       'button[data-slot="tooltip-trigger"]'
@@ -159,31 +134,7 @@ describe('DockedSessionHistory conversation tree menu', () => {
     await act(async () => currentPrompt?.click());
     await waitForElementToDisappear('[data-session-prompt-preview]');
     expect(currentPrompt?.parentElement?.dataset.sessionPromptPinned).toBeUndefined();
-
-    expect(host.querySelector('button[aria-label="tasks.bottomPanel.sessionViewList"]')).toBeNull();
-    const viewTree = host.querySelector<HTMLButtonElement>(
-      'button[aria-label="tasks.bottomPanel.sessionViewTree"]'
-    );
-    expect(viewTree?.getAttribute('aria-expanded')).toBe('false');
-    await act(async () => viewTree?.click());
-
-    expect(viewTree?.getAttribute('aria-expanded')).toBe('true');
     expect(mocks.update).not.toHaveBeenCalled();
-    expect(host.textContent).toContain('current path prompt');
-    expect(document.querySelector('[data-session-prompt-tree]')?.textContent).toBe('tree path');
-    expect(document.body.textContent).toContain(
-      'tasks.bottomPanel.sessionTreeSingleConversationDescription'
-    );
-    expect(document.body.textContent).toContain('tasks.bottomPanel.sessionTreeSummary');
-    expect(mocks.useSessionPrompts).toHaveBeenLastCalledWith(true);
-    expect(mocks.useSessionPromptTree).toHaveBeenLastCalledWith(true);
-
-    await act(async () => viewTree?.click());
-
-    expect(viewTree?.getAttribute('aria-expanded')).toBe('false');
-    await waitForElementToDisappear('[data-session-prompt-tree]');
-    expect(document.querySelector('[data-session-prompt-tree]')).toBeNull();
-    expect(mocks.useSessionPromptTree).toHaveBeenLastCalledWith(false);
   });
 
   it('reserves final geometry without showing or loading transcript content before activation', async () => {
@@ -193,7 +144,6 @@ describe('DockedSessionHistory conversation tree menu', () => {
     await act(async () => root.render(createElement(DockedSessionHistory, { active: false })));
 
     expect(mocks.useSessionPrompts).toHaveBeenLastCalledWith(false);
-    expect(mocks.useSessionPromptTree).toHaveBeenLastCalledWith(false);
     const reservedDock = host.querySelector<HTMLElement>('[data-session-history-dock]');
     expect(reservedDock?.dataset.sessionHistoryReady).toBe('false');
     expect(reservedDock?.style.height).toBe('157px');
@@ -424,7 +374,7 @@ describe('DockedSessionHistory conversation tree menu', () => {
     });
   });
 
-  it('keeps the tree icon available while the current-path list is collapsed', async () => {
+  it('collapses to the header row and stops the transcript fetch', async () => {
     const { DockedSessionHistory } = await import(
       '@renderer/features/tasks/conversations/session-history-panel'
     );
@@ -437,17 +387,7 @@ describe('DockedSessionHistory conversation tree menu', () => {
     expect(host.querySelector<HTMLElement>('[data-session-history-dock]')?.style.height).toBe(
       '29px'
     );
-    const viewTree = host.querySelector<HTMLButtonElement>(
-      'button[aria-label="tasks.bottomPanel.sessionViewTree"]'
-    );
-    expect(viewTree).not.toBeNull();
     expect(mocks.useSessionPrompts).toHaveBeenLastCalledWith(false);
-    expect(mocks.useSessionPromptTree).toHaveBeenLastCalledWith(false);
-
-    await act(async () => viewTree?.click());
-
-    expect(document.querySelector('[data-session-prompt-tree]')).not.toBeNull();
-    expect(mocks.useSessionPromptTree).toHaveBeenLastCalledWith(true);
   });
 
   it('renders an unavailable fork action with an explanation', async () => {

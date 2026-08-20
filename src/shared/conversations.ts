@@ -197,23 +197,6 @@ export type SessionContextRestoreTarget =
   | { kind: 'claude-message'; messageId: string }
   | { kind: 'codex-turn'; turnId: string };
 
-export type ForkConversationAtPromptParams = {
-  projectId: string;
-  taskId: string;
-  conversationId: string;
-  /** Zero-based index used to revalidate the checkpoint against the source transcript. */
-  promptIndex: number;
-  target: SessionContextRestoreTarget;
-  initialSize?: { cols: number; rows: number };
-};
-
-export type ForkConversationParams = {
-  projectId: string;
-  taskId: string;
-  conversationId: string;
-  initialSize?: { cols: number; rows: number };
-};
-
 export type ClaudeMemoryFile = {
   kind: 'global-claude' | 'project-claude' | 'project-agents';
   path: string;
@@ -545,4 +528,10 @@ export type CreateConversationParams = {
    * Opening the resulting Yoda conversation resumes this source on demand.
    */
   sessionSource?: AgentSessionSource;
+  /**
+   * Team-room member seat. A task is its session everywhere else, so this is the
+   * only caller allowed to put a second session in a task: a room task holds one
+   * session per teammate and the conductor routes between them.
+   */
+  teamRoomMemberSeat?: boolean;
 };

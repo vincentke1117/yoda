@@ -206,12 +206,6 @@ export const APP_SHORTCUTS = defineShortcuts({
     category: 'Tab Navigation',
     hideFromSettings: true,
   },
-  newConversation: {
-    defaultHotkey: 'Mod+Shift+C',
-    label: 'New Conversation',
-    description: 'Create a new conversation in the current task',
-    category: 'Task View',
-  },
   newTerminal: {
     defaultHotkey: 'Mod+Shift+T',
     label: 'New Terminal',

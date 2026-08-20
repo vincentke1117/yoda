@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { conversationRenamedChannel } from '@shared/events/conversationEvents';
+import { syncTaskNameFromSession } from '@main/core/tasks/operations/task-name-sync';
 import { db } from '@main/db/client';
 import { conversations } from '@main/db/schema';
 import { events } from '@main/lib/events';
@@ -35,5 +36,9 @@ export async function renameConversation(
       taskId: existing.taskId,
       title: name,
     });
+    // A task is its session, so one title names both. Advisory: a task the user
+    // named by hand keeps its name, and `renameTask` (which calls us) has
+    // already written the same name, so this is a no-op on that path.
+    await syncTaskNameFromSession(existing.projectId, existing.taskId, name);
   }
 }

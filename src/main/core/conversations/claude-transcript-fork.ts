@@ -22,7 +22,14 @@ export type BuildForkedClaudeTranscriptResult = {
 };
 
 export type ForkClaudeTranscriptParams = {
+  /** Working directory the forked transcript is written for. */
   cwd?: string;
+  /**
+   * Working directory the source transcript lives under. Defaults to `cwd`.
+   * A fork that lands in a new worktree has to read from the old cwd slug and
+   * write into the new one, so the two are not always the same directory.
+   */
+  sourceCwd?: string;
   claudeConfigDir?: string;
   sourceSessionId: string;
   targetSessionId: string;
@@ -245,6 +252,7 @@ export function buildForkedClaudeTranscript({
  */
 export async function forkClaudeTranscript({
   cwd,
+  sourceCwd,
   claudeConfigDir,
   sourceSessionId,
   targetSessionId,
@@ -256,7 +264,7 @@ export async function forkClaudeTranscript({
     throw new Error('Source and target Claude session ids must differ');
   }
   const resolvedSourcePath = resolveTranscriptPath({
-    cwd,
+    cwd: sourceCwd ?? cwd,
     claudeConfigDir,
     sessionId: sourceSessionId,
     explicitPath: sourcePath,

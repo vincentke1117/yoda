@@ -7,7 +7,6 @@ import {
   getTaskView,
 } from '@renderer/features/tasks/stores/task-selectors';
 import type { CommandProvider } from '@renderer/lib/commands/types';
-import { showModal } from '@renderer/lib/modal/modal-provider';
 import { appState } from '@renderer/lib/stores/app-state';
 
 /**
@@ -28,7 +27,6 @@ export function createTaskCommandProvider(projectId: string, taskId: string): Co
       if (!provisioned) return [];
 
       const taskView = getTaskView(projectId, taskId);
-      const tabManager = taskView?.tabManager;
 
       const taskMgr = getTaskManagerStore(projectId);
       const taskIds = taskMgr ? Array.from(taskMgr.tasks.keys()) : [];
@@ -38,26 +36,6 @@ export function createTaskCommandProvider(projectId: string, taskId: string): Co
       const taskData = getRegisteredTaskData(projectId, taskId);
 
       return [
-        // ── Conversations ──────────────────────────────────────────────────
-        {
-          id: 'task.newConversation',
-          label: 'New Conversation',
-          description: 'Create a new conversation in the current task',
-          shortcutKey: 'newConversation',
-          group: 'Conversations',
-          execute() {
-            showModal('newConversationModal', {
-              projectId,
-              taskId,
-              onSuccess: ({ conversationIds }) => {
-                const conversationId = conversationIds[0];
-                if (conversationId) tabManager?.openConversation(conversationId);
-                taskView?.setFocusedRegion('main');
-              },
-            });
-          },
-        },
-
         // ── View sidebar panels ────────────────────────────────────────────
         {
           id: 'task.sidebarTask',

@@ -18,8 +18,6 @@ import {
   restoreRuntimeInstructionFileVersion,
   saveEditableRuntimeInstructionFile,
 } from './editable-instruction-files';
-import { forkConversation } from './forkConversation';
-import { forkConversationAtPrompt } from './forkConversationAtPrompt';
 import {
   generateConversationTitle,
   getConversationNamingPreview,
@@ -52,7 +50,6 @@ import {
   getLocalAgentSessionTranscript,
   listLocalAgentSessions,
 } from './local-agent-session-operations';
-import { moveConversation } from './moveConversation';
 import { getProjectConversationPrompts, getProjectPromptSources } from './project-prompts';
 import { getProjectSessionSources } from './project-sessions';
 import { renameConversation } from './renameConversation';
@@ -239,8 +236,6 @@ export const conversationController = createRPCController({
   archiveConversation,
   unarchiveConversation,
   deleteConversation,
-  forkConversation,
-  forkConversationAtPrompt,
   generateConversationTitle,
   getConversationNamingPreview,
   getConversationNamingSnapshot,
@@ -290,7 +285,6 @@ export const conversationController = createRPCController({
   getActiveRuntimeStatuses,
   listLocalAgentSessions,
   getLocalAgentSessionTranscript,
-  moveConversation,
   getConversationRuntimeStatuses,
   getProjectPromptSources,
   getProjectConversationPrompts,

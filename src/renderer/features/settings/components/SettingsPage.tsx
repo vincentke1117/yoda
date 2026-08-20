@@ -42,7 +42,6 @@ import {
   AutoTrustWorktreesRow,
   BranchNamingRow,
   EnableTmuxRow,
-  InitTaskNameFromSessionRow,
   PreArchiveCommandRow,
   TmuxSettingsChapter,
   WorkspacesEnabledRow,
@@ -226,10 +225,6 @@ export function SettingsPage({
         {
           id: 'workspaces-enabled',
           component: <WorkspacesEnabledRow />,
-        },
-        {
-          id: 'init-task-name-from-session',
-          component: <InitTaskNameFromSessionRow />,
         },
         {
           id: 'branch-naming',

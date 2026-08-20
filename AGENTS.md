@@ -124,6 +124,7 @@ optional_env:
 - renderer 里改后端 PTY 尺寸只能走 `src/renderer/lib/pty/pty-resize-authority.ts`，禁止直接调 `rpc.pty.resize` / `resizeForRenderer`：一个 PTY 只有一份 grid，观察者窗口（独立看板）改了会连带改窄主窗口的 TUI（2026-08-18, c429a81）。
 - 列表既有筛选又有数量上限时，必须先筛后截断，跨窗口推送的候选列表保持不截断（2026-08-18, c429a81）。
 - 任务列表 surface 的筛选/排序只能走 `@shared/task-view-options` + `TaskViewOptionsMenu`，禁止在单个 surface 里另写一份（2026-08-18, 7d40aff）。
+- 一个任务只有一个会话：`createConversation` 会拒绝往已有未归档会话的任务里再插一条，同分支再上一个 Agent 走 `createSiblingTask`（共享 worktree，refCount），唯一例外是 team room 的 `teamRoomMemberSeat`（2026-08-18, e363505）。
 
 ## 注意
 - 我正在以开发模式运行与迭代 yoda，不要打开我已安装的 yoda
@@ -141,3 +142,6 @@ optional_env:
 - base-ui 弹层不能互相嵌套：DropdownMenu(Menu.Root) 嵌进 ContextMenu 会让内层菜单 parent.type 判成 context-menu、trigger 点不开；同一元素上要叠加左键下拉就改用 Popover（PopoverRoot 是独立树，且 Popover 默认 click 开、Menu 默认 mousedown 开；非 button 元素 trigger 要加 `nativeButton={false}`）（2026-08-19, 6e70b60f）
 - Claude activity 记录的合法 status 含 `shell`（Claude Code 2.1.233+：turn 结束但挂着后台 shell/dev server 时写 shell 而非 idle）；`parseClaudeSessionActivity` 只认 busy/idle/waiting 会把 shell 当 null，导致卡住的 awaiting-input/working 永远无法被 reconcile 修复，必须把 shell 当 settled（idle 同级）处理（2026-08-20, 228c53f）
 - `listTmuxSessionMarkersStrict` 里 tmux 二进制缺失（spawn ENOENT）必须按「无会话」返回 `[]`，与超时/传输失败（应 rethrow 让 GC 中止）区分开，否则无 tmux 的机器 `deleteProject` 会静默失败、renderer 回滚项目（用户看「移除项目」没反应）（2026-08-20, c08763a）
+- `new-task-modal-responsive.test.ts` 是源码文本契约测试（grep `home-view.tsx` 里的 JSX 字面量），改那段 JSX 必须同步改断言（2026-08-18, e363505）
+- `new ConversationManagerStore(p, t, [])` 传空 preloaded 会把 `_loaded` 置真，`load()` 直接返回不拉数据；要测加载路径就别传第三个参数（2026-08-18, e363505）
+- `createTask.ts` 里有两处 `shouldGenerate` 自动命名门（`createTask` 用 `params`、`retryTaskSetup` 用 `row`），改命名策略必须两处都改（2026-08-18, e363505）

@@ -1,10 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { and, eq, sql } from 'drizzle-orm';
-import type {
-  Conversation,
-  ForkConversationAtPromptParams,
-  SessionContextRestoreTarget,
-} from '@shared/conversations';
+import type { Conversation, SessionContextRestoreTarget } from '@shared/conversations';
 import { db } from '@main/db/client';
 import { conversations, tasks } from '@main/db/schema';
 import { log } from '@main/lib/logger';
@@ -24,27 +20,43 @@ import { withRuntimeStateRoot } from './session-state-roots';
 import type { ConversationConfig } from './types';
 import { mapConversationRowToConversation } from './utils';
 
-const pendingContextForks = new Map<string, Promise<Conversation>>();
+/** Already-provisioned task that receives the forked session. */
+export type ForkSessionTargetTask = {
+  projectId: string;
+  taskId: string;
+  /** A task is its session, so this titles both. */
+  title: string;
+};
 
-export function forkConversationAtPrompt(
-  params: ForkConversationAtPromptParams
-): Promise<Conversation> {
-  const key = contextForkKey(params);
-  const existing = pendingContextForks.get(key);
-  if (existing) return existing;
+export type ForkSessionIntoTaskParams = {
+  projectId: string;
+  taskId: string;
+  conversationId: string;
+  promptIndex: number;
+  target: SessionContextRestoreTarget;
+  initialSize?: { cols: number; rows: number };
+  /**
+   * Destination task. Never the source task — a task is its session, so a fork
+   * is a new task rather than a second session under the source.
+   */
+  targetTask: ForkSessionTargetTask;
+};
 
-  const pending = createConversationFork(params).finally(() => {
-    if (pendingContextForks.get(key) === pending) pendingContextForks.delete(key);
-  });
-  pendingContextForks.set(key, pending);
-  return pending;
-}
-
-async function createConversationFork(
-  params: ForkConversationAtPromptParams
+/**
+ * Copies the source session's provider-native context up to `target` and lands
+ * it as the single session of an already-provisioned destination task.
+ *
+ * The destination may sit in a different worktree than the source, so provider
+ * context is read from the source cwd and written for the destination cwd.
+ */
+export async function forkSessionIntoTask(
+  params: ForkSessionIntoTaskParams
 ): Promise<Conversation> {
   if (!Number.isInteger(params.promptIndex) || params.promptIndex < 0) {
     throw new Error('Invalid prompt index.');
+  }
+  if (params.targetTask.taskId === params.taskId) {
+    throw new Error('A forked session must land in a different task.');
   }
 
   const [source] = await db
@@ -63,11 +75,16 @@ async function createConversationFork(
   }
   const sourceConversation = mapConversationRowToConversation(source);
 
-  const task = resolveTask(params.projectId, params.taskId);
-  if (!task) {
+  const sourceTask = resolveTask(params.projectId, params.taskId);
+  if (!sourceTask) {
     throw new Error(`Task not provisioned: ${params.taskId}`);
   }
-  const cwd = task.conversations.taskPath;
+  const targetTask = resolveTask(params.targetTask.projectId, params.targetTask.taskId);
+  if (!targetTask) {
+    throw new Error(`Task not provisioned: ${params.targetTask.taskId}`);
+  }
+  const sourceCwd = sourceTask.conversations.taskPath;
+  const cwd = targetTask.conversations.taskPath;
 
   let forkedConversationId: string;
   let deleteProviderFork: () => Promise<void>;
@@ -78,13 +95,14 @@ async function createConversationFork(
     const providerConfig = await runtimeOverrideSettings.getItem('claude');
     const claudeConfigDir = getConversationRuntimeStateRoot(sourceConversation, providerConfig);
     const sourceSessionId = getConversationAgentSessionId(sourceConversation);
-    const context = await getClaudeSessionContext(cwd, sourceSessionId, { claudeConfigDir });
+    const context = await getClaudeSessionContext(sourceCwd, sourceSessionId, { claudeConfigDir });
     const prompt = context?.prompts[params.promptIndex];
     assertPromptTarget(prompt?.restoreTarget, params.target);
 
     forkedConversationId = randomUUID();
     await forkClaudeTranscript({
       cwd,
+      sourceCwd,
       claudeConfigDir,
       sourceSessionId,
       targetSessionId: forkedConversationId,
@@ -102,7 +120,7 @@ async function createConversationFork(
       ? withRuntimeStateRoot('codex', providerConfig, codexHome)
       : providerConfig;
     const context = await getCodexSessionContext(
-      cwd,
+      sourceCwd,
       getConversationAgentSessionId(sourceConversation),
       source.title,
       source.createdAt,
@@ -131,9 +149,9 @@ async function createConversationFork(
       .insert(conversations)
       .values({
         id: forkedConversationId,
-        projectId: source.projectId,
-        taskId: source.taskId,
-        title: `${source.title} · #${params.promptIndex + 1}`,
+        projectId: params.targetTask.projectId,
+        taskId: params.targetTask.taskId,
+        title: params.targetTask.title,
         titleSource: 'yoda',
         runtime: source.runtime,
         config: createForkedConversationConfig(
@@ -141,7 +159,7 @@ async function createConversationFork(
           sourceConversation,
           forkedConversationId
         ),
-        isInitialConversation: false,
+        isInitialConversation: true,
         createdAt: sql`CURRENT_TIMESTAMP`,
         updatedAt: sql`CURRENT_TIMESTAMP`,
         lastInteractedAt,
@@ -155,12 +173,12 @@ async function createConversationFork(
 
     const conversation = mapConversationRowToConversation(row);
     try {
-      await task.conversations.startSession(conversation, params.initialSize, true);
+      await targetTask.conversations.startSession(conversation, params.initialSize, true);
     } catch (error) {
       // The restored provider context and DB record are already durable. Treat
       // a launch failure as a recoverable created session so a renderer retry
-      // cannot duplicate the fork; the user can resume it from the new tab.
-      log.warn('forkConversationAtPrompt: restored context but failed to start session', {
+      // cannot duplicate the fork; the user can resume it from the new task.
+      log.warn('forkSessionIntoTask: restored context but failed to start session', {
         conversationId: conversation.id,
         error: String(error),
       });
@@ -168,10 +186,13 @@ async function createConversationFork(
     }
 
     try {
-      await db.update(tasks).set({ lastInteractedAt }).where(eq(tasks.id, source.taskId));
+      await db
+        .update(tasks)
+        .set({ lastInteractedAt })
+        .where(eq(tasks.id, params.targetTask.taskId));
     } catch (error) {
-      log.warn('forkConversationAtPrompt: failed to update task interaction time', {
-        taskId: source.taskId,
+      log.warn('forkSessionIntoTask: failed to update task interaction time', {
+        taskId: params.targetTask.taskId,
         error: String(error),
       });
     }
@@ -182,7 +203,7 @@ async function createConversationFork(
     try {
       await deleteProviderFork();
     } catch (cleanupError) {
-      log.warn('forkConversationAtPrompt: failed to clean up provider fork', {
+      log.warn('forkSessionIntoTask: failed to clean up provider fork', {
         conversationId: forkedConversationId,
         error: String(cleanupError),
       });
@@ -212,12 +233,6 @@ function createForkedConversationConfig(
       sessionId: forkedSessionId,
     },
   });
-}
-
-function contextForkKey(params: ForkConversationAtPromptParams): string {
-  const targetId =
-    params.target.kind === 'claude-message' ? params.target.messageId : params.target.turnId;
-  return `${params.projectId}:${params.taskId}:${params.conversationId}:${params.promptIndex}:${params.target.kind}:${targetId}`;
 }
 
 function assertPromptTarget(

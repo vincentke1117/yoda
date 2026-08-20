@@ -1,9 +1,7 @@
-import { ArchiveRestore } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Conversation } from '@shared/conversations';
 import { formatConversationTitleForDisplay } from '@renderer/features/tasks/conversations/conversation-title-utils';
-import { reopenArchivedConversation } from '@renderer/features/tasks/conversations/use-archived-conversations';
 import AgentLogo from '@renderer/lib/components/agent-logo';
 import { rpc } from '@renderer/lib/ipc';
 import { type BaseModalProps } from '@renderer/lib/modal/modal-provider';
@@ -16,7 +14,6 @@ import {
 } from '@renderer/lib/ui/dialog';
 import { RelativeTime } from '@renderer/lib/ui/relative-time';
 import { agentConfig } from '@renderer/utils/agentConfig';
-import { log } from '@renderer/utils/logger';
 import { TranscriptLineItem } from './components/transcript-line';
 import {
   normalizeConversationTranscript,
@@ -25,25 +22,19 @@ import {
 
 export type ArchivedSessionTranscriptModalArgs = {
   conversation: Conversation;
-  /** Task-level read-only review keeps lifecycle restoration in the explicit task menu. */
-  allowRestore?: boolean;
 };
 
 type Props = BaseModalProps<void> & ArchivedSessionTranscriptModalArgs;
 
 /**
- * Read-only viewer for an archived session: the on-disk transcript (Claude
- * JSONL / Codex rollout) rendered without resuming the PTY or touching the
- * archive state — review first, restore only if needed.
+ * Read-only viewer for an archived task's session: the on-disk transcript
+ * (Claude JSONL / Codex rollout) rendered without resuming the PTY or touching
+ * the archive state. Restoring is a task-level action, so it lives in the task
+ * menu rather than here.
  */
-export function ArchivedSessionTranscriptModal({
-  conversation,
-  allowRestore = true,
-  onClose,
-}: Props) {
+export function ArchivedSessionTranscriptModal({ conversation, onClose }: Props) {
   const { t } = useTranslation();
   const [transcript, setTranscript] = useState<ConversationTranscript | undefined>();
-  const [busy, setBusy] = useState(false);
 
   const config = agentConfig[conversation.runtimeId];
   const displayTitle = formatConversationTitleForDisplay(
@@ -65,21 +56,6 @@ export function ArchivedSessionTranscriptModal({
       cancelled = true;
     };
   }, [conversation.projectId, conversation.taskId, conversation.id]);
-
-  const handleRestore = async () => {
-    if (busy) return;
-    setBusy(true);
-    try {
-      await reopenArchivedConversation(conversation);
-      onClose();
-    } catch (error) {
-      log.warn('ArchivedSessionTranscriptModal: failed to restore conversation', {
-        conversationId: conversation.id,
-        error,
-      });
-      setBusy(false);
-    }
-  };
 
   return (
     <>
@@ -134,17 +110,6 @@ export function ArchivedSessionTranscriptModal({
         )}
       </DialogContentArea>
       <DialogFooter>
-        {allowRestore ? (
-          <Button
-            type="button"
-            variant="outline"
-            disabled={busy}
-            onClick={() => void handleRestore()}
-          >
-            <ArchiveRestore className="size-4" />
-            {t('tasks.archivedSession.restore')}
-          </Button>
-        ) : null}
         <Button type="button" variant="outline" onClick={onClose}>
           {t('common.close')}
         </Button>

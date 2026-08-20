@@ -127,7 +127,6 @@ export const taskSettingsSchema = z.object({
   workspacesEnabled: z.boolean().catch(false),
   autoGenerateName: z.boolean(),
   /** Initialize the task name from the initial session's auto-generated title. */
-  initTaskNameFromSession: z.boolean().catch(true),
   /**
    * How auto-created branches are named: 'hash' = short time hash at creation
    * (stable, never renamed); 'ai' = semantic slug from the naming agent,
@@ -578,7 +577,6 @@ export const keyboardSettingsSchema = z
       tab7: z.string().nullable().optional(),
       tab8: z.string().nullable().optional(),
       tab9: z.string().nullable().optional(),
-      newConversation: z.string().nullable().optional(),
       newTerminal: z.string().nullable().optional(),
       confirm: z.string().nullable().optional(),
       toggleTerminalDrawer: z.string().nullable().optional(),

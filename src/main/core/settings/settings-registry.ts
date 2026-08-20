@@ -52,7 +52,6 @@ export const SETTINGS_DEFAULTS = {
   tasks: {
     workspacesEnabled: false,
     autoGenerateName: true,
-    initTaskNameFromSession: true,
     branchNaming: 'hash' as const,
     namingAgentId: '',
     promptRewriteAgentId: '',

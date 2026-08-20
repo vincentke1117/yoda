@@ -1,13 +1,10 @@
 import { ArrowUpRight, ChevronRight, GitBranch } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useTranslation } from 'react-i18next';
-import type { ConversationUsageSummary } from '@shared/stats';
 import {
   getProjectStore,
   projectDisplayName,
 } from '@renderer/features/projects/stores/project-selectors';
-import { ConversationTree } from '@renderer/features/tasks/conversations/conversation-tree';
-import { useArchivedConversations } from '@renderer/features/tasks/conversations/use-archived-conversations';
 import { openTaskWhenReady } from '@renderer/features/tasks/open-task-when-ready';
 import {
   asProvisioned,
@@ -19,7 +16,6 @@ import { useNavigate } from '@renderer/lib/layout/navigation-provider';
 import { type BaseModalProps } from '@renderer/lib/modal/modal-provider';
 import { Button } from '@renderer/lib/ui/button';
 import { DialogContentArea, DialogHeader, DialogTitle } from '@renderer/lib/ui/dialog';
-import { EmptyState } from '@renderer/lib/ui/empty-state';
 import { TaskStatsStrip } from './components/task-stats-strip';
 import { useTaskStats } from './hooks/useTaskStats';
 import { SubtaskList } from './view/subtask-list';
@@ -32,14 +28,12 @@ export type TaskDetailsModalArgs = {
 type Props = BaseModalProps<void> & TaskDetailsModalArgs;
 
 /**
- * A task's own secondary page: identity, code/token totals, its session tree
- * and its sub-tasks. A task IS its session, so none of this sits between the
- * user and the working surface — it opens on demand from the titlebar or a
- * task menu, over whatever the user was doing.
+ * A task's own secondary page: identity, code/token totals and its sub-tasks.
+ * A task IS its session, so none of this sits between the user and the working
+ * surface — it opens on demand from the titlebar or a task menu, over whatever
+ * the user was doing.
  *
- * Hosted outside the task view, so every store is read through selectors. Live
- * session stores only exist for a provisioned task; an idle one still shows its
- * identity, stats, archived sessions and sub-tasks.
+ * Hosted outside the task view, so every store is read through selectors.
  */
 export const TaskDetailsModal = observer(function TaskDetailsModal({
   projectId,
@@ -51,14 +45,8 @@ export const TaskDetailsModal = observer(function TaskDetailsModal({
 
   const taskStore = getTaskStore(projectId, taskId);
   const provisioned = asProvisioned(taskStore);
-  const sessions = Array.from(provisioned?.conversations.conversations.values() ?? []);
-  const archivedSessions = useArchivedConversations(projectId, taskId);
-  const sessionCount = sessions.length + archivedSessions.length;
 
   const { data: taskStats } = useTaskStats(projectId, taskId);
-  const usageByConversation = new Map<string, ConversationUsageSummary>(
-    (taskStats?.conversations ?? []).map((usage) => [usage.conversationId, usage])
-  );
 
   const projectName = projectDisplayName(getProjectStore(projectId)) ?? projectId;
   const taskName = taskDisplayName(taskStore) ?? taskId;
@@ -72,11 +60,6 @@ export const TaskDetailsModal = observer(function TaskDetailsModal({
   const ancestors = taskAncestors(projectId, taskId).reverse();
   const breadcrumbAncestors =
     ancestors.length > 3 ? [ancestors[0], null, ancestors[ancestors.length - 1]] : ancestors;
-
-  const openSession = (conversationId: string) => {
-    void openTaskWhenReady(projectId, taskId, navigate, { kind: 'conversation', conversationId });
-    onClose();
-  };
 
   return (
     <>
@@ -138,37 +121,19 @@ export const TaskDetailsModal = observer(function TaskDetailsModal({
           </div>
         )}
 
-        <section className="flex flex-col gap-2">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-medium text-foreground">
-              {t('tasks.details.sessions', { count: sessionCount })}
-            </h2>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                void openTaskWhenReady(projectId, taskId, navigate);
-                onClose();
-              }}
-            >
-              <ArrowUpRight className="size-4" />
-              {t('tasks.details.openTask')}
-            </Button>
-          </div>
-
-          {sessionCount === 0 ? (
-            <EmptyState label={t('tasks.details.noSessions')} />
-          ) : (
-            <ConversationTree
-              owner={{ projectId, taskId, provisioned }}
-              activeConversations={sessions}
-              archivedConversations={archivedSessions}
-              activeConversationId={provisioned?.taskView.tabManager.activeConversationId}
-              usageByConversation={usageByConversation}
-              onOpenActive={openSession}
-            />
-          )}
-        </section>
+        <div className="flex justify-end">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              void openTaskWhenReady(projectId, taskId, navigate);
+              onClose();
+            }}
+          >
+            <ArrowUpRight className="size-4" />
+            {t('tasks.details.openTask')}
+          </Button>
+        </div>
 
         <SubtaskList projectId={projectId} taskId={taskId} onNavigate={onClose} />
       </DialogContentArea>

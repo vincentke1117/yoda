@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, isNull, ne, sql } from 'drizzle-orm';
 import {
   type Conversation,
   type CreateConversationParams,
@@ -62,6 +62,34 @@ async function resolveConversationPermission(
   };
 }
 
+/**
+ * Guards the one-session-per-task invariant: a task *is* its session, so a
+ * second one under the same task would give the same unit of work two names,
+ * two transcripts and two menus. Work that needs another agent on the same
+ * branch goes through `createSiblingTask`, which shares the worktree by
+ * refcount. Team rooms are the single exception and say so at the call site.
+ */
+async function assertTaskHasNoSession(params: CreateConversationParams): Promise<void> {
+  if (params.teamRoomMemberSeat) return;
+  const [existing] = await db
+    .select({ id: conversations.id })
+    .from(conversations)
+    .where(
+      and(
+        eq(conversations.taskId, params.taskId),
+        isNull(conversations.archivedAt),
+        ne(conversations.id, params.id)
+      )
+    )
+    .limit(1);
+  if (existing) {
+    throw new Error(
+      `Task ${params.taskId} already has a session (${existing.id}). A task is its session — ` +
+        'use createSiblingTask to put another agent on the same branch.'
+    );
+  }
+}
+
 export async function createConversation(params: CreateConversationParams): Promise<Conversation> {
   const id = params.id ?? randomUUID();
   const sessionId = makePtySessionId(params.projectId, params.taskId, id);
@@ -74,6 +102,7 @@ export async function createConversation(params: CreateConversationParams): Prom
   try {
     const task = resolveTask(params.projectId, params.taskId);
     if (!task) throw new Error('Task not found');
+    await assertTaskHasNoSession(params);
     const discoveredSession = params.sessionSource
       ? await localAgentSessionCatalog.validateSource(params.sessionSource)
       : undefined;

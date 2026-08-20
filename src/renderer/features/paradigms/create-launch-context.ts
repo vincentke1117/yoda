@@ -14,7 +14,6 @@ import type { MountedProject } from '@renderer/features/projects/stores/project'
 import type { ProjectManagerStore } from '@renderer/features/projects/stores/project-manager';
 import { asMounted } from '@renderer/features/projects/stores/project-selectors';
 import { initialConversationTitle } from '@renderer/features/tasks/conversations/conversation-title-utils';
-import type { ProvisionedTask } from '@renderer/features/tasks/stores/task';
 import { asProvisioned, getTaskStore } from '@renderer/features/tasks/stores/task-selectors';
 import { toast } from '@renderer/lib/hooks/use-toast';
 import { rpc } from '@renderer/lib/ipc';
@@ -45,8 +44,6 @@ export interface CreateParadigmLaunchContextArgs {
   slotAgentId: (slotKey: string) => string | null;
   /** Runtime a slot falls back to when its Agent follows the composer default. */
   composerRuntime: RuntimeId | null;
-  /** The task being joined — required for the `existing-task` target. */
-  provisionedTask: ProvisionedTask | null;
   /** The project tasks are created in — required for the `new-task` target. */
   project: MountedProject | null;
   selectedBranch: Branch | undefined;
@@ -67,14 +64,14 @@ export interface CreateParadigmLaunchContextArgs {
   t: (key: string) => string;
   /** Reveals a newly created task and reports it to the composer's host. */
   focusTask: (projectId: string, taskId: string) => void;
-  onConversationsStarted: (projectId: string, taskId: string, conversationIds: string[]) => void;
   resetComposer: () => void;
 }
 
 /**
- * Builds the services a paradigm launches through. Every difference between
- * "start a new task" and "join the task I am already in" is resolved here, so a
- * paradigm has one implementation instead of one per surface.
+ * Builds the services a paradigm launches through, so a paradigm has one
+ * implementation instead of one per surface. Every target creates tasks: a task
+ * is its session, so several agents on one requirement are sibling tasks (or
+ * subtasks of the task they continue), never extra sessions inside one task.
  */
 export function createParadigmLaunchContext(
   args: CreateParadigmLaunchContextArgs
@@ -87,30 +84,12 @@ export function createParadigmLaunchContext(
     imagePaths,
     sessionImagePaths,
   } = args;
-  const joinedTask = target.kind === 'existing-task' ? target : null;
-  const createdConversationIds: string[] = [];
-
   const requireProject = (): MountedProject => {
     if (!args.project) {
       throw new Error(`Paradigm launch target "${target.kind}" has no mounted project.`);
     }
     return args.project;
   };
-  const requireJoinedTask = (): ProvisionedTask => {
-    if (!args.provisionedTask) {
-      throw new Error('Paradigm launch targets a task that is not provisioned.');
-    }
-    return args.provisionedTask;
-  };
-
-  // Conversation titles are deduplicated against the task's existing sessions;
-  // a fresh task starts from an empty list.
-  const conversationTitleInputs = joinedTask
-    ? Array.from(requireJoinedTask().conversations.conversations.values(), (conversation) => ({
-        runtimeId: conversation.data.runtimeId,
-        title: conversation.data.title,
-      }))
-    : [];
   const reservedNames = args.project
     ? Array.from(args.project.taskManager.tasks.values(), (task) => task.data.name)
     : [];
@@ -158,36 +137,6 @@ export function createParadigmLaunchContext(
     } finally {
       dismissWaitToast();
     }
-  };
-
-  const createJoinedConversation = (
-    request: ParadigmAgentLaunchRequest,
-    task: ProvisionedTask,
-    joined: { projectId: string; taskId: string }
-  ): LaunchedParadigmAgent => {
-    const provider = request.slot.provider;
-    const initialPrompt = request.buildPrompt(requirement);
-    const conversationId = crypto.randomUUID();
-    const title = initialConversationTitle(
-      provider,
-      args.titlePrompt ?? initialPrompt,
-      conversationTitleInputs
-    );
-    conversationTitleInputs.push({ runtimeId: provider, title });
-    createdConversationIds.push(conversationId);
-    const promise = task.conversations.createConversation({
-      id: conversationId,
-      projectId: joined.projectId,
-      taskId: joined.taskId,
-      runtime: provider,
-      title,
-      initialPrompt,
-      deferInitialPrompt,
-      imagePaths: sessionImagePaths,
-      ...agentRuntimeSettings(request.slot.agent, provider),
-      skillSelection: agentSkillSelection(request.slot.agent),
-    });
-    return { ...joined, conversationId, runtime: provider, promise };
   };
 
   const taskStrategy = (kind: HomeProjectSubmitStrategy, taskName: string) =>
@@ -289,13 +238,10 @@ export function createParadigmLaunchContext(
     },
 
     launchAgent(request) {
-      return joinedTask
-        ? createJoinedConversation(request, requireJoinedTask(), joinedTask)
-        : createOwnTask(request);
+      return createOwnTask(request);
     },
 
     launchBareTask(request) {
-      if (joinedTask) return { ...joinedTask, promise: Promise.resolve() };
       const project = requireProject();
       const taskId = crypto.randomUUID();
       const taskName = reserveTaskName(request?.nameSeed ?? args.baseName);
@@ -395,15 +341,6 @@ export function createParadigmLaunchContext(
         : launch.promise.then(() => requirement);
     },
 
-    claimJoinedTask() {
-      if (!joinedTask) return;
-      void getTaskStore(joinedTask.projectId, joinedTask.taskId)
-        ?.setParadigm(args.paradigm)
-        .catch(() => {
-          // The stamp is display metadata; the orchestration it labels already ran.
-        });
-    },
-
     assertTaskReady(task) {
       if (!asProvisioned(getTaskStore(task.projectId, task.taskId))) {
         throw new Error(args.t('home.teamTaskSetupIncomplete'));
@@ -411,39 +348,26 @@ export function createParadigmLaunchContext(
     },
 
     focusTask(projectId, taskId) {
-      // Joining a task means the composer already sits inside it.
-      if (joinedTask) return;
       args.focusTask(projectId, taskId);
     },
 
     finish() {
-      if (joinedTask) {
-        void getTaskStore(joinedTask.projectId, joinedTask.taskId)?.setNeedsReview(false);
-        args.onConversationsStarted(
-          joinedTask.projectId,
-          joinedTask.taskId,
-          createdConversationIds
-        );
-      }
       args.resetComposer();
     },
 
     reportLaunchFailure(promise) {
       void promise.catch(() => {
-        toast.error(
-          joinedTask ? 'Agent conversation failed to start.' : 'Agent task failed to start.'
-        );
+        toast.error('Agent task failed to start.');
       });
     },
 
     reportFailures(results) {
       const failures = results.filter((result) => result.status === 'rejected');
       if (failures.length === 0) return;
-      const targetName = joinedTask ? 'conversation' : 'task';
       toast.error(
         failures.length === 1
-          ? `One agent ${targetName} failed to start.`
-          : `${failures.length} agent ${targetName}s failed to start.`
+          ? 'One agent task failed to start.'
+          : `${failures.length} agent tasks failed to start.`
       );
     },
   };

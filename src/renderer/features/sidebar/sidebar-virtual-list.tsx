@@ -15,14 +15,8 @@ import {
   type RefObject,
 } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useTabDropZone, type TabDragPayload, type TabDropEvent } from '@renderer/app/tab-drag';
 import { sidebarGroupId, type SidebarGroupKey } from '@renderer/features/sidebar/sidebar-group';
 import { type SidebarRow } from '@renderer/features/sidebar/sidebar-store';
-import {
-  canMoveConversationToTask,
-  conversationTransferFromPayload,
-} from '@renderer/features/tasks/conversations/conversation-transfer';
-import { moveConversationToTask } from '@renderer/features/tasks/conversations/move-conversation-to-task';
 import { getRegisteredTaskData } from '@renderer/features/tasks/stores/task-selectors';
 import { useToast } from '@renderer/lib/hooks/use-toast';
 import { useParams, useWorkspaceSlots } from '@renderer/lib/layout/navigation-provider';
@@ -616,21 +610,9 @@ const SidebarRowContent = memo(function SidebarRowContent({
     />
   );
   if (!dndEnabled) {
-    return (
-      <ConversationTaskDropRow
-        projectId={row.projectId}
-        taskId={row.taskId}
-        data-sidebar-row={dndId}
-      >
-        {taskNode}
-      </ConversationTaskDropRow>
-    );
+    return <div data-sidebar-row={dndId}>{taskNode}</div>;
   }
-  return (
-    <SortableRow dndId={dndId} projectId={row.projectId} taskId={row.taskId}>
-      {taskNode}
-    </SortableRow>
-  );
+  return <SortableRow dndId={dndId}>{taskNode}</SortableRow>;
 });
 
 /**
@@ -922,8 +904,6 @@ function SidebarGroupHeader({
 interface SortableRowProps {
   dndId: string;
   children: React.ReactNode;
-  projectId?: string;
-  taskId?: string;
 }
 
 /**
@@ -932,18 +912,10 @@ interface SortableRowProps {
  * translates it (make-way animation), making passed-over rows invisible. This
  * row therefore carries `data-sidebar-row` itself — no extra wrapper.
  */
-function SortableRow({ dndId, children, projectId, taskId }: SortableRowProps) {
+function SortableRow({ dndId, children }: SortableRowProps) {
   const { setNodeRef, transform, transition, isDragging, listeners, attributes } = useSortable({
     id: dndId,
   });
-  const { dropRef, isOver } = useConversationTaskDropZone(projectId, taskId);
-  const setRowRef = useCallback(
-    (node: HTMLDivElement | null) => {
-      setNodeRef(node);
-      dropRef(projectId && taskId ? node : null);
-    },
-    [dropRef, projectId, setNodeRef, taskId]
-  );
 
   const dndStyle: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
@@ -954,62 +926,12 @@ function SortableRow({ dndId, children, projectId, taskId }: SortableRowProps) {
 
   return (
     <div
-      ref={setRowRef}
+      ref={setNodeRef}
       style={dndStyle}
       data-sidebar-row={dndId}
-      className={cn(
-        'min-w-0 overflow-hidden rounded-lg',
-        isOver && 'ring-2 ring-inset ring-primary bg-primary/10'
-      )}
+      className="min-w-0 overflow-hidden rounded-lg"
       {...attributes}
       {...listeners}
-    >
-      {children}
-    </div>
-  );
-}
-
-function useConversationTaskDropZone(projectId?: string, taskId?: string) {
-  return useTabDropZone({
-    canDrop: (payload) => {
-      if (!projectId || !taskId || !getRegisteredTaskData(projectId, taskId)) return false;
-      return canMoveConversationToTask(payload, projectId, taskId);
-    },
-    onDrop: (payload: TabDragPayload, _event: TabDropEvent) => {
-      if (!projectId || !taskId) return;
-      const transfer = conversationTransferFromPayload(payload);
-      if (!transfer) return;
-      const taskName = getRegisteredTaskData(projectId, taskId)?.name ?? taskId;
-      void moveConversationToTask({
-        projectId,
-        sourceTaskId: transfer.sourceTaskId,
-        targetTaskId: taskId,
-        targetTaskName: taskName,
-        conversationId: transfer.conversationId,
-      });
-    },
-  });
-}
-
-function ConversationTaskDropRow({
-  projectId,
-  taskId,
-  children,
-  ...props
-}: {
-  projectId: string;
-  taskId: string;
-  children: React.ReactNode;
-} & React.HTMLAttributes<HTMLDivElement>) {
-  const { dropRef, isOver } = useConversationTaskDropZone(projectId, taskId);
-  return (
-    <div
-      {...props}
-      ref={dropRef}
-      className={cn(
-        'min-w-0 overflow-hidden rounded-lg',
-        isOver && 'ring-2 ring-inset ring-primary bg-primary/10'
-      )}
     >
       {children}
     </div>

@@ -350,6 +350,9 @@ class RoomConductor {
           reasoningEffort: member.reasoningEffort,
           skillSelection: member.skillSelection ?? undefined,
           initialPrompt: subst(`${systemPrompt}\n\n${turnPrompt}`),
+          // A room task carries one session per teammate; the conductor routes
+          // between them. Every other task is its single session.
+          teamRoomMemberSeat: true,
         });
         await setMemberConversation(member.id, conversationId);
         events.emit(teamRoomUpdatedChannel, { roomId }, roomId);
