@@ -7,7 +7,7 @@ import { isAgentSessionRunningStatus } from '@shared/events/agentEvents';
 import { log } from '@main/lib/logger';
 import { clearInterruptMarker, hasInterruptMarker } from './interrupt-marker';
 
-type ClaudeSessionStatus = 'busy' | 'idle' | 'waiting';
+type ClaudeSessionStatus = 'busy' | 'idle' | 'waiting' | 'shell';
 
 export interface ClaudeSessionActivity {
   pid: number | null;
@@ -57,7 +57,14 @@ const RECONCILE_INTERVAL_MS = 3_000;
  */
 const RECONCILE_MIN_IDLE_AGE_MS = 2_000;
 const PID_FILE_RE = /^\d+\.json$/;
-const SESSION_STATUSES = new Set(['busy', 'idle', 'waiting']);
+/**
+ * Claude Code 2.1.233 writes `shell` when a turn has ended but the CLI still
+ * owns a live background shell (a dev server, a background job). The agent is
+ * not processing a turn — same evidence of a settled process as `idle` — but
+ * the record must be recognised or the watcher goes blind to it and a stuck
+ * `working`/`awaiting-input` can never be cleared.
+ */
+const SESSION_STATUSES = new Set(['busy', 'idle', 'waiting', 'shell']);
 
 /**
  * Watches Claude Code's process activity files (`~/.claude/sessions/<pid>.json`).
@@ -101,13 +108,25 @@ export function parseClaudeSessionActivity(raw: string): ClaudeSessionActivity |
 }
 
 /**
- * Whether an `idle` record is admissible evidence against a run state that was
- * set at `runStateAt`.
+ * A record status that proves the CLI has returned to its prompt: the turn is
+ * over and the agent is no longer blocked on the user. `shell` is Claude Code
+ * 2.1.233's variant of `idle` when a background shell (dev server, background
+ * job) is still attached — the agent is not working either way.
+ */
+export function settledActivityStatus(
+  status: ClaudeSessionStatus | undefined
+): status is 'idle' | 'shell' {
+  return status === 'idle' || status === 'shell';
+}
+
+/**
+ * Whether a settled record (`idle` or `shell`) is admissible evidence against a
+ * run state that was set at `runStateAt`.
  *
  * Claude writes its status about a second after the process starts, so a CLI
  * sitting at its boot prompt is indistinguishable — by status alone — from one
  * that just finished a turn. A process that started *after* the run state was
- * set was never there for the turn that status describes, so its idle prompt
+ * set was never there for the turn that status describes, so its settled prompt
  * says nothing about it. Starting a session is a consequence of the user opening
  * the task, so honouring that read would tie run state to being looked at.
  *
@@ -118,7 +137,7 @@ export function idleActivitySettlesRunState(
   activity: Pick<ClaudeSessionActivity, 'status' | 'startedAt'>,
   runStateAt: number
 ): boolean {
-  if (activity.status !== 'idle') return false;
+  if (!settledActivityStatus(activity.status)) return false;
   return activity.startedAt === null || activity.startedAt <= runStateAt;
 }
 
@@ -288,15 +307,16 @@ class ClaudeSessionActivityTailer implements ClaudeSessionActivityWatcher {
       return;
     }
 
-    if (activity.status === 'idle' && previous?.status !== 'idle') {
+    if (settledActivityStatus(activity.status) && previous?.status !== activity.status) {
       this.awaitingInputObserved = false;
-      // A fresh tailer has no baseline, and Claude writes `idle` about a second
-      // after its process starts — so a first read of `idle` is equally
-      // consistent with a settled turn and with a CLI that has only just booted
-      // to its prompt. Attaching a watcher is a consequence of the user opening
-      // the task, so publishing a verdict from that first read would make run
-      // state depend on being looked at. Seed the baseline and let the next
-      // transition, or the reconciler below, speak with evidence.
+      // A fresh tailer has no baseline, and Claude writes `idle` (or `shell`
+      // when a background job is attached) about a second after its process
+      // starts — so a first read of a settled status is equally consistent with
+      // a finished turn and with a CLI that has only just booted to its prompt.
+      // Attaching a watcher is a consequence of the user opening the task, so
+      // publishing a verdict from that first read would make run state depend
+      // on being looked at. Seed the baseline and let the next transition, or
+      // the reconciler below, speak with evidence.
       if (previous) this.scheduleIdle(previous.status, activity.updatedAt);
     }
   }
@@ -362,7 +382,7 @@ class ClaudeSessionActivityTailer implements ClaudeSessionActivityWatcher {
     if (this.idleTimer) clearTimeout(this.idleTimer);
     this.idleTimer = setTimeout(() => {
       this.idleTimer = undefined;
-      if (this.stopped || this.lastActivity?.status !== 'idle') return;
+      if (this.stopped || !settledActivityStatus(this.lastActivity?.status)) return;
       if (this.lastActivity.updatedAt !== updatedAt) return;
       const interrupted =
         previousStatus === 'waiting' || hasInterruptMarker(this.ctx.conversationId);

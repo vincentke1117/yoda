@@ -17,7 +17,7 @@ export type TaskMenuSessionFields = {
   tmuxEnabled?: boolean;
   process?: {
     pid?: number;
-    status?: 'busy' | 'idle' | 'waiting';
+    status?: 'busy' | 'idle' | 'waiting' | 'shell';
     updatedAt?: string;
   };
 };
