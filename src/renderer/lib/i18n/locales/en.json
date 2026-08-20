@@ -1898,7 +1898,8 @@
       "processStatus": {
         "busy": "Busy",
         "idle": "Idle",
-        "waiting": "Waiting"
+        "waiting": "Waiting",
+        "shell": "Background"
       },
       "createdAt": "Created",
       "updatedAt": "Record updated",
@@ -1946,8 +1947,8 @@
         "tmux": "Whether the session is hosted in tmux. If enabled, the process survives window close and can be reattached.",
         "ptyStatus": "Connection state between the UI and the main-process pseudo terminal (PTY); affects live terminal output.",
         "ptySessionId": "Internal identifier of this PTY connection, for debugging only; changes after app restart.",
-        "processStatus": "Momentary state inferred from process activity: busy, idle, or waiting.",
-        "processUpdatedAt": "When the process state (busy/idle/waiting) last changed.",
+        "processStatus": "Momentary state inferred from process activity: busy, idle, waiting, or background.",
+        "processUpdatedAt": "When the process state (busy/idle/waiting/background) last changed.",
         "sessionExited": "Whether the CLI process has exited. Continuing the conversation spawns a new process via the resume command.",
         "seen": "Whether you have viewed this session's latest output; drives the unread marker in the sidebar.",
         "updatedAt": "When this session's database record was last written. Any field change (title, status, archive, ...) refreshes it.",

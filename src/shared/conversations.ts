@@ -122,7 +122,8 @@ export type ConversationSessionInfo = {
   tmuxEnabled?: boolean;
   process?: {
     pid?: number;
-    status?: 'busy' | 'idle' | 'waiting';
+    /** `shell` is Claude Code 2.1.233's status for a turn that finished with a background job attached. */
+    status?: 'busy' | 'idle' | 'waiting' | 'shell';
     updatedAt?: string;
   };
 };

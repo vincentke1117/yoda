@@ -67,7 +67,7 @@ export type TeamMemberObservation = {
   mode: TeamCommunicationMode;
   runtimeStatus: 'idle' | 'waiting' | 'running' | 'finished' | 'error' | 'awaiting-input';
   processId: number | null;
-  processStatus: 'busy' | 'idle' | 'waiting' | null;
+  processStatus: 'busy' | 'idle' | 'waiting' | 'shell' | null;
   transcriptPath: string | null;
   sharedFilePath: string | null;
   sharedFileExists: boolean;
