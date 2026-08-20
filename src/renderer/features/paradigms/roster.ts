@@ -164,11 +164,6 @@ export function paradigmRoster({
     .filter((member): member is AgentTeamMember => member !== null);
 }
 
-/** The kind a roster of this size is: one Agent works alone, several are a team. */
-export function rosterKindId(members: readonly AgentTeamMember[]): 'single' | 'team' {
-  return members.length >= 2 ? 'team' : 'single';
-}
-
 /**
  * A paradigm rewritten around a roster.
  *
@@ -207,9 +202,17 @@ export function rosterDraft({
 
   const normalized = normalizeTeamMembers(members);
   const sole = normalized.length === 1 ? normalized[0] : undefined;
-  const soleAgent = sole ? findReferencedAgent(sole, agents) : null;
+  const soleAgentId = sole
+    ? (findReferencedAgent(sole, agents)?.id ??
+      // A freshly created user Agent can be selected before the agents query
+      // refreshes. Its stable id is already authoritative; do not mistake that
+      // short cache gap for a legacy inline role and persist a one-member team.
+      (sole.agentRef && !sole.agentRef.startsWith(BUILTIN_AGENT_SLUG_PREFIX)
+        ? sole.agentRef
+        : null))
+    : null;
 
-  if (normalized.length >= 2 || (sole && !soleAgent)) {
+  if (normalized.length >= 2 || (sole && !soleAgentId)) {
     // Team wiring survives the crossing when the instance already had some;
     // otherwise the kind's own defaults apply, minus their shipped roster.
     const existing: Pick<TeamParadigmParams, 'routing' | 'communication' | 'routingHopLimit'> =
@@ -234,6 +237,6 @@ export function rosterDraft({
   return {
     kindId: 'single',
     ...presentation,
-    params: soleAgent ? withParadigmSlotAgent({}, seat.storageKey, soleAgent.id) : { agents: {} },
+    params: soleAgentId ? withParadigmSlotAgent({}, seat.storageKey, soleAgentId) : { agents: {} },
   };
 }

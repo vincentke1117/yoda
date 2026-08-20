@@ -1,5 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query';
-import type { AgentTeam } from '@shared/agent-team';
+import type { AgentTeam, AgentTeamMember } from '@shared/agent-team';
 import type { Branch } from '@shared/git';
 import type { ParadigmKindDescriptor } from '@shared/paradigms/contract';
 import type { ParadigmStamp } from '@shared/paradigms/stamp';
@@ -123,6 +123,8 @@ export interface ParadigmLaunchContext {
    * the composer's runtime when not named.
    */
   resolveSlot(slotKey: string, fallbackRuntime?: RuntimeId | null): ResolvedAgentSlot;
+  /** Resolves one roster member, including legacy inline roles without an Agent row. */
+  resolveMember(member: AgentTeamMember): ResolvedAgentSlot;
 
   /** Creates the agent seat: a conversation on the target task, or a new task. */
   launchAgent(request: ParadigmAgentLaunchRequest): LaunchedParadigmAgent;

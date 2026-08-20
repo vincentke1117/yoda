@@ -41,6 +41,7 @@ import yodaLogo from '@/assets/images/yoda/yoda_logo.svg';
 import { enabledTeamMembers, type AgentTeam } from '@shared/agent-team';
 import type { Agent } from '@shared/agents';
 import type { Branch } from '@shared/git';
+import { paradigmKindByRoster } from '@shared/paradigms/classification';
 import type {
   ParadigmAccent,
   ParadigmKindDescriptor,
@@ -78,6 +79,7 @@ import type {
 } from '@renderer/features/paradigms/launch-context';
 import { paradigmsQueryKey } from '@renderer/features/paradigms/paradigm-queries';
 import { paradigmLauncher, paradigmLaunchStamp } from '@renderer/features/paradigms/registry';
+import { paradigmRoster } from '@renderer/features/paradigms/roster';
 import { paradigmSeatAgentId } from '@renderer/features/paradigms/seats';
 import { ParadigmSelector } from '@renderer/features/paradigms/selector';
 import {
@@ -717,17 +719,29 @@ export const HomeComposer = observer(function HomeComposer({
       : undefined;
     return remembered ?? selectByKind(paradigms, paradigmKindForRunMode(runMode), undefined);
   }, [paradigms, runMode, selectedParadigmId]);
+  const activeRoster = useMemo(
+    () =>
+      activeParadigm
+        ? paradigmRoster({
+            paradigm: activeParadigm,
+            agents: userAgents,
+            draftAgents: selectedAgentIdsByMode,
+          })
+        : [],
+    [activeParadigm, selectedAgentIdsByMode, userAgents]
+  );
   /**
    * The kind actually driving this composer.
    *
-   * Every capability gate reads this rather than the run mode: the mode is a
-   * persisted string that names a kind, while the selected instance *is* one, and
-   * after a roster edit the instance is the one that changed.
+   * Persisted `kindId` identifies a params/protocol shape. Single-vs-team is a
+   * live property of the enabled roster, so historical one-member `team` rows
+   * must behave exactly like every other single-Agent paradigm.
    */
-  const activeKind = useMemo(
-    () => paradigmKind(activeParadigm?.kindId ?? paradigmKindForRunMode(runMode)),
-    [activeParadigm, runMode]
-  );
+  const activeKind = useMemo(() => {
+    const storedKindId = activeParadigm?.kindId ?? paradigmKindForRunMode(runMode);
+    const effectiveKindId = paradigmKindByRoster(storedKindId, activeRoster);
+    return paradigmKind(effectiveKindId);
+  }, [activeParadigm, activeRoster, runMode]);
   // The roster the multi-agent paradigm runs, read off the selected instance
   // itself: a team *is* a `team` instance, and its roster is that instance's
   // params. Derived rather than fetched separately so the row the picker
@@ -739,19 +753,30 @@ export const HomeComposer = observer(function HomeComposer({
   // Per-slot Agent selection, resolved against the selected instance first and
   // the composer draft second — see `paradigmSeatAgentId`.
   const slotAgentId = useCallback(
-    (slotKey: string): string | null =>
-      paradigmSeatAgentId({
+    (slotKey: string): string | null => {
+      if (activeKind.kindId === 'single' && activeTeam) {
+        const sole = enabledTeamMembers(activeTeam)[0];
+        if (sole?.agentRef) {
+          return (
+            userAgents.find((agent) => agent.id === sole.agentRef || agent.slug === sole.agentRef)
+              ?.id ?? sole.agentRef
+          );
+        }
+        return null;
+      }
+      return paradigmSeatAgentId({
         paradigm: activeParadigm,
         slotStorageKey: slotKey,
         draftAgents: selectedAgentIdsByMode,
         agents: userAgents,
-      }),
-    [activeParadigm, selectedAgentIdsByMode, userAgents]
+      });
+    },
+    [activeKind.kindId, activeParadigm, activeTeam, selectedAgentIdsByMode, userAgents]
   );
   const composerAgent = useMemo<Agent | null>(() => {
-    if (activeKind.kindId === 'team') {
-      const leader =
-        activeTeam?.members.find((member) => member.role === 'leader') ?? activeTeam?.members[0];
+    if (activeTeam) {
+      const running = enabledTeamMembers(activeTeam);
+      const leader = running.find((member) => member.role === 'leader') ?? running[0];
       if (!leader?.agentRef) return null;
       return (
         userAgents.find(
@@ -765,15 +790,22 @@ export const HomeComposer = observer(function HomeComposer({
   }, [activeKind, activeTeam, slotAgentId, userAgents]);
   const composerSkillSelection = useMemo(() => agentSkillSelection(composerAgent), [composerAgent]);
   const permissionModes = useRuntimePermissionModes();
-  const normalAgentRuntime = useMemo(
-    () =>
-      resolveAgentSlot({
-        selectedAgentId: slotAgentId(NORMAL_PROMPT_KEY),
-        agents: userAgents,
-        fallbackRuntime: runtimeId,
-      }).provider,
-    [runtimeId, slotAgentId, userAgents]
-  );
+  const normalAgentRuntime = useMemo(() => {
+    const sole = activeTeam ? enabledTeamMembers(activeTeam)[0] : undefined;
+    if (activeKind.kindId === 'single' && sole) {
+      const agent = sole.agentRef
+        ? userAgents.find(
+            (candidate) => candidate.id === sole.agentRef || candidate.slug === sole.agentRef
+          )
+        : undefined;
+      return agent?.preferredRuntime ?? sole.runtime;
+    }
+    return resolveAgentSlot({
+      selectedAgentId: slotAgentId(NORMAL_PROMPT_KEY),
+      agents: userAgents,
+      fallbackRuntime: runtimeId,
+    }).provider;
+  }, [activeKind.kindId, activeTeam, runtimeId, slotAgentId, userAgents]);
   // Variants reuse the base agent (NORMAL_PROMPT_KEY) with only a runtime
   // override, so their model label mirrors the base config's model.
   const compareModelLabel = useMemo(() => {
@@ -1002,16 +1034,12 @@ export const HomeComposer = observer(function HomeComposer({
     },
     [appPromptLanguage, inputPromptLanguage, promptRewriteEnabled, runtimeId, selectedProjectId]
   );
-  // A slot can run only when it has an Agent assigned (the Agent supplies the
-  // runtime + prompt). Every slot the paradigm declares must be filled.
+  // Stored team params carry their roster directly; fixed-slot protocols resolve
+  // every declared seat. The category is already derived from that same roster.
   const hasSlotAgent = (slotKey: string) => !!slotAgentId(slotKey);
-  const modeHasAgents =
-    activeKind.kindId === 'team'
-      ? // A team's roster lives in its params, not in fixed slots — and a member
-        // switched off is still on the roster, so only the enabled ones count
-        // towards having anyone to run.
-        Boolean(activeTeam && enabledTeamMembers(activeTeam).length > 0)
-      : activeKind.slots.every((slot) => hasSlotAgent(slot.storageKey));
+  const modeHasAgents = activeTeam
+    ? Boolean(enabledTeamMembers(activeTeam).length > 0)
+    : activeKind.slots.every((slot) => hasSlotAgent(slot.storageKey));
   // Multi-config compare only fires in plain (normal, non-task-scoped) submits;
   // every variant must target a real project before it can spawn a task.
   const compareActive =

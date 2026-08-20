@@ -141,16 +141,12 @@ const TopLevelTabSync = observer(function TopLevelTabSync({
 
     const pending = tabManager.flushPendingTopLevelTarget();
     if (shouldResolveScopeEntry) {
-      // No resolvable target means the task holds no page yet — route to the
-      // task itself and let it render its own session surface.
-      openTaskTopTab(
-        projectId,
-        taskId,
-        pending ??
-          tabManager.activeTopLevelTarget ??
-          tabManager.preferredConversationTarget ??
-          undefined
-      );
+      const restoreTarget =
+        pending ?? tabManager.activeTopLevelTarget ?? tabManager.preferredConversationTarget;
+      // With no internal target the current target-less route already is the
+      // task's own session surface. Reopening that same route bumps replayNonce,
+      // which reruns this layout effect and otherwise forms a synchronous loop.
+      if (restoreTarget) openTaskTopTab(projectId, taskId, restoreTarget);
       return;
     }
     if (!target || !targetKey) return;

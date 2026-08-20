@@ -1,4 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query';
+import type { AgentTeamMember } from '@shared/agent-team';
 import type { Agent } from '@shared/agents';
 import type { Branch } from '@shared/git';
 import type { ParadigmStamp } from '@shared/paradigms/stamp';
@@ -265,6 +266,26 @@ export function createParadigmLaunchContext(
         agents: args.agents,
         fallbackRuntime: fallbackRuntime === undefined ? args.composerRuntime : fallbackRuntime,
       });
+    },
+
+    resolveMember(member: AgentTeamMember) {
+      const agent = member.agentRef
+        ? args.agents.find(
+            (candidate) => candidate.id === member.agentRef || candidate.slug === member.agentRef
+          )
+        : undefined;
+      if (agent) {
+        return resolveAgentSlot({
+          selectedAgentId: agent.id,
+          agents: args.agents,
+          fallbackRuntime: member.runtime,
+        });
+      }
+      return {
+        provider: member.runtime,
+        systemPrompt: member.systemPrompt ?? '',
+        agent: null,
+      };
     },
 
     launchAgent(request) {

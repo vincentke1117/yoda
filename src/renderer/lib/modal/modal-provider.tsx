@@ -97,6 +97,23 @@ export function useShowModal<MId extends ModalId>(id: MId) {
   );
 }
 
+/**
+ * Like `useShowModal`, but a trigger that fires while the same panel is already on
+ * top is ignored instead of stacking a second copy of it. For entry points that can
+ * be hit repeatedly without the panel getting in the way — a global hotkey, a
+ * sidebar button — where N triggers would otherwise mean N identical panels and N
+ * presses of Escape to get rid of them.
+ */
+export function useShowModalOnce<MId extends ModalId>(id: MId) {
+  return useCallback(
+    (args: UserArgs<MId>) => {
+      if (modalStore.activeModalId === id) return;
+      modalStore.setModal(id, wrapArgs(args));
+    },
+    [id]
+  );
+}
+
 export function useTransitionModal<MId extends ModalId>(id: MId) {
   return useCallback(
     (args: UserArgs<MId>) => {

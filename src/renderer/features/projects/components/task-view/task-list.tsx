@@ -10,7 +10,7 @@ import { useIssueSearch } from '@renderer/features/tasks/components/issue-select
 import { getTaskManagerStore } from '@renderer/features/tasks/stores/task-selectors';
 import { ListPopoverCard } from '@renderer/lib/components/list-popover-card';
 import { useParams } from '@renderer/lib/layout/navigation-provider';
-import { useShowModal } from '@renderer/lib/modal/modal-provider';
+import { useShowModal, useShowModalOnce } from '@renderer/lib/modal/modal-provider';
 import { Button } from '@renderer/lib/ui/button';
 import { EmptyState } from '@renderer/lib/ui/empty-state';
 import { SearchInput } from '@renderer/lib/ui/search-input';
@@ -169,7 +169,7 @@ export const TaskList = observer(function TaskList() {
     hasAnyIntegration: issueSearch.hasAnyIntegration,
     onSearchTermChange: issueSearch.handleSetSearchTerm,
   };
-  const showCommandPalette = useShowModal('commandPaletteModal');
+  const showCommandPalette = useShowModalOnce('commandPaletteModal');
 
   useEffect(() => {
     if (!taskManager || taskView?.tab !== 'archived') {

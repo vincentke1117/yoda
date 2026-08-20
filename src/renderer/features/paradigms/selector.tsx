@@ -1,7 +1,7 @@
 import { Check, ChevronDown, Copy, MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { AgentTeamMember } from '@shared/agent-team';
+import { isTeamMemberEnabled, type AgentTeamMember } from '@shared/agent-team';
 import type { Agent } from '@shared/agents';
 import type { ParadigmKindId } from '@shared/paradigms/contract';
 import { AvatarInput, type AvatarFileError } from '@renderer/lib/components/avatar-input';
@@ -73,7 +73,10 @@ export function ParadigmSelector({
   const { t } = useTranslation();
   const { paradigms, create, update, setPresentation, remove, duplicate } = useParadigms();
   const [open, setOpen] = useState(false);
-  const entries = useMemo(() => paradigmEntries(paradigms), [paradigms]);
+  const entries = useMemo(
+    () => paradigmEntries(paradigms, { agents, draftAgents }),
+    [agents, draftAgents, paradigms]
+  );
   const currentId = paradigmEntryId(entries, kindId, paradigmId);
   // Switching paradigm reshapes the whole run, so we stage the choice locally and
   // only commit on explicit confirmation rather than applying on each click. Agent
@@ -89,7 +92,7 @@ export function ParadigmSelector({
   const current = entries.find((entry) => entry.id === currentId) ?? entries[0];
   const pending = entries.find((entry) => entry.id === pendingId) ?? current;
   const dirty = configurationDirty || (pending !== undefined && pending.id !== current?.id);
-  const isNonStandardMode = current !== undefined && current.kindId !== 'single';
+  const isNonStandardMode = current !== undefined && current.categoryKindId !== 'single';
 
   // A paradigm *is* its roster, so the list reads it per instance: a duplicated
   // paradigm's Agents are its own, which is what makes the copy worth having.
@@ -109,7 +112,7 @@ export function ParadigmSelector({
    * count is what the user is choosing between anyway.
    */
   const rosterSummary = (entry: ParadigmEntry): string => {
-    const members = rosterOf(entry);
+    const members = rosterOf(entry).filter(isTeamMemberEnabled);
     if (members.length === 0) return t(entry.descKey);
     const sole = members[0];
     if (members.length === 1 && sole) return rosterAgent(sole, agents)?.name ?? sole.displayName;
@@ -127,7 +130,7 @@ export function ParadigmSelector({
   };
 
   const handleConfirm = () => {
-    if (pending) onChange(pending.kindId, pending.id);
+    if (pending) onChange(pending.categoryKindId, pending.id);
     setConfigurationDirty(false);
     setOpen(false);
   };

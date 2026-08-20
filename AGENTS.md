@@ -131,6 +131,7 @@ optional_env:
 - 会话分享的体量上限分散在 web 仓库四层（zod blocks.max / 路由字节检查 / 表 CHECK 约束 / Vercel 线路字节），只放开一层会换一种错误码而非修好（2026-08-17, 3cade15）
 - 分享载荷加字段必须同步改 web 仓库 `sessionShareBaseSchema`：它是 `.strict()`，多一个未声明字段整个上传报 400 invalid_session_share（2026-08-18, 99c4f5e）
 - 访问 `http://localhost:3000` 仅能看到 Yoda 静态 splash 而没有 Electron preload/RPC 时，停止用 ego-browser 继续操作该 renderer，改用当前开发实例的原生 IPC/可回读存储验证（2026-08-18, b40ff86）。
+- 外部直接暂停 `automations` 记录不会触发 `automationsUpdatedChannel`，内存 Cron 仍保留但 `automationRunner.fire` 会重读 `status` 并拦截后续 cron；要求界面立即同步时必须走原生 RPC（2026-08-18, b40ff86）。
 - 排序键 locale collation 陷阱：未排序哨兵必须是字母（如 'z'），不能是标点（ICU 将标点排在数字前，会使未排序项浮到顶部）（2026-08-18, 359a1b9）
 - dnd-kit 测试每个指针步骤必须独立 act()：拖拽开始后 droppable rects 在 effect 里测量，批量手势会在 over 变为非 null 前结束（2026-08-18, 359a1b9）
 - Base UI 弹层退场动画：卸载前必须先关闭弹层（Esc + 250ms 等待），否则全局 bookkeeping 认为菜单还开着，下次 trigger 拒绝打开（2026-08-18, 359a1b9）
@@ -138,3 +139,4 @@ optional_env:
 - 去掉组件的 `observer` 包裹会让 react-hooks/set-state-in-effect 等规则突然开始生效，原有 effect 里的同步 setState 会新报 lint（2026-08-18, 8c3195a）
 - 新增 drizzle 迁移改变 journal 尾部时，`migrations.test.ts` 里只 apply `count-1`/部分历史的 skip-ahead fixture 必须为新 tail 迁移创建目标表，否则 `runBundledMigrations` 在 `ALTER TABLE` 时报 "no such table"（2026-08-19, 1363a59）
 - base-ui 弹层不能互相嵌套：DropdownMenu(Menu.Root) 嵌进 ContextMenu 会让内层菜单 parent.type 判成 context-menu、trigger 点不开；同一元素上要叠加左键下拉就改用 Popover（PopoverRoot 是独立树，且 Popover 默认 click 开、Menu 默认 mousedown 开；非 button 元素 trigger 要加 `nativeButton={false}`）（2026-08-19, 6e70b60f）
+- Claude activity 记录的合法 status 含 `shell`（Claude Code 2.1.233+：turn 结束但挂着后台 shell/dev server 时写 shell 而非 idle）；`parseClaudeSessionActivity` 只认 busy/idle/waiting 会把 shell 当 null，导致卡住的 awaiting-input/working 永远无法被 reconcile 修复，必须把 shell 当 settled（idle 同级）处理（2026-08-20, 228c53f）
