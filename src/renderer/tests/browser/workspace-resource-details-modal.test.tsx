@@ -115,6 +115,7 @@ const snapshot: AppResourceSnapshot = {
       memoryBytes: 900_000_000,
     },
   ],
+  backendProcesses: [],
   agentSessions: [
     {
       projectId: 'project-1',

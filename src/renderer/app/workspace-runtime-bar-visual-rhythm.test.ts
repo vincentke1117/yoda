@@ -35,7 +35,7 @@ describe('Workspace runtime bar visual rhythm', () => {
   it('uses the pressed surface only for open or toggle state', () => {
     expect(source).toContain('isMaasPopoverOpen');
     expect(source).toMatch(/maasPresentation\.active\s+\? 'text-foreground'/);
-    expect(source).toContain("terminalActive && 'bg-background-2 text-foreground'");
+    expect(source).toContain("processCount > 0 ? 'text-foreground' : 'text-foreground-passive'");
   });
 
   it('overlays compact counters against the glyph so they never eat the gutter', () => {

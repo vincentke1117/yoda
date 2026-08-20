@@ -4,30 +4,27 @@ import { readRuntimeBarSource } from '@renderer/app/runtime-bar/test-helpers/rea
 describe('Workspace runtime bar Terminal ownership', () => {
   const source = readRuntimeBarSource();
 
-  it('uses the quick-action project/global Terminal as its only button state', () => {
+  it('uses the quick-action project/global Terminal as its only state source', () => {
     expect(source).toContain('const workspaceTerminalOpen = workspaceTerminalStore.isOpen;');
-    expect(source).toContain('const terminalActive = workspaceTerminalOpen;');
     expect(source).not.toContain(
       'const terminalActive = taskTerminalActive || workspaceTerminalStore.isOpen;'
     );
 
-    const toggleStart = source.indexOf('const toggleTerminal = () => {');
-    const toggleEnd = source.indexOf('\n  };', toggleStart);
-    const toggleSource = source.slice(toggleStart, toggleEnd);
+    const openStart = source.indexOf('const openTerminalPanel = () => {');
+    const openEnd = source.indexOf('\n  };', openStart);
+    const openSource = source.slice(openStart, openEnd);
 
-    expect(toggleSource).toContain(
+    expect(openSource).toContain(
       'workspaceTerminalStore.toggleForRuntimeBar(activeMountedProjectData)'
     );
-    expect(toggleSource).not.toContain('workspaceTerminalStore.close()');
-    expect(toggleSource).not.toContain('workspaceTerminalStore.toggleProject');
-    expect(toggleSource).not.toContain('workspaceTerminalStore.toggleGlobal');
-    expect(toggleSource).not.toContain('setTerminalDrawerOpen');
-    expect(toggleSource).not.toContain('taskTerminalVisible');
+    expect(openSource).not.toContain('workspaceTerminalStore.close()');
+    expect(openSource).not.toContain('workspaceTerminalStore.toggleProject');
+    expect(openSource).not.toContain('workspaceTerminalStore.toggleGlobal');
   });
 
   it('collapses a task Terminal hidden behind the quick-action Terminal', () => {
     expect(source).toContain(
-      'if (!workspaceTerminalOpen || !taskTerminalVisible || !provisionedTask) return;'
+      'if (!isOpen || !workspaceTerminalOpen || !taskTerminalVisible || !provisionedTask) return;'
     );
     expect(source).toContain('provisionedTask.taskView.setTerminalDrawerOpen(false);');
   });

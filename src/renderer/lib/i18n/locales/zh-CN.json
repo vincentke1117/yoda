@@ -5233,6 +5233,23 @@
     "skill": "Skill",
     "doctor": "Doctor",
     "terminal": "终端",
+    "terminalPopup": {
+      "title": "终端与运行中后端进程",
+      "description": "打开项目终端面板，或查看正在运行的后端进程。",
+      "triggerLabel": "{{count}} 个后端进程在运行",
+      "panel": "终端",
+      "openPanel": "打开终端面板",
+      "processes": "运行中后端进程",
+      "processesEmpty": "暂无运行中后端进程",
+      "openUrl": "打开",
+      "stop": "停止",
+      "stopFailed": "停止失败",
+      "appPreview": "App 预览",
+      "metro": "Metro",
+      "detachable": "退出后可保留",
+      "unknownTerminal": "终端 {{id}}",
+      "footer": "退出 Yoda 前会确认运行中的后端进程；Metro 等可保留进程可继续运行。"
+    },
     "trajectory": {
       "triggerLabel": "打开耗时",
       "title": "打开耗时",

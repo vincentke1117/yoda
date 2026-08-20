@@ -11,6 +11,7 @@ function summary(
   return {
     agentSessions: values.running,
     terminalSessions: 0,
+    backendProcesses: 0,
     nonKeepableSessions: [],
     ...values,
   };
@@ -23,6 +24,19 @@ function nonKeepableTerminal(name: string) {
     projectId: 'project-1',
     scopeId: 'local:project-1:project-view',
     name,
+    detachable: false,
+  };
+}
+
+function nonKeepableBackend(label: string, kind: 'app-preview' | 'metro') {
+  return {
+    id: label,
+    kind,
+    label,
+    projectId: kind === 'app-preview' ? 'project-1' : null,
+    projectName: kind === 'app-preview' ? 'Project' : null,
+    url: kind === 'app-preview' ? 'http://127.0.0.1:5173/' : 'exp://192.168.1.5:8081',
+    pid: 1234,
     detachable: false,
   };
 }
@@ -99,6 +113,7 @@ describe('resolveAgentSessionSummaryForShutdown', () => {
           ...restartSummary,
           agentSessions: restartSummary.running,
           terminalSessions: 0,
+          backendProcesses: 0,
         },
         showDialog
       )
@@ -177,7 +192,7 @@ describe('resolveQuitAgentSessionsDecision', () => {
     });
     expect(options?.buttons).toEqual(['Stop Sessions', 'Cancel']);
     expect(options?.detail).toBe(
-      "This session isn't using tmux, so it can't keep running in the background after Yoda quits.\n\n- Exit prompt task - Exit prompt wording (Codex)\n\nStop it to quit, or cancel to keep working."
+      "This session isn't detachable, so it can't keep running in the background after Yoda quits.\n\n- Exit prompt task - Exit prompt wording (Codex)\n\nStop it to quit, or cancel to keep working."
     );
   });
 
@@ -201,7 +216,7 @@ describe('resolveQuitAgentSessionsDecision', () => {
     );
 
     expect(detail).toBe(
-      "These sessions aren't using tmux, so they can't keep running in the background after Yoda quits.\n\n- Exit prompt task - Exit prompt wording (Codex)\n- Exit prompt task - Mobile control (Codex)\n\nStop them to quit, or cancel to keep working."
+      "These sessions aren't detachable, so they can't keep running in the background after Yoda quits.\n\n- Exit prompt task - Exit prompt wording (Codex)\n- Exit prompt task - Mobile control (Codex)\n\nStop them to quit, or cancel to keep working."
     );
   });
 
@@ -222,7 +237,7 @@ describe('resolveQuitAgentSessionsDecision', () => {
     );
 
     expect(detail).toBe(
-      '2 sessions can be kept in tmux. 1 direct session will stop if Yoda quits.\n\n- Exit prompt task - Direct session (Codex)'
+      '2 sessions can be kept running in the background. 1 session will stop if Yoda quits.\n\n- Exit prompt task - Direct session (Codex)'
     );
   });
 
@@ -248,7 +263,73 @@ describe('resolveQuitAgentSessionsDecision', () => {
 
     expect(message).toBe('2 agent sessions and 1 terminal session are still running.');
     expect(detail).toBe(
-      '2 sessions can be kept in tmux. 1 direct session will stop if Yoda quits.\n\n- Start locally (Terminal)'
+      '2 sessions can be kept running in the background. 1 session will stop if Yoda quits.\n\n- Start locally (Terminal)'
+    );
+  });
+
+  it('includes backend processes in the message and stop list', () => {
+    let message = '';
+    let detail = '';
+    const showDialog = vi.fn((options: { message: string; detail: string }) => {
+      message = options.message;
+      detail = options.detail;
+      return 1;
+    });
+
+    resolveQuitAgentSessionsDecision(
+      summary({
+        running: 1,
+        keepable: 0,
+        agentSessions: 0,
+        backendProcesses: 1,
+        nonKeepableSessions: [nonKeepableBackend('My App preview', 'app-preview')],
+      }),
+      showDialog
+    );
+
+    expect(message).toBe('A backend process is still running.');
+    expect(detail).toBe(
+      "This session isn't detachable, so it can't keep running in the background after Yoda quits.\n\n- My App preview (App preview)\n\nStop it to quit, or cancel to keep working."
+    );
+  });
+
+  it('counts detachable backend processes as keepable', () => {
+    const showDialog = vi.fn(() => 0);
+
+    expect(
+      resolveQuitAgentSessionsDecision(
+        summary({
+          running: 1,
+          keepable: 1,
+          agentSessions: 0,
+          backendProcesses: 1,
+        }),
+        showDialog
+      )
+    ).toEqual({ action: 'quit', mode: 'detach' });
+    expect(showDialog).toHaveBeenCalledOnce();
+  });
+
+  it('combines agents, terminals and backend processes into one message', () => {
+    let message = '';
+    const showDialog = vi.fn((options: { message: string }) => {
+      message = options.message;
+      return 2;
+    });
+
+    resolveQuitAgentSessionsDecision(
+      summary({
+        running: 4,
+        keepable: 3,
+        agentSessions: 2,
+        terminalSessions: 1,
+        backendProcesses: 1,
+      }),
+      showDialog
+    );
+
+    expect(message).toBe(
+      '2 agent sessions, 1 terminal session, and 1 backend process are still running.'
     );
   });
 });

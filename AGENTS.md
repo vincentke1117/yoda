@@ -140,3 +140,4 @@ optional_env:
 - 新增 drizzle 迁移改变 journal 尾部时，`migrations.test.ts` 里只 apply `count-1`/部分历史的 skip-ahead fixture 必须为新 tail 迁移创建目标表，否则 `runBundledMigrations` 在 `ALTER TABLE` 时报 "no such table"（2026-08-19, 1363a59）
 - base-ui 弹层不能互相嵌套：DropdownMenu(Menu.Root) 嵌进 ContextMenu 会让内层菜单 parent.type 判成 context-menu、trigger 点不开；同一元素上要叠加左键下拉就改用 Popover（PopoverRoot 是独立树，且 Popover 默认 click 开、Menu 默认 mousedown 开；非 button 元素 trigger 要加 `nativeButton={false}`）（2026-08-19, 6e70b60f）
 - Claude activity 记录的合法 status 含 `shell`（Claude Code 2.1.233+：turn 结束但挂着后台 shell/dev server 时写 shell 而非 idle）；`parseClaudeSessionActivity` 只认 busy/idle/waiting 会把 shell 当 null，导致卡住的 awaiting-input/working 永远无法被 reconcile 修复，必须把 shell 当 settled（idle 同级）处理（2026-08-20, 228c53f）
+- `listTmuxSessionMarkersStrict` 里 tmux 二进制缺失（spawn ENOENT）必须按「无会话」返回 `[]`，与超时/传输失败（应 rethrow 让 GC 中止）区分开，否则无 tmux 的机器 `deleteProject` 会静默失败、renderer 回滚项目（用户看「移除项目」没反应）（2026-08-20, c08763a）

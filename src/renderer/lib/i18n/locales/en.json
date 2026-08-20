@@ -5233,6 +5233,23 @@
     "skill": "Skill",
     "doctor": "Doctor",
     "terminal": "Terminal",
+    "terminalPopup": {
+      "title": "Terminal & running backend processes",
+      "description": "Open the project Terminal, or see which backend processes are running.",
+      "triggerLabel": "{{count}} backend processes running",
+      "panel": "Terminal",
+      "openPanel": "Open terminal panel",
+      "processes": "Running backend processes",
+      "processesEmpty": "No backend processes running",
+      "openUrl": "Open",
+      "stop": "Stop",
+      "stopFailed": "Could not stop the process",
+      "appPreview": "App preview",
+      "metro": "Metro",
+      "detachable": "Keep running after quit",
+      "unknownTerminal": "Terminal {{id}}",
+      "footer": "Yoda will confirm running backend processes before quitting; detachable ones (e.g. Metro) can keep running."
+    },
     "trajectory": {
       "triggerLabel": "Open timing",
       "title": "Open timing",
