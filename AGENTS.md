@@ -146,3 +146,4 @@ optional_env:
 - `new-task-modal-responsive.test.ts` 是源码文本契约测试（grep `home-view.tsx` 里的 JSX 字面量），改那段 JSX 必须同步改断言（2026-08-18, e363505）
 - `new ConversationManagerStore(p, t, [])` 传空 preloaded 会把 `_loaded` 置真，`load()` 直接返回不拉数据；要测加载路径就别传第三个参数（2026-08-18, e363505）
 - `createTask.ts` 里有两处 `shouldGenerate` 自动命名门（`createTask` 用 `params`、`retryTaskSetup` 用 `row`），改命名策略必须两处都改（2026-08-18, e363505）
+- Claude 兼容端点会话（如 DeepSeek V4 的 1M 变体）的 transcript 只记基础 model id、不带 `[1m]` 窗口后缀：上下文窗口推断走 `claude-context-window` 的固定窗口表（deepseek-v4-* → 1M），要展示完整 model 需从 conversation.agent 反查 `agents.model_suffix` 补全（2026-08-21, ce8a688e）
