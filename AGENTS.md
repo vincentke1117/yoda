@@ -76,6 +76,7 @@ optional_env:
 - 复用与实体一致性：`agents/conventions/reuse.md`
 - 禁止 re-export，永远从原始源头 import
 - 会被测试 import 的模块（logger、util、shared）里禁止 import `electron` 或 `@renderer/lib/ipc`，需要这些能力就导出 `setXxx(fn)` 由启动入口注入（2026-08-17, a38678e）
+- 终端 smart-path 硬换行拼接：跨行 URL 尾部没有 `/` 也要能接（百分号编码/纯 query 的 authorize URL 每行都可能无字面 `/`），判定要按 URL 语法（scheme / `%HH`）门控而非路径分隔符，但仍保留完整扩展名边界（2026-08-21, 9b3a464c9d）
 - 超时常数必须对照实测开销设定，并把实测数字写进注释（2026-08-17, a38678e）
 - 改运行中 Yoda 自身的数据走 `node /tmp/yoda-renderer.mjs '<js>'` 调 `window.electronAPI.invoke`，不要直接写 DB，否则事件、版本快照、前端缓存三者不一致（2026-08-17, b1bfc34）
 
