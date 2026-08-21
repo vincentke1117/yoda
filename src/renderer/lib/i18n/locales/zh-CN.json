@@ -1953,10 +1953,7 @@
         "updatedAt": "该会话数据库记录最近一次被写入的时间，任何字段变化（标题、状态、归档等）都会刷新。",
         "lastInteractedAt": "你最近一次在该会话中发送输入或操作终端的时间，区别于记录更新（后台写入也会刷新记录更新）。"
       },
-      "replyCount": "{{count}} 条回复",
-      "expandReply": "展开",
-      "expandAllReplies": "展开全部",
-      "collapseReplies": "收起"
+      "replyDetailLevel": "本条回复详细程度：{{level}}"
     },
     "hooks": {
       "title": "Hooks",

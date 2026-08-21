@@ -1,6 +1,7 @@
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { userEvent } from 'vitest/browser';
 import { SessionConversationList } from '@renderer/features/tasks/session-conversation-list';
 import '../../index.css';
 
@@ -68,6 +69,12 @@ function renderList(
   } as never);
 }
 
+async function settle() {
+  await act(async () => {
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+  });
+}
+
 describe('SessionConversationList', () => {
   let host: HTMLDivElement;
   let root: Root;
@@ -80,10 +87,20 @@ describe('SessionConversationList', () => {
 
   afterEach(async () => {
     await act(async () => root.unmount());
+    document
+      .querySelectorAll('[data-slot="dropdown-menu-content"]')
+      .forEach((node) => node.remove());
     host.remove();
   });
 
-  it('hides agent replies at the hidden default while offering a local expand', async () => {
+  const drillTriggers = () =>
+    host.querySelectorAll<HTMLButtonElement>(
+      'button[aria-label^="tasks.sessionInfo.replyDetailLevel"]'
+    );
+  const radioItems = () =>
+    document.querySelectorAll<HTMLElement>('[data-slot="dropdown-menu-radio-item"]');
+
+  it('hides agent replies at the hidden default while offering a per-card drill-down', async () => {
     await act(async () => {
       root.render(renderList(root, { displayLevel: 'hidden' }));
     });
@@ -92,53 +109,38 @@ describe('SessionConversationList', () => {
     expect(text).toContain('Build the feature');
     expect(text).not.toContain('Implemented and tested.');
     expect(text).not.toContain('I will inspect the code.');
-    expect(text).toContain('tasks.sessionInfo.replyCount:2');
-    expect(text).toContain('tasks.sessionInfo.expandReply');
+    expect(drillTriggers()).toHaveLength(2);
   });
 
-  it('reveals the closing reply on the first step, then the commentary on the second', async () => {
+  it('drills a card to detailed through its own menu', async () => {
     await act(async () => {
       root.render(renderList(root, { displayLevel: 'hidden' }));
     });
 
-    const affordance = () => host.querySelector('button') as HTMLButtonElement;
+    await userEvent.click(drillTriggers()[0]!);
+    await settle();
 
-    await act(async () => affordance().click());
+    const detailed = Array.from(radioItems()).find((item) =>
+      item.textContent?.includes('detailed')
+    );
+    expect(detailed).toBeTruthy();
+    await userEvent.click(detailed!);
+    await settle();
+
     expect(host.textContent).toContain('Implemented and tested.');
-    expect(host.textContent).not.toContain('I will inspect the code.');
-    expect(host.textContent).toContain('tasks.sessionInfo.expandAllReplies');
-
-    await act(async () => affordance().click());
     expect(host.textContent).toContain('I will inspect the code.');
-    expect(host.textContent).toContain('tasks.sessionInfo.collapseReplies');
   });
 
-  it('collapses back to hidden on a third step', async () => {
-    await act(async () => {
-      root.render(renderList(root, { displayLevel: 'hidden' }));
-    });
-
-    const affordance = () => host.querySelector('button') as HTMLButtonElement;
-    for (let step = 0; step < 3; step += 1) {
-      await act(async () => affordance().click());
-    }
-
-    expect(host.textContent).not.toContain('Implemented and tested.');
-    expect(host.textContent).not.toContain('I will inspect the code.');
-    expect(host.textContent).toContain('tasks.sessionInfo.expandReply');
-  });
-
-  it('keeps the concise default compact: final reply only until explicitly expanded', async () => {
+  it('keeps the concise default compact: final reply only until drilled deeper', async () => {
     await act(async () => {
       root.render(renderList(root, { displayLevel: 'concise' }));
     });
 
     expect(host.textContent).toContain('Implemented and tested.');
     expect(host.textContent).not.toContain('I will inspect the code.');
-    expect(host.textContent).toContain('tasks.sessionInfo.expandAllReplies');
   });
 
-  it('expands one turn independently while the other stays hidden', async () => {
+  it('drills one turn independently while the other stays hidden', async () => {
     await act(async () => {
       root.render(renderList(root, { displayLevel: 'hidden' }));
     });
@@ -146,7 +148,18 @@ describe('SessionConversationList', () => {
     const articles = host.querySelectorAll('article');
     expect(articles).toHaveLength(2);
 
-    await act(async () => (articles[0]!.querySelector('button') as HTMLButtonElement).click());
+    await userEvent.click(
+      articles[0]!.querySelector<HTMLButtonElement>(
+        'button[aria-label^="tasks.sessionInfo.replyDetailLevel"]'
+      )!
+    );
+    await settle();
+
+    const detailed = Array.from(radioItems()).find((item) =>
+      item.textContent?.includes('detailed')
+    );
+    await userEvent.click(detailed!);
+    await settle();
 
     expect(host.textContent).toContain('Implemented and tested.');
     expect(articles[1]!.textContent).not.toContain('Implemented and tested.');

@@ -1,5 +1,6 @@
-import { ChevronDown, ChevronUp, Loader2, MoreHorizontal } from 'lucide-react';
-import { Fragment, useMemo, useState } from 'react';
+import { isAgentReplyDisplayLevel } from '@lovstudio/yoda-protocol/agent-reply-display';
+import { ChevronDown, Loader2, MoreHorizontal } from 'lucide-react';
+import { Fragment, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type {
   ClaudeSessionPrompt,
@@ -21,8 +22,26 @@ import {
   type SessionTurn,
   type SessionTurnUser,
 } from '@renderer/features/tasks/session-conversation';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from '@renderer/lib/ui/dropdown-menu';
 import { MarkdownRenderer } from '@renderer/lib/ui/markdown-renderer';
 import { cn } from '@renderer/utils/utils';
+
+/** The reply depths a conversation card can show (verbose is the raw feed). */
+const CARD_REPLY_LEVELS: ReplyDisplayLevel[] = ['hidden', 'concise', 'detailed'];
+
+function agentReplyDisplayLevelLabelKey(level: ReplyDisplayLevel): string {
+  return `tasks.sessionPanel.agentReplyDisplay.${level}.label`;
+}
+
+function agentReplyDisplayLevelDescriptionKey(level: ReplyDisplayLevel): string {
+  return `tasks.sessionPanel.agentReplyDisplay.${level}.description`;
+}
 
 export function SessionConversationList({
   prompts,
@@ -125,9 +144,9 @@ export function SessionConversationList({
 
 /**
  * One Q&A card: the user prompt on top and the agent's replies below, unified
- * into a single visual unit. `displayLevel` is only the default collapse depth —
- * the reply zone steps up one level at a time (hidden → concise → detailed)
- * locally, so a reply hidden by the global mode can still be read per card.
+ * into a single visual unit. The card's top-right drill-down is the card's own
+ * reply depth — `displayLevel` is only the default, and picking a level here
+ * overrides this card alone.
  */
 function SessionTurnRow({
   turn,
@@ -148,9 +167,10 @@ function SessionTurnRow({
     () => filterTurnReplies(turn.replies, effectiveLevel),
     [effectiveLevel, turn.replies]
   );
-  // An explicit per-card interaction takes over from the preview's height cap:
-  // the default keeps the docked strip compact, expanding shows the full text.
+  // An explicit per-card drill-down takes over from the preview's height cap:
+  // the default keeps the docked strip compact, picking a level shows its full text.
   const manual = overrideLevel !== undefined;
+  const levelMenu = <TurnLevelMenu level={effectiveLevel} onSelect={setOverrideLevel} />;
 
   return (
     <article
@@ -165,6 +185,7 @@ function SessionTurnRow({
           variant={variant}
           onRestorePrompt={onRestorePrompt}
           isRestoring={isRestoring}
+          levelMenu={levelMenu}
         />
       ) : null}
       {turn.replies.length > 0 ? (
@@ -175,6 +196,7 @@ function SessionTurnRow({
             turn.user ? 'mt-1' : null
           )}
         >
+          {turn.user ? null : <div className="mb-1 flex justify-end">{levelMenu}</div>}
           <div
             className={cn(
               'grid gap-2',
@@ -185,11 +207,6 @@ function SessionTurnRow({
               <AgentReplyBlock key={reply.id} reply={reply} variant={variant} />
             ))}
           </div>
-          <ReplyAffordance
-            effectiveLevel={effectiveLevel}
-            count={turn.replies.length}
-            onStep={() => setOverrideLevel(stepLevel(effectiveLevel))}
-          />
         </section>
       ) : null}
     </article>
@@ -201,11 +218,13 @@ function TurnUserZone({
   variant,
   onRestorePrompt,
   isRestoring,
+  levelMenu,
 }: {
   user: SessionTurnUser;
   variant: 'preview' | 'full';
   onRestorePrompt?: (prompt: ClaudeSessionPrompt, index: number) => void;
   isRestoring: boolean;
+  levelMenu: ReactNode;
 }) {
   const { t } = useTranslation();
   const text = displaySessionPromptText(user.message.text);
@@ -226,6 +245,7 @@ function TurnUserZone({
         </span>
         <span className="ml-auto flex shrink-0 items-center gap-1">
           {timestamp ? <span className="font-mono">{timestamp}</span> : null}
+          {levelMenu}
           {canRestore && user.prompt && user.promptIndex && onRestorePrompt ? (
             <SessionPromptRestoreButton
               prompt={user.prompt}
@@ -252,6 +272,61 @@ function TurnUserZone({
         {text}
       </p>
     </header>
+  );
+}
+
+/**
+ * The card's drill-down: a compact selector for this card's reply depth. The
+ * shared display level is only the default; the pick here overrides this card.
+ */
+function TurnLevelMenu({
+  level,
+  onSelect,
+}: {
+  level: ReplyDisplayLevel;
+  onSelect: (level: ReplyDisplayLevel) => void;
+}) {
+  const { t } = useTranslation();
+  const levelLabel = t(agentReplyDisplayLevelLabelKey(level));
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        aria-label={t('tasks.sessionInfo.replyDetailLevel', { level: levelLabel })}
+        title={t('tasks.sessionInfo.replyDetailLevel', { level: levelLabel })}
+        className="flex h-6 min-w-0 shrink-0 items-center gap-1 rounded-sm px-1.5 text-[11px] text-foreground-passive transition-colors hover:bg-background-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <span className="max-w-16 truncate">{levelLabel}</span>
+        <ChevronDown className="size-3 shrink-0" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuRadioGroup
+          value={level}
+          onValueChange={(next) => {
+            if (isAgentReplyDisplayLevel(next) && next !== 'verbose') onSelect(next);
+          }}
+        >
+          {CARD_REPLY_LEVELS.map((candidate) => (
+            <DropdownMenuRadioItem
+              key={candidate}
+              value={candidate}
+              className="items-start"
+              closeOnClick
+            >
+              <span className="min-w-0">
+                <span className="block text-sm text-foreground">
+                  {t(agentReplyDisplayLevelLabelKey(candidate))}
+                </span>
+                <span className="mt-0.5 block whitespace-normal text-[11px] leading-snug text-foreground-passive">
+                  {t(agentReplyDisplayLevelDescriptionKey(candidate))}
+                </span>
+              </span>
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -287,45 +362,6 @@ function AgentReplyBlock({
       />
     </div>
   );
-}
-
-/**
- * The per-card expand/collapse control. Steps through the reply depths one at
- * a time: hidden → concise → detailed → hidden, so a globally hidden reply can
- * be read locally without changing the mode.
- */
-function ReplyAffordance({
-  effectiveLevel,
-  count,
-  onStep,
-}: {
-  effectiveLevel: ReplyDisplayLevel;
-  count: number;
-  onStep: () => void;
-}) {
-  const { t } = useTranslation();
-  const label =
-    effectiveLevel === 'hidden'
-      ? `${t('tasks.sessionInfo.replyCount', { count })} · ${t('tasks.sessionInfo.expandReply')}`
-      : effectiveLevel === 'concise'
-        ? t('tasks.sessionInfo.expandAllReplies')
-        : t('tasks.sessionInfo.collapseReplies');
-  const Chevron = effectiveLevel === 'detailed' ? ChevronUp : ChevronDown;
-
-  return (
-    <button
-      type="button"
-      className="mt-1 flex w-full items-center justify-center gap-1 rounded-sm py-0.5 text-[11px] text-foreground-passive transition-colors hover:bg-background-2 hover:text-foreground-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border"
-      onClick={onStep}
-    >
-      <Chevron className="size-3" />
-      {label}
-    </button>
-  );
-}
-
-function stepLevel(level: ReplyDisplayLevel): ReplyDisplayLevel {
-  return level === 'hidden' ? 'concise' : level === 'concise' ? 'detailed' : 'hidden';
 }
 
 function formatTimestamp(timestamp: string | null): string | null {
