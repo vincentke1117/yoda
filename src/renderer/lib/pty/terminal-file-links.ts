@@ -244,6 +244,8 @@ const PATH_SEG_EXCLUDED_RE = new RegExp(`[${PATH_SEG_EXCLUDED}]`, 'u');
 const TRAILING_PATH_RUN_RE = new RegExp(`[^${PATH_SEG_EXCLUDED}]+$`, 'u');
 const COMPLETE_EXT_RE = /\.[A-Za-z0-9]{1,8}$/;
 const URL_IN_PROGRESS_RE = /(?:https?|ftp|file):\/\/\S+$/i;
+const URL_SCHEME_RE = /(?:https?|ftp|file):\/\//i;
+const PERCENT_ENCODING_RE = /%(?:[0-9A-Fa-f]{2})/;
 const URL_CONTINUATION_START_RE = /[A-Za-z0-9._~:/?#@!$&'*+,;=%-]/;
 const URL_CONTINUATION_HINT_RE = /[/:?#&=%]/;
 const URL_FINAL_SEGMENT_WITH_CLOSER_RE = /^[A-Za-z0-9._~!$&'*+,;=:@%-]+([)\]}>）】〉》」』])$/u;
@@ -360,6 +362,19 @@ function canHardJoin(
   if (!isRowFull(terminal, upperBottomRowIndex)) return false;
   if (hasHardWrappedLocationCandidate(upperText, lowerStripped)) return true;
   if (hasHardWrappedParenthesizedFilenameCandidate(upperText, lowerStripped)) return true;
+  // A wrapped URL can break on a row whose trailing run has no `/`: query
+  // strings and percent-encoded URLs (`http%3A%2F%2F...`) carry no literal
+  // separator at the break. Recognize the row as mid-URL from URL syntax rather
+  // than a path tail, then let the conservative continuation check confirm.
+  // A complete-looking extension at the break is still the URL end, mirroring
+  // the general path rule below (`http://host:3000/file.ts` + `:31`).
+  if (
+    hasUrlFragmentSyntax(upperText) &&
+    !hasCompleteExtensionAtBoundary(upperText, lowerStripped) &&
+    canHardJoinUrl(upperText, lowerStripped)
+  ) {
+    return true;
+  }
   const tail = TRAILING_PATH_RUN_RE.exec(upperText)?.[0];
   if (!tail || !tail.includes('/')) return false;
   if (!lowerStripped || PATH_SEG_EXCLUDED_RE.test(lowerStripped[0])) return false;
@@ -497,6 +512,31 @@ function hasHardWrappedLocationCandidate(upperText: string, lowerStripped: strin
 
   const locationContinuation = `${partialLocation}${lowerStripped}`;
   return HARD_WRAP_LOCATION_RE.test(locationContinuation);
+}
+
+/**
+ * True when the row carries URL-specific syntax that can survive a hard wrap
+ * even when its trailing run has no `/`: a literal scheme, or percent-encoded
+ * characters such as `http%3A%2F%2F...`. Gates the URL continuation check in
+ * {@link canHardJoin} before the general path-separator rule, which would
+ * otherwise refuse to join a wrapped percent-encoded or query-only URL row.
+ */
+function hasUrlFragmentSyntax(text: string): boolean {
+  return URL_SCHEME_RE.test(text) || PERCENT_ENCODING_RE.test(text);
+}
+
+/**
+ * A complete-looking extension at the hard-wrap break usually IS the path or
+ * URL end (the row just happens to be full) — only a continuation that clearly
+ * extends it (`.gz` of a wrapped `archive.tar.gz`, or another path segment)
+ * may join. Mirrors the general {@link canHardJoin} extension rule so URL
+ * continuation does not silently resurrect a false file or URL tail.
+ */
+function hasCompleteExtensionAtBoundary(upperText: string, lowerStripped: string): boolean {
+  const tail = TRAILING_PATH_RUN_RE.exec(upperText)?.[0];
+  return Boolean(
+    tail && COMPLETE_EXT_RE.test(tail) && lowerStripped[0] !== '.' && lowerStripped[0] !== '/'
+  );
 }
 
 function canHardJoinUrl(upperText: string, lowerStripped: string): boolean {

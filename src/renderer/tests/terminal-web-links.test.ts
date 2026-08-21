@@ -92,6 +92,27 @@ describe('terminal web links', () => {
     ]);
   });
 
+  it('joins every row of a percent-encoded query URL wrapped across five rows', () => {
+    const rows = [
+      'https://api.supabase.com/v1/oauth/authorize?response_type=code&client_id=0106d721-0348-4990-b48d-a79decc4ebb6&code_challenge=UWtIqAX6iF0E0s_AxrLL',
+      'rg8dnjR8fPL5u0fDCxmJ4Qo&code_challenge_method=S256&redirect_uri=http%3A%2F%2Flocalhost%3A3118%2Fcallback&state=5BuEHdJNwvxKcRzfmoUkWENvSVWlmggbp2',
+      '770N5drf8&scope=organizations%3Aread+projects%3Aread+projects%3Awrite+database%3Awrite+database%3Aread+analytics%3Aread+secrets%3Aread+edge_funct',
+      'ions%3Aread+edge_functions%3Awrite+environment%3Aread+environment%3Awrite+storage%3Aread+storage%3Awrite&resource=https%3A%2F%2Fmcp.supabase.com%',
+      '2Fmcp',
+    ];
+    const url = rows.join('');
+    const terminal = makeTerminal(rows);
+
+    // Interior rows carry no literal `/` or `://` (slashes are `%2F`), so the
+    // join must not depend on a path separator at the break. Every row must
+    // resolve to the same full URL.
+    for (const bufferLineNumber of [1, 2, 3, 4, 5]) {
+      expect(
+        getTerminalWebLinkMatches(terminal, bufferLineNumber).map((match) => match.url)
+      ).toEqual([url]);
+    }
+  });
+
   it.each([
     ['full-width parentheses', '（', '）'],
     ['ASCII parentheses', '(', ')'],
