@@ -1938,10 +1938,7 @@
         "updatedAt": "When this session's database record was last written. Any field change (title, status, archive, ...) refreshes it.",
         "lastInteractedAt": "When you last sent input or interacted with the terminal in this session — unlike record updated, which background writes also refresh."
       },
-      "replyCount": "{{count}} replies",
-      "expandReply": "Expand",
-      "expandAllReplies": "Expand all",
-      "collapseReplies": "Collapse"
+      "replyDetailLevel": "Reply detail level: {{level}}"
     },
     "hooks": {
       "title": "Hooks",
