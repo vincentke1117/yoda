@@ -86,6 +86,12 @@ export const APP_SHORTCUTS = defineShortcuts({
     description: 'Create a new task',
     category: 'Navigation',
   },
+  newTaskToggle: {
+    defaultHotkey: 'Alt',
+    label: 'New Task (Toggle Mode)',
+    description: 'Hold this key and click New Task to open in the alternate mode',
+    category: 'Navigation',
+  },
   newProject: {
     defaultHotkey: 'Mod+Shift+N',
     label: 'New Project',
