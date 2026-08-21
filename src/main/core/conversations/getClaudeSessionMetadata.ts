@@ -16,10 +16,15 @@ import { log } from '@main/lib/logger';
  *
  * If both surfaces appear in a single transcript, the newer TaskCreate/TaskUpdate state wins.
  * Callers poll; we re-read the whole file each tick (KISS — sessions are kilobytes-to-MB).
+ *
+ * `modelSuffix` (the Agent's `[1m]`-style window selector) is never written into the
+ * transcript by the CLI, so the model id comes back bare. Callers who know the suffix
+ * pass it here so the returned model is the complete id actually launched.
  */
 export async function getClaudeSessionMetadata(
   cwd: string,
-  sessionId: string
+  sessionId: string,
+  options?: { modelSuffix?: string | null }
 ): Promise<ClaudeSessionMetadata | null> {
   const filePath = resolveClaudeTranscriptPath(cwd, sessionId);
   let raw: string;
@@ -91,7 +96,15 @@ export async function getClaudeSessionMetadata(
   const todos =
     taskOrder.length > 0 ? taskOrder.map((id) => taskById.get(id)!) : (legacyTodos ?? []);
 
-  return { summary, todos, model };
+  return { summary, todos, model: applyModelSuffix(model, options?.modelSuffix) };
+}
+
+/** Append the Agent's window suffix to the bare transcript model id, if not already present. */
+function applyModelSuffix(model: string | null, suffix: string | null | undefined): string | null {
+  const trimmed = suffix?.trim();
+  if (!model || !trimmed) return model;
+  if (model.endsWith(trimmed)) return model;
+  return `${model}${trimmed}`;
 }
 
 function safeParse(line: string): Record<string, unknown> | null {

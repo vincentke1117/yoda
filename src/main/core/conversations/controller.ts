@@ -1,6 +1,7 @@
 import { createRPCController } from '@shared/ipc/rpc';
 import { makePtySessionId } from '@shared/ptySessionId';
 import type { SessionOpenPerformanceContext } from '@shared/session-open-performance';
+import { agentsConfigService } from '@main/core/agents-config/agents-config-service';
 import { ptySessionRegistry } from '@main/core/pty/pty-session-registry';
 import { runtimeOverrideSettings } from '@main/core/settings/runtime-settings-service';
 import { KeyedTtlSingleFlightCache } from '@main/lib/keyed-ttl-single-flight-cache';
@@ -58,7 +59,10 @@ import { resumeConversationWithResult } from './resumeConversation';
 import { rewritePrompt } from './rewritePrompt';
 import { getProjectDeliverySummaries, getTaskDeliverySummaries } from './session-summary-context';
 import { getSessionSummarySnapshot } from './session-summary-snapshot';
-import { getStoredConversationSessionSource } from './stored-conversation-session-source';
+import {
+  getConversationAgentId,
+  getStoredConversationSessionSource,
+} from './stored-conversation-session-source';
 import { touchConversation } from './touchConversation';
 import {
   conversationTranscriptRevision,
@@ -130,9 +134,16 @@ async function getConfiguredClaudeSessionConversation(cwd: string, sessionId: st
 }
 
 function getCachedClaudeSessionMetadata(cwd: string, sessionId: string) {
-  return claudeSessionMetadataCache.get(sessionContextCacheKey([cwd, sessionId]), () =>
-    getClaudeSessionMetadata(cwd, sessionId)
-  );
+  return claudeSessionMetadataCache.get(sessionContextCacheKey([cwd, sessionId]), async () => {
+    // The CLI writes only the bare model id into the transcript; the Agent's
+    // `[1m]`-style window suffix lives in its profile. Restore the complete id
+    // so the runtime bar shows what was actually launched.
+    const agentId = await getConversationAgentId(sessionId);
+    const modelSuffix = agentId
+      ? ((await agentsConfigService.get(agentId))?.modelSuffix ?? null)
+      : null;
+    return getClaudeSessionMetadata(cwd, sessionId, { modelSuffix });
+  });
 }
 
 async function getConfiguredCodexSessionContext(
