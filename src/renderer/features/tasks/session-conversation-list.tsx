@@ -188,10 +188,11 @@ function SessionTurnRow({
           levelMenu={levelMenu}
         />
       ) : null}
-      {turn.replies.length > 0 ? (
+      {turn.replies.length > 0 && (visibleReplies.length > 0 || !turn.user) ? (
         <section
           className={cn(
-            'min-w-0 border-l-2 border-primary/45 bg-primary/5',
+            'min-w-0 border-l-2 border-primary/45',
+            visibleReplies.length > 0 && 'bg-primary/5',
             variant === 'preview' ? 'px-2 py-1.5' : 'rounded-r-sm p-2.5',
             turn.user ? 'mt-1' : null
           )}
