@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@main/core/maas/maas-service', () => ({
   maasService: {
-    listZenmuxCatalogTextModelCandidates: mocks.listCatalog,
+    getActivePlatformModels: mocks.listCatalog,
   },
 }));
 
@@ -86,7 +86,7 @@ beforeEach(() => {
       return storedSettings;
     }
   );
-  mocks.listCatalog.mockResolvedValue([]);
+  mocks.listCatalog.mockResolvedValue(null);
   mocks.fetchOfficial.mockResolvedValue({ kind: 'credentialsMissing' });
 });
 
@@ -122,6 +122,34 @@ describe('model provider catalog', () => {
     });
     expect(result.providers.some((provider) => provider.name === 'Codex')).toBe(false);
     expect(result.providers.some((provider) => provider.name === 'Claude Code')).toBe(false);
+  });
+
+  it('prepends the active MaaS channel as a native-id group', () => {
+    const result = buildModelProviderCatalog(createSettings(), new Set(), {
+      platformId: 'cliproxyapi',
+      name: 'CLIProxyAPI',
+      models: ['gpt-5.6-sol', 'gpt-5.6-luna'],
+    });
+
+    expect(result.providers[0]).toMatchObject({
+      id: 'channel:cliproxyapi',
+      name: 'CLIProxyAPI',
+      channel: true,
+    });
+    expect(result.providers[0].models).toEqual([
+      { id: 'gpt-5.6-sol', custom: false, sources: ['channel'] },
+      { id: 'gpt-5.6-luna', custom: false, sources: ['channel'] },
+    ]);
+  });
+
+  it('omits the channel group when the active channel has no models', () => {
+    const result = buildModelProviderCatalog(createSettings(), new Set(), {
+      platformId: 'cliproxyapi',
+      name: 'CLIProxyAPI',
+      models: [],
+    });
+
+    expect(result.providers[0].id).not.toBe('channel:cliproxyapi');
   });
 
   it('persists custom models under their vendor and normalizes bare IDs', async () => {
@@ -255,19 +283,19 @@ describe('model provider catalog', () => {
     storedSettings = createSettings({ automaticUpdatesEnabled: false });
 
     await service.refreshAutomatically();
-    expect(mocks.listCatalog).not.toHaveBeenCalled();
+    expect(mocks.updateComputed).not.toHaveBeenCalled();
 
     storedSettings = createSettings({
       lastAutomaticRefreshAt: new Date().toISOString(),
     });
     await service.refreshAutomatically();
-    expect(mocks.listCatalog).not.toHaveBeenCalled();
+    expect(mocks.updateComputed).not.toHaveBeenCalled();
 
     storedSettings = createSettings({
       lastAutomaticRefreshAt: '2026-01-01T00:00:00.000Z',
     });
     await service.refreshAutomatically();
-    expect(mocks.listCatalog).toHaveBeenCalledTimes(1);
+    expect(mocks.updateComputed).toHaveBeenCalledTimes(1);
     expect(storedSettings.lastAutomaticRefreshAt).not.toBe('2026-01-01T00:00:00.000Z');
   });
 

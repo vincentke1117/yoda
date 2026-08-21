@@ -14,12 +14,12 @@ const serviceMocks = vi.hoisted(() => ({
   updateRuntimeConfig: vi.fn<(id: string, config: Record<string, unknown>) => Promise<void>>(
     async () => undefined
   ),
-  listCatalog: vi.fn(async () => [] as string[]),
+  listCatalog: vi.fn(async () => null),
 }));
 
 vi.mock('@main/core/maas/maas-service', () => ({
   maasService: {
-    listZenmuxCatalogTextModelCandidates: serviceMocks.listCatalog,
+    getActivePlatformModels: serviceMocks.listCatalog,
   },
 }));
 
@@ -144,7 +144,7 @@ describe('provider model catalog mapping', () => {
 
     const entries = sanitizeCatalogEntriesForRuntime(provider!, [
       {
-        source: 'zenmux',
+        source: 'officialApi',
         models: ['anthropic/claude-haiku-4.5'],
         fetchedAt,
         expiresAt,

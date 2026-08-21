@@ -152,7 +152,7 @@ type ActiveOperation = {
 };
 
 type ModelsResponse = {
-  data?: unknown[];
+  data?: Array<{ id?: string }>;
 };
 
 type VersionMetadata = {
@@ -274,16 +274,17 @@ export class CliProxyApiManagedService {
         state: 'unsupported',
         installed,
         installedVersion,
-        modelCount: null,
+        models: null,
       });
     }
 
     if (installed && managementKey && (await this.probeManagement(managementKey))) {
+      const modelSummary = apiKey ? await this.getModels(apiKey) : null;
       return this.createStatus({
         state: 'running',
         installed,
         installedVersion,
-        modelCount: apiKey ? await this.getModelCount(apiKey) : null,
+        models: modelSummary?.models ?? null,
       });
     }
 
@@ -292,7 +293,7 @@ export class CliProxyApiManagedService {
         state: 'external-running',
         installed,
         installedVersion,
-        modelCount: null,
+        models: null,
       });
     }
 
@@ -300,7 +301,7 @@ export class CliProxyApiManagedService {
       state: installed ? 'stopped' : 'not-installed',
       installed,
       installedVersion,
-      modelCount: null,
+      models: null,
     });
   }
 
@@ -633,17 +634,23 @@ export class CliProxyApiManagedService {
     }
   }
 
-  private async getModelCount(apiKey: string): Promise<number | null> {
+  private async getModels(
+    apiKey: string
+  ): Promise<{ count: number | null; models: string[] | null }> {
     try {
       const response = await this.fetchApi(`${CLIPROXYAPI_MANAGED_ENDPOINT}/models`, {
         headers: { Authorization: `Bearer ${apiKey}` },
         signal: AbortSignal.timeout(STATUS_TIMEOUT_MS),
       });
-      if (!response.ok) return null;
+      if (!response.ok) return { count: null, models: null };
       const body = (await response.json()) as ModelsResponse;
-      return Array.isArray(body.data) ? body.data.length : null;
+      if (!Array.isArray(body.data)) return { count: null, models: null };
+      const models = body.data
+        .map((model) => model.id?.trim())
+        .filter((id): id is string => Boolean(id));
+      return { count: models.length, models };
     } catch {
-      return null;
+      return { count: null, models: null };
     }
   }
 
@@ -651,12 +658,12 @@ export class CliProxyApiManagedService {
     state,
     installed,
     installedVersion,
-    modelCount,
+    models,
   }: {
     state: CliProxyApiManagedStatus['state'];
     installed: boolean;
     installedVersion: string | null;
-    modelCount: number | null;
+    models: string[] | null;
   }): CliProxyApiManagedStatus {
     return {
       state,
@@ -668,7 +675,8 @@ export class CliProxyApiManagedService {
       adminUrl: CLIPROXYAPI_MANAGED_ADMIN_URL,
       bundledVersion: CLIPROXYAPI_MANAGED_VERSION,
       installedVersion,
-      modelCount,
+      modelCount: models?.length ?? null,
+      models,
     };
   }
 

@@ -147,3 +147,5 @@ optional_env:
 - `new ConversationManagerStore(p, t, [])` 传空 preloaded 会把 `_loaded` 置真，`load()` 直接返回不拉数据；要测加载路径就别传第三个参数（2026-08-18, e363505）
 - `createTask.ts` 里有两处 `shouldGenerate` 自动命名门（`createTask` 用 `params`、`retryTaskSetup` 用 `row`），改命名策略必须两处都改（2026-08-18, e363505）
 - Claude 兼容端点会话（如 DeepSeek V4 的 1M 变体）的 transcript 只记基础 model id、不带 `[1m]` 窗口后缀：上下文窗口推断走 `claude-context-window` 的固定窗口表（deepseek-v4-* → 1M），要展示完整 model 需从 conversation.agent 反查 `agents.model_suffix` 补全（2026-08-21, ce8a688e）
+- zh-CN i18n 文案与 key 名都禁止出现 "MaaS" 子串：`locales.test.ts` 对 `JSON.stringify(zhCN)` 全库扫描，key 名里的 MaaS 也会被捕获；产品术语用「模型接入」/ 'Model access'（2026-08-21, ec50ab9a8f）
+- MaaS 渠道候选模型枚举统一走 `maasService.listPlatformModels`/`getActivePlatformModels`（`{endpoint}/models`，Electron net.fetch 走系统代理）；给 Agent 下拉/全局发现/网关卡片喂数据都用它，不要再为单个平台写专属 catalog（2026-08-21, ec50ab9a8f）

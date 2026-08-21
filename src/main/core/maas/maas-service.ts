@@ -11,6 +11,7 @@ import {
   MAAS_PLATFORM_IDS,
   MAAS_PLATFORMS,
   resolveMaasEnvKey,
+  resolveSecretKind,
   supportsMaasPlatformForRuntime,
   type MaasApiKeyKind,
   type MaasCodexClientSyncStatus,
@@ -86,50 +87,57 @@ const PLATFORM_INFO_CACHE_TTL_MS = 24 * 60 * 60 * 1_000;
 const PLATFORM_DESCRIPTION_TIMEOUT_MS = 10_000;
 const PROFILE_WEBSITE_TIMEOUT_MS = 10_000;
 const PROFILE_WEBSITE_MAX_BYTES = 2 * 1024 * 1024;
-const ZENMUX_MODEL_CATALOG_CACHE_TTL_MS = 24 * 60 * 60 * 1_000;
-const ZENMUX_MODEL_CATALOG_TIMEOUT_MS = 10_000;
-const ZENMUX_USAGE_LOOKBACK_DAYS = 60;
-const ZENMUX_MAX_MODELS_PER_BUCKET = 50;
+const PLATFORM_MODEL_CACHE_TTL_MS = 24 * 60 * 60 * 1_000;
+const PLATFORM_MODEL_TIMEOUT_MS = 10_000;
+const MANAGEMENT_USAGE_LOOKBACK_DAYS = 60;
+const MANAGEMENT_MAX_MODELS_PER_BUCKET = 50;
 
-type ZenmuxStatisticsMetric = 'tokens' | 'cost';
+type ManagementStatisticsMetric = 'tokens' | 'cost';
 
-type ZenmuxTimeseriesEntry = {
+type ManagementTimeseriesEntry = {
   model?: string;
   label?: string;
   value?: number;
 };
 
-type ZenmuxTimeseriesBucket = {
+type ManagementTimeseriesBucket = {
   date?: string;
-  models?: ZenmuxTimeseriesEntry[];
+  models?: ManagementTimeseriesEntry[];
 };
 
-type ZenmuxTimeseriesResponse = {
+type ManagementTimeseriesResponse = {
   success?: boolean;
   data?: {
     metric?: string;
     starting_at?: string;
     ending_at?: string;
-    series?: ZenmuxTimeseriesBucket[];
+    series?: ManagementTimeseriesBucket[];
   };
   error?: string | { message?: string };
   message?: string;
 };
 
-type ZenmuxCatalogModel = {
+export type MaasPlatformModel = {
   id?: string;
   object?: string;
   input_modalities?: string[];
   output_modalities?: string[];
 };
 
-type ZenmuxModelsResponse = {
-  data?: ZenmuxCatalogModel[];
+type PlatformModelsResponse = {
+  data?: MaasPlatformModel[];
   error?: string | { message?: string };
   message?: string;
 };
 
-type ZenmuxErrorBody = {
+type PlatformModelList = {
+  platformId: MaasPlatformId;
+  displayName: string;
+  models: MaasPlatformModel[];
+  fetchedAt: string;
+};
+
+type ApiErrorBody = {
   error?: string | { message?: string };
   message?: string;
 };
@@ -351,15 +359,6 @@ function getConnectedPlatform(
   return settings.connections.find((item) => item.platformId === platformId);
 }
 
-function getConnectedPlatformByTemplate(
-  settings: MaasSettings,
-  templateId: MaasPlatformTemplateId
-): MaasPlatformConnection | undefined {
-  return settings.connections.find(
-    (connection) => getMaasPlatformTemplateId(connection.platformId) === templateId
-  );
-}
-
 function hasExternalAgentSyncConsent(settings: MaasSettings): boolean {
   if (settings.externalAgentSyncEnabled !== undefined) {
     return (
@@ -398,12 +397,12 @@ function utcDateString(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
-function zenmuxUsageDateRange(): { startingAt: string; endingAt: string } {
+function managementUsageDateRange(): { startingAt: string; endingAt: string } {
   const now = new Date();
   const endingAt = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   endingAt.setUTCDate(endingAt.getUTCDate() - 1);
   const startingAt = new Date(endingAt);
-  startingAt.setUTCDate(startingAt.getUTCDate() - ZENMUX_USAGE_LOOKBACK_DAYS + 1);
+  startingAt.setUTCDate(startingAt.getUTCDate() - MANAGEMENT_USAGE_LOOKBACK_DAYS + 1);
 
   return {
     startingAt: utcDateString(startingAt),
@@ -411,7 +410,7 @@ function zenmuxUsageDateRange(): { startingAt: string; endingAt: string } {
   };
 }
 
-function zenmuxManagementUrl(endpoint: string, path: string): URL {
+function managementApiUrl(endpoint: string, path: string): URL {
   const defaultEndpoint = MAAS_PLATFORMS.zenmux.defaultEndpoint;
   const trimmedEndpoint = (endpoint.trim() || defaultEndpoint).replace(/\/+$/, '');
   const managementBase = trimmedEndpoint.endsWith('/management')
@@ -421,7 +420,7 @@ function zenmuxManagementUrl(endpoint: string, path: string): URL {
   return new URL(`${managementBase}/${path.replace(/^\/+/, '')}`);
 }
 
-function getErrorMessage(body: ZenmuxErrorBody | null, fallback: string): string {
+function getApiErrorMessage(body: ApiErrorBody | null, fallback: string): string {
   if (!body) return fallback;
   if (typeof body.error === 'string' && body.error.trim()) return body.error;
   if (typeof body.error === 'object' && body.error.message?.trim()) return body.error.message;
@@ -468,9 +467,9 @@ function recordDate(date: string): string {
   return new Date(`${date}T00:00:00.000Z`).toISOString();
 }
 
-function buildZenmuxUsageRecords(
-  tokens: ZenmuxTimeseriesResponse['data'],
-  costs: ZenmuxTimeseriesResponse['data']
+function buildManagementUsageRecords(
+  tokens: ManagementTimeseriesResponse['data'],
+  costs: ManagementTimeseriesResponse['data']
 ): MaasInvocationRecord[] {
   const costByDateAndModel = new Map<string, number>();
   for (const bucket of costs?.series ?? []) {
@@ -603,9 +602,7 @@ export class MaasService {
     MaasPlatformTemplateId,
     TTLCache<MaasPlatformInfoSnapshot>
   >();
-  private readonly zenmuxModelCatalogCache = new TTLCache<string[]>(
-    ZENMUX_MODEL_CATALOG_CACHE_TTL_MS
-  );
+  private readonly platformModelCacheByConnection = new Map<string, TTLCache<PlatformModelList>>();
 
   /**
    * Reconcile one Codex account/profile root with Yoda's current MaaS route.
@@ -790,7 +787,7 @@ export class MaasService {
         }
         const apiKey = await readPlatformSecret(
           activeBinding.platformId,
-          getMaasPlatformTemplateId(activeBinding.platformId) === 'zenmux' ? 'inference' : 'primary'
+          resolveSecretKind(activeBinding.platformId)
         );
         if (!apiKey) {
           return {
@@ -895,12 +892,8 @@ export class MaasService {
     return Promise.all(
       settings.connections.map(async (saved) => {
         const platformId = saved.platformId;
-        const templateId = getMaasPlatformTemplateId(platformId);
         const apiKey = await readPlatformSecret(platformId, 'primary');
-        const inferenceApiKey = await readPlatformSecret(
-          platformId,
-          templateId === 'zenmux' ? 'inference' : 'primary'
-        );
+        const inferenceApiKey = await readPlatformSecret(platformId, resolveSecretKind(platformId));
         const connection = {
           ...saved,
           displayName:
@@ -1412,10 +1405,7 @@ export class MaasService {
     const settings = await appSettingsService.get('maas');
     const connection = getConnectedPlatform(settings, platformId);
     if (!connection) return undefined;
-    const apiKey = await readPlatformSecret(
-      platformId,
-      getMaasPlatformTemplateId(platformId) === 'zenmux' ? 'inference' : 'primary'
-    );
+    const apiKey = await readPlatformSecret(platformId, resolveSecretKind(platformId));
     if (!apiKey) return undefined;
     return {
       displayName: connection.displayName,
@@ -1470,7 +1460,10 @@ export class MaasService {
       if (input.kind !== 'primary' && input.kind !== 'inference' && input.kind !== 'account') {
         return { success: false, error: 'Unsupported MaaS API key kind.' };
       }
-      if (input.kind === 'inference' && getMaasPlatformTemplateId(input.platformId) !== 'zenmux') {
+      if (
+        input.kind === 'inference' &&
+        !getMaasPlatformDefinition(input.platformId).separateInferenceKey
+      ) {
         return { success: false, error: 'This platform does not use a separate inference key.' };
       }
 
@@ -1519,7 +1512,7 @@ export class MaasService {
       const apiKey = input.apiKey?.trim() ?? '';
       const inferenceApiKey = input.inferenceApiKey?.trim() ?? '';
       const accountAccessToken = input.accountAccessToken?.trim() ?? '';
-      const usesSeparateInferenceKey = templateId === 'zenmux';
+      const usesSeparateInferenceKey = Boolean(platform.separateInferenceKey);
       const clientApiKey = usesSeparateInferenceKey ? inferenceApiKey : apiKey;
       const existingClientKeyFingerprint = usesSeparateInferenceKey
         ? existing?.inferenceKeyFingerprint
@@ -1597,7 +1590,7 @@ export class MaasService {
         secretsToRestore.set(key, await encryptedAppSecretsStore.getSecret(key));
         await encryptedAppSecretsStore.setSecret(key, apiKey);
       }
-      if (templateId === 'zenmux' && inferenceApiKey) {
+      if (platform.separateInferenceKey && inferenceApiKey) {
         const key = inferenceSecretKey(input.platformId);
         secretsToRestore.set(key, await encryptedAppSecretsStore.getSecret(key));
         await encryptedAppSecretsStore.setSecret(key, inferenceApiKey);
@@ -1624,7 +1617,7 @@ export class MaasService {
       if (activePlatformBinding) {
         const activeApiKey = await readPlatformSecret(
           input.platformId,
-          templateId === 'zenmux' ? 'inference' : 'primary'
+          resolveSecretKind(input.platformId)
         );
         if (!activeApiKey) {
           throw new Error(
@@ -1730,10 +1723,9 @@ export class MaasService {
           : `${templateId}:${globalThis.crypto.randomUUID()}`
       );
       const apiKey = await readPlatformSecret(input.platformId, 'primary');
-      const inferenceApiKey =
-        templateId === 'zenmux'
-          ? await readPlatformSecret(input.platformId, 'inference')
-          : undefined;
+      const inferenceApiKey = getMaasPlatformDefinition(input.platformId).separateInferenceKey
+        ? await readPlatformSecret(input.platformId, 'inference')
+        : undefined;
       const accountAccessToken = await readPlatformSecret(input.platformId, 'account');
 
       if (!apiKey && !inferenceApiKey) {
@@ -1808,10 +1800,7 @@ export class MaasService {
         return failedResult('Platform is not connected.');
       }
 
-      const apiKey = await readPlatformSecret(
-        platformId,
-        getMaasPlatformTemplateId(platformId) === 'zenmux' ? 'inference' : 'primary'
-      );
+      const apiKey = await readPlatformSecret(platformId, resolveSecretKind(platformId));
       if (!apiKey) {
         return failedResult('Stored API key is missing. Reconnect the platform to restore it.');
       }
@@ -1972,7 +1961,7 @@ export class MaasService {
       );
     }
 
-    if (templateId !== 'zenmux') {
+    if (!getMaasPlatformDefinition(input.platformId).supportsManagementStatistics) {
       return this.loadRemoteUsageSummary(
         connection,
         input.platformId,
@@ -2024,26 +2013,110 @@ export class MaasService {
     };
   }
 
-  async listTextModelCandidates(forceRefresh = false): Promise<string[]> {
-    const settings = await appSettingsService.get('maas');
-    const zenmuxConnection = getConnectedPlatformByTemplate(settings, 'zenmux');
-    if (!zenmuxConnection) return [];
-
-    const result = await this.listRealRecords(settings, zenmuxConnection.platformId, forceRefresh);
-    const models = new Set<string>();
-    for (const record of result.records) {
-      const model = record.model?.trim();
-      if (record.kind === 'text' && model) models.add(model);
-    }
-    return [...models];
+  /**
+   * Enumerate the models a connected platform exposes via its OpenAI-compatible
+   * `/models` endpoint. Text-capable ids only unless `includeNonText` is set.
+   * Uses Electron `net.fetch` so system proxy settings apply (matters for remote
+   * relays behind a local proxy).
+   */
+  async listPlatformModels(
+    platformId: MaasPlatformId,
+    opts?: { forceRefresh?: boolean; includeNonText?: boolean }
+  ): Promise<string[]> {
+    const result = await this.loadPlatformModels(platformId, opts?.forceRefresh === true);
+    const models = opts?.includeNonText
+      ? result.models
+      : result.models.filter((model) => isTextModel(model));
+    return models.map((model) => model.id?.trim()).filter((id): id is string => Boolean(id));
   }
 
-  async listZenmuxCatalogTextModelCandidates(forceRefresh = false): Promise<string[]> {
-    if (forceRefresh) {
-      this.zenmuxModelCatalogCache.invalidate();
-    }
+  async getActivePlatformModels(opts?: {
+    forceRefresh?: boolean;
+    includeNonText?: boolean;
+  }): Promise<{ platformId: MaasPlatformId; displayName: string; models: string[] } | null> {
+    const settings = await appSettingsService.get('maas');
+    const platformId = settings.selectedPlatformId;
+    if (!platformId) return null;
+    const connection = getConnectedPlatform(settings, platformId);
+    if (!connection) return null;
+    const models = await this.listPlatformModels(platformId, opts);
+    return { platformId, displayName: connection.displayName, models };
+  }
 
-    return this.zenmuxModelCatalogCache.get(() => this.fetchZenmuxCatalogTextModels());
+  private async loadPlatformModels(
+    platformId: MaasPlatformId,
+    forceRefresh: boolean
+  ): Promise<PlatformModelList> {
+    const settings = await appSettingsService.get('maas');
+    const connection = getConnectedPlatform(settings, platformId);
+    if (!connection) {
+      return {
+        platformId,
+        displayName: getMaasPlatformDefinition(platformId).name,
+        models: [],
+        fetchedAt: new Date().toISOString(),
+      };
+    }
+    const apiKey = await readPlatformSecret(platformId, resolveSecretKind(platformId));
+    if (!apiKey) {
+      return {
+        platformId,
+        displayName: connection.displayName,
+        models: [],
+        fetchedAt: new Date().toISOString(),
+      };
+    }
+    const cacheKey = `${platformId}:${connection.endpoint}:${keyFingerprint(apiKey)}`;
+    let cache = this.platformModelCacheByConnection.get(cacheKey);
+    if (!cache) {
+      cache = new TTLCache<PlatformModelList>(PLATFORM_MODEL_CACHE_TTL_MS);
+      this.platformModelCacheByConnection.set(cacheKey, cache);
+    }
+    if (forceRefresh) {
+      cache.invalidate();
+    }
+    return cache.get(() => this.fetchPlatformModels(connection, apiKey, platformId));
+  }
+
+  private async fetchPlatformModels(
+    connection: MaasPlatformConnection,
+    apiKey: string,
+    platformId: MaasPlatformId
+  ): Promise<PlatformModelList> {
+    const modelsUrl = `${connection.endpoint.replace(/\/+$/, '')}/models`;
+    const response = await net.fetch(modelsUrl, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(PLATFORM_MODEL_TIMEOUT_MS),
+    });
+    let body: PlatformModelsResponse | null = null;
+    try {
+      body = (await response.json()) as PlatformModelsResponse;
+    } catch {
+      body = null;
+    }
+    if (!response.ok) {
+      throw new Error(
+        `Model list returned ${response.status}: ${getApiErrorMessage(
+          body,
+          response.statusText || 'Request failed.'
+        )}`
+      );
+    }
+    if (!Array.isArray(body?.data)) {
+      throw new Error('The model endpoint did not return a model list.');
+    }
+    const models: MaasPlatformModel[] = [];
+    for (const model of body.data) {
+      if (!model.id?.trim()) continue;
+      if (model.object && model.object !== 'model') continue;
+      models.push(model);
+    }
+    return {
+      platformId,
+      displayName: connection.displayName,
+      models,
+      fetchedAt: new Date().toISOString(),
+    };
   }
 
   private async listRealRecords(
@@ -2061,7 +2134,7 @@ export class MaasService {
       };
     }
 
-    if (getMaasPlatformTemplateId(platformId) !== 'zenmux') {
+    if (!getMaasPlatformDefinition(platformId).supportsManagementStatistics) {
       return {
         records: [],
         source: 'none',
@@ -2080,7 +2153,7 @@ export class MaasService {
       cache.invalidate();
     }
 
-    return cache.get(() => this.fetchZenmuxUsageRecords(connection));
+    return cache.get(() => this.fetchManagementUsageRecords(connection));
   }
 
   /**
@@ -2206,7 +2279,7 @@ export class MaasService {
     }
   }
 
-  private async fetchZenmuxUsageRecords(
+  private async fetchManagementUsageRecords(
     connection: MaasPlatformConnection
   ): Promise<RealRecordsResult> {
     const apiKey = await readPlatformSecret(connection.platformId, 'primary');
@@ -2217,14 +2290,14 @@ export class MaasService {
     }
 
     const [tokens, costs] = await Promise.all([
-      this.fetchZenmuxTimeseries(connection.endpoint, apiKey, 'tokens'),
-      this.fetchZenmuxTimeseries(connection.endpoint, apiKey, 'cost'),
+      this.fetchManagementTimeseries(connection.endpoint, apiKey, 'tokens'),
+      this.fetchManagementTimeseries(connection.endpoint, apiKey, 'cost'),
     ]);
 
-    const fallbackPeriod = zenmuxUsageDateRange();
+    const fallbackPeriod = managementUsageDateRange();
 
     return {
-      records: buildZenmuxUsageRecords(tokens.data, costs.data),
+      records: buildManagementUsageRecords(tokens.data, costs.data),
       source: 'zenmux-management-statistics',
       fetchedAt: new Date().toISOString(),
       period: {
@@ -2292,8 +2365,8 @@ export class MaasService {
         );
       }
       throw new Error(
-        `OpenRouter usage API returned ${response.status}: ${getErrorMessage(
-          body as ZenmuxErrorBody | null,
+        `OpenRouter usage API returned ${response.status}: ${getApiErrorMessage(
+          body as ApiErrorBody | null,
           response.statusText || 'Request failed.'
         )}`
       );
@@ -2304,18 +2377,18 @@ export class MaasService {
     return body;
   }
 
-  private async fetchZenmuxTimeseries(
+  private async fetchManagementTimeseries(
     endpoint: string,
     apiKey: string,
-    metric: ZenmuxStatisticsMetric
-  ): Promise<ZenmuxTimeseriesResponse> {
-    const { startingAt, endingAt } = zenmuxUsageDateRange();
-    const url = zenmuxManagementUrl(endpoint, 'statistics/timeseries');
+    metric: ManagementStatisticsMetric
+  ): Promise<ManagementTimeseriesResponse> {
+    const { startingAt, endingAt } = managementUsageDateRange();
+    const url = managementApiUrl(endpoint, 'statistics/timeseries');
     url.searchParams.set('metric', metric);
     url.searchParams.set('bucket_width', '1d');
     url.searchParams.set('starting_at', startingAt);
     url.searchParams.set('ending_at', endingAt);
-    url.searchParams.set('limit', String(ZENMUX_MAX_MODELS_PER_BUCKET));
+    url.searchParams.set('limit', String(MANAGEMENT_MAX_MODELS_PER_BUCKET));
 
     const response = await fetch(url, {
       headers: {
@@ -2323,9 +2396,9 @@ export class MaasService {
       },
     });
 
-    let body: ZenmuxTimeseriesResponse | null = null;
+    let body: ManagementTimeseriesResponse | null = null;
     try {
-      body = (await response.json()) as ZenmuxTimeseriesResponse;
+      body = (await response.json()) as ManagementTimeseriesResponse;
     } catch {
       body = null;
     }
@@ -2338,7 +2411,7 @@ export class MaasService {
       }
 
       throw new Error(
-        `ZenMux usage API returned ${response.status}: ${getErrorMessage(
+        `ZenMux usage API returned ${response.status}: ${getApiErrorMessage(
           body,
           response.statusText || 'Request failed.'
         )}`
@@ -2346,7 +2419,7 @@ export class MaasService {
     }
 
     if (body?.success === false) {
-      throw new Error(getErrorMessage(body, 'ZenMux usage API rejected the request.'));
+      throw new Error(getApiErrorMessage(body, 'ZenMux usage API rejected the request.'));
     }
 
     if (!Array.isArray(body?.data?.series)) {
@@ -2355,54 +2428,11 @@ export class MaasService {
 
     return body;
   }
-
-  private async fetchZenmuxCatalogTextModels(): Promise<string[]> {
-    const base = `${MAAS_PLATFORMS.zenmux.defaultEndpoint.replace(/\/+$/, '')}/`;
-    const url = new URL('models', base);
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), ZENMUX_MODEL_CATALOG_TIMEOUT_MS);
-
-    try {
-      const response = await fetch(url, { signal: controller.signal });
-      let body: ZenmuxModelsResponse | null = null;
-      try {
-        body = (await response.json()) as ZenmuxModelsResponse;
-      } catch {
-        body = null;
-      }
-
-      if (!response.ok) {
-        throw new Error(
-          `ZenMux model catalog returned ${response.status}: ${getErrorMessage(
-            body,
-            response.statusText || 'Request failed.'
-          )}`
-        );
-      }
-
-      if (!Array.isArray(body?.data)) {
-        throw new Error('ZenMux model catalog did not return a model list.');
-      }
-
-      const models = new Set<string>();
-      for (const model of body.data) {
-        const id = model.id?.trim();
-        if (!id) continue;
-        if (model.object && model.object !== 'model') continue;
-        if (!isTextCatalogModel(model)) continue;
-        models.add(id);
-      }
-
-      return [...models];
-    } finally {
-      clearTimeout(timer);
-    }
-  }
 }
 
 export const maasService = new MaasService();
 
-function isTextCatalogModel(model: ZenmuxCatalogModel): boolean {
+function isTextModel(model: MaasPlatformModel): boolean {
   const outputModalities = model.output_modalities ?? [];
   if (outputModalities.length > 0 && !outputModalities.includes('text')) return false;
 

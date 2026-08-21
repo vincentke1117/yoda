@@ -84,7 +84,7 @@ export const modalRegistry = {
   feedbackModal: createModal(FeedbackModal),
   addMaasProfileModal: createModal(AddMaasProfileModal, { size: 'sm' }),
   maasConnectionTestModal: createModal(MaasConnectionTestModal, { size: 'md' }),
-  zenmuxUsageModal: createModal(ZenmuxUsageModal, { size: 'lg' }),
+  maasUsageModal: createModal(ZenmuxUsageModal, { size: 'lg' }),
   mcpServerModal: createModal(McpModal),
   createSkillModal: createModal(CreateSkillModal),
   reviseSkillModal: createModal(ReviseSkillModal, { size: 'lg' }),

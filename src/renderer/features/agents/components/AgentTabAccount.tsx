@@ -34,28 +34,6 @@ type AgentTabAccountProps = {
   agentId: RuntimeId;
 };
 
-function findConnection(
-  connections: MaasConnection[] | undefined,
-  platformId: MaasConnection['platformId']
-): MaasConnection {
-  const platform = getMaasPlatformDefinition(platformId);
-  return (
-    connections?.find((connection) => connection.platformId === platformId) ?? {
-      platformId,
-      displayName: platform.name,
-      endpoint: platform.defaultEndpoint,
-      keyFingerprint: null,
-      inferenceKeyFingerprint: null,
-      connectedAt: null,
-      lastCheckedAt: null,
-      lastTest: null,
-      configured: false,
-      connected: false,
-      error: null,
-    }
-  );
-}
-
 function formatCompactNumber(value: number | null): string {
   if (typeof value !== 'number') return '-';
   return new Intl.NumberFormat(undefined, {
@@ -163,7 +141,15 @@ export const AgentTabAccount: React.FC<AgentTabAccountProps> = observer(function
     staleTime: 5 * 60_000,
   });
 
-  const zenmuxConnection = findConnection(maasConnections.data, 'zenmux');
+  const managementConnection =
+    selectedMaasConnection?.connected &&
+    getMaasPlatformDefinition(selectedMaasConnection.platformId).supportsManagementStatistics
+      ? selectedMaasConnection
+      : (maasConnections.data?.find(
+          (connection) =>
+            connection.connected &&
+            getMaasPlatformDefinition(connection.platformId).supportsManagementStatistics
+        ) ?? null);
   const handleSelectAuthProvider = useCallback(
     (authProvider: AgentAccountProviderId) => {
       selectAuthProvider(authProvider);
@@ -406,7 +392,7 @@ export const AgentTabAccount: React.FC<AgentTabAccountProps> = observer(function
             >
               <div className="space-y-3">
                 <MaasConnectionList connections={connectedMaasConnections} />
-                <MaasUsageHandoffPanel connected={zenmuxConnection.connected} />
+                <MaasUsageHandoffPanel connected={managementConnection?.connected ?? false} />
               </div>
             </AuthSourceRow>
           </div>

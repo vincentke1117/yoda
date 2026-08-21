@@ -5,12 +5,12 @@ import { and, desc, eq } from 'drizzle-orm';
 import { app, clipboard, dialog, nativeImage } from 'electron';
 import {
   AI_LAB_CODEX_MODEL,
-  AI_LAB_DEFAULT_ZENMUX_MODEL,
+  AI_LAB_DEFAULT_IMAGE_MODEL,
   type AiLabAppPreviewResult,
   type AiLabEngineId,
   type AiLabEngineStatus,
+  type AiLabImageModel,
   type AiLabUserApp,
-  type AiLabZenmuxModel,
   type AssignAiLabAppProjectInput,
   type LogoGenerationInput,
   type LogoGenerationListItem,
@@ -28,12 +28,14 @@ import {
   type AiLabImageEditResult,
   type AiLabRegenerateImageInput,
 } from '@shared/ai-lab-bridge';
+import { getMaasPlatformDefinition, type MaasPlatformId } from '@shared/maas';
 import { projectDisplayName } from '@shared/projects';
 import { resolveCommandPath } from '@main/core/dependencies/probe';
 import { LocalExecutionContext } from '@main/core/execution-context/local-execution-context';
 import { maasService } from '@main/core/maas/maas-service';
 import { getProjectById } from '@main/core/projects/operations/getProjects';
 import { projectManager } from '@main/core/projects/project-manager';
+import { appSettingsService } from '@main/core/settings/settings-service';
 import { db } from '@main/db/client';
 import { aiLabGenerations } from '@main/db/schema';
 import { log } from '@main/lib/logger';
@@ -55,7 +57,7 @@ import { AiLabAppStore } from './app-store';
 import { AiLabBuildJobStore } from './build-job-store';
 import { generateCodexImages } from './codex-image-engine';
 import { buildLogoPrompt } from './logo-prompt';
-import { editZenmuxImage, generateZenmuxImages } from './zenmux-image-client';
+import { editMaasImage, generateMaasImages } from './maas-image-client';
 
 const HISTORY_LIMIT = 60;
 const APP_IMAGE_EDIT_HISTORY_LIMIT = 24;
@@ -144,14 +146,22 @@ export class AiLabService {
     if (this.activeAppImageEdits >= 2) {
       throw new Error('Too many AI Lab images are generating. Wait for one to finish.');
     }
-    const credentials = await maasService.getInferenceCredentials('zenmux');
+    const imagePlatformId = await this.resolveImagePlatformId();
+    if (!imagePlatformId) {
+      throw new Error(
+        'No image-capable model access platform is connected. Connect one in Model access first.'
+      );
+    }
+    const credentials = await maasService.getInferenceCredentials(imagePlatformId);
     if (!credentials) {
-      throw new Error('ZenMux is not connected. Add a ZenMux inference API key first.');
+      throw new Error(
+        'The image edit platform is not connected. Connect it in Model access first.'
+      );
     }
 
     this.activeAppImageEdits += 1;
     try {
-      const buffer = await editZenmuxImage({
+      const buffer = await editMaasImage({
         ...credentials,
         appId: normalized.appId,
         prompt: normalized.prompt,
@@ -172,7 +182,7 @@ export class AiLabService {
         brandName: app.name,
         description: app.description,
         styleId: app.id,
-        engine: 'zenmux',
+        engine: imagePlatformId,
         model: AI_LAB_APP_IMAGE_MODEL,
         prompt: normalized.prompt,
         status: 'succeeded',
@@ -381,23 +391,47 @@ export class AiLabService {
     }
   }
 
+  /**
+   * The MaaS platform to use for image generation: the selected platform when it
+   * is image-capable, otherwise the first connected image-capable platform.
+   */
+  private async resolveImagePlatformId(): Promise<MaasPlatformId | null> {
+    const settings = await appSettingsService.get('maas');
+    const candidateIds: MaasPlatformId[] = [];
+    if (settings.selectedPlatformId) candidateIds.push(settings.selectedPlatformId);
+    for (const connection of settings.connections) {
+      candidateIds.push(connection.platformId);
+    }
+
+    // `getInferenceCredentials` resolves the stored key, so unconnected platforms
+    // are filtered out here; the selected platform wins when it is connected.
+    for (const platformId of candidateIds) {
+      if (!getMaasPlatformDefinition(platformId).capabilities.includes('image')) continue;
+      if (await maasService.getInferenceCredentials(platformId)) return platformId;
+    }
+    return null;
+  }
+
   async listEngines(): Promise<AiLabEngineStatus[]> {
-    const [zenmuxCredentials, codexPath] = await Promise.all([
-      maasService.getInferenceCredentials('zenmux'),
+    const [imagePlatformId, codexPath] = await Promise.all([
+      this.resolveImagePlatformId(),
       resolveCommandPath('codex', new LocalExecutionContext()),
     ]);
-    return [
-      {
-        id: 'zenmux',
-        available: Boolean(zenmuxCredentials),
-        reason: zenmuxCredentials ? null : 'not-connected',
-      },
-      {
-        id: 'codex',
-        available: Boolean(codexPath),
-        reason: codexPath ? null : 'cli-missing',
-      },
-    ];
+    const engines: AiLabEngineStatus[] = [];
+    if (imagePlatformId) {
+      const credentials = await maasService.getInferenceCredentials(imagePlatformId);
+      engines.push({
+        id: imagePlatformId,
+        available: Boolean(credentials),
+        reason: credentials ? null : 'not-connected',
+      });
+    }
+    engines.push({
+      id: 'codex',
+      available: Boolean(codexPath),
+      reason: codexPath ? null : 'cli-missing',
+    });
+    return engines;
   }
 
   async generateLogo(input: LogoGenerationInput): Promise<LogoGenerationListItem> {
@@ -412,7 +446,11 @@ export class AiLabService {
       styleId: input.styleId,
     });
     const model =
-      input.engine === 'codex' ? AI_LAB_CODEX_MODEL : (input.model ?? AI_LAB_DEFAULT_ZENMUX_MODEL);
+      input.engine === 'codex'
+        ? AI_LAB_CODEX_MODEL
+        : (input.model ??
+          getMaasPlatformDefinition(input.engine).defaultImageModel ??
+          AI_LAB_DEFAULT_IMAGE_MODEL);
 
     const startedAt = Date.now();
     let buffers: Buffer[] = [];
@@ -510,16 +548,19 @@ export class AiLabService {
     count: number,
     id: string
   ): Promise<Buffer[]> {
-    if (engine === 'zenmux') {
-      const credentials = await maasService.getInferenceCredentials('zenmux');
+    if (engine !== 'codex') {
+      const credentials = await maasService.getInferenceCredentials(engine);
       if (!credentials) {
-        throw new Error('ZenMux is not connected. Add a ZenMux API key first.');
+        throw new Error(
+          'The image generation platform is not connected. Connect it in Model access first.'
+        );
       }
-      return generateZenmuxImages({
+      return generateMaasImages({
         ...credentials,
-        model: model as AiLabZenmuxModel,
+        model: model as AiLabImageModel,
         prompt,
         count,
+        vertexImageEndpoint: getMaasPlatformDefinition(engine).vertexImageEndpoint === true,
       });
     }
 

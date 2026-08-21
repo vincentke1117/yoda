@@ -1,7 +1,8 @@
 import type { RuntimeCustomConfig } from '@shared/app-settings';
 import {
-  getMaasPlatformTemplateId,
+  getMaasPlatformDefinition,
   resolveMaasEnvKey,
+  resolveModelNamespace,
   supportsMaasPlatformForRuntime,
   type MaasPlatformId,
   type MaasRuntimeBinding,
@@ -49,15 +50,11 @@ export function resolveMaasRuntimeEnv(
   }
 
   let endpoint = credentials.endpoint.replace(/\/+$/, '');
-  const templateId = getMaasPlatformTemplateId(credentials.platformId);
-  if (runtimeId === 'claude' && templateId === 'zenmux') {
-    endpoint = endpoint.replace(/\/api\/v1$/, '/api/anthropic');
-  }
-  if (runtimeId === 'claude' && templateId === 'openrouter') {
-    endpoint = endpoint.replace(/\/api\/v1$/, '/api');
-  }
-  if (runtimeId === 'claude' && templateId !== 'zenmux' && templateId !== 'openrouter') {
+  const platform = getMaasPlatformDefinition(credentials.platformId);
+  if (runtimeId === 'claude') {
     endpoint = endpoint.replace(/\/v1$/, '');
+    const suffix = platform.claudeEndpointRewrite ?? '';
+    if (suffix) endpoint = `${endpoint}${suffix}`;
   }
 
   const env = Object.fromEntries([
@@ -66,11 +63,7 @@ export function resolveMaasRuntimeEnv(
   ]);
   if (runtimeId === 'claude') {
     env.ANTHROPIC_API_KEY = '';
-  }
-  if (runtimeId === 'claude' && templateId === 'zenmux') {
-    env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = '1';
-    env.CLAUDE_CODE_ATTRIBUTION_HEADER = '0';
-    env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = '1';
+    Object.assign(env, platform.claudeEnvFlags ?? {});
   }
   return env;
 }
@@ -122,16 +115,21 @@ export function resolveCodexOfficialRuntimeArgs(): string[] {
 }
 
 /**
- * Codex normally uses provider-native model ids such as `gpt-5.6-sol`, while
- * ZenMux exposes the same model as `openai/gpt-5.6-sol`. Keep the native id for
- * direct providers and restore the catalog prefix only at the ZenMux boundary.
+ * Codex normally uses provider-native model ids such as `gpt-5.6-sol`, while a
+ * prefixed-namespace platform (e.g. ZenMux) exposes the same model as
+ * `openai/gpt-5.6-sol`. Keep the native id for direct providers and restore the
+ * catalog prefix only at the prefixed-namespace boundary.
  */
 export function resolveCodexMaasModelId(
   credentials: MaasRuntimeCredentials,
   model: string
 ): string {
   const normalized = model.trim();
-  if (!normalized || normalized.includes('/') || !usesZenmuxModelNamespace(credentials)) {
+  if (
+    !normalized ||
+    normalized.includes('/') ||
+    resolveModelNamespace(credentials.platformId, credentials.endpoint) !== 'prefixed'
+  ) {
     return normalized;
   }
 
@@ -171,16 +169,6 @@ export function rewriteCodexMaasModelArgs(
     }
   }
   return rewritten;
-}
-
-function usesZenmuxModelNamespace(credentials: MaasRuntimeCredentials): boolean {
-  if (getMaasPlatformTemplateId(credentials.platformId) === 'zenmux') return true;
-  try {
-    const hostname = new URL(credentials.endpoint).hostname.toLowerCase();
-    return hostname === 'zenmux.ai' || hostname.endsWith('.zenmux.ai');
-  } catch {
-    return false;
-  }
 }
 
 function formatTomlString(value: string): string {

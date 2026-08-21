@@ -104,7 +104,12 @@ describe('CliProxyApiManagedService', () => {
 
     expect(result).toMatchObject({
       success: true,
-      status: { state: 'running', managed: true, modelCount: 2 },
+      status: {
+        state: 'running',
+        managed: true,
+        modelCount: 2,
+        models: ['claude', 'gemini'],
+      },
     });
     expect(connectPlatform).toHaveBeenCalledWith({
       platformId: 'cliproxyapi',

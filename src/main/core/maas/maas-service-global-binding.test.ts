@@ -1522,3 +1522,95 @@ describe('stored MaaS keys', () => {
     ]);
   });
 });
+
+describe('platform model enumeration', () => {
+  const cliproxyConnection: MaasSettings['connections'][number] = {
+    platformId: 'cliproxyapi',
+    displayName: 'CLIProxyAPI',
+    endpoint: 'http://127.0.0.1:8317/v1',
+    keyFingerprint: 'sk...test',
+    inferenceKeyFingerprint: null,
+    accountKeyFingerprint: null,
+    connectedAt: '2026-08-20T00:00:00.000Z',
+    lastCheckedAt: null,
+    lastTest: null,
+  };
+
+  function modelsResponse(
+    data: Array<{
+      id: string;
+      object?: string;
+      input_modalities?: string[];
+      output_modalities?: string[];
+    }>
+  ): Response {
+    return new Response(JSON.stringify({ data }), { status: 200 });
+  }
+
+  beforeEach(() => {
+    mocks.settings = {
+      selectedPlatformId: 'cliproxyapi',
+      connections: [cliproxyConnection],
+      runtimeBindings: [],
+    };
+    mocks.secrets = { 'yoda-maas-token:cliproxyapi': 'sk-test' };
+    mocks.netFetch.mockReset();
+    mocks.netFetch.mockResolvedValue(new Response('{}', { status: 200 }));
+  });
+
+  it('lists text-capable models from the connected channel via net.fetch', async () => {
+    mocks.netFetch.mockResolvedValue(
+      modelsResponse([
+        { id: 'gpt-5.6-sol', output_modalities: ['text'] },
+        { id: 'gpt-image-2', output_modalities: ['image'] },
+      ])
+    );
+
+    await expect(new MaasService().listPlatformModels('cliproxyapi')).resolves.toEqual([
+      'gpt-5.6-sol',
+    ]);
+    expect(mocks.netFetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:8317/v1/models',
+      expect.objectContaining({
+        headers: { Authorization: 'Bearer sk-test' },
+      })
+    );
+  });
+
+  it('returns all models when includeNonText is set', async () => {
+    mocks.netFetch.mockResolvedValue(
+      modelsResponse([
+        { id: 'gpt-5.6-sol', output_modalities: ['text'] },
+        { id: 'gpt-image-2', output_modalities: ['image'] },
+      ])
+    );
+
+    await expect(
+      new MaasService().listPlatformModels('cliproxyapi', { includeNonText: true })
+    ).resolves.toEqual(['gpt-5.6-sol', 'gpt-image-2']);
+  });
+
+  it('returns an empty list when no credential is stored', async () => {
+    delete mocks.secrets['yoda-maas-token:cliproxyapi'];
+
+    await expect(new MaasService().listPlatformModels('cliproxyapi')).resolves.toEqual([]);
+    expect(mocks.netFetch).not.toHaveBeenCalled();
+  });
+
+  it('returns an empty list when the platform is not connected', async () => {
+    mocks.settings.connections = [];
+
+    await expect(new MaasService().listPlatformModels('cliproxyapi')).resolves.toEqual([]);
+  });
+
+  it('resolves the active platform through getActivePlatformModels', async () => {
+    mocks.settings.selectedPlatformId = 'cliproxyapi';
+    mocks.netFetch.mockResolvedValue(modelsResponse([{ id: 'gpt-5.6-sol' }]));
+
+    await expect(new MaasService().getActivePlatformModels()).resolves.toEqual({
+      platformId: 'cliproxyapi',
+      displayName: 'CLIProxyAPI',
+      models: ['gpt-5.6-sol'],
+    });
+  });
+});

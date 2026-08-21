@@ -71,6 +71,7 @@ export const GLOBAL_LLM_MODEL_DISCOVERY_SOURCE_IDS = [
   'custom',
   'aiGateway',
   'runtimeCatalog',
+  'channel',
 ] as const;
 
 export type GlobalLlmModelDiscoverySource = (typeof GLOBAL_LLM_MODEL_DISCOVERY_SOURCE_IDS)[number];

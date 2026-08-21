@@ -4,7 +4,12 @@ export const MAX_CUSTOM_MODELS_PER_PROVIDER = 40;
 export const MAX_CUSTOM_MODEL_PROVIDERS = 50;
 export const MODEL_PROVIDER_AUTO_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1_000;
 
-export const MODEL_PROVIDER_CATALOG_SOURCES = ['official', 'aggregate', 'custom'] as const;
+export const MODEL_PROVIDER_CATALOG_SOURCES = [
+  'official',
+  'aggregate',
+  'custom',
+  'channel',
+] as const;
 export type ModelProviderCatalogSource = (typeof MODEL_PROVIDER_CATALOG_SOURCES)[number];
 
 export const MODEL_PROVIDER_UPDATE_STATUSES = [
@@ -131,6 +136,8 @@ export type ModelProviderCatalogGroup = {
   officialApiConfigured: boolean;
   updateStatus: ModelProviderUpdateStatus;
   updateError?: string;
+  /** The live model list of the active MaaS channel; ids are gateway-native. */
+  channel?: boolean;
 };
 
 export type ModelProviderCatalogResult = {

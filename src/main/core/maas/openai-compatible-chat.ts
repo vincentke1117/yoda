@@ -1,8 +1,4 @@
-import {
-  getMaasPlatformTemplateId,
-  type MaasPlatformConnection,
-  type MaasPlatformId,
-} from '@shared/maas';
+import { type MaasPlatformConnection, type MaasPlatformId } from '@shared/maas';
 import { log } from '@main/lib/logger';
 
 const SECRET_PREFIX = 'yoda-maas-token';
@@ -132,14 +128,8 @@ async function loadActiveConnection(): Promise<MaasPlatformConnection | undefine
 
 async function inferModel(platformId: MaasPlatformId): Promise<string | undefined> {
   try {
-    if (getMaasPlatformTemplateId(platformId) === 'zenmux') {
-      const { maasService } = await import('./maas-service');
-      return (
-        (await maasService.listTextModelCandidates())[0] ??
-        (await maasService.listZenmuxCatalogTextModelCandidates())[0]
-      );
-    }
-    return undefined;
+    const { maasService } = await import('./maas-service');
+    return (await maasService.listPlatformModels(platformId))[0];
   } catch (error) {
     log.warn('openai-compatible-chat: model inference failed', { error: String(error) });
     return undefined;

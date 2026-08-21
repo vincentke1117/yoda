@@ -3,7 +3,6 @@ import type { RuntimeId } from './runtime-registry';
 export const RUNTIME_MODEL_CANDIDATE_CACHE_SOURCES = [
   'catalog',
   'officialApi',
-  'zenmux',
   'docs',
   'cli',
 ] as const;

@@ -355,7 +355,7 @@ export const MaasView: React.FC<{
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
   const managedGatewayStarsQuery = useMaasManagedGatewayStars();
-  const showZenmuxUsage = useShowModal('zenmuxUsageModal');
+  const showMaasUsage = useShowModal('maasUsageModal');
   const showAddProfile = useShowModal('addMaasProfileModal');
   const showConnectionTest = useShowModal('maasConnectionTestModal');
   const [initialRequestedPlatformId] = useState<MaasPlatformId | undefined>(() =>
@@ -516,7 +516,6 @@ export const MaasView: React.FC<{
         {platformIds.map((platformId) => {
           const connection = findConnection(connections, platformId, draftProfiles.get(platformId));
           const isDraft = !connection.configured && draftPlatformIds.includes(platformId);
-          const templateId = getMaasPlatformTemplateId(platformId);
           const enabled = Boolean(
             globalBinding.data?.enabled && globalBinding.data.platformId === platformId
           );
@@ -530,8 +529,9 @@ export const MaasView: React.FC<{
           );
           const itemProps = {
             connection,
-            onOpenUsage:
-              templateId === 'zenmux' ? () => showZenmuxUsage({ platformId }) : undefined,
+            onOpenUsage: getMaasPlatformDefinition(platformId).supportsManagementStatistics
+              ? () => showMaasUsage({ platformId })
+              : undefined,
             onOpenTest: () =>
               showConnectionTest({
                 platformId,
@@ -803,7 +803,6 @@ const PlatformAccordionItem: React.FC<
   const disconnectMutation = useDisconnectMaasPlatform();
   const duplicateMutation = useDuplicateMaasProfile();
   const platform = getMaasPlatformDefinition(connection.platformId);
-  const templateId = getMaasPlatformTemplateId(connection.platformId);
   const formId = `maas-profile-form-${useId()}`;
   const [editorState, setEditorState] = useState<ConnectionEditorState>(
     EMPTY_CONNECTION_EDITOR_STATE
@@ -971,7 +970,8 @@ const PlatformAccordionItem: React.FC<
                 {t('maas.profile.duplicate')}
               </DropdownMenuItem>
             ) : null}
-            {templateId === 'zenmux' && onOpenUsage ? (
+            {getMaasPlatformDefinition(connection.platformId).supportsManagementStatistics &&
+            onOpenUsage ? (
               <DropdownMenuItem onClick={onOpenUsage}>
                 <Activity className="size-3.5" />
                 {t('maas.records.viewUsage')}
@@ -1186,8 +1186,10 @@ const ConnectionPanel: React.FC<{
   const { toast } = useToast();
   const connectMutation = useConnectMaasPlatform();
   const templateId = getMaasPlatformTemplateId(connection.platformId);
-  const isZenmux = templateId === 'zenmux';
-  const supportsAccountUsageCredential = !isZenmux && templateId !== 'openrouter';
+  const usesSeparateInferenceKey = Boolean(
+    getMaasPlatformDefinition(connection.platformId).separateInferenceKey
+  );
+  const supportsAccountUsageCredential = !usesSeparateInferenceKey && templateId !== 'openrouter';
   const [apiKey, setApiKey] = useState('');
   const [inferenceApiKey, setInferenceApiKey] = useState('');
   const [accountAccessToken, setAccountAccessToken] = useState('');
@@ -1214,9 +1216,11 @@ const ConnectionPanel: React.FC<{
   const saving = connectMutation.isPending;
   const hasStoredClientKey =
     connection.connected &&
-    Boolean(isZenmux ? connection.inferenceKeyFingerprint : connection.keyFingerprint);
-  const clientKey = isZenmux ? inferenceApiKey : apiKey;
-  const replacingClientKey = isZenmux ? replacingInferenceKey : replacingKey;
+    Boolean(
+      usesSeparateInferenceKey ? connection.inferenceKeyFingerprint : connection.keyFingerprint
+    );
+  const clientKey = usesSeparateInferenceKey ? inferenceApiKey : apiKey;
+  const replacingClientKey = usesSeparateInferenceKey ? replacingInferenceKey : replacingKey;
   const hasClientKey = Boolean(clientKey.trim() || (hasStoredClientKey && !replacingClientKey));
   const basicConfigurationComplete = Boolean(displayName.trim() && endpoint.trim() && hasClientKey);
   const savedEnvKey = connection.envKey ?? generatedEnvKey;
@@ -1226,11 +1230,11 @@ const ConnectionPanel: React.FC<{
       clientKey.trim() ||
       replacingClientKey ||
       envKey.trim() !== savedEnvKey ||
-      (isZenmux && (apiKey.trim() || replacingKey)) ||
+      (usesSeparateInferenceKey && (apiKey.trim() || replacingKey)) ||
       (supportsAccountUsageCredential && (accountAccessToken.trim() || replacingAccountKey))
   );
   const canSave = basicConfigurationComplete && isValidMaasEnvKey(envKey.trim());
-  const clientApiKeyPlaceholder = isZenmux
+  const clientApiKeyPlaceholder = usesSeparateInferenceKey
     ? t('maas.connection.inferenceApiKeyPlaceholder')
     : templateId === 'litellm'
       ? t('maas.connection.litellmKeyPlaceholder')
@@ -1360,8 +1364,8 @@ const ConnectionPanel: React.FC<{
     setReplacingAccountKey(false);
   };
 
-  const clientKeyKind: MaasApiKeyKind = isZenmux ? 'inference' : 'primary';
-  const clientKeyFingerprint = isZenmux
+  const clientKeyKind: MaasApiKeyKind = usesSeparateInferenceKey ? 'inference' : 'primary';
+  const clientKeyFingerprint = usesSeparateInferenceKey
     ? connection.inferenceKeyFingerprint
     : connection.keyFingerprint;
   return (
@@ -1402,10 +1406,12 @@ const ConnectionPanel: React.FC<{
               placeholder={clientApiKeyPlaceholder}
               replacing={replacingClientKey}
               copying={copyingKeyKind === clientKeyKind}
-              onValueChange={isZenmux ? setInferenceApiKey : setApiKey}
+              onValueChange={usesSeparateInferenceKey ? setInferenceApiKey : setApiKey}
               onCopy={() => handleCopyStoredKey(clientKeyKind)}
-              onReplace={isZenmux ? handleReplaceInferenceKey : handleReplaceKey}
-              onCancelReplace={isZenmux ? handleCancelReplaceInferenceKey : handleCancelReplaceKey}
+              onReplace={usesSeparateInferenceKey ? handleReplaceInferenceKey : handleReplaceKey}
+              onCancelReplace={
+                usesSeparateInferenceKey ? handleCancelReplaceInferenceKey : handleCancelReplaceKey
+              }
             />
           </label>
         </div>
@@ -1429,7 +1435,7 @@ const ConnectionPanel: React.FC<{
                 style={{ overflowWrap: 'anywhere' }}
               >
                 {t(
-                  isZenmux
+                  usesSeparateInferenceKey
                     ? 'maas.connection.advancedSummaryWithManagement'
                     : supportsAccountUsageCredential
                       ? 'maas.connection.advancedSummaryWithAccountUsage'
@@ -1455,7 +1461,7 @@ const ConnectionPanel: React.FC<{
                     }}
                   />
                 </label>
-                {isZenmux ? (
+                {usesSeparateInferenceKey ? (
                   <label className="grid gap-1.5 @3xl:col-span-2">
                     <span className="text-xs font-medium text-muted-foreground">
                       {t('maas.connection.managementApiKey')}

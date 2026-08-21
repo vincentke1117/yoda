@@ -25,12 +25,13 @@ type SourceLoadResult = {
 export async function discoverGlobalLlmModels(
   input: GlobalLlmModelDiscoveryInput
 ): Promise<GlobalLlmModelDiscoveryResult> {
-  const [gatewayResult, customResult, runtimeCatalogResult] = await Promise.all([
+  const [gatewayResult, customResult, runtimeCatalogResult, channelResult] = await Promise.all([
     loadGatewayModels(input),
     loadCustomModels(input),
     loadRuntimeCatalogModels(input),
+    loadChannelModels(input),
   ]);
-  const results = [customResult, gatewayResult, runtimeCatalogResult];
+  const results = [customResult, gatewayResult, runtimeCatalogResult, channelResult];
   const models = mergeModelCandidates(results);
 
   return {
@@ -52,6 +53,25 @@ async function loadCustomModels(input: GlobalLlmModelDiscoveryInput): Promise<So
   } catch (error) {
     return {
       source: 'custom',
+      models: [],
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+async function loadChannelModels(input: GlobalLlmModelDiscoveryInput): Promise<SourceLoadResult> {
+  try {
+    if (!input.maasPlatformId) return { source: 'channel', models: [] };
+    const { maasService } = await import('@main/core/maas/maas-service');
+    return {
+      source: 'channel',
+      models: await maasService.listPlatformModels(input.maasPlatformId, {
+        forceRefresh: input.forceRefresh,
+      }),
+    };
+  } catch (error) {
+    return {
+      source: 'channel',
       models: [],
       error: error instanceof Error ? error.message : String(error),
     };

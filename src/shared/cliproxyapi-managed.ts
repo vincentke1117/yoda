@@ -22,6 +22,7 @@ export type CliProxyApiManagedStatus = {
   bundledVersion: string;
   installedVersion: string | null;
   modelCount: number | null;
+  models: string[] | null;
 };
 
 export type CliProxyApiManagedActionResult = {

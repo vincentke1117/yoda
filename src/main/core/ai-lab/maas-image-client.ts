@@ -1,4 +1,4 @@
-import type { AiLabZenmuxModel } from '@shared/ai-lab';
+import type { AiLabImageModel } from '@shared/ai-lab';
 import {
   AI_LAB_APP_IMAGE_MODEL,
   type AiLabImageEditQuality,
@@ -25,7 +25,7 @@ type VertexGenerateContentResponse = ApiErrorBody & {
 };
 
 /** Restyles a source image through ZenMux's OpenAI-compatible multipart edit protocol. */
-export async function editZenmuxImage(input: {
+export async function editMaasImage(input: {
   endpoint: string;
   apiKey: string;
   appId: string;
@@ -39,7 +39,7 @@ export async function editZenmuxImage(input: {
   const logId = await aiLogService.start({
     purpose: 'app-image-edit',
     mode: 'api',
-    runtime: 'zenmux',
+    runtime: 'maas',
     model: AI_LAB_APP_IMAGE_MODEL,
     command: url,
     prompt: input.prompt,
@@ -81,31 +81,34 @@ export async function editZenmuxImage(input: {
 }
 
 /**
- * Generates logo candidates through ZenMux. OpenAI image models use the
- * OpenAI-compatible Images API (supports `n` natively); Google image models
- * are only exposed through ZenMux's Vertex AI protocol, which returns one
- * image per request, so multiple candidates fan out as parallel requests.
+ * Generates logo candidates through an image-capable MaaS platform. OpenAI
+ * image models use the OpenAI-compatible Images API (supports `n` natively);
+ * Google image models are only exposed through the platform's Vertex AI
+ * protocol when it declares `vertexImageEndpoint`, which returns one image per
+ * request, so multiple candidates fan out as parallel requests.
  */
-export async function generateZenmuxImages(input: {
+export async function generateMaasImages(input: {
   endpoint: string;
   apiKey: string;
-  model: AiLabZenmuxModel;
+  model: AiLabImageModel;
   prompt: string;
   count: number;
+  vertexImageEndpoint?: boolean;
 }): Promise<Buffer[]> {
   const logId = await aiLogService.start({
     purpose: 'logo-generation',
     mode: 'api',
-    runtime: 'zenmux',
+    runtime: 'maas',
     model: input.model,
     command: input.endpoint,
     prompt: input.prompt,
     metadata: { count: String(input.count) },
   });
   try {
-    const buffers = input.model.startsWith('openai/')
-      ? await generateViaImagesApi(input)
-      : await Promise.all(Array.from({ length: input.count }, () => generateViaVertex(input)));
+    const buffers =
+      input.model.startsWith('openai/') || !input.vertexImageEndpoint
+        ? await generateViaImagesApi(input)
+        : await Promise.all(Array.from({ length: input.count }, () => generateViaVertex(input)));
     await aiLogService.finish(logId, {
       status: 'succeeded',
       output: `${buffers.length} image(s) generated.`,
@@ -123,7 +126,7 @@ export async function generateZenmuxImages(input: {
 async function generateViaImagesApi(input: {
   endpoint: string;
   apiKey: string;
-  model: AiLabZenmuxModel;
+  model: AiLabImageModel;
   prompt: string;
   count: number;
 }): Promise<Buffer[]> {
@@ -148,7 +151,7 @@ async function generateViaImagesApi(input: {
 async function generateViaVertex(input: {
   endpoint: string;
   apiKey: string;
-  model: AiLabZenmuxModel;
+  model: AiLabImageModel;
   prompt: string;
 }): Promise<Buffer> {
   // Default endpoint https://zenmux.ai/api/v1 → Vertex base https://zenmux.ai/api/vertex-ai

@@ -95,7 +95,7 @@ type TokenKeyResponse = {
 };
 
 type ModelsResponse = {
-  data?: unknown[];
+  data?: Array<{ id?: string }>;
 };
 
 function composeFileContents(): string {
@@ -162,7 +162,7 @@ export class NewApiManagedService {
         initialized: setup.initialized,
         credentialsAvailable: Boolean(adminPassword),
         docker,
-        modelCount: installed && setup.initialized ? await this.getModelCount() : null,
+        models: installed && setup.initialized ? (await this.getModels()).models : null,
       });
     }
 
@@ -174,7 +174,7 @@ export class NewApiManagedService {
         initialized: false,
         credentialsAvailable: Boolean(adminPassword),
         docker,
-        modelCount: null,
+        models: null,
       });
     }
 
@@ -185,7 +185,7 @@ export class NewApiManagedService {
         initialized: false,
         credentialsAvailable: Boolean(adminPassword),
         docker,
-        modelCount: null,
+        models: null,
       });
     }
 
@@ -195,7 +195,7 @@ export class NewApiManagedService {
       initialized: false,
       credentialsAvailable: Boolean(adminPassword),
       docker,
-      modelCount: null,
+      models: null,
     });
   }
 
@@ -475,20 +475,24 @@ export class NewApiManagedService {
     }
   }
 
-  private async getModelCount(): Promise<number | null> {
+  private async getModels(): Promise<{ count: number | null; models: string[] | null }> {
     const apiKey = await this.secretStore.getSecret(API_KEY_SECRET);
-    if (!apiKey) return null;
+    if (!apiKey) return { count: null, models: null };
 
     try {
       const response = await this.fetchApi(`${NEW_API_MANAGED_ENDPOINT}/models`, {
         headers: { Authorization: `Bearer ${apiKey}` },
         signal: AbortSignal.timeout(STATUS_TIMEOUT_MS),
       });
-      if (!response.ok) return null;
+      if (!response.ok) return { count: null, models: null };
       const body = (await response.json()) as ModelsResponse;
-      return Array.isArray(body.data) ? body.data.length : null;
+      if (!Array.isArray(body.data)) return { count: null, models: null };
+      const models = body.data
+        .map((model) => model.id?.trim())
+        .filter((id): id is string => Boolean(id));
+      return { count: models.length, models };
     } catch {
-      return null;
+      return { count: null, models: null };
     }
   }
 
@@ -579,14 +583,14 @@ export class NewApiManagedService {
     initialized,
     credentialsAvailable,
     docker,
-    modelCount,
+    models,
   }: {
     state: NewApiManagedStatus['state'];
     installed: boolean;
     initialized: boolean;
     credentialsAvailable: boolean;
     docker: DockerAvailability;
-    modelCount: number | null;
+    models: string[] | null;
   }): NewApiManagedStatus {
     return {
       state,
@@ -602,7 +606,8 @@ export class NewApiManagedService {
       endpoint: NEW_API_MANAGED_ENDPOINT,
       adminUrl: NEW_API_MANAGED_ADMIN_URL,
       imageVersion: NEW_API_IMAGE_VERSION,
-      modelCount,
+      modelCount: models?.length ?? null,
+      models,
     };
   }
 

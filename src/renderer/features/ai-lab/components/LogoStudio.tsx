@@ -2,15 +2,16 @@ import { Plug, Sparkles, TerminalSquare } from 'lucide-react';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  AI_LAB_DEFAULT_ZENMUX_MODEL,
-  AI_LAB_ZENMUX_MODELS,
+  AI_LAB_DEFAULT_IMAGE_MODEL,
+  AI_LAB_IMAGE_MODELS,
   LOGO_STYLE_IDS,
   type AiLabEngineId,
   type AiLabEngineStatus,
-  type AiLabZenmuxModel,
+  type AiLabImageModel,
   type LogoGenerationInput,
   type LogoStyleId,
 } from '@shared/ai-lab';
+import { getMaasPlatformDefinition } from '@shared/maas';
 import { useNavigate } from '@renderer/lib/layout/navigation-provider';
 import { Button } from '@renderer/lib/ui/button';
 import { Input } from '@renderer/lib/ui/input';
@@ -22,19 +23,22 @@ import { useAiLabEngines } from '../use-ai-lab';
 
 const ENGINE_STORAGE_KEY = 'yoda.aiLab.engine';
 
-const ZENMUX_MODEL_LABELS: Record<AiLabZenmuxModel, string> = {
+const IMAGE_MODEL_LABELS: Record<AiLabImageModel, string> = {
   'google/gemini-3-pro-image-preview': 'Nano Banana Pro',
   'openai/gpt-image-2': 'GPT Image 2',
 };
 
-const COUNT_OPTIONS: Record<AiLabEngineId, number[]> = {
-  zenmux: [1, 2, 4],
-  codex: [1, 2],
-};
+const CODEX_COUNT_OPTIONS = [1, 2];
+const IMAGE_COUNT_OPTIONS = [1, 2, 4];
 
+function countOptionsFor(engine: AiLabEngineId): number[] {
+  return engine === 'codex' ? CODEX_COUNT_OPTIONS : IMAGE_COUNT_OPTIONS;
+}
+
+/** Migrate legacy stored values: 'zenmux' now follows the active image platform. */
 function loadStoredEngine(): AiLabEngineId | null {
   const stored = localStorage.getItem(ENGINE_STORAGE_KEY);
-  return stored === 'zenmux' || stored === 'codex' ? stored : null;
+  return stored === 'codex' ? 'codex' : null;
 }
 
 export const LogoStudio: React.FC<{
@@ -51,11 +55,11 @@ export const LogoStudio: React.FC<{
   // null = no explicit pick yet: seamlessly follow whichever engine is
   // actually usable on this machine instead of forcing a setup step.
   const [pickedEngine, setPickedEngine] = useState<AiLabEngineId | null>(loadStoredEngine);
-  const [model, setModel] = useState<AiLabZenmuxModel>(AI_LAB_DEFAULT_ZENMUX_MODEL);
+  const [model, setModel] = useState<AiLabImageModel>(AI_LAB_DEFAULT_IMAGE_MODEL);
   const [rawCount, setRawCount] = useState(4);
 
   const engine: AiLabEngineId =
-    pickedEngine ?? engines?.find((status) => status.available)?.id ?? 'zenmux';
+    pickedEngine ?? engines?.find((status) => status.available)?.id ?? 'codex';
   const count = clampCount(rawCount, engine);
   const selectedStatus: AiLabEngineStatus | undefined = engines?.find(
     (status) => status.id === engine
@@ -76,7 +80,7 @@ export const LogoStudio: React.FC<{
       description: description.trim(),
       styleId,
       engine,
-      model: engine === 'zenmux' ? model : undefined,
+      model: engine === 'codex' ? undefined : model,
       count,
     });
   };
@@ -137,30 +141,35 @@ export const LogoStudio: React.FC<{
                 if (value) handlePickEngine(value as AiLabEngineId);
               }}
             >
-              <ToggleGroupItem value="zenmux" className="gap-1.5">
-                <Plug className="h-3.5 w-3.5" />
-                {t('aiLab.logo.engineZenmux')}
-              </ToggleGroupItem>
-              <ToggleGroupItem value="codex" className="gap-1.5">
-                <TerminalSquare className="h-3.5 w-3.5" />
-                {t('aiLab.logo.engineCodex')}
-              </ToggleGroupItem>
+              {(engines ?? []).map((status) =>
+                status.id === 'codex' ? (
+                  <ToggleGroupItem key={status.id} value={status.id} className="gap-1.5">
+                    <TerminalSquare className="h-3.5 w-3.5" />
+                    {t('aiLab.logo.engineCodex')}
+                  </ToggleGroupItem>
+                ) : (
+                  <ToggleGroupItem key={status.id} value={status.id} className="gap-1.5">
+                    <Plug className="h-3.5 w-3.5" />
+                    {getMaasPlatformDefinition(status.id).name}
+                  </ToggleGroupItem>
+                )
+              )}
             </ToggleGroup>
           </div>
 
-          {engine === 'zenmux' && (
+          {engine !== 'codex' && (
             <div className="space-y-1.5">
               <Label>{t('aiLab.logo.model')}</Label>
               <ToggleGroup
                 multiple={false}
                 value={[model]}
                 onValueChange={([value]) => {
-                  if (value) setModel(value as AiLabZenmuxModel);
+                  if (value) setModel(value as AiLabImageModel);
                 }}
               >
-                {AI_LAB_ZENMUX_MODELS.map((id) => (
+                {AI_LAB_IMAGE_MODELS.map((id) => (
                   <ToggleGroupItem key={id} value={id}>
-                    {ZENMUX_MODEL_LABELS[id]}
+                    {IMAGE_MODEL_LABELS[id]}
                   </ToggleGroupItem>
                 ))}
               </ToggleGroup>
@@ -176,7 +185,7 @@ export const LogoStudio: React.FC<{
                 if (value) setRawCount(Number(value));
               }}
             >
-              {COUNT_OPTIONS[engine].map((option) => (
+              {countOptionsFor(engine).map((option) => (
                 <ToggleGroupItem key={option} value={String(option)} className="min-w-8">
                   {option}
                 </ToggleGroupItem>
@@ -188,17 +197,17 @@ export const LogoStudio: React.FC<{
         {selectedStatus && !selectedStatus.available && (
           <div className="flex items-center gap-3 rounded-lg border border-border bg-background px-3 py-2 text-xs text-muted-foreground">
             <span>
-              {engine === 'zenmux'
-                ? t('aiLab.logo.engineUnavailableZenmux')
-                : t('aiLab.logo.engineUnavailableCodex')}
+              {engine === 'codex'
+                ? t('aiLab.logo.engineUnavailableCodex')
+                : t('aiLab.logo.engineUnavailableMaas')}
             </span>
-            {engine === 'zenmux' && (
+            {engine !== 'codex' && (
               <Button
                 size="xs"
                 variant="outline"
                 onClick={() => navigate('settings', { tab: 'maas' })}
               >
-                {t('aiLab.logo.connectZenmux')}
+                {t('aiLab.logo.connectMaas')}
               </Button>
             )}
           </div>
@@ -221,6 +230,6 @@ export const LogoStudio: React.FC<{
 };
 
 function clampCount(current: number, engine: AiLabEngineId): number {
-  const options = COUNT_OPTIONS[engine];
+  const options = countOptionsFor(engine);
   return options.includes(current) ? current : options[options.length - 1]!;
 }

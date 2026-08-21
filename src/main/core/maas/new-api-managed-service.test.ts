@@ -152,6 +152,7 @@ describe('NewApiManagedService', () => {
         initialized: true,
         credentialsAvailable: true,
         modelCount: 0,
+        models: [],
       },
     });
     expect(dockerCalls.some((args) => args.includes('pull'))).toBe(true);

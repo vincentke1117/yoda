@@ -94,7 +94,8 @@ export class ModelProviderCatalogService {
 
     let aggregate = current.catalogCache.aggregate;
     try {
-      const models = await maasService.listZenmuxCatalogTextModelCandidates(true);
+      const active = await maasService.getActivePlatformModels({ forceRefresh: true });
+      const models = active?.models ?? [];
       aggregate = {
         models: normalizeCatalogModelIds(models),
         fetchedAt: now,
@@ -235,16 +236,32 @@ export class ModelProviderCatalogService {
           [source.providerId, await hasOfficialModelProviderCredentials(source.providerId)] as const
       )
     );
+    let channel: { platformId: string; name: string; models: string[] } | null = null;
+    try {
+      const active = await maasService.getActivePlatformModels();
+      if (active) {
+        channel = {
+          platformId: active.platformId,
+          name: active.displayName,
+          models: active.models,
+        };
+      }
+    } catch {
+      // The channel group is a presentation nicety; degrade to the static catalog.
+      channel = null;
+    }
     return buildModelProviderCatalog(
       settings,
-      new Set(credentialPairs.filter(([, value]) => value).map(([id]) => id))
+      new Set(credentialPairs.filter(([, value]) => value).map(([id]) => id)),
+      channel
     );
   }
 }
 
 export function buildModelProviderCatalog(
   settings: ModelProviderSettings,
-  configuredOfficialProviders: ReadonlySet<string> = new Set()
+  configuredOfficialProviders: ReadonlySet<string> = new Set(),
+  channel?: { platformId: string; name: string; models: readonly string[] } | null
 ): ModelProviderCatalogResult {
   const groups = new Map<string, MutableProviderGroup>();
 
@@ -297,6 +314,24 @@ export function buildModelProviderCatalog(
     const rightOrder = knownOrder.get(right.id) ?? Number.MAX_SAFE_INTEGER;
     return leftOrder - rightOrder || left.name.localeCompare(right.name);
   });
+
+  if (channel && channel.models.length > 0) {
+    providers.unshift({
+      id: `channel:${channel.platformId}`,
+      name: channel.name,
+      custom: true,
+      models: channel.models.map((id) => ({ id, custom: false, sources: ['channel'] })),
+      customModels: [],
+      officialSourceUrl: null,
+      officialSnapshotAt: null,
+      officialFetchedAt: null,
+      lastUpdateAttemptAt: null,
+      officialApiSupported: false,
+      officialApiConfigured: false,
+      updateStatus: 'customOnly',
+      channel: true,
+    });
+  }
 
   return {
     providers,
