@@ -559,6 +559,7 @@ export const keyboardSettingsSchema = z
       toggleTheme: z.string().nullable().optional(),
       closeModal: z.string().nullable().optional(),
       newTask: z.string().nullable().optional(),
+      newTaskToggle: z.string().nullable().optional(),
       newProject: z.string().nullable().optional(),
       openInEditor: z.string().nullable().optional(),
       sidebarChanges: z.string().nullable().optional(),
