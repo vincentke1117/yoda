@@ -250,4 +250,40 @@ describe('parseClaudeUsage context window', () => {
     expect(usage?.total.input).toBe(1_500);
     expect(usage?.context?.usedTokens).toBe(91_000);
   });
+
+  it('treats a fixed-window model as 1M even below the standard threshold', () => {
+    const raw = assistantRow(
+      'msg-1',
+      { input_tokens: 1_000, cache_read_input_tokens: 118_000, output_tokens: 500 },
+      DAY_ONE,
+      'deepseek-v4-flash'
+    );
+
+    expect(parseClaudeUsage(raw)?.context).toMatchObject({
+      usedTokens: 119_500,
+      limitTokens: 1_000_000,
+    });
+  });
+
+  it('resolves an explicit [1m] model-id suffix to 1M', () => {
+    const raw = assistantRow(
+      'msg-1',
+      { input_tokens: 10_000, output_tokens: 500 },
+      DAY_ONE,
+      'deepseek/deepseek-v4-pro[1m]'
+    );
+
+    expect(parseClaudeUsage(raw)?.context).toMatchObject({ limitTokens: 1_000_000 });
+  });
+
+  it('resolves an explicit [128k] model-id suffix to its window', () => {
+    const raw = assistantRow(
+      'msg-1',
+      { input_tokens: 10_000, output_tokens: 500 },
+      DAY_ONE,
+      'deepseek-v4-lite[128k]'
+    );
+
+    expect(parseClaudeUsage(raw)?.context).toMatchObject({ limitTokens: 128_000 });
+  });
 });

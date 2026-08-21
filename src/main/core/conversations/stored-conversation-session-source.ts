@@ -1,4 +1,4 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import type { AgentSessionSource } from '@shared/conversations';
 import { db, sqlite } from '@main/db/client';
 import { conversations } from '@main/db/schema';
@@ -16,6 +16,31 @@ export async function getStoredConversationSessionSource(
     .where(eq(conversations.id, conversationId))
     .limit(1);
   return parseConversationSessionSource(row?.config);
+}
+
+/**
+ * The reusable Agent profile bound to the conversation identified by
+ * `idOrSessionId` — matched by conversation id first, then by the provider
+ * session id stored in `config.sessionSource.sessionId` (the two differ once a
+ * session is discovered from the provider rather than created from a Yoda
+ * conversation). Null when the session belongs to no agent.
+ */
+export async function getConversationAgentId(idOrSessionId: string): Promise<string | null> {
+  const byId = await db
+    .select({ config: conversations.config })
+    .from(conversations)
+    .where(eq(conversations.id, idOrSessionId))
+    .limit(1);
+  const byIdAgent = parseConversationConfig(byId[0]?.config).agent?.id;
+  if (byIdAgent) return byIdAgent;
+  const bySource = await db
+    .select({ config: conversations.config })
+    .from(conversations)
+    .where(
+      sql`json_extract(${conversations.config}, '$.sessionSource.sessionId') = ${idOrSessionId}`
+    )
+    .limit(1);
+  return parseConversationConfig(bySource[0]?.config).agent?.id ?? null;
 }
 
 export async function storeConversationSessionSource(
