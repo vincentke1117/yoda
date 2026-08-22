@@ -151,3 +151,4 @@ optional_env:
 - browser 测试 mock `MarkdownRenderer` 要把 content 渲染成文本子节点（`createElement('span', null, content)`），放 `data-*` 属性会让 `textContent` 断言静默取不到（2026-08-21, be9b9f66）
 - zh-CN i18n 文案与 key 名都禁止出现 "MaaS" 子串：`locales.test.ts` 对 `JSON.stringify(zhCN)` 全库扫描，key 名里的 MaaS 也会被捕获；产品术语用「模型接入」/ 'Model access'（2026-08-21, ec50ab9a8f）
 - MaaS 渠道候选模型枚举统一走 `maasService.listPlatformModels`/`getActivePlatformModels`（`{endpoint}/models`，Electron net.fetch 走系统代理）；给 Agent 下拉/全局发现/网关卡片喂数据都用它，不要再为单个平台写专属 catalog（2026-08-21, ec50ab9a8f）
+- 用 Python urllib 直连 `https://lovstudio.ai` 会被 Cloudflare 以 403 error 1010（TLS/HTTP 指纹拦截）拒绝，curl 正常：须带浏览器风格 `User-Agent` + `Accept` + `Accept-Language` 头；sandbox 子进程不继承系统代理，需在命令内 export（2026-08-22, 49d5728）
