@@ -139,3 +139,4 @@ optional_env:
 - 新增 drizzle 迁移改变 journal 尾部时，`migrations.test.ts` 里只 apply `count-1`/部分历史的 skip-ahead fixture 必须为新 tail 迁移创建目标表，否则 `runBundledMigrations` 在 `ALTER TABLE` 时报 "no such table"（2026-08-19, 1363a59）
 - base-ui 弹层不能互相嵌套：DropdownMenu(Menu.Root) 嵌进 ContextMenu 会让内层菜单 parent.type 判成 context-menu、trigger 点不开；同一元素上要叠加左键下拉就改用 Popover（PopoverRoot 是独立树，且 Popover 默认 click 开、Menu 默认 mousedown 开；非 button 元素 trigger 要加 `nativeButton={false}`）（2026-08-19, 6e70b60f）
 - `listTmuxSessionMarkersStrict` 里 tmux 二进制缺失（spawn ENOENT）必须按「无会话」返回 `[]`，与超时/传输失败（应 rethrow 让 GC 中止）区分开，否则无 tmux 的机器 `deleteProject` 会静默失败、renderer 回滚项目（用户看「移除项目」没反应）（2026-08-20, c08763a）
+- 终端智能路径里以 `/` 结尾的绝对目录必须允许空格和 ASCII 括号，并用真实输出原样回归候选、链接范围与目录目标（2026-08-26, dd6bb51）
