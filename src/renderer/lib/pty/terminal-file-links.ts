@@ -75,8 +75,8 @@ const ROOTED_FILE_PATH_CANDIDATE_REGEX = new RegExp(
   `(^|[${PATH_LEADING}])(@?\\/(?:${ABSOLUTE_PATH_SEGMENT}\\/)+?${FILE_PATH_FILENAME}(?::\\d+(?::\\d+)?)?)(?!(?:\\.| +)${PATH_SEG_TOKEN}\\/)(?=$|[${PATH_TRAILING}])`,
   'gu'
 );
-const ROOTED_SPACED_FILENAME_CANDIDATE_REGEX = new RegExp(
-  `(^|[${PATH_LEADING}])(@?\\/(?:${ABSOLUTE_PATH_SEGMENT}\\/)+?${SPACED_ABSOLUTE_FILENAME}(?::\\d+(?::\\d+)?)?)(?=$|[${PATH_TRAILING}])`,
+const ROOTED_SPACED_PATH_CANDIDATE_REGEX = new RegExp(
+  `(^|[${PATH_LEADING}])(@?\\/(?:${SPACED_DIRECTORY_SEGMENT}\\/)+?${SPACED_ABSOLUTE_FILENAME}(?::\\d+(?::\\d+)?)?)(?=$|[${PATH_TRAILING}])`,
   'gu'
 );
 const ROOTED_SPACED_DIRECTORY_CANDIDATE_REGEX = new RegExp(
@@ -115,7 +115,7 @@ const FILE_PATH_CANDIDATE_REGEXES: readonly {
   isDirectory?: true;
 }[] = [
   { regex: FILE_URI_CANDIDATE_REGEX, requiresSpace: false },
-  { regex: ROOTED_SPACED_FILENAME_CANDIDATE_REGEX, requiresSpace: true },
+  { regex: ROOTED_SPACED_PATH_CANDIDATE_REGEX, requiresSpace: true },
   { regex: ROOTED_SPACED_DIRECTORY_CANDIDATE_REGEX, requiresSpace: true },
   { regex: ROOTED_FILE_PATH_CANDIDATE_REGEX, requiresSpace: true },
   { regex: TILDE_DIRECTORY_CANDIDATE_REGEX, requiresSpace: false, isDirectory: true },
