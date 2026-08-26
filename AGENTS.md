@@ -153,3 +153,4 @@ optional_env:
 - MaaS 渠道候选模型枚举统一走 `maasService.listPlatformModels`/`getActivePlatformModels`（`{endpoint}/models`，Electron net.fetch 走系统代理）；给 Agent 下拉/全局发现/网关卡片喂数据都用它，不要再为单个平台写专属 catalog（2026-08-21, ec50ab9a8f）
 - 用 Python urllib 直连 `https://lovstudio.ai` 会被 Cloudflare 以 403 error 1010（TLS/HTTP 指纹拦截）拒绝，curl 正常：须带浏览器风格 `User-Agent` + `Accept` + `Accept-Language` 头；sandbox 子进程不继承系统代理，需在命令内 export（2026-08-22, 49d5728）
 - 终端智能路径里以 `/` 结尾的绝对目录必须允许空格和 ASCII 括号，并用真实输出原样回归候选、链接范围与目录目标（2026-08-26, dd6bb51）
+- 终端带空格/括号目录的目录候选和目录内文件候选必须共用同一目录段语法，回归同时覆盖真实完整文件串与 xterm 主点击，否则只测末尾 `/` 会漏掉文件路径（2026-08-26, 5a8b830）
