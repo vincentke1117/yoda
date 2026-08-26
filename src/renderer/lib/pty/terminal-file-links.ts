@@ -55,6 +55,12 @@ const ABSOLUTE_PATH_SEGMENT = `${PATH_SEG_TOKEN}(?: +${PATH_SEG_TOKEN})?`;
 const SPACED_FILENAME_TOKEN = `[^\\s"'\`$<>|\\\\/:]+`;
 const SPACED_ABSOLUTE_FILENAME = `${SPACED_FILENAME_TOKEN}(?: +${SPACED_FILENAME_TOKEN})* +[^\\s"'\`$<>|\\\\/:]*\\.${PATH_EXT}`;
 const SPACED_BARE_FILENAME = `${SPACED_FILENAME_TOKEN}(?: +${SPACED_FILENAME_TOKEN})+\\.(?:${BARE_FILENAME_EXTENSIONS})`;
+// A trailing slash makes an absolute directory unambiguous, so its segments
+// may carry several words and ASCII parentheses (for example
+// `/Users/mark/Downloads/Media/Roman Holiday (1953)/`). Sentence and CJK
+// wrapper punctuation remain boundaries so adjacent prose stays outside.
+const SPACED_DIRECTORY_TOKEN = `[^\\s"'\`$<>|\\\\/:：「」『』【】〈〉《》，、。；！？]+`;
+const SPACED_DIRECTORY_SEGMENT = `${SPACED_DIRECTORY_TOKEN}(?: +${SPACED_DIRECTORY_TOKEN})*`;
 // A path is either a file (one or more `dir/` segments + a `name.ext`, optional
 // `:line:col`) OR a directory (one or more `dir/` segments ending in a slash,
 // no filename). Making the filename tail optional lets a trailing-slash run
@@ -71,6 +77,10 @@ const ROOTED_FILE_PATH_CANDIDATE_REGEX = new RegExp(
 );
 const ROOTED_SPACED_FILENAME_CANDIDATE_REGEX = new RegExp(
   `(^|[${PATH_LEADING}])(@?\\/(?:${ABSOLUTE_PATH_SEGMENT}\\/)+?${SPACED_ABSOLUTE_FILENAME}(?::\\d+(?::\\d+)?)?)(?=$|[${PATH_TRAILING}])`,
+  'gu'
+);
+const ROOTED_SPACED_DIRECTORY_CANDIDATE_REGEX = new RegExp(
+  `(^|[${PATH_LEADING}])(@?\\/(?:${SPACED_DIRECTORY_SEGMENT}\\/)+)(?=$|[${PATH_TRAILING}])`,
   'gu'
 );
 // Home-relative, extensionless multi-segment paths are commonly emitted for
@@ -106,6 +116,7 @@ const FILE_PATH_CANDIDATE_REGEXES: readonly {
 }[] = [
   { regex: FILE_URI_CANDIDATE_REGEX, requiresSpace: false },
   { regex: ROOTED_SPACED_FILENAME_CANDIDATE_REGEX, requiresSpace: true },
+  { regex: ROOTED_SPACED_DIRECTORY_CANDIDATE_REGEX, requiresSpace: true },
   { regex: ROOTED_FILE_PATH_CANDIDATE_REGEX, requiresSpace: true },
   { regex: TILDE_DIRECTORY_CANDIDATE_REGEX, requiresSpace: false, isDirectory: true },
   { regex: FILE_PATH_CANDIDATE_REGEX, requiresSpace: false },

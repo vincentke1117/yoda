@@ -159,6 +159,34 @@ describe('terminal file links', () => {
     ]);
   });
 
+  it('recognizes a rooted directory containing spaces and parentheses', () => {
+    const text = '/Users/mark/Downloads/Media/Roman Holiday (1953)/';
+    const line = `文件夹：${text}`;
+    const terminal = makeTerminal([line]);
+
+    expect(extractTerminalFileLinkCandidates(line)).toEqual([{ text, index: line.indexOf(text) }]);
+    expect(
+      getTerminalFileLinkMatches(terminal, 1, {
+        workspaceRoot: '/Users/mark/lovstudio/coding/yoda/.worktrees/cseqf',
+        homeDir: '/Users/mark',
+        onOpen: (): void => undefined,
+      })
+    ).toEqual([
+      {
+        range: {
+          start: { x: line.indexOf(text) + 1, y: 1 },
+          end: { x: line.indexOf(text) + text.length, y: 1 },
+        },
+        text,
+        target: {
+          originalText: text,
+          isDirectory: true,
+          absolutePath: '/Users/mark/Downloads/Media/Roman Holiday (1953)',
+        },
+      },
+    ]);
+  });
+
   it('keeps separate rooted paths from being merged through prose', () => {
     const first = '/Users/mark/Library/Application Support/yoda/first.log';
     const second = '/Users/mark/Library/Application Support/yoda/second.log';
