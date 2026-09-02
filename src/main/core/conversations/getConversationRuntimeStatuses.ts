@@ -20,6 +20,7 @@ import { readClaudeTurnVerdictFile } from './claude-run-state-source';
 import {
   getClaudeSessionActivity,
   idleActivitySettlesRunState,
+  settledActivityStatus,
 } from './claude-session-activity-source';
 import { findClaudeTranscriptPathBySessionId } from './claude-transcript-locator';
 import { readCodexTurnVerdict } from './codex-run-state-source';
@@ -183,7 +184,7 @@ async function deriveStatus(args: {
     }).catch(() => null);
     if (activity?.status === 'busy') truth = 'working';
     else if (activity?.status === 'waiting') truth = 'awaiting-input';
-    else if (activity?.status === 'idle') {
+    else if (activity?.status && settledActivityStatus(activity.status)) {
       // A CLI that started after the live status was set is sitting at its boot
       // prompt, not at the end of the turn that status describes. Resuming a
       // session is a consequence of opening the task, so trusting that read

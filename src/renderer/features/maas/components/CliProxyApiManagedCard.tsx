@@ -41,7 +41,7 @@ import {
   useStartCliProxyApi,
   useStopCliProxyApi,
 } from '../useMaas';
-import { ManagedGatewayCardShell } from './ManagedGatewayCardShell';
+import { ManagedGatewayCardShell, ManagedGatewayModelChips } from './ManagedGatewayCardShell';
 
 type CliProxyApiManagedCardProps = {
   onOpenManualSettings: () => void;
@@ -390,7 +390,14 @@ export function CliProxyApiManagedCard({
       testId="cliproxyapi-managed-card"
       icon={<Network className="h-8 w-8 text-primary" />}
       name="CLIProxyAPI"
-      description={description}
+      description={
+        <>
+          {description}
+          {status?.models && status.models.length > 0 ? (
+            <ManagedGatewayModelChips models={status.models} />
+          ) : null}
+        </>
+      }
       starCount={starCount}
       actions={
         <HeaderActionToolbar label={t('maas.managedGateways.cliProxyApi.actions')}>

@@ -60,6 +60,28 @@ describe('parseClaudeSessionActivity', () => {
       parseClaudeSessionActivity(JSON.stringify({ sessionId: 'x', status: 'done' }))
     ).toBeNull();
   });
+
+  it('parses the shell status Claude writes while a background job runs', () => {
+    expect(
+      parseClaudeSessionActivity(
+        JSON.stringify({
+          pid: 123,
+          sessionId: 'conv-1',
+          cwd: '/repo',
+          status: 'shell',
+          updatedAt: 1_781_115_179_335,
+        })
+      )
+    ).toEqual({
+      pid: 123,
+      sessionId: 'conv-1',
+      cwd: '/repo',
+      status: 'shell',
+      waitingFor: null,
+      updatedAt: 1_781_115_179_335,
+      startedAt: null,
+    });
+  });
 });
 
 describe('watchClaudeSessionActivity', () => {
@@ -98,7 +120,7 @@ describe('watchClaudeSessionActivity', () => {
   }
 
   function writeSession(
-    status: 'busy' | 'idle' | 'waiting',
+    status: 'busy' | 'idle' | 'waiting' | 'shell',
     updatedAt = Date.now(),
     overrides: {
       pid?: number;
@@ -209,6 +231,23 @@ describe('watchClaudeSessionActivity', () => {
     }
   );
 
+  it.each([
+    ['busy', 'turn-started', 'turn-completed'],
+    ['waiting', 'awaiting-input', 'turn-interrupted'],
+  ] as const)(
+    'settles %s the same way when Claude writes shell (background job) instead of idle',
+    async (initial, initialEvent, settledEvent) => {
+      writeSession(initial);
+      start({ idleSettleMs: 10 });
+
+      await waitFor(() => events.some((event) => event.kind === initialEvent));
+      writeSession('shell', Date.now() + 1);
+
+      await waitFor(() => events.some((event) => event.kind === settledEvent));
+      expect(events.at(-1)?.kind).toBe(settledEvent);
+    }
+  );
+
   it('preserves a user interrupt when busy returns to idle', async () => {
     writeSession('busy');
     start({ idleSettleMs: 10 });
@@ -247,6 +286,17 @@ describe('watchClaudeSessionActivity', () => {
       // The record is well past the edge-triggered path's staleness window, so
       // nothing but the reconciler can correct the status.
       writeSession('idle', Date.now() - 10_000);
+      setStoreStatus('awaiting-input', Date.now() - 10_000);
+      start(seams);
+
+      await waitFor(() => events.some((event) => event.kind === 'turn-completed'));
+    });
+
+    it('settles an awaiting-input against a shell record (background job still alive)', async () => {
+      // A turn that finished behind a live background shell — e.g. a dev server
+      // launched by the agent — is written as `shell`, which previously parsed
+      // to null and left a stuck awaiting-input permanently uncorrectable.
+      writeSession('shell', Date.now() - 10_000);
       setStoreStatus('awaiting-input', Date.now() - 10_000);
       start(seams);
 

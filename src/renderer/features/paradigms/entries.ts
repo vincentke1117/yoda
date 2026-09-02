@@ -1,6 +1,9 @@
+import type { Agent } from '@shared/agents';
+import { paradigmKindByRoster } from '@shared/paradigms/classification';
 import type { ParadigmIconId, ParadigmKindId } from '@shared/paradigms/contract';
 import { paradigmKind } from '@shared/paradigms/kinds';
 import type { Paradigm } from '@shared/paradigms/paradigm';
+import { paradigmRoster } from './roster';
 
 /**
  * One row in the paradigm picker — a paradigm *instance*.
@@ -16,7 +19,8 @@ import type { Paradigm } from '@shared/paradigms/paradigm';
 export interface ParadigmEntry {
   /** Paradigm instance id — what the picker keys, selects, and mutates on. */
   id: string;
-  kindId: ParadigmKindId;
+  /** Dynamic user-facing category; never copied directly from persisted `kindId`. */
+  categoryKindId: ParadigmKindId;
   iconId: ParadigmIconId;
   /** Glyph, image URL, or data URL from the instance; wins over `iconId`. */
   avatar?: string;
@@ -33,6 +37,11 @@ export interface ParadigmEntry {
   /** Shipped instances can be renamed and re-iconed, but not removed. */
   builtin: boolean;
   pickerOrder: number;
+}
+
+export interface ParadigmEntryRosterContext {
+  agents: Agent[];
+  draftAgents: Record<string, string[]>;
 }
 
 /** User instances sort after every built-in, in list order. */
@@ -79,21 +88,37 @@ export function paradigmEntryLabel(
  * Kinds outside the picker are dropped here rather than excluded upstream: their
  * instances are real and launchable, they are just reached another way.
  */
-export function paradigmEntries(paradigms: readonly Paradigm[]): ParadigmEntry[] {
+export function paradigmEntries(
+  paradigms: readonly Paradigm[],
+  rosterContext?: ParadigmEntryRosterContext
+): ParadigmEntry[] {
   let userIndex = 0;
   return paradigms
     .flatMap((paradigm) => {
-      const kind = paradigmKind(paradigm.kindId);
+      // `kindId` describes the params/protocol stored on disk; it is not a
+      // trustworthy user-facing category. A one-Agent roster is single-Agent
+      // even when an older renderer happened to persist it with the team shape.
+      const categoryKindId =
+        rosterContext && (paradigm.kindId === 'single' || paradigm.kindId === 'team')
+          ? paradigmKindByRoster(
+              paradigm.kindId,
+              paradigmRoster({
+                paradigm,
+                agents: rosterContext.agents,
+                draftAgents: rosterContext.draftAgents,
+              })
+            )
+          : paradigm.kindId;
+      const kind = paradigmKind(categoryKindId);
       if (!kind.inPicker) return [];
       const rank = paradigm.builtin ? kind.pickerOrder : USER_ORDER_BASE + userIndex++;
       return [
         {
           id: paradigm.id,
-          kindId: paradigm.kindId,
+          categoryKindId,
           iconId: kind.iconId,
           ...(paradigm.icon ? { avatar: paradigm.icon } : {}),
-          // The category is the kind, always — an instance never stops being one
-          // way of working, whatever it is named.
+          // Category follows the roster size, not the historical storage shape.
           categoryKey: kind.labelKey,
           // Only an instance that was named carries a name. A kind's own built-in
           // has none, and reads as the bare category rather than repeating it.
@@ -121,7 +146,11 @@ export function paradigmEntryId(
   kindId: ParadigmKindId,
   paradigmId: string | undefined
 ): string | undefined {
-  return selectByKind(entries, kindId, paradigmId)?.id;
+  return (
+    entries.find((entry) => entry.categoryKindId === kindId && entry.id === paradigmId) ??
+    entries.find((entry) => entry.categoryKindId === kindId) ??
+    entries[0]
+  )?.id;
 }
 
 /**

@@ -35,6 +35,7 @@ export type NewApiManagedStatus = {
   adminUrl: string;
   imageVersion: string;
   modelCount: number | null;
+  models: string[] | null;
 };
 
 export type NewApiManagedActionResult = {

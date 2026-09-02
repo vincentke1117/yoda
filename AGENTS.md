@@ -76,6 +76,7 @@ optional_env:
 - 复用与实体一致性：`agents/conventions/reuse.md`
 - 禁止 re-export，永远从原始源头 import
 - 会被测试 import 的模块（logger、util、shared）里禁止 import `electron` 或 `@renderer/lib/ipc`，需要这些能力就导出 `setXxx(fn)` 由启动入口注入（2026-08-17, a38678e）
+- 终端 smart-path 硬换行拼接：跨行 URL 尾部没有 `/` 也要能接（百分号编码/纯 query 的 authorize URL 每行都可能无字面 `/`），判定要按 URL 语法（scheme / `%HH`）门控而非路径分隔符，但仍保留完整扩展名边界（2026-08-21, 9b3a464c9d）
 - 超时常数必须对照实测开销设定，并把实测数字写进注释（2026-08-17, a38678e）
 - 改运行中 Yoda 自身的数据走 `node /tmp/yoda-renderer.mjs '<js>'` 调 `window.electronAPI.invoke`，不要直接写 DB，否则事件、版本快照、前端缓存三者不一致（2026-08-17, b1bfc34）
 
@@ -124,6 +125,7 @@ optional_env:
 - renderer 里改后端 PTY 尺寸只能走 `src/renderer/lib/pty/pty-resize-authority.ts`，禁止直接调 `rpc.pty.resize` / `resizeForRenderer`：一个 PTY 只有一份 grid，观察者窗口（独立看板）改了会连带改窄主窗口的 TUI（2026-08-18, c429a81）。
 - 列表既有筛选又有数量上限时，必须先筛后截断，跨窗口推送的候选列表保持不截断（2026-08-18, c429a81）。
 - 任务列表 surface 的筛选/排序只能走 `@shared/task-view-options` + `TaskViewOptionsMenu`，禁止在单个 surface 里另写一份（2026-08-18, 7d40aff）。
+- 一个任务只有一个会话：`createConversation` 会拒绝往已有未归档会话的任务里再插一条，同分支再上一个 Agent 走 `createSiblingTask`（共享 worktree，refCount），唯一例外是 team room 的 `teamRoomMemberSeat`（2026-08-18, e363505）。
 
 ## 注意
 - 我正在以开发模式运行与迭代 yoda，不要打开我已安装的 yoda
@@ -131,6 +133,7 @@ optional_env:
 - 会话分享的体量上限分散在 web 仓库四层（zod blocks.max / 路由字节检查 / 表 CHECK 约束 / Vercel 线路字节），只放开一层会换一种错误码而非修好（2026-08-17, 3cade15）
 - 分享载荷加字段必须同步改 web 仓库 `sessionShareBaseSchema`：它是 `.strict()`，多一个未声明字段整个上传报 400 invalid_session_share（2026-08-18, 99c4f5e）
 - 访问 `http://localhost:3000` 仅能看到 Yoda 静态 splash 而没有 Electron preload/RPC 时，停止用 ego-browser 继续操作该 renderer，改用当前开发实例的原生 IPC/可回读存储验证（2026-08-18, b40ff86）。
+- 外部直接暂停 `automations` 记录不会触发 `automationsUpdatedChannel`，内存 Cron 仍保留但 `automationRunner.fire` 会重读 `status` 并拦截后续 cron；要求界面立即同步时必须走原生 RPC（2026-08-18, b40ff86）。
 - 排序键 locale collation 陷阱：未排序哨兵必须是字母（如 'z'），不能是标点（ICU 将标点排在数字前，会使未排序项浮到顶部）（2026-08-18, 359a1b9）
 - dnd-kit 测试每个指针步骤必须独立 act()：拖拽开始后 droppable rects 在 effect 里测量，批量手势会在 over 变为非 null 前结束（2026-08-18, 359a1b9）
 - Base UI 弹层退场动画：卸载前必须先关闭弹层（Esc + 250ms 等待），否则全局 bookkeeping 认为菜单还开着，下次 trigger 拒绝打开（2026-08-18, 359a1b9）
@@ -138,4 +141,17 @@ optional_env:
 - 去掉组件的 `observer` 包裹会让 react-hooks/set-state-in-effect 等规则突然开始生效，原有 effect 里的同步 setState 会新报 lint（2026-08-18, 8c3195a）
 - 新增 drizzle 迁移改变 journal 尾部时，`migrations.test.ts` 里只 apply `count-1`/部分历史的 skip-ahead fixture 必须为新 tail 迁移创建目标表，否则 `runBundledMigrations` 在 `ALTER TABLE` 时报 "no such table"（2026-08-19, 1363a59）
 - base-ui 弹层不能互相嵌套：DropdownMenu(Menu.Root) 嵌进 ContextMenu 会让内层菜单 parent.type 判成 context-menu、trigger 点不开；同一元素上要叠加左键下拉就改用 Popover（PopoverRoot 是独立树，且 Popover 默认 click 开、Menu 默认 mousedown 开；非 button 元素 trigger 要加 `nativeButton={false}`）（2026-08-19, 6e70b60f）
+- Claude activity 记录的合法 status 含 `shell`（Claude Code 2.1.233+：turn 结束但挂着后台 shell/dev server 时写 shell 而非 idle）；`parseClaudeSessionActivity` 只认 busy/idle/waiting 会把 shell 当 null，导致卡住的 awaiting-input/working 永远无法被 reconcile 修复，必须把 shell 当 settled（idle 同级）处理（2026-08-20, 228c53f）
 - `listTmuxSessionMarkersStrict` 里 tmux 二进制缺失（spawn ENOENT）必须按「无会话」返回 `[]`，与超时/传输失败（应 rethrow 让 GC 中止）区分开，否则无 tmux 的机器 `deleteProject` 会静默失败、renderer 回滚项目（用户看「移除项目」没反应）（2026-08-20, c08763a）
+- TanStack hotkeys 无左/右 Alt 区分：`parseHotkey('Alt')` 把 Alt 当 key（alt:false），`Hotkey` 类型也不含裸修饰键；hold-modifier+click 的覆盖手势必须自己写 side-aware matcher（`event.code === 'AltLeft'/'AltRight'`），MouseEvent 无 side 信息（2026-08-21, 7a202559b1）
+- `new-task-modal-responsive.test.ts` 是源码文本契约测试（grep `home-view.tsx` 里的 JSX 字面量），改那段 JSX 必须同步改断言（2026-08-18, e363505）
+- `new ConversationManagerStore(p, t, [])` 传空 preloaded 会把 `_loaded` 置真，`load()` 直接返回不拉数据；要测加载路径就别传第三个参数（2026-08-18, e363505）
+- `createTask.ts` 里有两处 `shouldGenerate` 自动命名门（`createTask` 用 `params`、`retryTaskSetup` 用 `row`），改命名策略必须两处都改（2026-08-18, e363505）
+- Claude 兼容端点会话（如 DeepSeek V4 的 1M 变体）的 transcript 只记基础 model id、不带 `[1m]` 窗口后缀：上下文窗口推断走 `claude-context-window` 的固定窗口表（deepseek-v4-* → 1M），要展示完整 model 需从 conversation.agent 反查 `agents.model_suffix` 补全（2026-08-21, ce8a688e）
+- browser 测试 mock `MarkdownRenderer` 要把 content 渲染成文本子节点（`createElement('span', null, content)`），放 `data-*` 属性会让 `textContent` 断言静默取不到（2026-08-21, be9b9f66）
+- zh-CN i18n 文案与 key 名都禁止出现 "MaaS" 子串：`locales.test.ts` 对 `JSON.stringify(zhCN)` 全库扫描，key 名里的 MaaS 也会被捕获；产品术语用「模型接入」/ 'Model access'（2026-08-21, ec50ab9a8f）
+- MaaS 渠道候选模型枚举统一走 `maasService.listPlatformModels`/`getActivePlatformModels`（`{endpoint}/models`，Electron net.fetch 走系统代理）；给 Agent 下拉/全局发现/网关卡片喂数据都用它，不要再为单个平台写专属 catalog（2026-08-21, ec50ab9a8f）
+- 用 Python urllib 直连 `https://lovstudio.ai` 会被 Cloudflare 以 403 error 1010（TLS/HTTP 指纹拦截）拒绝，curl 正常：须带浏览器风格 `User-Agent` + `Accept` + `Accept-Language` 头；sandbox 子进程不继承系统代理，需在命令内 export（2026-08-22, 49d5728）
+- 终端智能路径里以 `/` 结尾的绝对目录必须允许空格和 ASCII 括号，并用真实输出原样回归候选、链接范围与目录目标（2026-08-26, dd6bb51）
+- 终端带空格/括号目录的目录候选和目录内文件候选必须共用同一目录段语法，回归同时覆盖真实完整文件串与 xterm 主点击，否则只测末尾 `/` 会漏掉文件路径（2026-08-26, 5a8b830）
+- Yoda 导出的 `.yoda-theme.json` 会在 `skin.image` 保留导入图片的完整 Data URI；本地源文件丢失时先按 MIME 解码到原文件名，再用尺寸与 SHA-256 验证（2026-08-26, 4dd1568）

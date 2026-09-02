@@ -174,4 +174,36 @@ describe('createConversation', () => {
     await lifecycle;
     expect(lifecycleEntered).toBe(true);
   });
+
+  // A task is its session: a second one under the same task would give one unit
+  // of work two names, two transcripts and two menus.
+  it('refuses a second session in a task, naming the way to run another agent', async () => {
+    mocks.selectLimit.mockResolvedValue([{ id: 'conversation-existing' }]);
+
+    await expect(
+      createConversation({
+        id: 'conversation-1',
+        projectId: 'project-1',
+        taskId: 'task-1',
+        title: 'Acceptance review',
+        runtime: 'claude',
+      })
+    ).rejects.toThrow(/already has a session .*createSiblingTask/);
+    expect(mocks.startSession).not.toHaveBeenCalled();
+  });
+
+  it('lets a team-room seat join a room task, which holds one session per teammate', async () => {
+    mocks.selectLimit.mockResolvedValue([{ id: 'conversation-teammate' }]);
+
+    await expect(
+      createConversation({
+        id: 'conversation-1',
+        projectId: 'project-1',
+        taskId: 'task-1',
+        title: 'Ada',
+        runtime: 'claude',
+        teamRoomMemberSeat: true,
+      })
+    ).resolves.toEqual(expect.objectContaining({ id: 'conversation-1' }));
+  });
 });

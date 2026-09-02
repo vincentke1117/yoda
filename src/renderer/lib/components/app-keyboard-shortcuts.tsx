@@ -7,7 +7,7 @@ import {
 import { useTheme } from '@renderer/lib/hooks/useTheme';
 import { useWorkspaceLayoutContext } from '@renderer/lib/layout/layout-provider';
 import { useParams, useWorkspaceSlots } from '@renderer/lib/layout/navigation-provider';
-import { useShowModal } from '@renderer/lib/modal/modal-provider';
+import { useShowModalOnce } from '@renderer/lib/modal/modal-provider';
 
 /**
  * Mounts global keyboard shortcut handlers for the entire application.
@@ -20,7 +20,7 @@ import { useShowModal } from '@renderer/lib/modal/modal-provider';
  */
 export function AppKeyboardShortcuts() {
   const { value: keyboard } = useAppSettingsKey('keyboard');
-  const showCommandPalette = useShowModal('commandPaletteModal');
+  const showCommandPalette = useShowModalOnce('commandPaletteModal');
   const { toggleLeft } = useWorkspaceLayoutContext();
   const { toggleTheme } = useTheme();
   const commandPaletteHotkey = getEffectiveHotkey('commandPalette', keyboard);

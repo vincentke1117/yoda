@@ -21,14 +21,11 @@ import {
 import { observer } from 'mobx-react-lite';
 import { Activity } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  buildConversationSections,
-  fileTarget,
-  moveTopTabToSidebar,
-} from '@renderer/app/app-tab-context-menu';
+import { fileTarget, moveTopTabToSidebar } from '@renderer/app/app-tab-context-menu';
 import { openTaskTopTab } from '@renderer/app/open-task-target';
 import { tabDragSource, tabDropIndex, useTabDropZone } from '@renderer/app/tab-drag';
 import { BrowserPane } from '@renderer/features/tasks/browser/browser-pane';
+import { TaskMenuItemsForIds } from '@renderer/features/tasks/components/task-menu-items-for-ids';
 import type { ResolvedTab } from '@renderer/features/tasks/tabs/tab-manager-store';
 import {
   buildTaskWindowTarget,
@@ -203,17 +200,13 @@ export const TaskSidebar = observer(function TaskSidebar() {
       </ContextMenuItem>
     );
 
+    // A task is its session, so the session chip carries the task's own menu —
+    // the same one the sidebar row and the top strip show.
     if (tab.kind === 'conversation') {
-      // Same ordering as the top strip: management (rename / archive /
-      // renderer-only reload) first, copy second, open modes last.
-      const [management, copy] = buildConversationSections(
-        provisioned,
-        projectId,
-        taskId,
-        tab.conversationId,
-        t
-      );
-      return [management ?? [], copy ?? [], placement];
+      return [
+        [<TaskMenuItemsForIds key="task-actions" projectId={projectId} taskId={taskId} />],
+        placement,
+      ];
     }
 
     if (tab.kind === 'file' || tab.kind === 'diff') {

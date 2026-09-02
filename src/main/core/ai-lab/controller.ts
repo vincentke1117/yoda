@@ -73,6 +73,11 @@ async function startAppPreview(id: string) {
   return aiLabService.startAppPreview(id);
 }
 
+async function stopAppPreview(id: string) {
+  await aiLabService.stopAppPreview(id);
+  return { success: true as const };
+}
+
 async function assignAppProject(input: AssignAiLabAppProjectInput) {
   return aiLabService.assignAppProject(input);
 }
@@ -110,6 +115,7 @@ export const aiLabController = createRPCController({
   deleteAppImageEdit,
   scaffoldAppProject,
   startAppPreview,
+  stopAppPreview,
   assignAppProject,
   prepareBuildTask,
   cancelBuildTask,

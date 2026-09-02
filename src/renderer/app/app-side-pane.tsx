@@ -2,11 +2,7 @@ import { AppWindow, ArrowLeftToLine, Maximize2, Minimize2, PanelRight, X } from 
 import { observer } from 'mobx-react-lite';
 import { Activity, useEffect, useMemo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  buildConversationSections,
-  fileTarget,
-  moveTopTabToShellPane,
-} from '@renderer/app/app-tab-context-menu';
+import { fileTarget, moveTopTabToShellPane } from '@renderer/app/app-tab-context-menu';
 import { describeTab } from '@renderer/app/app-tab-strip';
 import { closeTaskTopTab, openTaskTopTab } from '@renderer/app/open-task-target';
 import {
@@ -22,6 +18,7 @@ import {
   type WrapParams,
 } from '@renderer/app/view-registry';
 import { useAppSettingsKey } from '@renderer/features/settings/use-app-settings-key';
+import { TaskMenuItemsForIds } from '@renderer/features/tasks/components/task-menu-items-for-ids';
 import { SelfContainedTaskPane } from '@renderer/features/tasks/split-view/tiled-task-grid';
 import {
   asProvisioned,
@@ -206,15 +203,12 @@ export const AppSidePane = observer(function AppSidePane() {
       </ContextMenuItem>,
     ];
 
+    // A task is its session — the session pin carries the task's own menu.
     if (resolved.kind === 'conversation') {
-      const [management, copy] = buildConversationSections(
-        provisioned,
-        pin.projectId,
-        pin.taskId,
-        resolved.conversationId,
-        t
-      );
-      return [management ?? [], copy ?? [], placement];
+      return [
+        [<TaskMenuItemsForIds key="task-actions" projectId={pin.projectId} taskId={pin.taskId} />],
+        placement,
+      ];
     }
 
     // room-member — placement only (no path actions).

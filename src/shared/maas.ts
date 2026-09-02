@@ -182,10 +182,47 @@ export type MaasConnection = MaasPlatformConnection & {
 };
 
 export function hasMaasInferenceCredential(connection: MaasConnection): boolean {
-  const templateId = getMaasPlatformTemplateId(connection.platformId);
+  const kind = resolveSecretKind(connection.platformId);
   return Boolean(
-    templateId === 'zenmux' ? connection.inferenceKeyFingerprint : connection.keyFingerprint
+    kind === 'inference' ? connection.inferenceKeyFingerprint : connection.keyFingerprint
   );
+}
+
+/** Which secret slot a platform uses for inference credentials. */
+export function resolveSecretKind(platformId: MaasPlatformId): 'inference' | 'primary' {
+  return getMaasPlatformDefinition(platformId).separateInferenceKey ? 'inference' : 'primary';
+}
+
+/**
+ * Whether a connection's model ids are provider-prefixed (`openai/gpt-…`,
+ * `google/…`) rather than gateway-native. Matches the platform template's
+ * `modelNamespace`, falling back to any registered platform's `modelHostnames`
+ * so a `profile:…` connection that points at a known prefixed-namespace host
+ * (e.g. a ZenMux profile) behaves identically to the template platform.
+ */
+export function resolveModelNamespace(
+  platformId: MaasPlatformId,
+  endpoint?: string
+): 'native' | 'prefixed' {
+  const platform = getMaasPlatformDefinition(platformId);
+  if (platform.modelNamespace === 'prefixed') return 'prefixed';
+  if (endpoint) {
+    try {
+      const hostname = new URL(endpoint).hostname.toLowerCase();
+      const matchesHost = (host: string) => hostname === host || hostname.endsWith(`.${host}`);
+      if ((platform.modelHostnames ?? []).some(matchesHost)) return 'prefixed';
+      if (
+        Object.values(MAAS_PLATFORMS).some((definition) =>
+          (definition.modelHostnames ?? []).some(matchesHost)
+        )
+      ) {
+        return 'prefixed';
+      }
+    } catch {
+      // Ignore malformed endpoint.
+    }
+  }
+  return 'native';
 }
 
 export function supportsMaasPlatformForRuntime(
@@ -368,6 +405,27 @@ export type MaasPlatformDefinition = {
   docsUrl: string;
   officialDescriptionUrl: string;
   capabilities: MaasInvocationKind[];
+  /** Platform keeps a separate "inference" API key distinct from the primary key. */
+  separateInferenceKey?: boolean;
+  /**
+   * Suffix Claude Code should receive as ANTHROPIC_BASE_URL after stripping a
+   * trailing `/v1` from the connection endpoint. Empty string keeps the stripped
+   * origin (`/v1/messages` served from the API origin). e.g. ZenMux serves the
+   * Anthropic surface under `/api/anthropic`.
+   */
+  claudeEndpointRewrite?: string;
+  /** Extra env vars to inject into the spawned Claude CLI for this platform. */
+  claudeEnvFlags?: Record<string, string>;
+  /** Whether model ids are provider-prefixed (`openai/…`) or gateway-native. */
+  modelNamespace?: 'native' | 'prefixed';
+  /** Hostnames whose connections use `modelNamespace: 'prefixed'` even when the template resolves otherwise (e.g. `profile:…`). */
+  modelHostnames?: string[];
+  /** Platform exposes a management/statistics API (usage records surfaced in MaaS). */
+  supportsManagementStatistics?: boolean;
+  /** Default image-generation model id for AI Lab when the platform has the `image` capability. */
+  defaultImageModel?: string;
+  /** Whether image inference may route Google models through the platform's Vertex-compatible endpoint. */
+  vertexImageEndpoint?: boolean;
 };
 
 export type MaasPlatformDescriptionSource = 'official-meta' | 'official-body-summary' | 'fallback';
@@ -479,6 +537,18 @@ export const MAAS_PLATFORMS: Record<MaasPlatformTemplateId, MaasPlatformDefiniti
     docsUrl: 'https://zenmux.ai/docs/',
     officialDescriptionUrl: 'https://zenmux.ai/docs/',
     capabilities: ['text', 'image', 'embedding', 'video'],
+    separateInferenceKey: true,
+    claudeEndpointRewrite: '/anthropic',
+    claudeEnvFlags: {
+      CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: '1',
+      CLAUDE_CODE_ATTRIBUTION_HEADER: '0',
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+    },
+    modelNamespace: 'prefixed',
+    modelHostnames: ['zenmux.ai'],
+    supportsManagementStatistics: true,
+    defaultImageModel: 'google/gemini-3-pro-image-preview',
+    vertexImageEndpoint: true,
   },
   openrouter: {
     id: 'openrouter',
@@ -490,6 +560,8 @@ export const MAAS_PLATFORMS: Record<MaasPlatformTemplateId, MaasPlatformDefiniti
     docsUrl: 'https://openrouter.ai/docs',
     officialDescriptionUrl: 'https://openrouter.ai/docs',
     capabilities: ['text', 'image'],
+    claudeEndpointRewrite: '',
+    defaultImageModel: 'openai/gpt-image-2',
   },
   siliconflow: {
     id: 'siliconflow',
@@ -511,6 +583,8 @@ export const MAAS_PLATFORMS: Record<MaasPlatformTemplateId, MaasPlatformDefiniti
     docsUrl: 'https://docs.litellm.ai/',
     officialDescriptionUrl: 'https://docs.litellm.ai/',
     capabilities: ['text', 'image', 'embedding'],
+    claudeEndpointRewrite: '',
+    defaultImageModel: 'openai/gpt-image-2',
   },
   newapi: {
     id: 'newapi',
@@ -522,6 +596,8 @@ export const MAAS_PLATFORMS: Record<MaasPlatformTemplateId, MaasPlatformDefiniti
     docsUrl: 'https://docs.newapi.pro/',
     officialDescriptionUrl: 'https://docs.newapi.pro/',
     capabilities: ['text', 'image', 'embedding'],
+    claudeEndpointRewrite: '',
+    defaultImageModel: 'openai/gpt-image-2',
   },
   cliproxyapi: {
     id: 'cliproxyapi',
@@ -533,6 +609,8 @@ export const MAAS_PLATFORMS: Record<MaasPlatformTemplateId, MaasPlatformDefiniti
     docsUrl: 'https://github.com/router-for-me/CLIProxyAPI',
     officialDescriptionUrl: 'https://github.com/router-for-me/CLIProxyAPI',
     capabilities: ['text', 'image'],
+    claudeEndpointRewrite: '',
+    defaultImageModel: 'openai/gpt-image-2',
   },
   custom: {
     id: 'custom',
@@ -543,6 +621,8 @@ export const MAAS_PLATFORMS: Record<MaasPlatformTemplateId, MaasPlatformDefiniti
     docsUrl: 'https://platform.openai.com/docs/api-reference',
     officialDescriptionUrl: 'https://platform.openai.com/docs/api-reference',
     capabilities: ['text', 'image', 'embedding'],
+    claudeEndpointRewrite: '',
+    defaultImageModel: 'openai/gpt-image-2',
   },
 };
 

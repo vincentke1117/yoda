@@ -1,5 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query';
-import type { AgentTeam } from '@shared/agent-team';
+import type { AgentTeam, AgentTeamMember } from '@shared/agent-team';
 import type { Branch } from '@shared/git';
 import type { ParadigmKindDescriptor } from '@shared/paradigms/contract';
 import type { ParadigmStamp } from '@shared/paradigms/stamp';
@@ -27,12 +27,11 @@ export interface CompareVariant {
 }
 
 /**
- * Where a launch lands. The three task-bearing targets are what let a paradigm
- * have one implementation instead of one per surface: the context absorbs the
- * difference between creating a task and joining one.
+ * Where a launch lands. The context absorbs the difference between them, so a
+ * paradigm has one implementation instead of one per surface. Every target
+ * creates tasks — a task is its session, so there is nothing to "join".
  */
 export type ParadigmLaunchTarget =
-  | { kind: 'existing-task'; projectId: string; taskId: string }
   | { kind: 'new-task'; projectId: string }
   /** No project selected — the task lands in the internal drafts project. */
   | { kind: 'draft' }
@@ -50,7 +49,7 @@ export interface ParadigmAgentLaunchRequest {
    * shape exactly once.
    */
   buildPrompt: (requirement: string) => string | undefined;
-  /** Task name seed; defaults to `ctx.baseName`. Ignored for `existing-task`. */
+  /** Task name seed; defaults to `ctx.baseName`. */
   nameSeed?: string;
   quickActionSource?: Omit<QuickActionTaskSource, 'conversationId'>;
 }
@@ -106,7 +105,7 @@ export interface ParadigmLaunchContext {
   titlePrompt: string | undefined;
   /** True when the initial prompt is injected after a language rewrite. */
   deferInitialPrompt: boolean;
-  /** Unique-per-project task name seed. Empty for `existing-task`. */
+  /** Unique-per-project task name seed. */
   baseName: string;
   imagePaths: string[] | undefined;
   /** The branch strategy this paradigm submits, derived from its capabilities. */
@@ -123,12 +122,13 @@ export interface ParadigmLaunchContext {
    * the composer's runtime when not named.
    */
   resolveSlot(slotKey: string, fallbackRuntime?: RuntimeId | null): ResolvedAgentSlot;
+  /** Resolves one roster member, including legacy inline roles without an Agent row. */
+  resolveMember(member: AgentTeamMember): ResolvedAgentSlot;
 
-  /** Creates the agent seat: a conversation on the target task, or a new task. */
+  /** Creates the agent seat: one task, carrying the agent's session. */
   launchAgent(request: ParadigmAgentLaunchRequest): LaunchedParadigmAgent;
   /**
-   * A task with no conversation, for paradigms that populate its conversations
-   * themselves. Resolves to the existing task when one is targeted.
+   * A task with no session, for paradigms that populate it themselves.
    */
   launchBareTask(request?: { nameSeed?: string }): {
     projectId: string;
@@ -154,18 +154,9 @@ export interface ParadigmLaunchContext {
     buildPrompt: (requirement: string) => string | undefined
   ): Promise<string | null>;
 
-  /**
-   * Records this paradigm as the one now driving the task being joined. No-op for
-   * the targets that create their own task — those are stamped at creation.
-   *
-   * Opt-in per kind rather than automatic: adding a lone Agent session to a team's
-   * task does not stop a team from driving it, so only the kinds that establish an
-   * orchestration of their own claim the task.
-   */
-  claimJoinedTask(): void;
   /** Throws when the task is not provisioned far enough to orchestrate on. */
   assertTaskReady(task: { projectId: string; taskId: string }): void;
-  /** Reveals the task. No-op when the composer already sits inside it. */
+  /** Reveals the task. */
   focusTask(projectId: string, taskId: string): void;
   /** Clears the composer and reports what was started to its host. */
   finish(): void;

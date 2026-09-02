@@ -20,7 +20,7 @@ import {
   useParams,
   useWorkspaceSlots,
 } from '@renderer/lib/layout/navigation-provider';
-import { useShowModal } from '@renderer/lib/modal/modal-provider';
+import { useShowModalOnce } from '@renderer/lib/modal/modal-provider';
 import { appState, sidebarStore, workspaceStore } from '@renderer/lib/stores/app-state';
 import { ShortcutHint } from '@renderer/lib/ui/shortcut-hint';
 import { cn } from '@renderer/utils/utils';
@@ -50,7 +50,7 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
   const { navigate } = useNavigate();
   const { currentView } = useWorkspaceSlots();
 
-  const showCommandPalette = useShowModal('commandPaletteModal');
+  const showCommandPalette = useShowModalOnce('commandPaletteModal');
   const { count: skillIssueCount, firstIssue: firstSkillIssue } = useSkillValidationIssues();
   const { isDragOver, onDragOver, onDragEnter, onDragLeave, onDrop } = useSidebarDrop();
 

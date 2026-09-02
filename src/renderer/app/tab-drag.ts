@@ -45,14 +45,7 @@ export type TabDragPayload =
   /** A bottom-panel mode tab — reorders within the bottom strip only. */
   | { kind: 'bottom-mode'; mode: BottomPanelTab }
   /** A terminal row in the bottom drawer's list — reorders within it only. */
-  | { kind: 'terminal-item'; terminalId: string }
-  /** A session being reassigned to another task in the same project. */
-  | {
-      kind: 'conversation-transfer';
-      projectId: string;
-      sourceTaskId: string;
-      conversationId: string;
-    };
+  | { kind: 'terminal-item'; terminalId: string };
 
 /** What a drop handler receives: the zone element plus the pointer position. */
 export type TabDropEvent = { currentTarget: HTMLElement; clientX: number; clientY: number };

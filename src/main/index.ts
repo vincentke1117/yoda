@@ -21,6 +21,7 @@ import {
 } from './core/app/quit-agent-sessions';
 import { appService } from './core/app/service';
 import { automationScheduler } from './core/automation/automation-scheduler';
+import { backendProcessRegistry } from './core/backend-processes/backend-process-registry';
 import { agentSessionRuntimeStore } from './core/conversations/agent-session-runtime';
 import { persistConversationRunOutcome } from './core/conversations/conversation-run-outcome';
 import { runStateReconcilerService } from './core/conversations/run-state-reconciler';
@@ -369,7 +370,7 @@ function prepareShutdown(mode: TeardownMode): Promise<void> {
       archivedTaskReactivationService.dispose();
       agentSessionRuntimeStore.dispose();
       aiLabService.dispose();
-      mobileGatewayService.dispose();
+      mobileGatewayService.dispose(mode);
       mobileRelayService.dispose();
       updateService.dispose();
       prSyncScheduler.dispose();
@@ -449,7 +450,8 @@ app.on('before-quit', (event) => {
   );
   const summary = combineActiveSessionSummaries(
     agentSummary,
-    workspaceTerminalService.getActiveSessionSummary()
+    workspaceTerminalService.getActiveSessionSummary(),
+    backendProcessRegistry.getActiveSessionSummary()
   );
   if (summary.running <= 0) {
     beginShutdown('terminate');

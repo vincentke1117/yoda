@@ -4,7 +4,7 @@ import { BUILTIN_PARADIGMS } from '@shared/paradigms/builtins';
 import { PARADIGM_KIND_IDS, type ParadigmKindId } from '@shared/paradigms/contract';
 import { PARADIGM_KINDS, paradigmSlot } from '@shared/paradigms/kinds';
 import { builtinParadigmId, isBuiltinParadigmId, type Paradigm } from '@shared/paradigms/paradigm';
-import { withParadigmSlotAgent } from '@shared/paradigms/params';
+import { withParadigmSlotAgent, type TeamParadigmParams } from '@shared/paradigms/params';
 import en from '@renderer/lib/i18n/locales/en.json';
 import zh from '@renderer/lib/i18n/locales/zh-CN.json';
 import {
@@ -115,7 +115,7 @@ describe('paradigm entries', () => {
 
   it('lists every picker kind flat, with no sections', () => {
     const entries = paradigmEntries(paradigms);
-    const kinds = new Set(entries.map((entry) => entry.kindId));
+    const kinds = new Set(entries.map((entry) => entry.categoryKindId));
     for (const kindId of PARADIGM_KIND_IDS) {
       expect(
         kinds.has(kindId),
@@ -124,15 +124,14 @@ describe('paradigm entries', () => {
     }
     // Every instance is its own row, so each team contributes one rather than
     // collapsing into a single "multi-agent" entry — the shipped one included.
-    expect(entries.filter((entry) => entry.kindId === 'team').map((entry) => entry.id)).toEqual([
-      builtinParadigmId('team'),
-      squad.id,
-    ]);
+    expect(
+      entries.filter((entry) => entry.categoryKindId === 'team').map((entry) => entry.id)
+    ).toEqual([builtinParadigmId('team'), squad.id]);
     // Ranked ascending, which is the only ordering the flat list has.
     expect(entries.map((entry) => entry.pickerOrder)).toEqual(
       [...entries.map((entry) => entry.pickerOrder)].sort((a, b) => a - b)
     );
-    expect(entries[0]?.kindId).toBe('single');
+    expect(entries[0]?.categoryKindId).toBe('single');
     // A user instance sorts after every built-in, whatever its kind.
     expect(entries.at(-1)?.id).toBe(mine.id);
   });
@@ -168,6 +167,32 @@ describe('paradigm entries', () => {
     expect(
       paradigmEntryLabel({ ...(team as ParadigmEntry), name: PARADIGM_KINDS.team.labelKey }, t).name
     ).toBeNull();
+  });
+
+  it('derives single-vs-team category from the enabled roster, not persisted kindId', () => {
+    const agent = { id: 'agent-a', slug: 'agent-a' } as Agent;
+    const staleTeam: Paradigm = {
+      ...squad,
+      id: 'stale-one-agent-team',
+      label: 'CC 小天才',
+      params: {
+        ...(PARADIGM_KINDS.team.defaultParams as TeamParadigmParams),
+        members: [
+          {
+            handle: agent.slug,
+            displayName: 'CC 小天才',
+            role: 'leader',
+            runtime: 'claude',
+            agentRef: agent.id,
+          },
+        ],
+      },
+    };
+
+    const [entry] = paradigmEntries([staleTeam], { agents: [agent], draftAgents: {} });
+
+    expect(entry?.categoryKindId).toBe('single');
+    expect(entry?.categoryKey).toBe(PARADIGM_KINDS.single.labelKey);
   });
 
   it('scopes seats to the instance, so a duplicate diverges from its original', () => {

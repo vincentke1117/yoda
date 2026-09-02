@@ -168,7 +168,7 @@ describe('LiteLlmManagedService', () => {
 
     expect(result).toMatchObject({
       success: true,
-      status: { state: 'running', managed: true, modelCount: 0 },
+      status: { state: 'running', managed: true, modelCount: 0, models: [] },
     });
     expect(dockerCalls.some((args) => args.includes('pull'))).toBe(true);
     expect(dockerCalls.some((args) => args.includes('up'))).toBe(true);

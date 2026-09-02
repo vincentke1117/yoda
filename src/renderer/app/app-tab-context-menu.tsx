@@ -1,25 +1,18 @@
+import type { TFunction } from 'i18next';
 import {
   AppWindow,
-  Archive,
   ArrowRightToLine,
   CopyX,
-  GitFork,
-  Link,
   ListX,
   LocateFixed,
   PanelRight,
   PanelRightOpen,
-  Pencil,
   RefreshCw,
-  Settings2,
-  Share2,
-  Sparkles,
   X,
 } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { Fragment, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { buildTaskDeepLink } from '@shared/deep-links';
 import type { TaskWindowTabTarget } from '@shared/task-window';
 import {
   closeTaskTopTab,
@@ -28,15 +21,8 @@ import {
 } from '@renderer/app/open-task-target';
 import { refreshProjectFile } from '@renderer/features/project-file/project-file-session';
 import { getProjectStore } from '@renderer/features/projects/stores/project-selectors';
-import { useAppSettingsKey } from '@renderer/features/settings/use-app-settings-key';
-import { archiveConversationFlow } from '@renderer/features/tasks/archive-task';
 import { TaskContextMenuItems } from '@renderer/features/tasks/components/task-context-menu';
 import { useTaskMenuActions } from '@renderer/features/tasks/components/use-task-menu-actions';
-import { ConversationMoveSubmenu } from '@renderer/features/tasks/conversations/conversation-move-submenu';
-import {
-  canForkConversation,
-  forkConversationIntoNewTab,
-} from '@renderer/features/tasks/conversations/fork-conversation-tab';
 import { isUnprovisioned, type ProvisionedTask } from '@renderer/features/tasks/stores/task';
 import {
   asProvisioned,
@@ -45,15 +31,9 @@ import {
 } from '@renderer/features/tasks/stores/task-selectors';
 import { type TabManagerStore } from '@renderer/features/tasks/tabs/tab-manager-store';
 import { openTaskTabInWindow } from '@renderer/features/tasks/tabs/tab-meta';
-import { copyYodaLink } from '@renderer/lib/clipboard';
 import { FilePathMenuItems, type FilePathTarget } from '@renderer/lib/components/file-path-actions';
-import { toast } from '@renderer/lib/hooks/use-toast';
 import { APP_SHORTCUTS } from '@renderer/lib/hooks/useKeyboardShortcuts';
-import { rpc } from '@renderer/lib/ipc';
 import { useWorkspaceLayoutContext } from '@renderer/lib/layout/layout-provider';
-import { useNavigate } from '@renderer/lib/layout/navigation-provider';
-import { showModal } from '@renderer/lib/modal/modal-provider';
-import { rpcErrorMessage } from '@renderer/lib/rpc-error';
 import { appState, sidebarStore } from '@renderer/lib/stores/app-state';
 import { isIndexTab, type AppTabEntry } from '@renderer/lib/stores/app-tabs-store';
 import {
@@ -62,12 +42,8 @@ import {
   ContextMenuItem,
   ContextMenuSeparator,
   ContextMenuShortcut,
-  ContextMenuSub,
-  ContextMenuSubContent,
-  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from '@renderer/lib/ui/context-menu';
-import { log } from '@renderer/utils/logger';
 
 /** Right-click menu for top-level app tabs; sections are separated automatically. */
 export const AppTabContextMenu = observer(function AppTabContextMenu({
@@ -81,16 +57,19 @@ export const AppTabContextMenu = observer(function AppTabContextMenu({
   const { setCollapsed } = useWorkspaceLayoutContext();
   const revealInSidebar = () => revealTabInSidebar(tab, () => setCollapsed('left', false));
 
-  // A target-less task tab IS the task entity on the strip — it gets the
-  // shared task menu (identical to the sidebar row and the kanban row).
+  // A task tab IS the task entity on the strip, and so is its session tab (a
+  // task is its session) — both get the shared task menu, identical to the
+  // sidebar row and the kanban row.
   if (tab.viewId === 'task') {
     const { projectId, taskId } = tab.params as { projectId?: string; taskId?: string };
-    if (projectId && taskId && tab.params.tab === undefined) {
+    const target = tab.params.tab as TaskWindowTabTarget | undefined;
+    if (projectId && taskId && (target === undefined || target.kind === 'conversation')) {
       return (
         <TaskOverviewTabMenu
           tab={tab}
           projectId={projectId}
           taskId={taskId}
+          target={target}
           onRevealInSidebar={revealInSidebar}
         >
           {children}
@@ -121,7 +100,7 @@ export const AppTabContextMenu = observer(function AppTabContextMenu({
   );
 });
 
-export type Translate = Parameters<typeof copyYodaLink>[1];
+export type Translate = TFunction;
 
 function buildTabSections(
   tab: AppTabEntry,
@@ -203,37 +182,47 @@ const TaskOverviewTabMenu = observer(function TaskOverviewTabMenu({
   tab,
   projectId,
   taskId,
+  target,
   onRevealInSidebar,
   children,
 }: {
   tab: AppTabEntry;
   projectId: string;
   taskId: string;
+  /** Set for the task's session tab; absent for the task tab itself. */
+  target?: TaskWindowTabTarget;
   onRevealInSidebar: () => void;
   children: ReactNode;
 }) {
   const { t } = useTranslation();
   const actions = useTaskMenuActions(projectId, taskId);
+  const reveal = (
+    <ContextMenuItem
+      key="reveal-in-sidebar"
+      className="whitespace-nowrap"
+      onClick={onRevealInSidebar}
+    >
+      <LocateFixed className="size-4" />
+      {t('appTabs.revealInSidebar')}
+    </ContextMenuItem>
+  );
+  // A session tab can move (side pane / shell pane / window); the task tab
+  // itself only spawns an independent view instance in the shell pane.
+  const placement = target
+    ? buildTargetPlacementItems(tab, projectId, taskId, target, t)
+    : [
+        <ContextMenuItem
+          key="global-pin"
+          className="whitespace-nowrap"
+          onClick={() => appState.sidePane.pinTaskView(projectId, taskId)}
+        >
+          <PanelRightOpen className="size-4" />
+          {t('appTabs.openInGlobalSidePane')}
+        </ContextMenuItem>,
+      ];
   const tabSections: ReactNode[][] = [
     buildProvisionRetrySection(projectId, taskId, t),
-    [
-      <ContextMenuItem
-        key="reveal-in-sidebar"
-        className="whitespace-nowrap"
-        onClick={onRevealInSidebar}
-      >
-        <LocateFixed className="size-4" />
-        {t('appTabs.revealInSidebar')}
-      </ContextMenuItem>,
-      <ContextMenuItem
-        key="global-pin"
-        className="whitespace-nowrap"
-        onClick={() => appState.sidePane.pinTaskView(projectId, taskId)}
-      >
-        <PanelRightOpen className="size-4" />
-        {t('appTabs.openInGlobalSidePane')}
-      </ContextMenuItem>,
-    ],
+    [reveal, ...placement],
     buildCloseSection(tab, t),
   ].filter((section) => section.length > 0);
 
@@ -262,67 +251,18 @@ const TaskOverviewTabMenu = observer(function TaskOverviewTabMenu({
 function buildTaskSections(tab: AppTabEntry, t: Translate, reveal: ReactNode[]): ReactNode[][] {
   const { projectId, taskId } = tab.params as { projectId?: string; taskId?: string };
   const target = tab.params.tab as TaskWindowTabTarget | undefined;
-  // The task's own tab is intercepted by TaskOverviewTabMenu before reaching here.
+  // The task's own tab and its session tab are intercepted by
+  // TaskOverviewTabMenu before reaching here.
   if (!projectId || !taskId || !target) return [];
 
   const provisioned = asProvisioned(getTaskStore(projectId, taskId));
   const retry = buildProvisionRetrySection(projectId, taskId, t);
-
-  const placement: ReactNode[] = [];
-  if (provisioned) {
-    placement.push(
-      <ContextMenuItem
-        key="sidebar-pin"
-        className="whitespace-nowrap"
-        onClick={() => void moveTopTabToSidebar(tab, provisioned, target)}
-      >
-        <PanelRight className="size-4" />
-        {t('tasks.tabs.openInSidePane')}
-      </ContextMenuItem>,
-      <ContextMenuItem
-        key="global-pin"
-        className="whitespace-nowrap"
-        onClick={() => void moveTopTabToShellPane(tab, provisioned, projectId, taskId, target)}
-      >
-        <PanelRightOpen className="size-4" />
-        {t('appTabs.openInGlobalSidePane')}
-      </ContextMenuItem>
-    );
-  }
-  placement.push(
-    <ContextMenuItem
-      key="window"
-      className="whitespace-nowrap"
-      onClick={() => {
-        void openTaskTabInWindow({ projectId, taskId, tab: target }).then((opened) => {
-          if (opened) closeTaskTopTab(tab);
-        });
-      }}
-    >
-      <AppWindow className="size-4" />
-      {t('tasks.tabs.openInWindow')}
-    </ContextMenuItem>
-  );
-
-  if (target.kind === 'conversation') {
-    const [management, copy] = buildConversationSections(
-      provisioned,
-      projectId,
-      taskId,
-      target.conversationId,
-      t
-    );
-    return [
-      retry,
-      management ?? [],
-      copy ?? [],
-      [...reveal, ...placement],
-      buildCloseSection(tab, t),
-    ];
-  }
+  const placement = buildTargetPlacementItems(tab, projectId, taskId, target, t);
 
   // room-member target — identity tab; placement + close only (no path actions).
-  if (target.kind === 'room-member') {
+  // A conversation target never reaches here (TaskOverviewTabMenu owns it), but
+  // it still has to be narrowed away before the path-based items below.
+  if (target.kind === 'room-member' || target.kind === 'conversation') {
     return [retry, [...reveal, ...placement], buildCloseSection(tab, t)];
   }
 
@@ -343,6 +283,53 @@ function buildTaskSections(tab: AppTabEntry, t: Translate, reveal: ReactNode[]):
     : [];
 
   return [retry, [...reveal, ...placement], file, buildCloseSection(tab, t)];
+}
+
+/** Where a task-entity tab can go: task sidebar, shell side pane, own window. */
+function buildTargetPlacementItems(
+  tab: AppTabEntry,
+  projectId: string,
+  taskId: string,
+  target: TaskWindowTabTarget,
+  t: Translate
+): ReactNode[] {
+  const provisioned = asProvisioned(getTaskStore(projectId, taskId));
+  const items: ReactNode[] = [];
+  if (provisioned) {
+    items.push(
+      <ContextMenuItem
+        key="sidebar-pin"
+        className="whitespace-nowrap"
+        onClick={() => void moveTopTabToSidebar(tab, provisioned, target)}
+      >
+        <PanelRight className="size-4" />
+        {t('tasks.tabs.openInSidePane')}
+      </ContextMenuItem>,
+      <ContextMenuItem
+        key="global-pin"
+        className="whitespace-nowrap"
+        onClick={() => void moveTopTabToShellPane(tab, provisioned, projectId, taskId, target)}
+      >
+        <PanelRightOpen className="size-4" />
+        {t('appTabs.openInGlobalSidePane')}
+      </ContextMenuItem>
+    );
+  }
+  items.push(
+    <ContextMenuItem
+      key="window"
+      className="whitespace-nowrap"
+      onClick={() => {
+        void openTaskTabInWindow({ projectId, taskId, tab: target }).then((opened) => {
+          if (opened) closeTaskTopTab(tab);
+        });
+      }}
+    >
+      <AppWindow className="size-4" />
+      {t('tasks.tabs.openInWindow')}
+    </ContextMenuItem>
+  );
+  return items;
 }
 
 /**
@@ -436,228 +423,6 @@ function buildCloseSection(tab: AppTabEntry, t: Translate): ReactNode[] {
 /** 'Mod+W' → '⌘W', matching the command palette's hotkey display. */
 function formatHotkey(hotkey: string | undefined): string | undefined {
   return hotkey?.replace('Mod', '⌘').replace('Shift', '⇧').replace('Alt', '⌥').replace(/\+/g, '');
-}
-
-/** Shared menu sections [management, copy] for the top strip and sidebar chips. */
-export function buildConversationSections(
-  provisioned: ProvisionedTask | undefined,
-  projectId: string,
-  taskId: string,
-  conversationId: string,
-  t: Translate
-): ReactNode[][] {
-  const management: ReactNode[] = [];
-  if (provisioned) {
-    management.push(
-      <ContextMenuItem
-        key="rename"
-        className="whitespace-nowrap"
-        onClick={() =>
-          showModal('renameConversationModal', {
-            projectId,
-            taskId,
-            conversationId,
-            currentTitle:
-              provisioned.conversations.conversations.get(conversationId)?.data.title ?? '',
-          })
-        }
-      >
-        <Pencil className="size-4" />
-        {t('tasks.tabs.renameConversation')}
-      </ContextMenuItem>
-    );
-    if (canForkConversation(provisioned, conversationId)) {
-      management.push(
-        <ContextMenuItem
-          key="fork"
-          className="whitespace-nowrap"
-          onClick={() =>
-            void forkConversationIntoNewTab({
-              provisioned,
-              projectId,
-              taskId,
-              conversationId,
-              messages: {
-                success: t('tasks.tabs.forkConversationSuccess'),
-                failure: t('tasks.tabs.forkConversationFailed'),
-              },
-            })
-          }
-        >
-          <GitFork className="size-4" />
-          {t('tasks.tabs.forkConversation')}
-        </ContextMenuItem>
-      );
-    }
-    management.push(
-      <ConversationMoveSubmenu
-        key="move"
-        projectId={projectId}
-        taskId={taskId}
-        conversationId={conversationId}
-      />,
-      <ConversationArchiveSubmenu
-        key="archive"
-        projectId={projectId}
-        taskId={taskId}
-        conversationId={conversationId}
-      />,
-      <ContextMenuItem
-        key="reload"
-        className="whitespace-nowrap"
-        onClick={() => void provisioned.conversations.restartConversation(conversationId)}
-      >
-        <RefreshCw className="size-4" />
-        {t('tasks.tabs.reloadConversation')}
-      </ContextMenuItem>
-    );
-  }
-
-  const copy: ReactNode[] = [
-    ...(provisioned
-      ? [
-          <ContextMenuItem
-            key="share-public"
-            className="whitespace-nowrap"
-            onClick={() => void shareConversationPublicly(projectId, taskId, conversationId, t)}
-          >
-            <Share2 className="size-4" />
-            {t('tasks.tabs.sharePublicLink')}
-          </ContextMenuItem>,
-        ]
-      : []),
-    <ContextMenuItem
-      key="copy-link"
-      className="whitespace-nowrap"
-      onClick={() => void copyYodaLink(buildTaskDeepLink({ projectId, taskId, conversationId }), t)}
-    >
-      <Link className="size-4" />
-      {t('tasks.tabs.copyYodaLink')}
-    </ContextMenuItem>,
-  ];
-
-  return [management, copy];
-}
-
-async function shareConversationPublicly(
-  projectId: string,
-  taskId: string,
-  conversationId: string,
-  t: Translate
-): Promise<void> {
-  const toastId = toast.loading(t('tasks.tabs.creatingPublicShare'));
-  try {
-    const share = await rpc.sessionShares.create(projectId, taskId, conversationId);
-    const copied = await rpc.app.clipboardWriteText(share.url);
-    toast.success(
-      t(copied.success ? 'tasks.tabs.publicShareCopied' : 'tasks.tabs.publicShareCreated'),
-      {
-        id: toastId,
-        description:
-          share.omittedAssetCount > 0
-            ? t('tasks.tabs.publicShareAssetsPartial', {
-                uploaded: share.assetCount,
-                omitted: share.omittedAssetCount,
-              })
-            : share.assetCount > 0
-              ? t('tasks.tabs.publicShareAssetsUploaded', { count: share.assetCount })
-              : copied.success
-                ? undefined
-                : t('tasks.tabs.publicShareCopyFailed'),
-        action: {
-          label: t('common.open'),
-          onClick: () => void rpc.app.openExternal(share.url),
-        },
-      }
-    );
-  } catch (error) {
-    log.warn('AppTabContextMenu: create public session share failed', {
-      projectId,
-      taskId,
-      conversationId,
-      error,
-    });
-
-    // Show the server's own reason (it carries the HTTP status and error code) instead
-    // of guessing at sign-in or empty history — those were only ever two of the causes.
-    const reason = rpcErrorMessage(error);
-    toast.error(t('tasks.tabs.publicShareFailed'), {
-      id: toastId,
-      description: reason || t('tasks.tabs.publicShareFailedDescription'),
-      action: {
-        label: t('common.copy'),
-        onClick: () => {
-          void rpc.app.clipboardWriteText(
-            [
-              reason || t('tasks.tabs.publicShareFailedDescription'),
-              `project: ${projectId}`,
-              `task: ${taskId}`,
-              `session: ${conversationId}`,
-            ].join('\n')
-          );
-        },
-      },
-    });
-  }
-}
-
-/** Archive submenu — direct / run skill then archive / configure skill. */
-function ConversationArchiveSubmenu({
-  projectId,
-  taskId,
-  conversationId,
-}: {
-  projectId: string;
-  taskId: string;
-  conversationId: string;
-}) {
-  const { t } = useTranslation();
-  const { navigate } = useNavigate();
-  const { value: homeDraft } = useAppSettingsKey('homeDraft');
-  const hasArchiveSkill = (homeDraft?.preArchiveCommand ?? '').trim().length > 0;
-
-  const archive = (skipPreCommand: boolean) => {
-    void archiveConversationFlow(projectId, taskId, conversationId, { skipPreCommand }).catch(
-      (error: unknown) => {
-        log.warn('AppTabContextMenu: archive conversation failed', {
-          projectId,
-          taskId,
-          conversationId,
-          error,
-        });
-      }
-    );
-  };
-
-  return (
-    <ContextMenuSub>
-      <ContextMenuSubTrigger className="whitespace-nowrap">
-        <Archive className="size-4" />
-        {t('tasks.tabs.archiveConversation')}
-      </ContextMenuSubTrigger>
-      <ContextMenuSubContent>
-        <ContextMenuItem className="whitespace-nowrap" onClick={() => archive(true)}>
-          <Archive className="size-4" />
-          {t('tasks.tabs.archiveConversationDirect')}
-        </ContextMenuItem>
-        <ContextMenuItem
-          className="whitespace-nowrap"
-          disabled={!hasArchiveSkill}
-          onClick={() => archive(false)}
-        >
-          <Sparkles className="size-4" />
-          {t('tasks.context.archiveWithSkill')}
-        </ContextMenuItem>
-        <ContextMenuItem
-          className="whitespace-nowrap"
-          onClick={() => navigate('settings', { tab: 'sessions' })}
-        >
-          <Settings2 className="size-4" />
-          {t('tasks.context.configureArchiveSkill')}
-        </ContextMenuItem>
-      </ContextMenuSubContent>
-    </ContextMenuSub>
-  );
 }
 
 /** Move a top-level tab into the task sidebar; returns the new internal tab id. */

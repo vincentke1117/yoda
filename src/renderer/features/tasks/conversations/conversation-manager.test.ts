@@ -7,7 +7,6 @@ import {
 } from '@shared/events/agentEvents';
 import {
   conversationArchivedChannel,
-  conversationMovedChannel,
   conversationRenamedChannel,
 } from '@shared/events/conversationEvents';
 import type { FrontendPty } from '@renderer/lib/pty/pty';
@@ -28,9 +27,6 @@ const mocks = vi.hoisted(() => ({
   ptyResizeMock: vi.fn(),
   resizeForRendererMock: vi.fn(),
   archiveConversationMock: vi.fn(),
-  createConversationMock: vi.fn(),
-  forkConversationMock: vi.fn(),
-  forkConversationAtPromptMock: vi.fn(),
   getConversationSessionInfoMock: vi.fn(),
   getConversationRuntimeStatusesMock: vi.fn(),
   getConversationsForTaskMock: vi.fn(),
@@ -54,9 +50,6 @@ vi.mock('@renderer/lib/ipc', () => ({
   rpc: {
     conversations: {
       archiveConversation: mocks.archiveConversationMock,
-      createConversation: mocks.createConversationMock,
-      forkConversation: mocks.forkConversationMock,
-      forkConversationAtPrompt: mocks.forkConversationAtPromptMock,
       getConversationSessionInfo: mocks.getConversationSessionInfoMock,
       getConversationRuntimeStatuses: mocks.getConversationRuntimeStatusesMock,
       getConversationsForTask: mocks.getConversationsForTaskMock,
@@ -130,23 +123,6 @@ describe('ConversationManagerStore', () => {
     mocks.resumeConversationMock.mockResolvedValue({ running: true, generation: 1 });
     mocks.restartConversationMock.mockResolvedValue({ generation: 1 });
     mocks.archiveConversationMock.mockResolvedValue(undefined);
-    mocks.createConversationMock.mockResolvedValue(conversation);
-    mocks.forkConversationMock.mockResolvedValue({
-      ...conversation,
-      id: 'conversation-fork',
-      title: 'Claude · #1',
-      isInitialConversation: false,
-      forkedFromConversationId: 'conversation-1',
-      forkedFromPromptIndex: 0,
-    });
-    mocks.forkConversationAtPromptMock.mockResolvedValue({
-      ...conversation,
-      id: 'conversation-fork',
-      title: 'Claude · #1',
-      isInitialConversation: false,
-      forkedFromConversationId: 'conversation-1',
-      forkedFromPromptIndex: 0,
-    });
     mocks.touchConversationMock.mockResolvedValue(undefined);
     mocks.getConversationSessionInfoMock.mockResolvedValue({ running: false });
     mocks.getConversationRuntimeStatusesMock.mockResolvedValue({});
@@ -1922,150 +1898,22 @@ describe('ConversationManagerStore', () => {
     expect(store.conversations.get('conversation-1')?.data.title).toBe('Synced Codex title');
   });
 
-  it('keeps auto-rename events that arrive before a created conversation is merged', async () => {
-    const createdConversation: Conversation = {
-      ...conversation,
-      id: 'conversation-2',
-      runtimeId: 'codex',
-      title: 'Codex',
-      isInitialConversation: false,
-    };
-    mocks.createConversationMock.mockImplementationOnce(async () => {
-      const listener = mocks.listeners.get(conversationRenamedChannel.name);
-      listener?.({
-        conversationId: 'conversation-2',
-        projectId: 'project-1',
-        taskId: 'task-1',
-        title: 'Synced Codex title',
-      });
-      return createdConversation;
-    });
-    const store = new ConversationManagerStore('project-1', 'task-1', [conversation]);
-
-    await store.createConversation({
-      id: 'conversation-2',
+  it('keeps auto-rename events that arrive before the session snapshot is merged', async () => {
+    // The session is created in main together with its task, so its provider
+    // title can land here before the renderer has ever seen the session.
+    const store = new ConversationManagerStore('project-1', 'task-1');
+    mocks.listeners.get(conversationRenamedChannel.name)?.({
+      conversationId: 'conversation-1',
       projectId: 'project-1',
       taskId: 'task-1',
-      runtime: 'codex',
-      title: 'Codex',
+      title: 'Synced Codex title',
     });
+    mocks.getConversationsForTaskMock.mockResolvedValue([conversation]);
 
-    expect(store.conversations.get('conversation-2')?.data.title).toBe('Synced Codex title');
+    await store.load();
+
+    expect(store.conversations.get('conversation-1')?.data.title).toBe('Synced Codex title');
     expect(mocks.ptyConnectMock).not.toHaveBeenCalled();
-  });
-
-  it('adds a context fork without connecting before a terminal surface requests it', async () => {
-    const store = new ConversationManagerStore('project-1', 'task-1', [conversation]);
-    mocks.ptyConnectMock.mockClear();
-    const params = {
-      projectId: 'project-1',
-      taskId: 'task-1',
-      conversationId: 'conversation-1',
-      promptIndex: 0,
-      target: { kind: 'claude-message' as const, messageId: 'prompt-1' },
-    };
-
-    const fork = await store.forkConversationAtPrompt(params);
-
-    expect(mocks.forkConversationAtPromptMock).toHaveBeenCalledWith(params);
-    expect(fork.id).toBe('conversation-fork');
-    expect(store.conversations.get('conversation-fork')?.data).toEqual(fork);
-    expect(store.conversations.get('conversation-fork')?.data).toMatchObject({
-      forkedFromConversationId: 'conversation-1',
-      forkedFromPromptIndex: 0,
-    });
-    expect(mocks.ptyConnectMock).not.toHaveBeenCalled();
-  });
-
-  it('adds a full conversation fork and deduplicates repeated requests', async () => {
-    const store = new ConversationManagerStore('project-1', 'task-1', [conversation]);
-    mocks.ptyConnectMock.mockClear();
-    const params = {
-      projectId: 'project-1',
-      taskId: 'task-1',
-      conversationId: 'conversation-1',
-      initialSize: { cols: 120, rows: 36 },
-    };
-
-    const first = store.forkConversation(params);
-    const second = store.forkConversation(params);
-    const [fork] = await Promise.all([first, second]);
-
-    expect(first).toBe(second);
-    expect(mocks.forkConversationMock).toHaveBeenCalledTimes(1);
-    expect(mocks.forkConversationMock).toHaveBeenCalledWith(params);
-    expect(store.conversations.get('conversation-fork')?.data).toEqual(fork);
-    expect(mocks.ptyConnectMock).not.toHaveBeenCalled();
-
-    await store.forkConversation(params);
-    expect(mocks.forkConversationMock).toHaveBeenCalledTimes(2);
-  });
-
-  it('leaves a restored fork disconnected when its initial backend launch failed', async () => {
-    mocks.forkConversationAtPromptMock.mockResolvedValueOnce({
-      ...conversation,
-      id: 'conversation-fork',
-      title: 'Claude · #1',
-      isInitialConversation: false,
-      resume: true,
-    });
-    const store = new ConversationManagerStore('project-1', 'task-1', [conversation]);
-    mocks.ptyConnectMock.mockClear();
-
-    const fork = await store.forkConversationAtPrompt({
-      projectId: 'project-1',
-      taskId: 'task-1',
-      conversationId: 'conversation-1',
-      promptIndex: 0,
-      target: { kind: 'claude-message', messageId: 'answer-1' },
-    });
-
-    expect(fork.resume).toBe(true);
-    expect(store.conversations.get('conversation-fork')?.sessionExited).toBe(true);
-    expect(mocks.ptyConnectMock).not.toHaveBeenCalled();
-  });
-
-  it('deduplicates concurrent context forks for the same provider checkpoint', async () => {
-    const store = new ConversationManagerStore('project-1', 'task-1', [conversation]);
-    const params = {
-      projectId: 'project-1',
-      taskId: 'task-1',
-      conversationId: 'conversation-1',
-      promptIndex: 0,
-      target: { kind: 'claude-message' as const, messageId: 'answer-1' },
-    };
-
-    const first = store.forkConversationAtPrompt(params);
-    const second = store.forkConversationAtPrompt(params);
-
-    expect(first).toBe(second);
-    expect(store.isContextForkPending(params)).toBe(true);
-    expect(mocks.forkConversationAtPromptMock).toHaveBeenCalledTimes(1);
-    await expect(Promise.all([first, second])).resolves.toHaveLength(2);
-    expect(store.isContextForkPending(params)).toBe(false);
-
-    await store.forkConversationAtPrompt(params);
-    expect(mocks.forkConversationAtPromptMock).toHaveBeenCalledTimes(2);
-  });
-
-  it('clears a failed context fork so the same checkpoint can be retried', async () => {
-    const store = new ConversationManagerStore('project-1', 'task-1', [conversation]);
-    const params = {
-      projectId: 'project-1',
-      taskId: 'task-1',
-      conversationId: 'conversation-1',
-      promptIndex: 0,
-      target: { kind: 'codex-turn' as const, turnId: 'turn-1' },
-    };
-    mocks.forkConversationAtPromptMock.mockRejectedValueOnce(new Error('fork failed'));
-
-    await expect(store.forkConversationAtPrompt(params)).rejects.toThrow('fork failed');
-    expect(store.isContextForkPending(params)).toBe(false);
-
-    await expect(store.forkConversationAtPrompt(params)).resolves.toMatchObject({
-      id: 'conversation-fork',
-    });
-    expect(mocks.forkConversationAtPromptMock).toHaveBeenCalledTimes(2);
   });
 
   it('archives conversations via RPC and leaves removal to the archive event', async () => {
@@ -2097,40 +1945,5 @@ describe('ConversationManagerStore', () => {
 
     expect(store.conversations.has('conversation-1')).toBe(false);
     expect(mocks.ptyDisposeMock).toHaveBeenCalled();
-  });
-
-  it('removes a conversation when it moves out of this task', () => {
-    const store = new ConversationManagerStore('project-1', 'task-1', [conversation]);
-    const listener = mocks.listeners.get(conversationMovedChannel.name);
-
-    listener?.({
-      conversation: { ...conversation, taskId: 'task-2' },
-      sourceTaskId: 'task-1',
-      targetTaskId: 'task-2',
-    });
-
-    expect(store.conversations.has('conversation-1')).toBe(false);
-    expect(mocks.ptyDisposeMock).toHaveBeenCalled();
-  });
-
-  it('registers a moved conversation lazily with its new PTY identity', async () => {
-    const store = new ConversationManagerStore('project-1', 'task-2');
-    const listener = mocks.listeners.get(conversationMovedChannel.name);
-    mocks.ptyConnectMock.mockClear();
-
-    listener?.({
-      conversation: { ...conversation, taskId: 'task-2' },
-      sourceTaskId: 'task-1',
-      targetTaskId: 'task-2',
-    });
-    await flushPromises();
-
-    expect(store.conversations.get('conversation-1')?.session.sessionId).toBe(
-      'project-1:task-2:conversation-1'
-    );
-    expect(mocks.ptyConnectMock).not.toHaveBeenCalled();
-    expect(mocks.getConversationRuntimeStatusesMock).toHaveBeenCalledWith('project-1', 'task-2', [
-      'conversation-1',
-    ]);
   });
 });

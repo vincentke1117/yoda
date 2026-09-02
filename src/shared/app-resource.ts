@@ -8,6 +8,17 @@ export type AppProcessResource = {
   memoryBytes: number;
 };
 
+export type AppBackendProcessResource = {
+  id: string;
+  kind: 'app-preview' | 'metro';
+  label: string;
+  projectId: string | null;
+  projectName: string | null;
+  url: string | null;
+  pid: number | null;
+  detachable: boolean;
+};
+
 export type AppAgentSessionResource = {
   projectId: string;
   taskId: string;
@@ -47,6 +58,7 @@ export type AppResourceSnapshot = {
   cpuPercent: number;
   memoryBytes: number;
   agentSessions: AppAgentSessionResource[];
+  backendProcesses: AppBackendProcessResource[];
   processes: AppProcessResource[];
   mainEventLoop: AppEventLoopMetrics;
   rendererPerformance: RendererPerformanceSample | null;

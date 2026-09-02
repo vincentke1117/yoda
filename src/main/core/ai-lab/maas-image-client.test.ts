@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { editZenmuxImage } from './zenmux-image-client';
+import { editMaasImage } from './maas-image-client';
 
 const logMocks = vi.hoisted(() => ({
   start: vi.fn(async () => 'log-1'),
@@ -28,7 +28,7 @@ describe('ZenMux image edit client', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    const result = await editZenmuxImage({
+    const result = await editMaasImage({
       endpoint: 'https://zenmux.ai/api/v1/',
       apiKey: 'secret',
       appId: 'app-1',

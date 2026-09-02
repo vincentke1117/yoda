@@ -41,6 +41,7 @@ import yodaLogo from '@/assets/images/yoda/yoda_logo.svg';
 import { enabledTeamMembers, type AgentTeam } from '@shared/agent-team';
 import type { Agent } from '@shared/agents';
 import type { Branch } from '@shared/git';
+import { paradigmKindByRoster } from '@shared/paradigms/classification';
 import type {
   ParadigmAccent,
   ParadigmKindDescriptor,
@@ -78,6 +79,7 @@ import type {
 } from '@renderer/features/paradigms/launch-context';
 import { paradigmsQueryKey } from '@renderer/features/paradigms/paradigm-queries';
 import { paradigmLauncher, paradigmLaunchStamp } from '@renderer/features/paradigms/registry';
+import { paradigmRoster } from '@renderer/features/paradigms/roster';
 import { paradigmSeatAgentId } from '@renderer/features/paradigms/seats';
 import { ParadigmSelector } from '@renderer/features/paradigms/selector';
 import {
@@ -151,23 +153,22 @@ import { promptRewriteFailureDescription } from './submit-prompt-rewrite';
 type HomeRunMode = LegacyRunMode;
 type RunHostKind = 'local' | 'ssh';
 
-type HomeComposerSubmitTarget =
-  | {
-      kind: 'new-task';
-      parentTask?: { projectId: string; taskId: string };
-      /**
-       * Quick-action capture: locks the composer to this project and always runs
-       * in quick-action mode, so the finished task is judged for promotion into
-       * the project's quick-action list.
-       */
-      quickActionProjectId?: string;
-    }
-  | { kind: 'existing-task'; projectId: string; taskId: string };
+type HomeComposerSubmitTarget = {
+  kind: 'new-task';
+  parentTask?: { projectId: string; taskId: string };
+  /**
+   * Quick-action capture: locks the composer to this project and always runs
+   * in quick-action mode, so the finished task is judged for promotion into
+   * the project's quick-action list.
+   */
+  quickActionProjectId?: string;
+};
 
-export type HomeComposerSubmitResult = { requirement: string } & (
-  | { kind: 'task'; projectId: string; taskId: string }
-  | { kind: 'conversation'; projectId: string; taskId: string; conversationIds: string[] }
-);
+export type HomeComposerSubmitResult = { requirement: string } & {
+  kind: 'task';
+  projectId: string;
+  taskId: string;
+};
 
 function branchLabel(branch: Branch | undefined, fallback = 'main'): string {
   if (!branch) return fallback;
@@ -365,12 +366,10 @@ export const HomeComposer = observer(function HomeComposer({
   const { t, i18n } = useTranslation();
   const { navigate } = useNavigate();
   const { setCollapsed } = useWorkspaceLayoutContext();
-  const taskScopedTarget = submitTarget.kind === 'existing-task' ? submitTarget : null;
   // Subtask mode: still creates tasks, but locked to the parent's project and
   // linked via parentTaskId; new branches fork off the parent's branch.
-  const parentTarget = submitTarget.kind === 'new-task' ? (submitTarget.parentTask ?? null) : null;
-  const quickActionProjectId =
-    submitTarget.kind === 'new-task' ? (submitTarget.quickActionProjectId ?? null) : null;
+  const parentTarget = submitTarget.parentTask ?? null;
+  const quickActionProjectId = submitTarget.quickActionProjectId ?? null;
 
   const projectManager = getProjectManagerStore();
   const showAddProjectModal = useShowModal('addProjectModal');
@@ -393,10 +392,9 @@ export const HomeComposer = observer(function HomeComposer({
   const { value: draft, update: updateDraft } = useAppSettingsKey('homeDraft');
   const { value: taskSettings, update: updateTaskSettings } = useAppSettingsKey('tasks');
 
-  const isProjectLocked = !!(taskScopedTarget || parentTarget || quickActionProjectId);
+  const isProjectLocked = !!(parentTarget || quickActionProjectId);
   const selectedProjectId = resolveHomeProjectId({
-    lockedProjectId:
-      taskScopedTarget?.projectId ?? parentTarget?.projectId ?? quickActionProjectId ?? undefined,
+    lockedProjectId: parentTarget?.projectId ?? quickActionProjectId ?? undefined,
     homeProjectId,
     navigationProjectId: navProjectId,
     draftProjectId: draft?.selectedProjectId,
@@ -454,9 +452,6 @@ export const HomeComposer = observer(function HomeComposer({
   const mounted = asMounted(projectStore);
   const projectData = mounted?.data;
   const connectionId = projectData?.type === 'ssh' ? projectData.connectionId : undefined;
-  const taskScopedTaskStore = taskScopedTarget
-    ? getTaskStore(taskScopedTarget.projectId, taskScopedTarget.taskId)
-    : undefined;
   const lockedProjectName = isProjectLocked
     ? (projectDisplayName(projectStore) ?? selectedProjectId)
     : undefined;
@@ -717,17 +712,29 @@ export const HomeComposer = observer(function HomeComposer({
       : undefined;
     return remembered ?? selectByKind(paradigms, paradigmKindForRunMode(runMode), undefined);
   }, [paradigms, runMode, selectedParadigmId]);
+  const activeRoster = useMemo(
+    () =>
+      activeParadigm
+        ? paradigmRoster({
+            paradigm: activeParadigm,
+            agents: userAgents,
+            draftAgents: selectedAgentIdsByMode,
+          })
+        : [],
+    [activeParadigm, selectedAgentIdsByMode, userAgents]
+  );
   /**
    * The kind actually driving this composer.
    *
-   * Every capability gate reads this rather than the run mode: the mode is a
-   * persisted string that names a kind, while the selected instance *is* one, and
-   * after a roster edit the instance is the one that changed.
+   * Persisted `kindId` identifies a params/protocol shape. Single-vs-team is a
+   * live property of the enabled roster, so historical one-member `team` rows
+   * must behave exactly like every other single-Agent paradigm.
    */
-  const activeKind = useMemo(
-    () => paradigmKind(activeParadigm?.kindId ?? paradigmKindForRunMode(runMode)),
-    [activeParadigm, runMode]
-  );
+  const activeKind = useMemo(() => {
+    const storedKindId = activeParadigm?.kindId ?? paradigmKindForRunMode(runMode);
+    const effectiveKindId = paradigmKindByRoster(storedKindId, activeRoster);
+    return paradigmKind(effectiveKindId);
+  }, [activeParadigm, activeRoster, runMode]);
   // The roster the multi-agent paradigm runs, read off the selected instance
   // itself: a team *is* a `team` instance, and its roster is that instance's
   // params. Derived rather than fetched separately so the row the picker
@@ -739,19 +746,30 @@ export const HomeComposer = observer(function HomeComposer({
   // Per-slot Agent selection, resolved against the selected instance first and
   // the composer draft second — see `paradigmSeatAgentId`.
   const slotAgentId = useCallback(
-    (slotKey: string): string | null =>
-      paradigmSeatAgentId({
+    (slotKey: string): string | null => {
+      if (activeKind.kindId === 'single' && activeTeam) {
+        const sole = enabledTeamMembers(activeTeam)[0];
+        if (sole?.agentRef) {
+          return (
+            userAgents.find((agent) => agent.id === sole.agentRef || agent.slug === sole.agentRef)
+              ?.id ?? sole.agentRef
+          );
+        }
+        return null;
+      }
+      return paradigmSeatAgentId({
         paradigm: activeParadigm,
         slotStorageKey: slotKey,
         draftAgents: selectedAgentIdsByMode,
         agents: userAgents,
-      }),
-    [activeParadigm, selectedAgentIdsByMode, userAgents]
+      });
+    },
+    [activeKind.kindId, activeParadigm, activeTeam, selectedAgentIdsByMode, userAgents]
   );
   const composerAgent = useMemo<Agent | null>(() => {
-    if (activeKind.kindId === 'team') {
-      const leader =
-        activeTeam?.members.find((member) => member.role === 'leader') ?? activeTeam?.members[0];
+    if (activeTeam) {
+      const running = enabledTeamMembers(activeTeam);
+      const leader = running.find((member) => member.role === 'leader') ?? running[0];
       if (!leader?.agentRef) return null;
       return (
         userAgents.find(
@@ -765,15 +783,22 @@ export const HomeComposer = observer(function HomeComposer({
   }, [activeKind, activeTeam, slotAgentId, userAgents]);
   const composerSkillSelection = useMemo(() => agentSkillSelection(composerAgent), [composerAgent]);
   const permissionModes = useRuntimePermissionModes();
-  const normalAgentRuntime = useMemo(
-    () =>
-      resolveAgentSlot({
-        selectedAgentId: slotAgentId(NORMAL_PROMPT_KEY),
-        agents: userAgents,
-        fallbackRuntime: runtimeId,
-      }).provider,
-    [runtimeId, slotAgentId, userAgents]
-  );
+  const normalAgentRuntime = useMemo(() => {
+    const sole = activeTeam ? enabledTeamMembers(activeTeam)[0] : undefined;
+    if (activeKind.kindId === 'single' && sole) {
+      const agent = sole.agentRef
+        ? userAgents.find(
+            (candidate) => candidate.id === sole.agentRef || candidate.slug === sole.agentRef
+          )
+        : undefined;
+      return agent?.preferredRuntime ?? sole.runtime;
+    }
+    return resolveAgentSlot({
+      selectedAgentId: slotAgentId(NORMAL_PROMPT_KEY),
+      agents: userAgents,
+      fallbackRuntime: runtimeId,
+    }).provider;
+  }, [activeKind.kindId, activeTeam, runtimeId, slotAgentId, userAgents]);
   // Variants reuse the base agent (NORMAL_PROMPT_KEY) with only a runtime
   // override, so their model label mirrors the base config's model.
   const compareModelLabel = useMemo(() => {
@@ -900,7 +925,6 @@ export const HomeComposer = observer(function HomeComposer({
       return [...prev, makeVariantFromBase()];
     });
   }, [makeVariantFromBase]);
-  const targetProvisionedTask = asProvisioned(taskScopedTaskStore);
   const setAttachImagesAsPathsGlobal = useCallback(
     (next: boolean) => {
       updateDraft({ attachImagesAsPaths: next });
@@ -977,7 +1001,6 @@ export const HomeComposer = observer(function HomeComposer({
   // Only a paradigm that refuses to degrade on an unborn repo needs a real
   // branch up front; the rest silently fall back to running in place.
   const modeRequiresWorktree =
-    !taskScopedTarget &&
     paradigmCapabilities.unbornPolicy === 'seed-commit' &&
     projectSubmitStrategyKind === 'new-branch';
   const appPromptLanguage = useMemo(
@@ -1002,26 +1025,19 @@ export const HomeComposer = observer(function HomeComposer({
     },
     [appPromptLanguage, inputPromptLanguage, promptRewriteEnabled, runtimeId, selectedProjectId]
   );
-  // A slot can run only when it has an Agent assigned (the Agent supplies the
-  // runtime + prompt). Every slot the paradigm declares must be filled.
+  // Stored team params carry their roster directly; fixed-slot protocols resolve
+  // every declared seat. The category is already derived from that same roster.
   const hasSlotAgent = (slotKey: string) => !!slotAgentId(slotKey);
-  const modeHasAgents =
-    activeKind.kindId === 'team'
-      ? // A team's roster lives in its params, not in fixed slots — and a member
-        // switched off is still on the roster, so only the enabled ones count
-        // towards having anyone to run.
-        Boolean(activeTeam && enabledTeamMembers(activeTeam).length > 0)
-      : activeKind.slots.every((slot) => hasSlotAgent(slot.storageKey));
-  // Multi-config compare only fires in plain (normal, non-task-scoped) submits;
-  // every variant must target a real project before it can spawn a task.
-  const compareActive =
-    activeKind.kindId === 'single' && !taskScopedTarget && compareVariants.length > 0;
+  const modeHasAgents = activeTeam
+    ? Boolean(enabledTeamMembers(activeTeam).length > 0)
+    : activeKind.slots.every((slot) => hasSlotAgent(slot.storageKey));
+  // Every variant must target a real project before it can spawn a task.
+  const compareActive = activeKind.kindId === 'single' && compareVariants.length > 0;
   const compareVariantsReady =
     !compareActive ||
     (Boolean(selectedProjectId) && compareVariants.every((variant) => Boolean(variant.projectId)));
   const quickActionModeAvailable =
     activeKind.kindId === 'single' &&
-    !taskScopedTarget &&
     compareVariants.length === 0 &&
     projectData?.type === 'local' &&
     (runtimeId === 'codex' || runtimeId === 'claude');
@@ -1045,11 +1061,9 @@ export const HomeComposer = observer(function HomeComposer({
     (!scaffoldsOwnProject || promptHasText) &&
     (scaffoldsOwnProject
       ? true
-      : taskScopedTarget
-        ? !!targetProvisionedTask
-        : modeCanRunWithoutProject
-          ? !mounted || !!projectSubmitSourceBranch
-          : !!mounted && (needsInitialCommit || !!projectSubmitSourceBranch));
+      : modeCanRunWithoutProject
+        ? !mounted || !!projectSubmitSourceBranch
+        : !!mounted && (needsInitialCommit || !!projectSubmitSourceBranch));
 
   const handleSubmit = useCallback(async () => {
     if (!canSubmit || submitting) return;
@@ -1121,9 +1135,6 @@ export const HomeComposer = observer(function HomeComposer({
           navigate('task', { projectId, taskId });
           onSubmitted?.({ kind: 'task', projectId, taskId, requirement });
         },
-        onConversationsStarted: (projectId: string, taskId: string, conversationIds: string[]) => {
-          onSubmitted?.({ kind: 'conversation', projectId, taskId, conversationIds, requirement });
-        },
         resetComposer: () => {
           promptInputRef.current?.setValue('');
           updateDraft({ prompt: '', promptTokens: [] });
@@ -1140,30 +1151,12 @@ export const HomeComposer = observer(function HomeComposer({
             ...shared,
             target: { kind: 'new-project' },
             baseName: '',
-            provisionedTask: null,
             project: null,
             baseDefaultBranch: undefined,
             parentBranchName: null,
             parentTaskId: undefined,
             // No project of its own to define facets, and no parent to inherit from.
             facetId: null,
-          }),
-          params
-        );
-        return;
-      }
-
-      if (taskScopedTarget) {
-        if (!targetProvisionedTask) return;
-        await paradigmLauncher(kindId).launch(
-          createParadigmLaunchContext({
-            ...shared,
-            target: taskScopedTarget,
-            baseName: '',
-            provisionedTask: targetProvisionedTask,
-            project: mounted ?? null,
-            baseDefaultBranch: undefined,
-            parentBranchName: parentBranchName ?? null,
           }),
           params
         );
@@ -1189,7 +1182,6 @@ export const HomeComposer = observer(function HomeComposer({
             ...shared,
             target: { kind: 'new-task', projectId: INTERNAL_PROJECT_ID },
             baseName,
-            provisionedTask: null,
             project: internalProject,
             strategyKind: 'no-worktree',
             selectedBranch: undefined,
@@ -1228,7 +1220,6 @@ export const HomeComposer = observer(function HomeComposer({
           ...shared,
           target: { kind: 'new-task', projectId: mounted.data.id },
           baseName,
-          provisionedTask: null,
           project: mounted,
           baseDefaultBranch,
           parentBranchName: parentBranchName ?? null,
@@ -1241,10 +1232,8 @@ export const HomeComposer = observer(function HomeComposer({
   }, [
     canSubmit,
     mounted,
-    taskScopedTarget,
     parentTarget,
     parentBranchName,
-    targetProvisionedTask,
     runtimeId,
     defaultBranch,
     currentBranchName,
@@ -1443,7 +1432,7 @@ export const HomeComposer = observer(function HomeComposer({
       : null;
 
   const environmentBranchConfiguration: EnvironmentBranchConfiguration | undefined =
-    !taskScopedTarget && mounted && strategyFieldConfig
+    mounted && strategyFieldConfig
       ? {
           projectId: mounted.data.id,
           strategyKind: strategyFieldConfig.strategyKind,
@@ -1542,7 +1531,7 @@ export const HomeComposer = observer(function HomeComposer({
         {/* Compare mode: the base config is migrated into this uniform, reorderable
             list, so every row is an equal config. The plain base chip row below is
             hidden while comparing. */}
-        {!taskScopedTarget && activeKind.kindId === 'single' && compareVariants.length > 0 && (
+        {activeKind.kindId === 'single' && compareVariants.length > 0 && (
           <div className="flex flex-col gap-2">
             {compareVariants.map((variant, index) => {
               const variantProject = asMounted(
@@ -1630,11 +1619,7 @@ export const HomeComposer = observer(function HomeComposer({
             {scaffoldsOwnProject ? null : isProjectLocked ? (
               <TaskScopedProjectButton
                 label={lockedProjectName ?? selectedProjectId ?? ''}
-                tooltip={
-                  taskScopedTarget
-                    ? t('home.taskConversationScopeTooltip')
-                    : t('home.subtaskScopeTooltip')
-                }
+                tooltip={t('home.subtaskScopeTooltip')}
               />
             ) : (
               <div className="flex h-7 items-stretch overflow-hidden rounded-md border border-border bg-background-1 transition-[border-color,box-shadow] focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50">
@@ -1684,7 +1669,7 @@ export const HomeComposer = observer(function HomeComposer({
                 {t('home.buildGenerating')}
               </span>
             )}
-            {!taskScopedTarget && mounted && activeKind.kindId === 'team' && (
+            {mounted && activeKind.kindId === 'team' && (
               <Chip icon={GitFork}>{t('home.teamBranchPolicy')}</Chip>
             )}
             <ParadigmSelector
@@ -1695,7 +1680,7 @@ export const HomeComposer = observer(function HomeComposer({
               onChange={setParadigm}
             />
             {renderComposerSettingsButton()}
-            {!taskScopedTarget && activeKind.kindId === 'single' && renderAddCompareButton()}
+            {activeKind.kindId === 'single' && renderAddCompareButton()}
           </div>
         )}
       </div>

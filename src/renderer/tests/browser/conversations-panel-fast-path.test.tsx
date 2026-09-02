@@ -12,7 +12,6 @@ type MockPty = {
 };
 
 const mocks = vi.hoisted(() => ({
-  archivedHook: vi.fn(),
   conversationValues: vi.fn(),
   historyActive: vi.fn(),
   interfaceSettingsLoading: false,
@@ -155,14 +154,6 @@ vi.mock('@renderer/features/tasks/conversations/conversation-session', async () 
   };
 });
 
-vi.mock('@renderer/features/tasks/conversations/conversation-tree', () => ({
-  ConversationTree: () => createElement('div'),
-}));
-
-vi.mock('@renderer/features/tasks/conversations/use-archived-conversations', () => ({
-  useArchivedConversations: (...args: unknown[]) => mocks.archivedHook(...args),
-}));
-
 vi.mock('@renderer/utils/logger', () => ({
   log: { level: 'info', debug: vi.fn() },
 }));
@@ -173,7 +164,6 @@ describe('ConversationsPanel active-session fast path', () => {
 
   beforeEach(() => {
     mocks.hosted = false;
-    mocks.archivedHook.mockReset().mockReturnValue([]);
     mocks.conversationValues.mockReset().mockImplementation(() => {
       throw new Error('active session enumerated the conversation collection');
     });
@@ -267,7 +257,6 @@ describe('ConversationsPanel active-session fast path', () => {
       'conversations:project-1:task-1'
     );
     expect(mocks.conversationValues).not.toHaveBeenCalled();
-    expect(mocks.archivedHook).not.toHaveBeenCalled();
     expect(mocks.sessionProps.mock.lastCall?.[0]).toMatchObject({ loadingSurface: 'external' });
     expect(mocks.historyActive).toHaveBeenLastCalledWith(false);
     const reservedHistory = host.querySelector<HTMLElement>('[data-history-active="false"]');

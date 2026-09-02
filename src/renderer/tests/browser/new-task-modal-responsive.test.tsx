@@ -172,22 +172,10 @@ describe('NewTaskModal responsive layout', () => {
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
   }
 
-  async function renderConversationAt(width: number, height: number): Promise<void> {
-    await page.viewport(width, height);
+  /** Same modal under the Dream skin, which restyles the dialog chrome. */
+  async function renderDreamAt(width: number, height: number): Promise<void> {
     host.className = 'ydream';
-    host.style.width = `${width}px`;
-    const { NewConversationModal } = await import('@renderer/app/new-conversation-modal');
-    await act(async () => {
-      root.render(
-        createElement(NewConversationModal, {
-          onClose: vi.fn(),
-          onSuccess: vi.fn(),
-          projectId: 'project-1',
-          taskId: 'task-1',
-        })
-      );
-    });
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    await renderAt(width, height);
   }
 
   it('keeps the floating modal open after locating the selected project', async () => {
@@ -271,10 +259,10 @@ describe('NewTaskModal responsive layout', () => {
     expect(Number.parseFloat(textareaStyle.maxHeight)).toBeLessThanOrEqual(106);
   });
 
-  it('keeps the new-conversation composer visible inside the Dream skin', async () => {
-    await renderConversationAt(672, 700);
+  it('keeps the composer visible inside the Dream skin', async () => {
+    await renderDreamAt(672, 700);
 
-    const modal = host.querySelector('[data-yoda-surface="new-conversation-modal"]');
+    const modal = host.querySelector('[data-yoda-surface="new-task-modal"]');
     const content = host.querySelector('[data-slot="dialog-content-area"]');
     const composer = host.querySelector('[data-yoda-surface="home-composer"]');
     const textarea = host.querySelector('[data-slot="textarea"]');

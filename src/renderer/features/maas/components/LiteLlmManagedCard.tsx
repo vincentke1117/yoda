@@ -45,7 +45,7 @@ import {
   DropdownMenuTrigger,
 } from '@renderer/lib/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@renderer/lib/ui/tooltip';
-import { ManagedGatewayCardShell } from './ManagedGatewayCardShell';
+import { ManagedGatewayCardShell, ManagedGatewayModelChips } from './ManagedGatewayCardShell';
 
 type LiteLlmManagedCardProps = {
   onOpenManualSettings: () => void;
@@ -475,7 +475,14 @@ export function LiteLlmManagedCard({ onOpenManualSettings, starCount }: LiteLlmM
       testId="litellm-integration-card"
       icon={<Waypoints className="h-8 w-8 text-primary" />}
       name="LiteLLM"
-      description={description}
+      description={
+        <>
+          {description}
+          {status?.models && status.models.length > 0 ? (
+            <ManagedGatewayModelChips models={status.models} />
+          ) : null}
+        </>
+      }
       starCount={starCount}
       actions={
         <HeaderActionToolbar label={t('settings.integrationsTab.litellmActions')}>

@@ -1,8 +1,8 @@
+import type { MaasPlatformId } from './maas';
 import type { RuntimeId } from './runtime-registry';
 
-export const AI_LAB_ENGINE_IDS = ['zenmux', 'codex'] as const;
-
-export type AiLabEngineId = (typeof AI_LAB_ENGINE_IDS)[number];
+/** An image engine: a connected MaaS platform id, or the bundled Codex CLI. */
+export type AiLabEngineId = MaasPlatformId | 'codex';
 
 export type AiLabEngineUnavailableReason = 'not-connected' | 'cli-missing';
 
@@ -13,18 +13,18 @@ export type AiLabEngineStatus = {
 };
 
 /**
- * ZenMux image models the logo generator can route to. Google image models are
- * only exposed through ZenMux's Vertex AI protocol (they never appear in the
- * OpenAI-style /models or /images endpoints); OpenAI ones use the Images API.
+ * Image models the logo generator can route to through an image-capable MaaS
+ * platform. Google image models require the platform's Vertex AI protocol
+ * (`vertexImageEndpoint`); OpenAI ones use the OpenAI Images API.
  */
-export const AI_LAB_ZENMUX_MODELS = [
+export const AI_LAB_IMAGE_MODELS = [
   'google/gemini-3-pro-image-preview',
   'openai/gpt-image-2',
 ] as const;
 
-export type AiLabZenmuxModel = (typeof AI_LAB_ZENMUX_MODELS)[number];
+export type AiLabImageModel = (typeof AI_LAB_IMAGE_MODELS)[number];
 
-export const AI_LAB_DEFAULT_ZENMUX_MODEL: AiLabZenmuxModel = 'google/gemini-3-pro-image-preview';
+export const AI_LAB_DEFAULT_IMAGE_MODEL: AiLabImageModel = 'google/gemini-3-pro-image-preview';
 
 /** Codex CLI generates through its built-in image_gen tool, backed by gpt-image-2. */
 export const AI_LAB_CODEX_MODEL = 'gpt-image-2';
@@ -45,8 +45,8 @@ export type LogoGenerationInput = {
   description: string;
   styleId: LogoStyleId;
   engine: AiLabEngineId;
-  /** ZenMux only; the Codex engine is pinned to its built-in model. */
-  model?: AiLabZenmuxModel;
+  /** Image-platform only; the Codex engine is pinned to its built-in model. */
+  model?: AiLabImageModel;
   count: number;
 };
 

@@ -1,4 +1,3 @@
-import { NewConversationModal } from '@renderer/app/new-conversation-modal';
 import { NewSubtaskModal } from '@renderer/app/new-subtask-modal';
 import { NewTaskModal } from '@renderer/app/new-task-modal';
 import { WorkspaceResourceDetailsModal } from '@renderer/app/workspace-resource-details-modal';
@@ -32,7 +31,6 @@ import { CreateParentTaskModal } from '@renderer/features/tasks/create-parent-ta
 import { CreateTaskModal } from '@renderer/features/tasks/create-task-modal/create-task-modal';
 import { CreatePrModal } from '@renderer/features/tasks/diff-view/changes-panel/components/pr-entry/create-pr-modal';
 import { ConflictDialog } from '@renderer/features/tasks/editor/conflict-dialog';
-import { RenameConversationModal } from '@renderer/features/tasks/rename-conversation-modal';
 import { RenameTaskModal } from '@renderer/features/tasks/rename-task-modal';
 import { SessionPromptsModal } from '@renderer/features/tasks/session-prompts-modal';
 import { SetParentTaskModal } from '@renderer/features/tasks/set-parent-task-modal';
@@ -74,7 +72,6 @@ export const modalRegistry = {
   workspaceResourceDetailsModal: createModal(WorkspaceResourceDetailsModal, { size: 'lg' }),
   taskModal: createModal(CreateTaskModal),
   newTaskModal: createModal(NewTaskModal, { size: 'lg', className: 'sm:max-w-3xl' }),
-  newConversationModal: createModal(NewConversationModal, { size: 'lg' }),
   newSubtaskModal: createModal(NewSubtaskModal, { size: 'lg' }),
   addProjectModal: createModal(AddProjectModal),
   expressCreateProjectModal: createModal(ExpressCreateProjectModal, { size: 'xs' }),
@@ -87,7 +84,7 @@ export const modalRegistry = {
   feedbackModal: createModal(FeedbackModal),
   addMaasProfileModal: createModal(AddMaasProfileModal, { size: 'sm' }),
   maasConnectionTestModal: createModal(MaasConnectionTestModal, { size: 'md' }),
-  zenmuxUsageModal: createModal(ZenmuxUsageModal, { size: 'lg' }),
+  maasUsageModal: createModal(ZenmuxUsageModal, { size: 'lg' }),
   mcpServerModal: createModal(McpModal),
   createSkillModal: createModal(CreateSkillModal),
   reviseSkillModal: createModal(ReviseSkillModal, { size: 'lg' }),
@@ -96,7 +93,6 @@ export const modalRegistry = {
   conflictDialog: createModal(ConflictDialog, { size: 'sm' }),
   createPrModal: createModal(CreatePrModal, { size: 'md' }),
   renameTaskModal: createModal(RenameTaskModal, { size: 'xs', scope: 'container' }),
-  renameConversationModal: createModal(RenameConversationModal, { size: 'xs' }),
   taskDetailsModal: createModal(TaskDetailsModal, { size: 'lg' }),
   setParentTaskModal: createModal(SetParentTaskModal, { size: 'sm' }),
   createParentTaskModal: createModal(CreateParentTaskModal, { size: 'xs' }),

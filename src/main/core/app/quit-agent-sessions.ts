@@ -1,6 +1,10 @@
 import { PRODUCT_NAME } from '@shared/app-identity';
 import { isAgentSessionRunningStatus } from '@shared/events/agentEvents';
 import { getRuntime } from '@shared/runtime-registry';
+import type {
+  ActiveBackendProcessSummary,
+  BackendProcessInfo,
+} from '@main/core/backend-processes/backend-process-registry';
 import type { ActiveConversationSession } from '@main/core/conversations/types';
 import type { ActiveAgentSessionSummary } from '@main/core/tasks/task-manager';
 import type {
@@ -28,13 +32,15 @@ type ShowQuitDialog = (options: QuitDialogOptions) => number;
 
 type QuitSessionInfo =
   | ActiveAgentSessionSummary['nonKeepableSessions'][number]
-  | ActiveWorkspaceTerminalSession;
+  | ActiveWorkspaceTerminalSession
+  | BackendProcessInfo;
 
 export type ActiveQuitSessionSummary = {
   running: number;
   keepable: number;
   agentSessions: number;
   terminalSessions: number;
+  backendProcesses: number;
   nonKeepableSessions: QuitSessionInfo[];
 };
 
@@ -70,17 +76,31 @@ function pluralize(count: number, singular: string, plural: string): string {
 }
 
 function messageFor(summary: ActiveQuitSessionSummary): string {
-  if (summary.agentSessions > 0 && summary.terminalSessions > 0) {
-    return `${summary.agentSessions} ${pluralize(summary.agentSessions, 'agent session', 'agent sessions')} and ${summary.terminalSessions} ${pluralize(summary.terminalSessions, 'terminal session', 'terminal sessions')} are still running.`;
+  const parts: string[] = [];
+  if (summary.agentSessions > 0) {
+    parts.push(
+      `${summary.agentSessions} ${pluralize(summary.agentSessions, 'agent session', 'agent sessions')}`
+    );
   }
   if (summary.terminalSessions > 0) {
-    return summary.terminalSessions === 1
-      ? 'A terminal session is still running.'
-      : `${summary.terminalSessions} terminal sessions are still running.`;
+    parts.push(
+      `${summary.terminalSessions} ${pluralize(summary.terminalSessions, 'terminal session', 'terminal sessions')}`
+    );
   }
-  return summary.agentSessions === 1
-    ? 'An agent session is still running.'
-    : `${summary.agentSessions} agent sessions are still running.`;
+  if (summary.backendProcesses > 0) {
+    parts.push(
+      `${summary.backendProcesses} ${pluralize(summary.backendProcesses, 'backend process', 'backend processes')}`
+    );
+  }
+
+  const verb = summary.running === 1 ? 'is' : 'are';
+  if (parts.length === 1) {
+    if (summary.agentSessions === 1) return 'An agent session is still running.';
+    if (summary.terminalSessions === 1) return 'A terminal session is still running.';
+    if (summary.backendProcesses === 1) return 'A backend process is still running.';
+    return `${parts[0]} ${verb} still running.`;
+  }
+  return `${parts.slice(0, -1).join(', ')}${parts.length > 2 ? ',' : ''} and ${parts[parts.length - 1]} ${verb} still running.`;
 }
 
 type SessionDetail = ActiveQuitSessionSummary['nonKeepableSessions'][number];
@@ -94,6 +114,11 @@ function truncateLabel(value: string): string {
 }
 
 function sessionLabel(session: SessionDetail): string {
+  if ('kind' in session) {
+    const kindLabel = session.kind === 'metro' ? 'Metro' : 'App preview';
+    const label = session.label.trim() || session.id;
+    return truncateLabel(`${label} (${kindLabel})`);
+  }
   if ('terminalId' in session) {
     return truncateLabel(`${session.name.trim() || session.terminalId} (Terminal)`);
   }
@@ -123,7 +148,7 @@ function directOnlyDetail(summary: ActiveQuitSessionSummary): string {
   const stopObject = count === 1 ? 'it' : 'them';
   const list = formatSessionList(summary.nonKeepableSessions);
 
-  const intro = `${sessionText} using tmux, so ${pronoun} can't keep running in the background after ${PRODUCT_NAME} quits.`;
+  const intro = `${sessionText} detachable, so ${pronoun} can't keep running in the background after ${PRODUCT_NAME} quits.`;
   const action = `Stop ${stopObject} to quit, or cancel to keep working.`;
 
   return list ? `${intro}\n\n${list}\n\n${action}` : `${intro} ${action}`;
@@ -131,7 +156,7 @@ function directOnlyDetail(summary: ActiveQuitSessionSummary): string {
 
 function mixedDetail(summary: ActiveQuitSessionSummary, keepable: number, direct: number): string {
   const list = formatSessionList(summary.nonKeepableSessions);
-  const intro = `${keepable} ${pluralize(keepable, 'session can', 'sessions can')} be kept in tmux. ${direct} direct ${pluralize(direct, 'session', 'sessions')} will stop if ${PRODUCT_NAME} quits.`;
+  const intro = `${keepable} ${pluralize(keepable, 'session can', 'sessions can')} be kept running in the background. ${direct} ${pluralize(direct, 'session', 'sessions')} will stop if ${PRODUCT_NAME} quits.`;
 
   return list ? `${intro}\n\n${list}` : intro;
 }
@@ -155,7 +180,7 @@ export function resolveQuitAgentSessionsDecision(
       cancelId: 2,
       title,
       message,
-      detail: `Keep them running in tmux after ${PRODUCT_NAME} quits, or stop them before exiting.`,
+      detail: `Keep them running in the background after ${PRODUCT_NAME} quits, or stop them before exiting.`,
       noLink: true,
     });
     if (response === 0) return { action: 'quit', mode: 'detach' };
@@ -166,7 +191,7 @@ export function resolveQuitAgentSessionsDecision(
   if (keepable > 0) {
     const response = showDialog({
       type: 'question',
-      buttons: ['Keep tmux Sessions', 'Stop Sessions', 'Cancel'],
+      buttons: ['Keep Running', 'Stop Sessions', 'Cancel'],
       defaultId: 2,
       cancelId: 2,
       title,
@@ -195,13 +220,19 @@ export function resolveQuitAgentSessionsDecision(
 
 export function combineActiveSessionSummaries(
   agents: ActiveAgentSessionSummary,
-  terminals: ActiveWorkspaceTerminalSessionSummary
+  terminals: ActiveWorkspaceTerminalSessionSummary,
+  backend: ActiveBackendProcessSummary
 ): ActiveQuitSessionSummary {
   return {
-    running: agents.running + terminals.running,
-    keepable: agents.keepable + terminals.keepable,
+    running: agents.running + terminals.running + backend.running,
+    keepable: agents.keepable + terminals.keepable + backend.keepable,
     agentSessions: agents.running,
     terminalSessions: terminals.running,
-    nonKeepableSessions: [...agents.nonKeepableSessions, ...terminals.nonKeepableSessions],
+    backendProcesses: backend.running,
+    nonKeepableSessions: [
+      ...agents.nonKeepableSessions,
+      ...terminals.nonKeepableSessions,
+      ...backend.nonKeepableSessions,
+    ],
   };
 }

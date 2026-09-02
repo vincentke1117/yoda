@@ -15,11 +15,11 @@ import { ParadigmRosterEditor } from './roster-editor';
 export function ParadigmConfigurationPanel(props: ParadigmPanelProps) {
   const { t } = useTranslation();
   const { entry, agents, roster, onRosterChange, onConfigurationChange } = props;
-  const KindPanel = PARADIGM_PANELS[entry.kindId];
+  const KindPanel = PARADIGM_PANELS[entry.categoryKindId];
   // A single-Agent paradigm labels its one row with the seat it fills. Kinds that
   // declare no seat (a team) fall back to the vibe-coding seat's label, which is
   // only ever shown while the roster is down to one Agent anyway.
-  const soleSlot = paradigmKind(entry.kindId).slots[0] ?? singleParadigmKind.slots[0];
+  const soleSlot = paradigmKind(entry.categoryKindId).slots[0] ?? singleParadigmKind.slots[0];
 
   return (
     <div className="mt-2 flex flex-col gap-1.5 border-t-0 pt-0">

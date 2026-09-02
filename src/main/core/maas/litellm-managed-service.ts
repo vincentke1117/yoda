@@ -77,7 +77,7 @@ type VirtualKeyResponse = {
 };
 
 type ModelsResponse = {
-  data?: unknown[];
+  data?: Array<{ id?: string }>;
 };
 
 function composeFileContents(): string {
@@ -160,7 +160,7 @@ export class LiteLlmManagedService {
         state: installed ? 'running' : 'external-running',
         installed,
         docker,
-        modelCount: installed ? await this.getModelCount() : null,
+        models: installed ? (await this.getModels()).models : null,
       });
     }
 
@@ -170,7 +170,7 @@ export class LiteLlmManagedService {
         state: 'docker-missing',
         installed,
         docker,
-        modelCount: null,
+        models: null,
       });
     }
 
@@ -179,7 +179,7 @@ export class LiteLlmManagedService {
         state: this.isDockerStarting() ? 'docker-starting' : 'docker-stopped',
         installed,
         docker,
-        modelCount: null,
+        models: null,
       });
     }
 
@@ -187,7 +187,7 @@ export class LiteLlmManagedService {
       state: installed ? 'stopped' : 'not-installed',
       installed,
       docker,
-      modelCount: null,
+      models: null,
     });
   }
 
@@ -396,12 +396,12 @@ export class LiteLlmManagedService {
     state,
     installed,
     docker,
-    modelCount,
+    models,
   }: {
     state: LiteLlmManagedStatus['state'];
     installed: boolean;
     docker: DockerAvailability;
-    modelCount: number | null;
+    models: string[] | null;
   }): LiteLlmManagedStatus {
     return {
       state,
@@ -415,7 +415,8 @@ export class LiteLlmManagedService {
       endpoint: LITELLM_MANAGED_ENDPOINT,
       adminUrl: LITELLM_MANAGED_ADMIN_URL,
       imageVersion: LITELLM_IMAGE_VERSION,
-      modelCount,
+      modelCount: models?.length ?? null,
+      models,
     };
   }
 
@@ -436,20 +437,24 @@ export class LiteLlmManagedService {
     }
   }
 
-  private async getModelCount(): Promise<number | null> {
+  private async getModels(): Promise<{ count: number | null; models: string[] | null }> {
     const masterKey = await this.secretStore.getSecret(MASTER_KEY_SECRET);
-    if (!masterKey) return null;
+    if (!masterKey) return { count: null, models: null };
 
     try {
       const response = await this.fetchApi('http://127.0.0.1:4000/v1/models', {
         headers: { Authorization: `Bearer ${masterKey}` },
         signal: AbortSignal.timeout(STATUS_TIMEOUT_MS),
       });
-      if (!response.ok) return null;
+      if (!response.ok) return { count: null, models: null };
       const body = (await response.json()) as ModelsResponse;
-      return Array.isArray(body.data) ? body.data.length : null;
+      if (!Array.isArray(body.data)) return { count: null, models: null };
+      const models = body.data
+        .map((model) => model.id?.trim())
+        .filter((id): id is string => Boolean(id));
+      return { count: models.length, models };
     } catch {
-      return null;
+      return { count: null, models: null };
     }
   }
 

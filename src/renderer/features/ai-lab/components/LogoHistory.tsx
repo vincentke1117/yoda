@@ -67,9 +67,9 @@ export const LogoHistory: React.FC<{
                 styleId: item.styleId as LogoGenerationInput['styleId'],
                 engine: item.engine,
                 model:
-                  item.engine === 'zenmux'
-                    ? (item.model as LogoGenerationInput['model'])
-                    : undefined,
+                  item.engine === 'codex'
+                    ? undefined
+                    : (item.model as LogoGenerationInput['model']),
                 count: Math.max(1, item.imageCount),
               })
             }

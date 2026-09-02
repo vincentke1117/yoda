@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Conversation } from '@shared/conversations';
-import { forkConversationAtPrompt } from './forkConversationAtPrompt';
+import { forkSessionIntoTask } from './forkSessionIntoTask';
 
 const mocks = vi.hoisted(() => ({
   deleteClaudeTranscript: vi.fn(),
@@ -72,7 +72,25 @@ const sourceRow = {
   createdAt: '2026-07-14 10:00:00',
 };
 
-describe('forkConversationAtPrompt', () => {
+const targetTask = {
+  projectId: 'project-1',
+  taskId: 'task-fork',
+  title: 'Source title · #1',
+};
+
+function forkParams(overrides: Record<string, unknown> = {}) {
+  return {
+    projectId: 'project-1',
+    taskId: 'task-1',
+    conversationId: 'source-conversation',
+    promptIndex: 0,
+    target: { kind: 'codex-turn' as const, turnId: 'turn-1' },
+    targetTask,
+    ...overrides,
+  };
+}
+
+describe('forkSessionIntoTask', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.selectChain.from.mockReturnThis();
@@ -83,9 +101,10 @@ describe('forkConversationAtPrompt', () => {
       {
         ...sourceRow,
         id: 'forked-thread',
+        taskId: 'task-fork',
         title: 'Source title · #1',
         titleSource: 'yoda',
-        isInitialConversation: false,
+        isInitialConversation: true,
         lastInteractedAt: '2026-07-14T11:00:00.000Z',
         forkedFromConversationId: 'source-conversation',
         forkedFromPromptIndex: 0,
@@ -93,9 +112,13 @@ describe('forkConversationAtPrompt', () => {
     ]);
     mocks.updateChain.set.mockReturnThis();
     mocks.updateChain.where.mockResolvedValue(undefined);
-    mocks.resolveTask.mockReturnValue({
-      conversations: { taskPath: '/repo', startSession: mocks.startSession },
-    });
+    // The destination task usually sits in its own worktree, so provider
+    // context is read from the source cwd and written for the target cwd.
+    mocks.resolveTask.mockImplementation((_projectId: string, taskId: string) =>
+      taskId === 'task-1'
+        ? { conversations: { taskPath: '/repo' } }
+        : { conversations: { taskPath: '/repo-fork', startSession: mocks.startSession } }
+    );
     mocks.startSession.mockResolvedValue(undefined);
     mocks.getRuntimeConfig.mockImplementation(async (runtimeId: string) =>
       runtimeId === 'claude'
@@ -137,15 +160,10 @@ describe('forkConversationAtPrompt', () => {
     );
   });
 
-  it('forks Codex through the verified turn, persists copied config, and resumes it', async () => {
-    const conversation = await forkConversationAtPrompt({
-      projectId: 'project-1',
-      taskId: 'task-1',
-      conversationId: 'source-conversation',
-      promptIndex: 0,
-      target: { kind: 'codex-turn', turnId: 'turn-1' },
-      initialSize: { cols: 120, rows: 32 },
-    });
+  it('forks Codex through the verified turn into the destination task and resumes it', async () => {
+    const conversation = await forkSessionIntoTask(
+      forkParams({ initialSize: { cols: 120, rows: 32 } })
+    );
 
     expect(mocks.getCodexSessionContext).toHaveBeenCalledWith(
       '/repo',
@@ -157,7 +175,7 @@ describe('forkConversationAtPrompt', () => {
     expect(mocks.forkCodexThread).toHaveBeenCalledWith({
       threadId: 'source-thread',
       lastTurnId: 'turn-1',
-      cwd: '/repo',
+      cwd: '/repo-fork',
       providerConfig: {
         cli: 'codex',
         env: { CODEX_HOME: '/state/codex' },
@@ -166,11 +184,12 @@ describe('forkConversationAtPrompt', () => {
     expect(mocks.insertChain.values).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'forked-thread',
+        taskId: 'task-fork',
         title: 'Source title · #1',
         titleSource: 'yoda',
         runtime: 'codex',
         config: '{"permissionMode":"full-auto"}',
-        isInitialConversation: false,
+        isInitialConversation: true,
         forkedFromConversationId: 'source-conversation',
         forkedFromPromptIndex: 0,
       })
@@ -188,16 +207,32 @@ describe('forkConversationAtPrompt', () => {
     );
   });
 
-  it('creates a new Claude session id and copies through the verified message', async () => {
+  it('rejects a fork that would land as a second session in the source task', async () => {
+    await expect(
+      forkSessionIntoTask(forkParams({ targetTask: { ...targetTask, taskId: 'task-1' } }))
+    ).rejects.toThrow('must land in a different task');
+
+    expect(mocks.forkCodexThread).not.toHaveBeenCalled();
+    expect(mocks.insertChain.values).not.toHaveBeenCalled();
+  });
+
+  it('rejects a destination task that is not provisioned', async () => {
+    mocks.resolveTask.mockImplementation((_projectId: string, taskId: string) =>
+      taskId === 'task-1' ? { conversations: { taskPath: '/repo' } } : undefined
+    );
+
+    await expect(forkSessionIntoTask(forkParams())).rejects.toThrow(
+      'Task not provisioned: task-fork'
+    );
+    expect(mocks.forkCodexThread).not.toHaveBeenCalled();
+  });
+
+  it('creates a new Claude session id in the destination worktree', async () => {
     mocks.selectChain.limit.mockResolvedValue([{ ...sourceRow, runtime: 'claude' }]);
 
-    await forkConversationAtPrompt({
-      projectId: 'project-1',
-      taskId: 'task-1',
-      conversationId: 'source-conversation',
-      promptIndex: 0,
-      target: { kind: 'claude-message', messageId: 'answer-1' },
-    });
+    await forkSessionIntoTask(
+      forkParams({ target: { kind: 'claude-message', messageId: 'answer-1' } })
+    );
 
     const inserted = mocks.insertChain.values.mock.calls[0]?.[0] as {
       id: string;
@@ -205,7 +240,8 @@ describe('forkConversationAtPrompt', () => {
       forkedFromPromptIndex: number;
     };
     expect(mocks.forkClaudeTranscript).toHaveBeenCalledWith({
-      cwd: '/repo',
+      cwd: '/repo-fork',
+      sourceCwd: '/repo',
       claudeConfigDir: '/state/claude',
       sourceSessionId: 'source-conversation',
       targetSessionId: inserted.id,
@@ -233,13 +269,7 @@ describe('forkConversationAtPrompt', () => {
       },
     ]);
 
-    await forkConversationAtPrompt({
-      projectId: 'project-1',
-      taskId: 'task-1',
-      conversationId: 'source-conversation',
-      promptIndex: 0,
-      target: { kind: 'codex-turn', turnId: 'turn-1' },
-    });
+    await forkSessionIntoTask(forkParams());
 
     const inserted = mocks.insertChain.values.mock.calls[0]?.[0] as { config: string };
     expect(JSON.parse(inserted.config)).toEqual({ permissionMode: 'full-auto' });
@@ -272,13 +302,7 @@ describe('forkConversationAtPrompt', () => {
         }) as Conversation
     );
 
-    await forkConversationAtPrompt({
-      projectId: 'project-1',
-      taskId: 'task-1',
-      conversationId: 'source-conversation',
-      promptIndex: 0,
-      target: { kind: 'codex-turn', turnId: 'turn-1' },
-    });
+    await forkSessionIntoTask(forkParams());
 
     const inserted = mocks.insertChain.values.mock.calls[0]?.[0] as { config: string };
     expect(JSON.parse(inserted.config)).toEqual({
@@ -304,13 +328,7 @@ describe('forkConversationAtPrompt', () => {
       },
     ]);
 
-    await forkConversationAtPrompt({
-      projectId: 'project-1',
-      taskId: 'task-1',
-      conversationId: 'first-fork',
-      promptIndex: 0,
-      target: { kind: 'codex-turn', turnId: 'turn-1' },
-    });
+    await forkSessionIntoTask(forkParams({ conversationId: 'first-fork' }));
 
     expect(mocks.insertChain.values).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -322,87 +340,17 @@ describe('forkConversationAtPrompt', () => {
 
   it('rejects stale or tampered targets before creating a provider fork', async () => {
     await expect(
-      forkConversationAtPrompt({
-        projectId: 'project-1',
-        taskId: 'task-1',
-        conversationId: 'source-conversation',
-        promptIndex: 0,
-        target: { kind: 'codex-turn', turnId: 'other-turn' },
-      })
+      forkSessionIntoTask(forkParams({ target: { kind: 'codex-turn', turnId: 'other-turn' } }))
     ).rejects.toThrow('restore target is invalid');
 
     expect(mocks.forkCodexThread).not.toHaveBeenCalled();
     expect(mocks.insertChain.values).not.toHaveBeenCalled();
   });
 
-  it('deduplicates concurrent forks of the same provider checkpoint', async () => {
-    let releaseFork: ((threadId: string) => void) | undefined;
-    mocks.forkCodexThread.mockReturnValueOnce(
-      new Promise<string>((resolve) => {
-        releaseFork = resolve;
-      })
-    );
-    const params = {
-      projectId: 'project-1',
-      taskId: 'task-1',
-      conversationId: 'source-conversation',
-      promptIndex: 0,
-      target: { kind: 'codex-turn' as const, turnId: 'turn-1' },
-    };
-
-    const first = forkConversationAtPrompt(params);
-    const second = forkConversationAtPrompt(params);
-
-    expect(first).toBe(second);
-    await vi.waitFor(() => expect(mocks.forkCodexThread).toHaveBeenCalledTimes(1));
-    releaseFork?.('forked-thread');
-    await expect(Promise.all([first, second])).resolves.toHaveLength(2);
-    expect(mocks.insertChain.values).toHaveBeenCalledTimes(1);
-  });
-
-  it('validates prompt indexes independently even when their target ids match', async () => {
-    mocks.getCodexSessionContext.mockResolvedValue({
-      threadId: 'source-thread',
-      prompts: [
-        {
-          id: 'prompt-1',
-          text: 'First prompt',
-          timestamp: null,
-          restoreTarget: { kind: 'codex-turn', turnId: 'turn-1' },
-        },
-        {
-          id: 'prompt-2',
-          text: 'Second prompt',
-          timestamp: null,
-          restoreTarget: { kind: 'codex-turn', turnId: 'turn-1' },
-        },
-      ],
-    });
-    const base = {
-      projectId: 'project-1',
-      taskId: 'task-1',
-      conversationId: 'source-conversation',
-      target: { kind: 'codex-turn' as const, turnId: 'turn-1' },
-    };
-
-    const first = forkConversationAtPrompt({ ...base, promptIndex: 0 });
-    const second = forkConversationAtPrompt({ ...base, promptIndex: 1 });
-
-    expect(first).not.toBe(second);
-    await expect(Promise.all([first, second])).resolves.toHaveLength(2);
-    expect(mocks.forkCodexThread).toHaveBeenCalledTimes(2);
-  });
-
   it('keeps a durable fork recoverable when its initial session launch fails', async () => {
     mocks.startSession.mockRejectedValueOnce(new Error('launch failed'));
 
-    const conversation = await forkConversationAtPrompt({
-      projectId: 'project-1',
-      taskId: 'task-1',
-      conversationId: 'source-conversation',
-      promptIndex: 0,
-      target: { kind: 'codex-turn', turnId: 'turn-1' },
-    });
+    const conversation = await forkSessionIntoTask(forkParams());
 
     expect(conversation.resume).toBe(true);
     expect(mocks.emit).toHaveBeenCalledWith('conversation:created', conversation);
@@ -412,15 +360,7 @@ describe('forkConversationAtPrompt', () => {
   it('deletes the provider fork when database persistence fails', async () => {
     mocks.insertChain.returning.mockRejectedValueOnce(new Error('database unavailable'));
 
-    await expect(
-      forkConversationAtPrompt({
-        projectId: 'project-1',
-        taskId: 'task-1',
-        conversationId: 'source-conversation',
-        promptIndex: 0,
-        target: { kind: 'codex-turn', turnId: 'turn-1' },
-      })
-    ).rejects.toThrow('database unavailable');
+    await expect(forkSessionIntoTask(forkParams())).rejects.toThrow('database unavailable');
 
     expect(mocks.deleteCodexThread).toHaveBeenCalledWith('forked-thread', {
       cli: 'codex',
@@ -435,18 +375,12 @@ describe('forkConversationAtPrompt', () => {
     mocks.insertChain.returning.mockRejectedValueOnce(new Error('database unavailable'));
 
     await expect(
-      forkConversationAtPrompt({
-        projectId: 'project-1',
-        taskId: 'task-1',
-        conversationId: 'source-conversation',
-        promptIndex: 0,
-        target: { kind: 'claude-message', messageId: 'answer-1' },
-      })
+      forkSessionIntoTask(forkParams({ target: { kind: 'claude-message', messageId: 'answer-1' } }))
     ).rejects.toThrow('database unavailable');
 
     const targetSessionId = mocks.forkClaudeTranscript.mock.calls[0]?.[0]?.targetSessionId;
     expect(mocks.deleteClaudeTranscript).toHaveBeenCalledWith({
-      cwd: '/repo',
+      cwd: '/repo-fork',
       claudeConfigDir: '/state/claude',
       sessionId: targetSessionId,
     });

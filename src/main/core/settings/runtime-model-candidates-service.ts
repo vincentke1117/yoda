@@ -33,13 +33,7 @@ type SourceResult = {
 };
 
 const CATALOG_SOURCE: RuntimeModelCandidateCacheSource = 'catalog';
-const SOURCE_ORDER: RuntimeModelCandidateCacheSource[] = [
-  'catalog',
-  'zenmux',
-  'officialApi',
-  'docs',
-  'cli',
-];
+const SOURCE_ORDER: RuntimeModelCandidateCacheSource[] = ['catalog', 'officialApi', 'docs', 'cli'];
 
 export class RuntimeModelCandidatesService {
   async inferNamingModelCandidates(
@@ -133,7 +127,8 @@ export class RuntimeModelCandidatesService {
 
     let catalogModels: string[] = [];
     try {
-      catalogModels = await maasService.listZenmuxCatalogTextModelCandidates(true);
+      catalogModels =
+        (await maasService.getActivePlatformModels({ forceRefresh: true }))?.models ?? [];
     } catch (error) {
       log.warn('runtime-model-candidates-service: startup model catalog refresh failed', {
         error: error instanceof Error ? error.message : String(error),
@@ -296,7 +291,7 @@ async function inferFromCatalog(
   provider: RuntimeDefinition,
   forceRefresh: boolean
 ): Promise<string[]> {
-  const models = await maasService.listZenmuxCatalogTextModelCandidates(forceRefresh);
+  const models = (await maasService.getActivePlatformModels({ forceRefresh }))?.models ?? [];
   if (models.length === 0) return [];
 
   return filterModelsForRuntime(provider, models);

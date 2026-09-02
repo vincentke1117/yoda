@@ -133,13 +133,6 @@ vi.mock('@renderer/features/tasks/stores/task-selectors', () => ({
   getRegisteredTaskData: () => undefined,
   getTaskStore: () => undefined,
 }));
-vi.mock('@renderer/features/tasks/conversations/conversation-transfer', () => ({
-  canMoveConversationToTask: () => false,
-  conversationTransferFromPayload: () => null,
-}));
-vi.mock('@renderer/features/tasks/conversations/move-conversation-to-task', () => ({
-  moveConversationToTask: vi.fn(),
-}));
 vi.mock('@renderer/lib/hooks/use-toast', () => ({
   toast: mocks.toast,
   useToast: () => ({ toast: mocks.toast }),

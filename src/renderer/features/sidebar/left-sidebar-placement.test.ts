@@ -33,7 +33,7 @@ describe('LeftSidebar app placement', () => {
     expect(source).toContain("import { NewTaskMenuButton } from './new-task-menu-button';");
     expect(source).toContain('<NewTaskMenuButton');
     expect(buttonSource).toContain(
-      'void openNewTaskFromPreference(currentProjectId, isAltOnlyModifier(event))'
+      'void openNewTaskFromPreference(currentProjectId, isOverride())'
     );
     expect(buttonSource).toContain("t('sidebar.newTask')");
     expect(source).not.toContain('openNewTaskFromCurrentContext');

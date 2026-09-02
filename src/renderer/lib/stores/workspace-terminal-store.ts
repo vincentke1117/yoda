@@ -117,6 +117,24 @@ export class WorkspaceTerminalStore {
     await this.openProject(project, { ensureTerminal: false });
   }
 
+  /** Resolve a terminal's display name across every known workspace scope. */
+  findTerminalName(terminalId: string): string | null {
+    for (const scope of this.scopes.values()) {
+      const terminal = scope.manager.terminals.get(terminalId);
+      if (terminal) return terminal.data.name;
+    }
+    return null;
+  }
+
+  /** Stop a terminal in whichever workspace scope owns it. */
+  async stopTerminal(terminalId: string): Promise<void> {
+    for (const scope of this.scopes.values()) {
+      if (!scope.manager.terminals.has(terminalId)) continue;
+      await scope.manager.deleteTerminal(terminalId);
+      return;
+    }
+  }
+
   isQuickActionRunning(project: MountedProject['data'], actionId: string): boolean {
     const scope = this.getScope(project);
     return Boolean(

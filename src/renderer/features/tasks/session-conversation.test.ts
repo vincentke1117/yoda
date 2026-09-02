@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { ClaudeSessionPrompt, SessionTranscriptMessage } from '@shared/conversations';
 import {
-  buildSessionConversationItems,
-  buildSessionConversationPreviewItems,
+  buildSessionConversationPreviewTurns,
+  buildSessionTurns,
+  filterTurnReplies,
+  type SessionTurn,
 } from './session-conversation';
 
 const prompts: ClaudeSessionPrompt[] = [
@@ -34,135 +36,150 @@ const messages: SessionTranscriptMessage[] = [
   { id: 'user-2', role: 'user', text: 'Polish it', timestamp: null },
 ];
 
-describe('buildSessionConversationItems', () => {
-  it('keeps user-only mode prompt-backed for restore actions', () => {
-    const items = buildSessionConversationItems(prompts, messages, 'hidden');
+function flatten(turns: SessionTurn[]): { role: 'user' | 'assistant'; text: string }[] {
+  const out: { role: 'user' | 'assistant'; text: string }[] = [];
+  for (const turn of turns) {
+    if (turn.user) out.push({ role: 'user', text: turn.user.message.text });
+    for (const reply of turn.replies) out.push({ role: 'assistant', text: reply.text });
+  }
+  return out;
+}
 
-    expect(items.map((item) => item.message.text)).toEqual(['Build the feature', 'Polish it']);
-    expect(items[0]?.prompt?.restoreTarget).toEqual({
+describe('buildSessionTurns', () => {
+  it('keeps user-only mode prompt-backed for restore actions', () => {
+    const turns = buildSessionTurns(prompts, []);
+
+    expect(turns).toHaveLength(2);
+    expect(turns[0]?.user?.prompt?.restoreTarget).toEqual({
       kind: 'codex-turn',
       turnId: 'turn-1',
     });
-    expect(items[0]?.promptIndex).toBe(1);
+    expect(turns[0]?.user?.promptIndex).toBe(1);
+    expect(turns[0]?.replies).toEqual([]);
   });
 
-  it('shows only final agent replies in concise mode', () => {
-    expect(
-      buildSessionConversationItems(prompts, messages, 'concise').map((item) => item.message.text)
-    ).toEqual(['Build the feature', 'Implemented and tested.', 'Polish it']);
-  });
+  it('groups every user prompt with its agent replies into one turn', () => {
+    const turns = buildSessionTurns(prompts, messages);
 
-  it('shows every readable agent reply in detailed mode', () => {
-    expect(
-      buildSessionConversationItems(prompts, messages, 'detailed').map((item) => item.message.text)
-    ).toEqual([
-      'Build the feature',
-      'I will inspect the code.',
-      'Implemented and tested.',
-      'Polish it',
+    expect(flatten(turns)).toEqual([
+      { role: 'user', text: 'Build the feature' },
+      { role: 'assistant', text: 'I will inspect the code.' },
+      { role: 'assistant', text: 'Implemented and tested.' },
+      { role: 'user', text: 'Polish it' },
     ]);
   });
 
   it('preserves restore actions when runtime prompt and message ids differ', () => {
-    const items = buildSessionConversationItems(
-      prompts,
-      [{ id: 'event-user-1', role: 'user', text: 'Build the feature', timestamp: null }],
-      'concise'
-    );
+    const turns = buildSessionTurns(prompts, [
+      { id: 'event-user-1', role: 'user', text: 'Build the feature', timestamp: null },
+    ]);
 
-    expect(items[0]?.promptIndex).toBe(1);
-    expect(items[0]?.prompt?.restoreTarget).toEqual({
+    expect(turns[0]?.user?.promptIndex).toBe(1);
+    expect(turns[0]?.user?.prompt?.restoreTarget).toEqual({
       kind: 'codex-turn',
       turnId: 'turn-1',
     });
   });
 
   it('keeps original transcript positions for prompt subsets', () => {
-    const items = buildSessionConversationItems([prompts[0]!], [], 'hidden', [5]);
+    const turns = buildSessionTurns([prompts[0]!], [], [5]);
 
-    expect(items[0]?.promptIndex).toBe(5);
+    expect(turns[0]?.user?.promptIndex).toBe(5);
   });
 
   it('deduplicates consecutive final replies by their user-visible text', () => {
     const duplicatedFinal = 'Implemented and tested.';
-    const items = buildSessionConversationItems(
-      prompts,
-      [
-        messages[0]!,
-        {
-          id: 'assistant-response-item',
-          role: 'assistant',
-          text: `${duplicatedFinal}
+    const turns = buildSessionTurns(prompts, [
+      messages[0]!,
+      {
+        id: 'assistant-response-item',
+        role: 'assistant',
+        text: `${duplicatedFinal}
 
 <oai-mem-citation>
 internal metadata
 </oai-mem-citation>`,
-          timestamp: '2026-07-30T08:09:37.052Z',
-          phase: 'final',
-        },
-        {
-          id: 'assistant-task-complete',
-          role: 'assistant',
-          text: duplicatedFinal,
-          timestamp: '2026-07-30T08:09:37.053Z',
-          phase: 'final',
-        },
-        messages[3]!,
-      ],
-      'concise'
-    );
+        timestamp: '2026-07-30T08:09:37.052Z',
+        phase: 'final',
+      },
+      {
+        id: 'assistant-task-complete',
+        role: 'assistant',
+        text: duplicatedFinal,
+        timestamp: '2026-07-30T08:09:37.053Z',
+        phase: 'final',
+      },
+      messages[3]!,
+    ]);
 
-    expect(items.map((item) => item.message.text)).toEqual([
-      'Build the feature',
-      duplicatedFinal,
-      'Polish it',
+    expect(turns).toHaveLength(2);
+    expect(turns[0]?.replies.map((reply) => reply.text)).toEqual([duplicatedFinal]);
+    expect(flatten(turns)).toEqual([
+      { role: 'user', text: 'Build the feature' },
+      { role: 'assistant', text: duplicatedFinal },
+      { role: 'user', text: 'Polish it' },
     ]);
   });
 
   it('keeps identical final replies when a user turn separates them', () => {
     const repeatedFinal = 'Done.';
-    const items = buildSessionConversationItems(
-      prompts,
-      [
-        messages[0]!,
-        {
-          id: 'assistant-1',
-          role: 'assistant',
-          text: repeatedFinal,
-          timestamp: null,
-          phase: 'final',
-        },
-        messages[3]!,
-        {
-          id: 'assistant-2',
-          role: 'assistant',
-          text: repeatedFinal,
-          timestamp: null,
-          phase: 'final',
-        },
-      ],
-      'concise'
-    );
+    const turns = buildSessionTurns(prompts, [
+      messages[0]!,
+      {
+        id: 'assistant-1',
+        role: 'assistant',
+        text: repeatedFinal,
+        timestamp: null,
+        phase: 'final',
+      },
+      messages[3]!,
+      {
+        id: 'assistant-2',
+        role: 'assistant',
+        text: repeatedFinal,
+        timestamp: null,
+        phase: 'final',
+      },
+    ]);
 
-    expect(items.filter((item) => item.message.role === 'assistant')).toHaveLength(2);
+    expect(flatten(turns).filter((item) => item.role === 'assistant')).toHaveLength(2);
   });
 });
 
-describe('buildSessionConversationPreviewItems', () => {
+describe('filterTurnReplies', () => {
+  const replies = buildSessionTurns(prompts, messages)[0]!.replies;
+
+  it('hides every reply in hidden mode', () => {
+    expect(filterTurnReplies(replies, 'hidden')).toEqual([]);
+  });
+
+  it('keeps only the closing reply in concise mode', () => {
+    expect(filterTurnReplies(replies, 'concise').map((reply) => reply.text)).toEqual([
+      'Implemented and tested.',
+    ]);
+  });
+
+  it('adds the commentary in detailed mode', () => {
+    expect(filterTurnReplies(replies, 'detailed').map((reply) => reply.text)).toEqual([
+      'I will inspect the code.',
+      'Implemented and tested.',
+    ]);
+  });
+});
+
+describe('buildSessionConversationPreviewTurns', () => {
   it('keeps the beginning and end while reporting the hidden middle', () => {
-    const items = Array.from({ length: 8 }, (_, index) => ({
+    const turns = Array.from({ length: 8 }, (_, index) => ({
       key: String(index),
-      message: {
-        id: String(index),
-        role: 'user' as const,
-        text: String(index),
-        timestamp: null,
+      user: {
+        message: { id: String(index), role: 'user' as const, text: String(index), timestamp: null },
       },
+      replies: [],
     }));
 
     expect(
-      buildSessionConversationPreviewItems(items).map((item) =>
-        item.type === 'truncated' ? `hidden:${item.hiddenCount}` : item.item.message.text
+      buildSessionConversationPreviewTurns(turns).map((item) =>
+        item.type === 'truncated' ? `hidden:${item.hiddenCount}` : item.item.user?.message.text
       )
     ).toEqual(['0', '1', '2', 'hidden:2', '5', '6', '7']);
   });

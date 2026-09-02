@@ -80,3 +80,25 @@ export function ManagedGatewayCardShell({
     </div>
   );
 }
+
+const MODEL_CHIPS_MAX = 6;
+
+/** A compact, scroll-safe list of the models a managed gateway exposes. */
+export function ManagedGatewayModelChips({ models }: { models: string[] | null }) {
+  if (!models || models.length === 0) return null;
+  const visible = models.slice(0, MODEL_CHIPS_MAX);
+  const extra = models.length - visible.length;
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-1">
+      {visible.map((model) => (
+        <span
+          key={model}
+          className="max-w-40 truncate rounded border border-border/60 bg-background/50 px-1.5 py-0.5 font-mono text-[10px] text-foreground-muted"
+        >
+          {model}
+        </span>
+      ))}
+      {extra > 0 ? <span className="text-[10px] text-foreground-muted">+{extra}…</span> : null}
+    </div>
+  );
+}

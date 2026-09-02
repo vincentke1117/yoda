@@ -34,6 +34,8 @@ type AgentModelOption = {
 type AgentModelGroup = {
   value: string;
   label: string;
+  /** The active MaaS channel's live model list; ids are gateway-native. */
+  isChannel?: boolean;
   items: AgentModelOption[];
 };
 
@@ -157,7 +159,11 @@ export function AgentModelCombobox({
         <ComboboxList>
           {(group: AgentModelGroup) => (
             <ComboboxGroup key={group.value} items={group.items}>
-              <ComboboxLabel>{group.label}</ComboboxLabel>
+              <ComboboxLabel>
+                {group.isChannel
+                  ? t('agentManager.modelFromChannel', { name: group.label })
+                  : group.label}
+              </ComboboxLabel>
               <ComboboxCollection>
                 {(option: AgentModelOption) => (
                   <ComboboxItem
@@ -190,12 +196,14 @@ function buildAgentModelGroups(providers: readonly ModelProviderCatalogGroup[]):
     .map((provider) => ({
       value: provider.id,
       label: provider.name,
+      isChannel: provider.channel === true,
       items: provider.models.map((model) => ({
         key: `${provider.id}:${model.id}`,
         providerId: provider.id,
         providerName: provider.name,
         modelId: model.id,
-        value: toRuntimeModelId(provider.id, model.id),
+        // Channel ids are the exact strings the gateway accepts; keep them raw.
+        value: provider.channel ? model.id : toRuntimeModelId(provider.id, model.id),
         sources: model.sources,
       })),
     }))
