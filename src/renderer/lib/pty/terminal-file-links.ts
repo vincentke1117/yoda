@@ -52,8 +52,14 @@ const ABSOLUTE_PATH_SEGMENT = `${PATH_SEG_TOKEN}(?: +${PATH_SEG_TOKEN})?`;
 // a prose delimiter (`Agent 时代，我们需要怎样的 IDE.pdf`). Keep this broader
 // allowance on the basename only, and require its final word to carry the file
 // extension, so trailing prose is not absorbed into the link.
-const SPACED_FILENAME_TOKEN = `[^\\s"'\`$<>|\\\\/:]+`;
-const SPACED_ABSOLUTE_FILENAME = `${SPACED_FILENAME_TOKEN}(?: +${SPACED_FILENAME_TOKEN})* +[^\\s"'\`$<>|\\\\/:]*\\.${PATH_EXT}`;
+// Full-width brackets routinely open trailing prose (`…活动.md（正文约 1.1`)
+// and never appear unbalanced inside a real filename, so excluding them stops
+// the spaced form from bridging an annotation and re-anchoring its extension
+// on a later token such as `1.1`. A full-width colon stays allowed — Chinese
+// filenames use it as a subtitle separator (`标题：副标题.pdf`).
+const SPACED_FILENAME_EXCLUDED = `\\s"'\`$<>|\\\\/:（）「」『』【】〈〉《》`;
+const SPACED_FILENAME_TOKEN = `[^${SPACED_FILENAME_EXCLUDED}]+`;
+const SPACED_ABSOLUTE_FILENAME = `${SPACED_FILENAME_TOKEN}(?: +${SPACED_FILENAME_TOKEN})* +[^${SPACED_FILENAME_EXCLUDED}]*\\.${PATH_EXT}`;
 const SPACED_BARE_FILENAME = `${SPACED_FILENAME_TOKEN}(?: +${SPACED_FILENAME_TOKEN})+\\.(?:${BARE_FILENAME_EXTENSIONS})`;
 // A path is either a file (one or more `dir/` segments + a `name.ext`, optional
 // `:line:col`) OR a directory (one or more `dir/` segments ending in a slash,
@@ -166,6 +172,54 @@ export interface TerminalFileLinkMatch {
   target: TerminalFileLinkTarget;
 }
 
+/**
+ * Narrowing is a capability of the scan that produced a match, not part of its
+ * value, so it lives in a side table and matches stay comparable as plain data.
+ */
+const matchNarrowers = new WeakMap<
+  TerminalFileLinkMatch,
+  (text: string) => TerminalFileLinkMatch | null
+>();
+
+/**
+ * Re-derive `match` from a prefix of its own text, keeping the same start cell.
+ * The verification layer uses this to shrink an over-matched candidate onto the
+ * reading that exists on disk. Returns null when `text` is not a prefix of the
+ * original candidate, no longer resolves to a target, or the match came from a
+ * scan whose terminal rows are gone.
+ */
+export function narrowTerminalFileLinkMatch(
+  match: TerminalFileLinkMatch,
+  text: string
+): TerminalFileLinkMatch | null {
+  return matchNarrowers.get(match)?.(text) ?? null;
+}
+
+/**
+ * Where a path ends inside prose is genuinely ambiguous — `（`, `，` and spaces
+ * all occur inside real filenames and also start the annotation after one — so
+ * the patterns above take the generous reading and an optional verification
+ * layer narrows it against the filesystem. Injected from the renderer entry
+ * (see setTerminalFileLinkVerification) so this module stays free of IPC.
+ */
+export interface TerminalFileLinkVerification {
+  verify(
+    matches: readonly TerminalFileLinkMatch[],
+    options: Pick<TerminalFileLinkOptions, 'sshConnectionId'>
+  ): Promise<TerminalFileLinkMatch[]>;
+  /** Cache-only narrowing for the synchronous hover/context-menu resolver. */
+  applyCached(
+    match: TerminalFileLinkMatch,
+    options: Pick<TerminalFileLinkOptions, 'sshConnectionId'>
+  ): TerminalFileLinkMatch;
+}
+
+let verification: TerminalFileLinkVerification | null = null;
+
+export function setTerminalFileLinkVerification(next: TerminalFileLinkVerification | null): void {
+  verification = next;
+}
+
 export function extractTerminalFileLinkCandidates(line: string): TerminalFileLinkCandidate[] {
   const candidates: TerminalFileLinkCandidate[] = [];
 
@@ -202,24 +256,28 @@ export function getTerminalFileLinkMatches(
 
   const matches: TerminalFileLinkMatch[] = [];
   for (const candidate of extractTerminalFileLinkCandidates(line)) {
-    const target = resolveTerminalFileLinkTarget(
-      candidate.text,
-      options.workspaceRoot,
-      options.homeDir,
-      options.workspaceRootAliases,
-      candidate.isDirectory
-    );
-    if (!target) continue;
+    const buildMatch = (text: string): TerminalFileLinkMatch | null => {
+      const target = resolveTerminalFileLinkTarget(
+        text,
+        options.workspaceRoot,
+        options.homeDir,
+        options.workspaceRootAliases,
+        candidate.isDirectory
+      );
+      if (!target) return null;
 
-    const range = mapScanRangeToBufferRange(
-      terminal,
-      chunks,
-      candidate.index,
-      candidate.text.length
-    );
-    if (!range) continue;
+      const range = mapScanRangeToBufferRange(terminal, chunks, candidate.index, text.length);
+      if (!range) return null;
 
-    matches.push({ range, text: candidate.text, target });
+      const match: TerminalFileLinkMatch = { range, text, target };
+      matchNarrowers.set(match, (next) =>
+        candidate.text.startsWith(next) ? buildMatch(next) : null
+      );
+      return match;
+    };
+
+    const match = buildMatch(candidate.text);
+    if (match) matches.push(match);
   }
 
   return matches;
@@ -626,11 +684,11 @@ export function getTerminalFileLinkAtCell(
   position: TerminalLinkCellPosition,
   options: TerminalFileLinkOptions
 ): TerminalFileLinkMatch | null {
-  return (
-    getTerminalFileLinkMatches(terminal, bufferLineNumber, options).find((match) =>
-      isTerminalLinkCellInRange(match.range, position)
-    ) ?? null
+  const match = getTerminalFileLinkMatches(terminal, bufferLineNumber, options).find((candidate) =>
+    isTerminalLinkCellInRange(candidate.range, position)
   );
+  if (!match) return null;
+  return verification?.applyCached(match, options) ?? match;
 }
 
 export function resolveTerminalFileLinkTarget(
@@ -800,31 +858,45 @@ class TerminalFileLinkProvider implements ILinkProvider {
       return;
     }
 
-    const links = getTerminalFileLinkMatches(this.terminal, bufferLineNumber, options).map(
-      (match): ILink => {
-        const hoverHandlers = createTerminalLinkHoverHandlers(this.terminal, 'Click to open');
+    const matches = getTerminalFileLinkMatches(this.terminal, bufferLineNumber, options);
+    if (matches.length === 0) {
+      callback(undefined);
+      return;
+    }
 
-        return {
-          range: match.range,
-          text: match.text,
-          decorations: {
-            pointerCursor: true,
-            underline: true,
-          },
-          activate: (event) => {
-            if (!isTerminalFileLinkActivation(event)) return;
-            event.preventDefault();
-            event.stopPropagation();
-            this.getOptions()?.onOpen(match.target);
-          },
-          hover: hoverHandlers.hover,
-          leave: hoverHandlers.leave,
-          dispose: hoverHandlers.dispose,
-        };
-      }
-    );
+    if (!verification) {
+      callback(matches.map((match) => this.toLink(match)));
+      return;
+    }
 
-    callback(links.length > 0 ? links : undefined);
+    // xterm allows an async answer here; the verifier caches its verdicts, so
+    // only the first hover over a row pays for the filesystem round trip.
+    void verification
+      .verify(matches, options)
+      .then((verified) => callback(verified.map((match) => this.toLink(match))))
+      .catch(() => callback(matches.map((match) => this.toLink(match))));
+  }
+
+  private toLink(match: TerminalFileLinkMatch): ILink {
+    const hoverHandlers = createTerminalLinkHoverHandlers(this.terminal, 'Click to open');
+
+    return {
+      range: match.range,
+      text: match.text,
+      decorations: {
+        pointerCursor: true,
+        underline: true,
+      },
+      activate: (event) => {
+        if (!isTerminalFileLinkActivation(event)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        this.getOptions()?.onOpen(match.target);
+      },
+      hover: hoverHandlers.hover,
+      leave: hoverHandlers.leave,
+      dispose: hoverHandlers.dispose,
+    };
   }
 }
 

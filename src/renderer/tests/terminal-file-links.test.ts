@@ -159,6 +159,25 @@ describe('terminal file links', () => {
     ]);
   });
 
+  it('stops a spaced filename at a full-width bracket that opens prose', () => {
+    const expected =
+      '/Users/mark/lovstudio/vault/手工川AI创造营/research/我调研了活动行上517个高客单价活动.md';
+    const line = `已写入 ${expected}（正文约 1.1 万字）`;
+
+    expect(extractTerminalFileLinkCandidates(line)).toEqual([
+      { text: expected, index: line.indexOf(expected) },
+    ]);
+  });
+
+  it('keeps a full-width colon inside a spaced filename', () => {
+    const expected = '/Users/mark/lovstudio/vault/Agentic Engineering：中文版.pdf';
+    const line = `导出 ${expected}`;
+
+    expect(extractTerminalFileLinkCandidates(line)).toEqual([
+      { text: expected, index: line.indexOf(expected) },
+    ]);
+  });
+
   it('keeps separate rooted paths from being merged through prose', () => {
     const first = '/Users/mark/Library/Application Support/yoda/first.log';
     const second = '/Users/mark/Library/Application Support/yoda/second.log';

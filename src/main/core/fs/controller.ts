@@ -43,6 +43,31 @@ type PathCompletionOptions = ListOptions & {
   allowOutsideProject?: boolean;
 };
 
+type ProbedPathKind = 'file' | 'directory' | null;
+
+async function buildPathProbe(
+  sshConnectionId: string | undefined
+): Promise<(path: string) => Promise<ProbedPathKind>> {
+  if (sshConnectionId) {
+    const proxy = await sshConnectionManager.connect(sshConnectionId);
+    const rootFs = new SshFileSystem(proxy, '/');
+    return async (candidate) => {
+      const entry = await rootFs.stat(candidate);
+      if (!entry) return null;
+      return entry.type === 'dir' ? 'directory' : 'file';
+    };
+  }
+
+  return async (candidate) => {
+    const stats = await nativeFs.stat(candidate);
+    return stats.isDirectory() ? 'directory' : 'file';
+  };
+}
+
+// Upper bound on one terminal smart-path probe batch: a single link yields a
+// handful of trimmings, and the renderer batches at most a few links per row.
+const PROBE_PATHS_MAX = 32;
+
 // Clipboard images carry no filesystem path, so the renderer ships the bytes
 // over and we persist them to a temp file the agent CLIs can read by path.
 const CLIPBOARD_IMAGE_EXTENSIONS: Record<string, string> = {
@@ -571,6 +596,36 @@ export const filesController = createRPCController({
     try {
       const entry = await env.fs.stat(filePath);
       return ok({ entry });
+    } catch (e) {
+      return err({ type: 'fs_error' as const, message: String(e) });
+    }
+  },
+
+  /**
+   * Classify absolute paths for the terminal smart-path layer. Prose and file
+   * names share too many characters for a regex alone to decide where a path
+   * ends, so the renderer over-matches, then asks disk which trimming is real.
+   * Read-only and batched; unreadable or missing paths report `null` rather
+   * than failing the batch.
+   */
+  probePaths: async (paths: string[], sshConnectionId?: string) => {
+    const requested = paths.slice(0, PROBE_PATHS_MAX);
+    if (requested.some((candidate) => !candidate.startsWith('/'))) {
+      return err({ type: 'fs_error' as const, message: 'probePaths requires absolute paths' });
+    }
+
+    try {
+      const probe = await buildPathProbe(sshConnectionId);
+      const kinds = await Promise.all(
+        requested.map(async (candidate) => {
+          try {
+            return await probe(candidate);
+          } catch {
+            return null;
+          }
+        })
+      );
+      return ok({ kinds });
     } catch (e) {
       return err({ type: 'fs_error' as const, message: String(e) });
     }

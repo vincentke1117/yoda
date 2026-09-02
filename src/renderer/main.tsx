@@ -26,6 +26,11 @@ import { codeEditorPool } from '@renderer/lib/monaco/monaco-code-pool';
 import { diffEditorPool } from '@renderer/lib/monaco/monaco-diff-pool';
 import { modelRegistry } from '@renderer/lib/monaco/monaco-model-registry';
 import { wirePrCacheInvalidation } from '@renderer/lib/pr-cache-invalidation';
+import {
+  applyCachedTerminalFileLinkVerification,
+  verifyTerminalFileLinkMatches,
+} from '@renderer/lib/pty/terminal-file-link-verify';
+import { setTerminalFileLinkVerification } from '@renderer/lib/pty/terminal-file-links';
 import { loadTerminalSettings } from '@renderer/lib/pty/terminal-settings-cache';
 import type { AgentRuntimeSnapshot } from '@renderer/lib/stores/agent-runtime-store';
 import { viewStateCache } from '@renderer/lib/stores/view-state-cache';
@@ -38,6 +43,13 @@ import { appState } from './lib/stores/app-state';
 // a stuck surface is diagnosable after the window is gone.
 setRendererLogForwarder((record) => {
   void rpc.app.reportRendererLog(record).catch(() => {});
+});
+
+// Smart terminal paths over-match on purpose; let them ask disk where a path
+// actually ends instead of teaching the patterns yet another prose exception.
+setTerminalFileLinkVerification({
+  verify: verifyTerminalFileLinkMatches,
+  applyCached: applyCachedTerminalFileLinkVerification,
 });
 
 async function bootstrap() {
