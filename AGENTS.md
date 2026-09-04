@@ -141,3 +141,5 @@ optional_env:
 - `listTmuxSessionMarkersStrict` 里 tmux 二进制缺失（spawn ENOENT）必须按「无会话」返回 `[]`，与超时/传输失败（应 rethrow 让 GC 中止）区分开，否则无 tmux 的机器 `deleteProject` 会静默失败、renderer 回滚项目（用户看「移除项目」没反应）（2026-08-20, c08763a）
 - xterm 的 WebGL 渲染器是 `f7fe9c1f65` 主动移除的（旧设计正是「挂载时 WebGL、离屏时 DOM」），现在 DOM 渲染器是唯一视觉场景；`pty-resize-rendering.test.ts` 用 `.xterm-rows` 结构和 textContent 断言守着它，canvas 下无等价物。要重新引入必须单独立项并先解释那次移除（2026-09-04, 71bcb62）
 - 终端输入与 ACK 走单向 `events.emit`（`pty:input-send` / `pty:acknowledge`），不要改回 `rpc.pty.sendInput` / `acknowledgeOutput` 的 invoke 往返；测试要观察它们就在 `vi.mock('@renderer/lib/ipc')` 的 `events.emit` 里按 channel name 转发进原有 spy（factory 被 hoist，只能内联字符串）（2026-09-04, 71bcb62）
+- 主进程卡顿先看 `~/Library/Logs/Yoda/yoda.log` 里的 `[main-thread] lag summary`：p50/p95 健康而 max 上百毫秒是常态，且 RPC/GC/SQLite 三类归因都指不出凶手时，说明是 Electron 原生主线程工作，不要再在 JS 层找优化点（2026-09-04, 71bcb62）
+- 新增可能阻塞主线程的同步操作时，用 `recordMainThreadBlockingWork(label, ms)` 插桩，否则它在停顿归因里是隐形的（2026-09-04, 71bcb62）
