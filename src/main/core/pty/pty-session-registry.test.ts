@@ -10,6 +10,8 @@ import {
   PTY_FLOW_CONTROL_HIGH_WATERMARK_BYTES,
   PTY_FLOW_CONTROL_LOW_WATERMARK_BYTES,
   PTY_GENERATION_REVEAL_CLAIM_TIMEOUT_MS,
+  PTY_INTERACTIVE_ECHO_MAX_BYTES,
+  PTY_INTERACTIVE_ECHO_WINDOW_MS,
   PTY_OUTPUT_BATCH_MAX_BYTES,
   PTY_PENDING_INPUT_MAX_CHUNKS,
   PTY_PENDING_INPUT_MAX_SESSIONS,
@@ -712,6 +714,64 @@ describe('PtySessionRegistry', () => {
         'session',
       ],
     ]);
+  });
+
+  it('emits a keystroke echo without waiting for the batch interval', () => {
+    vi.setSystemTime(1_000);
+    const registry = new PtySessionRegistry();
+    const pty = new FakePty();
+    registry.register('session', pty);
+    registry.subscribe('session', 'consumer');
+    registry.writeOrQueue('session', 'a');
+    eventMocks.emit.mockClear();
+
+    pty.emitData('a');
+
+    // No timer advance: the echo is already on its way.
+    expect(eventMocks.emit.mock.calls).toEqual([
+      [ptyDataChannel, { generation: 1, sequence: 1, byteLength: 1, data: 'a' }, 'session'],
+    ]);
+  });
+
+  it('keeps batching output that is too large or too late to be an echo', () => {
+    vi.setSystemTime(1_000);
+    const registry = new PtySessionRegistry();
+    const pty = new FakePty();
+    registry.register('session', pty);
+    registry.subscribe('session', 'consumer');
+    registry.writeOrQueue('session', 'a');
+    eventMocks.emit.mockClear();
+
+    // A full repaint is not an echo, however promptly it follows the keystroke.
+    pty.emitData('x'.repeat(PTY_INTERACTIVE_ECHO_MAX_BYTES + 1));
+    expect(eventMocks.emit).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(16);
+    expect(eventMocks.emit).toHaveBeenCalledTimes(1);
+
+    // Unprompted output long after the last keystroke is not an echo either.
+    eventMocks.emit.mockClear();
+    vi.setSystemTime(1_000 + PTY_INTERACTIVE_ECHO_WINDOW_MS + 1);
+    pty.emitData('b');
+    expect(eventMocks.emit).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(16);
+    expect(eventMocks.emit).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports the distinct windows that subscribed, and nothing when any is unknown', () => {
+    const registry = new PtySessionRegistry();
+    registry.register('session', new FakePty());
+
+    expect(registry.consumerOwnerWebContentsIds('session')).toBeNull();
+
+    registry.subscribe('session', 'first', { ownerWebContentsId: 7 });
+    registry.subscribe('session', 'second', { ownerWebContentsId: 7 });
+    registry.subscribe('session', 'third', { ownerWebContentsId: 9 });
+    expect(registry.consumerOwnerWebContentsIds('session')).toEqual([7, 9]);
+
+    // An unidentifiable owner has to fall back to the broadcast, or its window
+    // would silently stop receiving output.
+    registry.subscribe('session', 'fourth');
+    expect(registry.consumerOwnerWebContentsIds('session')).toBeNull();
   });
 
   it('cancels stale output and input subscriptions when a session respawns', () => {

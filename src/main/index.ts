@@ -40,6 +40,7 @@ import { ensureInternalProject } from './core/projects/operations/ensureInternal
 import { projectManager } from './core/projects/project-manager';
 import { promptLibraryService } from './core/prompt-library/prompt-library-service';
 import { promptSourceService } from './core/prompt-library/prompt-source-service';
+import { registerPtyFastPathListeners } from './core/pty/pty-fast-path';
 import { ptySessionRegistry } from './core/pty/pty-session-registry';
 import { prSyncScheduler } from './core/pull-requests/pr-sync-scheduler';
 import { searchService } from './core/search/search-service';
@@ -203,6 +204,7 @@ void app.whenReady().then(async () => {
   await promptLibraryService.initialize();
   await promptSourceService.initialize();
   ptySessionRegistry.setScrollbackLines((await appSettingsService.get('terminal')).scrollbackLines);
+  registerPtyFastPathListeners();
   __bootMark('appSettingsService.initialize done');
   await extensionMarketplaceService.initialize().catch((error: unknown) => {
     log.warn('Failed to initialize the Yoda Extension Marketplace:', error);

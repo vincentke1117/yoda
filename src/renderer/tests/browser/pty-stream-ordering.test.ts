@@ -45,6 +45,21 @@ const ipcMocks = vi.hoisted(() => {
 
 vi.mock('@renderer/lib/ipc', () => ({
   events: {
+    // Acknowledgements travel on a one-way channel instead of an RPC. Route
+    // them into the same spy so these assertions keep describing behaviour —
+    // which watermark is acknowledged, and when — rather than the transport.
+    // The channel name is inlined because a `vi.mock` factory is hoisted above
+    // this file's imports.
+    emit: vi.fn((event: { name?: string } | undefined, payload: unknown) => {
+      if (event?.name !== 'pty:acknowledge') return;
+      const ack = payload as {
+        sessionId: string;
+        consumerId: string;
+        generation: number;
+        sequence: number;
+      };
+      void ipcMocks.acknowledgeOutput(ack.sessionId, ack.consumerId, ack.generation, ack.sequence);
+    }),
     on: vi.fn((_event: unknown, listener: (event: PtyDataEvent) => void) =>
       ipcMocks.setDataListener(listener)
     ),

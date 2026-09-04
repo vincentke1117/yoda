@@ -26,49 +26,66 @@ function trackConsumerOwner(sender: WebContents | undefined): number | null {
   return sender.id;
 }
 
+export type PtyInputDeliveryStatus = 'written' | 'queued' | 'full' | 'unavailable' | 'resumed';
+
+/**
+ * Deliver renderer keystrokes to a session, resuming a detached or ended one.
+ *
+ * Shared by the `sendInput` RPC and the one-way `pty:input-send` channel the
+ * renderer uses on the typing hot path, so both take the identical fallback
+ * ladder: live PTY → detached tmux pane → durable resume with the bytes queued.
+ */
+export async function deliverPtyInput(
+  sessionId: string,
+  data: string
+): Promise<PtyInputDeliveryStatus> {
+  let status = ptySessionRegistry.writeOrQueue(sessionId, data);
+  if (status === 'unavailable') {
+    const parsed = parsePtySessionId(sessionId);
+    if (parsed) {
+      const conversationProvider = taskManager.getTask(parsed.scopeId)?.conversations;
+      const detachedTmuxSession = conversationProvider
+        ?.getActiveSessions()
+        .some(
+          (session) =>
+            session.conversationId === parsed.leafId &&
+            session.detachable &&
+            session.transportAttached === false
+        );
+      if (detachedTmuxSession && conversationProvider) {
+        try {
+          if (await conversationProvider.sendInput(parsed.leafId, data)) {
+            return 'resumed';
+          }
+        } catch (error) {
+          // The pane may have ended during its headless interval. Fall through
+          // to durable resume with the original bytes still available below.
+          log.debug('ptyController.sendInput: detached tmux delivery missed', {
+            sessionId,
+            error: String(error),
+          });
+        }
+      }
+      const registrationEpoch = ptySessionRegistry.beginRegistration(sessionId);
+      status = ptySessionRegistry.writeOrQueue(sessionId, data);
+      void resumeConversation(parsed.projectId, parsed.scopeId, parsed.leafId).catch((error) => {
+        ptySessionRegistry.cancelRegistration(sessionId, registrationEpoch);
+        log.debug('ptyController.sendInput: transparent resume skipped', {
+          sessionId,
+          error: String(error),
+        });
+      });
+    }
+  }
+  return status;
+}
+
 export const ptyController = createRPCController({
   exportTerminalLog,
 
   /** Send raw input data to a PTY session. */
   sendInput: async (sessionId: string, data: string) => {
-    let status = ptySessionRegistry.writeOrQueue(sessionId, data);
-    if (status === 'unavailable') {
-      const parsed = parsePtySessionId(sessionId);
-      if (parsed) {
-        const conversationProvider = taskManager.getTask(parsed.scopeId)?.conversations;
-        const detachedTmuxSession = conversationProvider
-          ?.getActiveSessions()
-          .some(
-            (session) =>
-              session.conversationId === parsed.leafId &&
-              session.detachable &&
-              session.transportAttached === false
-          );
-        if (detachedTmuxSession && conversationProvider) {
-          try {
-            if (await conversationProvider.sendInput(parsed.leafId, data)) {
-              return ok({ queued: false });
-            }
-          } catch (error) {
-            // The pane may have ended during its headless interval. Fall through
-            // to durable resume with the original bytes still available below.
-            log.debug('ptyController.sendInput: detached tmux delivery missed', {
-              sessionId,
-              error: String(error),
-            });
-          }
-        }
-        const registrationEpoch = ptySessionRegistry.beginRegistration(sessionId);
-        status = ptySessionRegistry.writeOrQueue(sessionId, data);
-        void resumeConversation(parsed.projectId, parsed.scopeId, parsed.leafId).catch((error) => {
-          ptySessionRegistry.cancelRegistration(sessionId, registrationEpoch);
-          log.debug('ptyController.sendInput: transparent resume skipped', {
-            sessionId,
-            error: String(error),
-          });
-        });
-      }
-    }
+    const status = await deliverPtyInput(sessionId, data);
     if (status === 'full') return err({ type: 'input_queue_full' as const });
     if (status === 'unavailable') return err({ type: 'not_found' as const });
     return ok({ queued: status === 'queued' });
