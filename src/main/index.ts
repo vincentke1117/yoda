@@ -58,6 +58,7 @@ import { updateService } from './core/updates/update-service';
 import { viewStateService } from './core/view-state/view-state-service';
 import type { TeardownMode } from './core/workspaces/workspace-registry';
 import { initializeDatabase } from './db/initialize';
+import { instrumentDatabaseForLagAttribution } from './db/lag-attribution';
 import { setLogDirectory } from './lib/log-file';
 import { log } from './lib/logger';
 import { recordMainThreadBlockingWork, startMainThreadLagProbe } from './lib/main-thread-lag';
@@ -175,7 +176,11 @@ void app.whenReady().then(async () => {
   __bootMark('resolveUserEnv kicked off (non-blocking)');
 
   try {
-    await initializeDatabase();
+    const database = await initializeDatabase();
+    // Synchronous SQLite holds the whole thread, so a slow query is invisible to
+    // the RPC observer whenever a scheduler or watcher — not a renderer call —
+    // is what issued it.
+    instrumentDatabaseForLagAttribution(database);
     __bootMark('initializeDatabase done');
     await aiLabService.initialize().catch((error: unknown) => {
       log.warn('Failed to restore pending Yoda Build tasks:', error);
