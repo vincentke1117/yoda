@@ -60,6 +60,7 @@ import type { TeardownMode } from './core/workspaces/workspace-registry';
 import { initializeDatabase } from './db/initialize';
 import { setLogDirectory } from './lib/log-file';
 import { log } from './lib/logger';
+import { startMainThreadLagProbe } from './lib/main-thread-lag';
 import { telemetryService } from './lib/telemetry';
 import { rpcRouter } from './rpc';
 import { ensureUserBinDirsInPath, resolveUserEnv } from './utils/userEnv';
@@ -142,6 +143,7 @@ void app.whenReady().then(async () => {
   const __bootMark = (label: string) =>
     console.log(`[DEBUG][boot] ${label} +${Date.now() - __bootT0}ms`);
   __bootMark('whenReady fired');
+  startMainThreadLagProbe();
   console.log('[BUILD-MARKER] agent-run-state-sync v4 (stateless-derive + claude-awaiting)');
   agentSessionRuntimeStore.initialize({
     recordRunOutcome: (conversationId, status) =>
