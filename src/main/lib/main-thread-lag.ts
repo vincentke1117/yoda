@@ -1,3 +1,4 @@
+import { PerformanceObserver } from 'node:perf_hooks';
 import { log } from './logger';
 
 /**
@@ -28,6 +29,26 @@ const REPORT_INTERVAL_MS = 60_000;
 /** Bound the retained window so a long-lived process cannot grow this forever. */
 const MAX_RETAINED_SAMPLES = REPORT_INTERVAL_MS / SAMPLE_INTERVAL_MS;
 
+/**
+ * Synchronous work worth attributing a stall to.
+ *
+ * One PTY output batch is scheduled every FLUSH_INTERVAL_MS (16 ms), so a piece
+ * of synchronous work that runs longer than that has already delayed terminal
+ * output by at least a frame. Track from there — well below the 100 ms stall
+ * threshold, so the culprit is recorded before the stall it contributes to.
+ */
+export const BLOCKING_WORK_TRACK_MS = 16;
+
+/** How many distinct offenders a summary names. */
+const TOP_OFFENDERS = 3;
+
+export type BlockingWorkTotal = {
+  label: string;
+  calls: number;
+  totalMs: number;
+  maxMs: number;
+};
+
 export type MainThreadLagSummary = {
   /** Samples in the reported window. */
   samples: number;
@@ -39,6 +60,8 @@ export type MainThreadLagSummary = {
   stalls: number;
   /** Total time the loop spent overshooting, i.e. work that displaced timers. */
   totalLagMs: number;
+  /** Synchronous work that plausibly caused the stalls, worst total first. */
+  topBlocking: BlockingWorkTotal[];
 };
 
 function percentile(sortedAscending: number[], fraction: number): number {
@@ -50,7 +73,16 @@ function percentile(sortedAscending: number[], fraction: number): number {
   return sortedAscending[index];
 }
 
-export function summarizeLagSamples(samples: readonly number[]): MainThreadLagSummary {
+export function rankBlockingWork(
+  totals: ReadonlyMap<string, BlockingWorkTotal>
+): BlockingWorkTotal[] {
+  return [...totals.values()].sort((a, b) => b.totalMs - a.totalMs).slice(0, TOP_OFFENDERS);
+}
+
+export function summarizeLagSamples(
+  samples: readonly number[],
+  blocking: ReadonlyMap<string, BlockingWorkTotal> = new Map()
+): MainThreadLagSummary {
   const sorted = [...samples].sort((a, b) => a - b);
   let stalls = 0;
   let totalLagMs = 0;
@@ -66,6 +98,7 @@ export function summarizeLagSamples(samples: readonly number[]): MainThreadLagSu
     maxMs: Math.round(sorted.at(-1) ?? 0),
     stalls,
     totalLagMs: Math.round(totalLagMs),
+    topBlocking: rankBlockingWork(blocking),
   };
 }
 
@@ -98,6 +131,8 @@ export class MainThreadLagProbe {
   private expectedAt = 0;
   private windowStartedAt = 0;
   private samples: number[] = [];
+  private blocking = new Map<string, BlockingWorkTotal>();
+  private gcObserver: PerformanceObserver | null = null;
 
   constructor(options: MainThreadLagProbeOptions = {}) {
     this.now = options.now ?? (() => Date.now());
@@ -110,19 +145,69 @@ export class MainThreadLagProbe {
   start(): void {
     if (this.handle !== null) return;
     this.windowStartedAt = this.now();
+    this.observeGarbageCollection();
     this.arm();
   }
 
+  /**
+   * Attribute a slice of synchronous work, so a stall can name its cause.
+   *
+   * Anything under BLOCKING_WORK_TRACK_MS is dropped: it cannot have displaced a
+   * PTY batch on its own, and keeping every RPC call would make the map the
+   * expensive part of the probe.
+   */
+  recordBlockingWork(label: string, durationMs: number): void {
+    if (!Number.isFinite(durationMs) || durationMs < BLOCKING_WORK_TRACK_MS) return;
+    const existing = this.blocking.get(label);
+    if (existing) {
+      existing.calls += 1;
+      existing.totalMs = Math.round(existing.totalMs + durationMs);
+      existing.maxMs = Math.max(existing.maxMs, Math.round(durationMs));
+      return;
+    }
+    this.blocking.set(label, {
+      label,
+      calls: 1,
+      totalMs: Math.round(durationMs),
+      maxMs: Math.round(durationMs),
+    });
+  }
+
+  /**
+   * A long GC pause stops the thread without any handler appearing to run, so
+   * without this a major collection looks like an unexplained stall.
+   */
+  private observeGarbageCollection(): void {
+    if (this.gcObserver) return;
+    try {
+      const observer = new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) {
+          this.recordBlockingWork('gc', entry.duration);
+        }
+      });
+      observer.observe({ entryTypes: ['gc'] });
+      // Node types do not declare unref on PerformanceObserver, but the handle
+      // keeps the loop alive without it.
+      (observer as unknown as { unref?: () => void }).unref?.();
+      this.gcObserver = observer;
+    } catch {
+      // GC timing is a diagnostic bonus, never a reason to lose the probe.
+    }
+  }
+
   stop(): void {
+    this.gcObserver?.disconnect();
+    this.gcObserver = null;
     if (this.handle === null) return;
     this.clearTimer(this.handle);
     this.handle = null;
     this.samples = [];
+    this.blocking.clear();
   }
 
   /** Summary of the window so far, without ending it. */
   peek(): MainThreadLagSummary {
-    return summarizeLagSamples(this.samples);
+    return summarizeLagSamples(this.samples, this.blocking);
   }
 
   private arm(): void {
@@ -138,8 +223,9 @@ export class MainThreadLagProbe {
     if (this.samples.length < MAX_RETAINED_SAMPLES) this.samples.push(lagMs);
     if (lagMs >= MAIN_THREAD_STALL_WARN_MS) this.onStall?.(lagMs);
     if (now - this.windowStartedAt >= REPORT_INTERVAL_MS) {
-      const summary = summarizeLagSamples(this.samples);
+      const summary = summarizeLagSamples(this.samples, this.blocking);
       this.samples = [];
+      this.blocking.clear();
       this.windowStartedAt = now;
       if (summary.stalls > 0) this.onReport?.(summary);
     }
@@ -171,4 +257,9 @@ export function startMainThreadLagProbe(): MainThreadLagProbe {
 
 export function getMainThreadLagSummary(): MainThreadLagSummary | null {
   return probe?.peek() ?? null;
+}
+
+/** Attribute synchronous work to the running probe, if one was started. */
+export function recordMainThreadBlockingWork(label: string, durationMs: number): void {
+  probe?.recordBlockingWork(label, durationMs);
 }

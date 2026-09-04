@@ -36,16 +36,40 @@ export function createRPCRouter<T extends RouterMap>(routers: T): T {
   return routers;
 }
 
-export function registerRPCRouter(router: RouterMap, ipcMain: IpcMain): void {
+/**
+ * Observe how long a handler held the thread before returning.
+ *
+ * Only the synchronous prefix is reported — the work done before the handler's
+ * first await. That is the part that blocks everything else on the thread,
+ * including PTY reads and flushes; total promise duration would conflate it
+ * with time spent legitimately waiting on I/O.
+ */
+export type RpcSyncDurationObserver = (channel: string, syncMs: number) => void;
+
+export function registerRPCRouter(
+  router: RouterMap,
+  ipcMain: IpcMain,
+  onSyncDuration?: RpcSyncDurationObserver
+): void {
   for (const [ns, handlers] of Object.entries(router)) {
     for (const [key, fn] of Object.entries(handlers)) {
       const channel = `${ns}.${key}`;
       const eventHandler = (fn as Partial<EventProcedure<unknown[], unknown>>)[
         eventProcedureHandler
       ];
-      ipcMain.handle(channel, (event, ...args: unknown[]) =>
-        eventHandler ? eventHandler(event, ...args) : fn(...args)
-      );
+      const invoke = (event: unknown, args: unknown[]) =>
+        eventHandler
+          ? eventHandler(event as never, ...args)
+          : (fn as (...a: unknown[]) => unknown)(...args);
+      ipcMain.handle(channel, (event, ...args: unknown[]) => {
+        if (!onSyncDuration) return invoke(event, args);
+        const startedAt = performance.now();
+        try {
+          return invoke(event, args);
+        } finally {
+          onSyncDuration(channel, performance.now() - startedAt);
+        }
+      });
     }
   }
 }
