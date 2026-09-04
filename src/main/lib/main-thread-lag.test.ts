@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  BLOCKING_WORK_TRACK_MS,
   MAIN_THREAD_STALL_WARN_MS,
   MainThreadLagProbe,
   summarizeLagSamples,
@@ -60,7 +61,41 @@ describe('summarizeLagSamples', () => {
       maxMs: 0,
       stalls: 0,
       totalLagMs: 0,
+      topBlocking: [],
     });
+  });
+});
+
+describe('MainThreadLagProbe blocking-work attribution', () => {
+  it('names the worst offenders and ignores work too short to hold a batch', () => {
+    const harness = createHarness();
+    harness.probe.start();
+
+    harness.probe.recordBlockingWork('rpc:tasks.list', 400);
+    harness.probe.recordBlockingWork('rpc:tasks.list', 200);
+    harness.probe.recordBlockingWork('gc', 300);
+    // Below one flush interval: cannot have displaced a PTY batch by itself.
+    harness.probe.recordBlockingWork('rpc:app.ping', BLOCKING_WORK_TRACK_MS - 1);
+
+    const summary = harness.probe.peek();
+    expect(summary.topBlocking).toEqual([
+      { label: 'rpc:tasks.list', calls: 2, totalMs: 600, maxMs: 400 },
+      { label: 'gc', calls: 1, totalMs: 300, maxMs: 300 },
+    ]);
+  });
+
+  it('starts each report window with a clean attribution table', () => {
+    const harness = createHarness();
+    harness.probe.start();
+
+    harness.probe.recordBlockingWork('rpc:tasks.list', 400);
+    harness.tick(50 + 300);
+    for (let i = 0; i < 1_200; i += 1) harness.tick(50);
+
+    expect(harness.reports[0]?.topBlocking).toEqual([
+      { label: 'rpc:tasks.list', calls: 1, totalMs: 400, maxMs: 400 },
+    ]);
+    expect(harness.probe.peek().topBlocking).toEqual([]);
   });
 });
 

@@ -60,7 +60,7 @@ import type { TeardownMode } from './core/workspaces/workspace-registry';
 import { initializeDatabase } from './db/initialize';
 import { setLogDirectory } from './lib/log-file';
 import { log } from './lib/logger';
-import { startMainThreadLagProbe } from './lib/main-thread-lag';
+import { recordMainThreadBlockingWork, startMainThreadLagProbe } from './lib/main-thread-lag';
 import { telemetryService } from './lib/telemetry';
 import { rpcRouter } from './rpc';
 import { ensureUserBinDirsInPath, resolveUserEnv } from './utils/userEnv';
@@ -226,7 +226,9 @@ void app.whenReady().then(async () => {
   __bootMark('ensureInternalProject done');
 
   // RPC router must be registered before the renderer fires its first IPC call.
-  registerRPCRouter(rpcRouter, ipcMain);
+  registerRPCRouter(rpcRouter, ipcMain, (channel, syncMs) =>
+    recordMainThreadBlockingWork(`rpc:${channel}`, syncMs)
+  );
   registerWindowIpc(ipcMain);
   __bootMark('registerRPCRouter done');
   deepLinkService.start();
