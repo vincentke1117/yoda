@@ -161,3 +161,4 @@ optional_env:
 - 终端输入与 ACK 走单向 `events.emit`（`pty:input-send` / `pty:acknowledge`），不要改回 `rpc.pty.sendInput` / `acknowledgeOutput` 的 invoke 往返；测试要观察它们就在 `vi.mock('@renderer/lib/ipc')` 的 `events.emit` 里按 channel name 转发进原有 spy（factory 被 hoist，只能内联字符串）（2026-09-04, 71bcb62）
 - 主进程卡顿先看 `~/Library/Logs/Yoda/yoda.log` 里的 `[main-thread] lag summary`：p50/p95 健康而 max 上百毫秒是常态，且 RPC/GC/SQLite 三类归因都指不出凶手时，说明是 Electron 原生主线程工作，不要再在 JS 层找优化点（2026-09-04, 71bcb62）
 - 新增可能阻塞主线程的同步操作时，用 `recordMainThreadBlockingWork(label, ms)` 插桩，否则它在停顿归因里是隐形的（2026-09-04, 71bcb62）
+- renderer 侧测事件循环延迟必须先判 `visibilityState === 'visible' && document.hasFocus()`：Chromium 对未主动呈现的页面节流定时器（1s→60s），未聚焦/被遮挡的 Electron 窗口仍报 visible，948/950/59951ms 这类数是节流间隔不是卡顿（2026-09-04, 71bcb62）
