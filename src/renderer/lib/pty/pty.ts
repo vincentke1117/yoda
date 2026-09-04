@@ -19,6 +19,7 @@ import {
   normalizeTerminalScrollbackLines,
 } from '@shared/terminal-settings';
 import { events, rpc } from '@renderer/lib/ipc';
+import { recordRendererBlockingWork } from '@renderer/lib/perf/renderer-lag';
 import {
   markTaskOpenFrameStage,
   type TaskOpenFrameDetails,
@@ -2557,7 +2558,12 @@ export class FrontendPty {
     }
 
     this.terminalWriteActive = true;
+    // xterm parses on its own schedule, but handing it a chunk and running the
+    // completion callback both happen on this loop. Attribute that slice so a
+    // renderer stall can be told apart from React and MobX work.
+    const writeStartedAt = performance.now();
     this.terminal.write(write.data.slice(write.offset, end), () => {
+      recordRendererBlockingWork('xterm:write', performance.now() - writeStartedAt);
       if (this.isDisposed) return;
       this.terminalWriteActive = false;
       write.offset = end;
