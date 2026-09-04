@@ -25,6 +25,9 @@ export default defineConfig({
           'extension-workers/maas-gateway': resolve(
             'src/main/core/extensions/maas-gateway/worker.ts'
           ),
+          // The PTY host owns node-pty in its own process, so reading a
+          // terminal is never queued behind Electron's main-thread work.
+          'pty-host/entry': resolve('src/main/core/pty/host/pty-host-entry.ts'),
         },
         // legacy-port intentionally lazy-loads db/client + db/kv + settings-service
         // to avoid opening the main sqlite handle before the migration gate runs.
