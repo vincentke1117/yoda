@@ -23,22 +23,32 @@ const observeLongTasks: UnattributedPauseObserver = (record) => {
 };
 
 /**
- * Drop any interval a hidden page could have had throttled.
+ * Drop any interval the browser could have throttled instead of run.
  *
- * Chromium throttles timers in a background page to once a second, and after
- * five minutes hidden to once a minute. Measuring through that reports a 60s
- * "stall" that is nothing but the throttle, which is exactly the wrong
- * conclusion to hand someone chasing a freeze. Intervals that merely straddle a
- * visibility change are dropped too, since only part of them was throttled.
+ * Chromium throttles timers in a page it is not actively presenting — to once a
+ * second, and after five minutes to once a minute. Measuring through that
+ * reports a 60s "stall" that is nothing but the throttle, which is exactly the
+ * wrong conclusion to hand someone chasing a freeze.
+ *
+ * `document.visibilityState` alone is not enough: an unfocused or occluded
+ * Electron window still reports "visible" while its timers are being throttled.
+ * Requiring focus as well narrows measurement to the state that actually
+ * matters — the user is looking at this window — at the cost of collecting
+ * nothing while the app sits in the background, which is the right trade when
+ * the alternative is inventing freezes.
  */
-function createVisibilityGuard(): () => boolean {
-  let visibilityChanged = false;
-  document.addEventListener('visibilitychange', () => {
-    visibilityChanged = true;
-  });
+function createMeasurabilityGuard(): () => boolean {
+  let interrupted = false;
+  const interrupt = () => {
+    interrupted = true;
+  };
+  document.addEventListener('visibilitychange', interrupt);
+  window.addEventListener('blur', interrupt);
+  window.addEventListener('focus', interrupt);
   return () => {
-    const measurable = document.visibilityState === 'visible' && !visibilityChanged;
-    visibilityChanged = false;
+    const measurable =
+      document.visibilityState === 'visible' && document.hasFocus() && !interrupted;
+    interrupted = false;
     return measurable;
   };
 }
@@ -59,7 +69,7 @@ export function startRendererLagProbe(): EventLoopLagProbe {
   if (probe) return probe;
   probe = new EventLoopLagProbe({
     observeUnattributedPauses: observeLongTasks,
-    shouldRecordSample: createVisibilityGuard(),
+    shouldRecordSample: createMeasurabilityGuard(),
     onStall: (lagMs) => {
       log.warn('[renderer-thread] stalled', { lagMs: Math.round(lagMs) });
     },
