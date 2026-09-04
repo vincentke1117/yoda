@@ -1,12 +1,10 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   BLOCKING_WORK_TRACK_MS,
-  MAIN_THREAD_STALL_WARN_MS,
-  MainThreadLagProbe,
+  EVENT_LOOP_STALL_WARN_MS,
+  EventLoopLagProbe,
   summarizeLagSamples,
-} from './main-thread-lag';
-
-vi.mock('./logger', () => ({ log: { warn: vi.fn(), debug: vi.fn() } }));
+} from './event-loop-lag';
 
 /** Drive the probe on a clock the test moves by hand. */
 function createHarness() {
@@ -14,17 +12,17 @@ function createHarness() {
   let pending: (() => void) | null = null;
   const stalls: number[] = [];
   const reports: ReturnType<typeof summarizeLagSamples>[] = [];
-  const probe = new MainThreadLagProbe({
+  const probe = new EventLoopLagProbe({
     now: () => now,
-    setTimer: (fn) => {
+    setTimer: (fn: () => void) => {
       pending = fn;
       return 1;
     },
     clearTimer: () => {
       pending = null;
     },
-    onStall: (lagMs) => stalls.push(lagMs),
-    onReport: (summary) => reports.push(summary),
+    onStall: (lagMs: number) => stalls.push(lagMs),
+    onReport: (summary: ReturnType<typeof summarizeLagSamples>) => reports.push(summary),
   });
   return {
     probe,
@@ -66,7 +64,7 @@ describe('summarizeLagSamples', () => {
   });
 });
 
-describe('MainThreadLagProbe blocking-work attribution', () => {
+describe('EventLoopLagProbe blocking-work attribution', () => {
   it('names the worst offenders and ignores work too short to hold a batch', () => {
     const harness = createHarness();
     harness.probe.start();
@@ -99,7 +97,7 @@ describe('MainThreadLagProbe blocking-work attribution', () => {
   });
 });
 
-describe('MainThreadLagProbe', () => {
+describe('EventLoopLagProbe', () => {
   it('measures overshoot rather than elapsed time', () => {
     const harness = createHarness();
     harness.probe.start();
@@ -118,9 +116,9 @@ describe('MainThreadLagProbe', () => {
     const harness = createHarness();
     harness.probe.start();
 
-    harness.tick(50 + MAIN_THREAD_STALL_WARN_MS - 1);
+    harness.tick(50 + EVENT_LOOP_STALL_WARN_MS - 1);
 
-    expect(harness.probe.peek().maxMs).toBe(MAIN_THREAD_STALL_WARN_MS - 1);
+    expect(harness.probe.peek().maxMs).toBe(EVENT_LOOP_STALL_WARN_MS - 1);
     expect(harness.stalls).toEqual([]);
   });
 

@@ -25,6 +25,7 @@ import { wireModelRegistryInvalidation } from '@renderer/lib/monaco/invalidation
 import { codeEditorPool } from '@renderer/lib/monaco/monaco-code-pool';
 import { diffEditorPool } from '@renderer/lib/monaco/monaco-diff-pool';
 import { modelRegistry } from '@renderer/lib/monaco/monaco-model-registry';
+import { startRendererLagProbe } from '@renderer/lib/perf/renderer-lag';
 import { wirePrCacheInvalidation } from '@renderer/lib/pr-cache-invalidation';
 import {
   applyCachedTerminalFileLinkVerification,
@@ -159,6 +160,9 @@ async function bootstrap() {
       }
     }
   }
+
+  // Start before React mounts so hydration's own stalls are measured too.
+  startRendererLagProbe();
 
   // Avoid double-mount in dev which can duplicate PTY sessions
   ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
