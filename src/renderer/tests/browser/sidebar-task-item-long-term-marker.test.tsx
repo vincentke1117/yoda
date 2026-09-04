@@ -277,9 +277,7 @@ describe('SidebarTaskItem long-term marker', () => {
     expect(mocks.provisionTask).toHaveBeenCalledWith('task-1');
   });
 
-  // Archiving is organizational, not a runtime state: an archived row provisions
-  // and opens exactly like any other, and restoring stays an explicit action.
-  it('provisions and opens an archived row like any other', async () => {
+  it('lets the shared open flow restore an archived row before provisioning', async () => {
     mocks.taskState = 'unprovisioned';
     mocks.taskPhase = 'idle';
     mocks.archivedAt = '2026-08-14T10:00:00.000Z';
@@ -306,7 +304,7 @@ describe('SidebarTaskItem long-term marker', () => {
       row?.dispatchEvent(new MouseEvent('click', { bubbles: true, button: 0 }));
     });
 
-    expect(mocks.provisionTask).toHaveBeenCalledWith('task-1');
+    expect(mocks.provisionTask).not.toHaveBeenCalled();
     expect(mocks.openTaskWhenReady).toHaveBeenCalledOnce();
     expect(mocks.openTaskWhenReady).toHaveBeenCalledWith('project-1', 'task-1', mocks.navigate);
   });

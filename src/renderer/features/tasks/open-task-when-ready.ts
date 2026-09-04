@@ -1,3 +1,4 @@
+import type { Conversation } from '@shared/conversations';
 import type { TaskWindowTabTarget } from '@shared/task-window';
 import {
   openProvisionedTaskTab,
@@ -11,6 +12,7 @@ import {
 } from '@renderer/features/tasks/stores/task-selectors';
 import { toast } from '@renderer/lib/hooks/use-toast';
 import i18n from '@renderer/lib/i18n';
+import { rpc } from '@renderer/lib/ipc';
 import type { NavigateFnTyped } from '@renderer/lib/layout/navigation-provider';
 import { appState } from '@renderer/lib/stores/app-state';
 import { log } from '@renderer/utils/logger';
@@ -48,6 +50,37 @@ const TASK_OPEN_CANCELLATION_POLL_MS = 25;
 
 class TaskOpenCancelledError extends Error {}
 class TaskOpenDeadlineError extends Error {}
+
+function isArchivedTaskStore(store: ReturnType<typeof getTaskStore>): boolean {
+  const data = store?.data;
+  return Boolean(data && 'archivedAt' in data && data.archivedAt);
+}
+
+function conversationActivityTime(conversation: Conversation): number {
+  for (const value of [
+    conversation.lastInteractedAt,
+    conversation.updatedAt,
+    conversation.archivedAt,
+    conversation.createdAt,
+  ]) {
+    if (!value) continue;
+    const timestamp = Date.parse(value);
+    if (!Number.isNaN(timestamp)) return timestamp;
+  }
+  return 0;
+}
+
+async function resolveArchivedTaskSessionTarget(
+  projectId: string,
+  taskId: string
+): Promise<Extract<TaskWindowTabTarget, { kind: 'conversation' }> | undefined> {
+  const conversations = await rpc.conversations.getArchivedConversationsForTask(projectId, taskId);
+  const latest = [...conversations].sort((left, right) => {
+    const timeOrder = conversationActivityTime(right) - conversationActivityTime(left);
+    return timeOrder !== 0 ? timeOrder : right.id.localeCompare(left.id);
+  })[0];
+  return latest ? { kind: 'conversation', conversationId: latest.id } : undefined;
+}
 
 type TaskTargetOpenOutcome =
   | { ok: true; selection: DeferredTaskTabSelection }
@@ -294,9 +327,23 @@ async function openTaskWhenReadyAfterTrace(
     );
   let target: TaskWindowTabTarget | undefined = explicitTarget;
   const initialTaskStore = getTaskStore(projectId, taskId);
-  let provisioned = asProvisioned(initialTaskStore);
+  const openingArchivedTask = isArchivedTaskStore(initialTaskStore);
+  const initialProvisioned = asProvisioned(initialTaskStore);
+  if (openingArchivedTask && !target && initialProvisioned) {
+    target = resolveLastTaskSessionTarget(
+      appState.history,
+      initialProvisioned.taskView.tabManager,
+      projectId,
+      taskId
+    );
+  }
+  // An archived task must cross the restore boundary before it can use the hot
+  // path. Task archive cascades to its sessions, so a provisioned renderer from
+  // an earlier open can still hold an authoritative-but-empty conversation map.
+  let provisioned = openingArchivedTask ? undefined : initialProvisioned;
   markTaskOpenTrace(projectId, taskId, 'store-resolved', {
     provisioned: Boolean(provisioned),
+    archived: openingArchivedTask,
     explicitTarget: explicitTarget?.kind ?? null,
   });
 
@@ -462,6 +509,15 @@ async function openTaskWhenReadyAfterTrace(
   let pendingProvision: Promise<void> | null = null;
 
   try {
+    // Resolve the archived session while it is still queryable as archived.
+    // prepareExplicitTaskOpen restores the task and all of its conversations.
+    if (openingArchivedTask && !target) {
+      target = await waitForTaskOpenStep(
+        resolveArchivedTaskSessionTarget(projectId, taskId),
+        isCurrentRequest,
+        hardDeadline
+      );
+    }
     await waitForTaskOpenStep(
       prepareExplicitTaskOpen(projectId, taskId),
       isCurrentRequest,

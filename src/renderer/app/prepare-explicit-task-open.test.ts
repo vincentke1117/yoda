@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   getProjectManagerStore: vi.fn(),
   getTaskManagerStore: vi.fn(),
   mountProject: vi.fn(),
+  retryTaskSetup: vi.fn(),
   restoreTask: vi.fn(),
 }));
 
@@ -24,6 +25,7 @@ describe('prepareExplicitTaskOpen', () => {
     mocks.ensureProjectLoaded.mockResolvedValue(true);
     mocks.mountProject.mockResolvedValue(undefined);
     mocks.ensureTaskLoaded.mockResolvedValue(true);
+    mocks.retryTaskSetup.mockResolvedValue(undefined);
     mocks.restoreTask.mockResolvedValue(undefined);
     mocks.getProjectManagerStore.mockReturnValue({
       ensureProjectLoaded: mocks.ensureProjectLoaded,
@@ -31,6 +33,7 @@ describe('prepareExplicitTaskOpen', () => {
     });
     mocks.getTaskManagerStore.mockReturnValue({
       ensureTaskLoaded: mocks.ensureTaskLoaded,
+      retryTaskSetup: mocks.retryTaskSetup,
       restoreTask: mocks.restoreTask,
       tasks: new Map([
         [
@@ -52,14 +55,44 @@ describe('prepareExplicitTaskOpen', () => {
     );
   });
 
-  // Archiving is organizational, not a runtime state: an archived task opens and
-  // runs like any other, and opening one must never mutate its archive state.
-  it('point-loads an archived task without restoring it', async () => {
+  it('restores an archived task and its sessions after point-loading it', async () => {
     await prepareExplicitTaskOpen('project-1', 'task-1');
 
     expect(mocks.mountProject).toHaveBeenCalledWith('project-1');
     expect(mocks.ensureTaskLoaded).toHaveBeenCalledWith('task-1');
-    expect(mocks.restoreTask).not.toHaveBeenCalled();
+    expect(mocks.restoreTask).toHaveBeenCalledWith('task-1');
+    expect(mocks.ensureTaskLoaded.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.restoreTask.mock.invocationCallOrder[0]
+    );
+  });
+
+  it('resumes interrupted setup before an explicit open provisions the task', async () => {
+    mocks.getTaskManagerStore.mockReturnValue({
+      ensureTaskLoaded: mocks.ensureTaskLoaded,
+      retryTaskSetup: mocks.retryTaskSetup,
+      restoreTask: mocks.restoreTask,
+      tasks: new Map([
+        [
+          'task-1',
+          {
+            state: 'unprovisioned',
+            data: {
+              id: 'task-1',
+              archivedAt: '2026-07-05T04:00:00.000Z',
+              setupStatus: 'pending',
+            },
+          },
+        ],
+      ]),
+    });
+
+    await prepareExplicitTaskOpen('project-1', 'task-1');
+
+    expect(mocks.restoreTask).toHaveBeenCalledWith('task-1');
+    expect(mocks.retryTaskSetup).toHaveBeenCalledWith('task-1');
+    expect(mocks.restoreTask.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.retryTaskSetup.mock.invocationCallOrder[0]
+    );
   });
 
   it('fails closed when the task cannot be point-loaded', async () => {
@@ -69,5 +102,6 @@ describe('prepareExplicitTaskOpen', () => {
       'Task task-1 could not be loaded'
     );
     expect(mocks.restoreTask).not.toHaveBeenCalled();
+    expect(mocks.retryTaskSetup).not.toHaveBeenCalled();
   });
 });

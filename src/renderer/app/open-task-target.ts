@@ -233,7 +233,18 @@ export async function prepareTaskTarget(projectId: string, taskId?: string): Pro
   const taskManager = getTaskManagerStore(projectId);
   if (!taskManager) return;
   const taskLoaded = await taskManager.ensureTaskLoaded(taskId);
-  if (taskLoaded) await taskManager.provisionTask(taskId);
+  if (!taskLoaded) return;
+
+  const task = taskManager.tasks.get(taskId);
+  if (!task || task.state === 'unregistered') return;
+  if ('archivedAt' in task.data && task.data.archivedAt) {
+    await taskManager.restoreTask(taskId);
+  }
+  const preparedTask = taskManager.tasks.get(taskId);
+  if (preparedTask?.state === 'unprovisioned' && preparedTask.data.setupStatus === 'pending') {
+    await taskManager.retryTaskSetup(taskId);
+  }
+  await taskManager.provisionTask(taskId);
 }
 
 export function openTaskWindowTarget(

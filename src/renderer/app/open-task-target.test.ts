@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   getTaskManagerStore: vi.fn(),
   mountProject: vi.fn(),
   provisionTask: vi.fn(),
+  retryTaskSetup: vi.fn(),
+  restoreTask: vi.fn(),
   showModal: vi.fn(),
 }));
 
@@ -106,9 +108,13 @@ describe('openProvisionedTaskTab', () => {
     mocks.mountProject.mockResolvedValue(undefined);
     mocks.ensureTaskLoaded.mockResolvedValue(true);
     mocks.provisionTask.mockResolvedValue(undefined);
+    mocks.retryTaskSetup.mockResolvedValue(undefined);
+    mocks.restoreTask.mockResolvedValue(undefined);
     mocks.getTaskManagerStore.mockReturnValue({
       ensureTaskLoaded: mocks.ensureTaskLoaded,
       provisionTask: mocks.provisionTask,
+      restoreTask: mocks.restoreTask,
+      tasks: new Map([['task-1', { state: 'unprovisioned', data: { id: 'task-1' } }]]),
     });
   });
 
@@ -340,9 +346,13 @@ describe('openProvisionedTaskTab', () => {
       mocks.mountProject.mockResolvedValue(undefined);
       mocks.ensureTaskLoaded.mockResolvedValue(true);
       mocks.provisionTask.mockResolvedValue(undefined);
+      mocks.restoreTask.mockResolvedValue(undefined);
       mocks.getTaskManagerStore.mockReturnValue({
         ensureTaskLoaded: mocks.ensureTaskLoaded,
         provisionTask: mocks.provisionTask,
+        retryTaskSetup: mocks.retryTaskSetup,
+        restoreTask: mocks.restoreTask,
+        tasks: new Map([['task-1', { state: 'unprovisioned', data: { id: 'task-1' } }]]),
       });
     });
 
@@ -354,6 +364,57 @@ describe('openProvisionedTaskTab', () => {
       expect(mocks.getTaskManagerStore).toHaveBeenCalledWith('project-1');
       expect(mocks.ensureTaskLoaded).toHaveBeenCalledWith('task-1');
       expect(mocks.provisionTask).toHaveBeenCalledWith('task-1');
+      expect(mocks.restoreTask).not.toHaveBeenCalled();
+    });
+
+    it('restores an archived task before provisioning its sessions', async () => {
+      mocks.getTaskManagerStore.mockReturnValue({
+        ensureTaskLoaded: mocks.ensureTaskLoaded,
+        provisionTask: mocks.provisionTask,
+        retryTaskSetup: mocks.retryTaskSetup,
+        restoreTask: mocks.restoreTask,
+        tasks: new Map([
+          [
+            'task-1',
+            {
+              state: 'unprovisioned',
+              data: { id: 'task-1', archivedAt: '2026-08-14T10:00:00.000Z' },
+            },
+          ],
+        ]),
+      });
+
+      await prepareTaskTarget('project-1', 'task-1');
+
+      expect(mocks.restoreTask).toHaveBeenCalledWith('task-1');
+      expect(mocks.restoreTask.mock.invocationCallOrder[0]).toBeLessThan(
+        mocks.provisionTask.mock.invocationCallOrder[0]
+      );
+    });
+
+    it('resumes a persisted pending setup before provisioning a task target', async () => {
+      mocks.getTaskManagerStore.mockReturnValue({
+        ensureTaskLoaded: mocks.ensureTaskLoaded,
+        provisionTask: mocks.provisionTask,
+        retryTaskSetup: mocks.retryTaskSetup,
+        restoreTask: mocks.restoreTask,
+        tasks: new Map([
+          [
+            'task-1',
+            {
+              state: 'unprovisioned',
+              data: { id: 'task-1', setupStatus: 'pending' },
+            },
+          ],
+        ]),
+      });
+
+      await prepareTaskTarget('project-1', 'task-1');
+
+      expect(mocks.retryTaskSetup).toHaveBeenCalledWith('task-1');
+      expect(mocks.retryTaskSetup.mock.invocationCallOrder[0]).toBeLessThan(
+        mocks.provisionTask.mock.invocationCallOrder[0]
+      );
     });
 
     it('stops when the project no longer exists', async () => {

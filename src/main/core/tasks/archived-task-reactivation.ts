@@ -10,8 +10,8 @@ import { log } from '@main/lib/logger';
 import { restoreTaskWithoutDescendants } from './operations/restoreTask';
 
 /**
- * Opening an archived task is read-only — that stays true. Sending it new work
- * is not: the moment its agent starts a turn the task holds live work, and an
+ * Read-only transcript inspection does not reactivate a task. Sending it new
+ * work does: the moment its agent starts a turn the task holds live work, and an
  * archived row with a running agent is a lie in every surface that filters on
  * `archivedAt` (sidebar, kanban, counts, mobile). So reactivate on the agent's
  * own run state rather than on any single input path: the composer, a terminal

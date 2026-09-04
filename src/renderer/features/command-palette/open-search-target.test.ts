@@ -63,15 +63,13 @@ describe('openCommandPaletteSearchTarget', () => {
     });
   });
 
-  // Archiving is organizational, not a runtime state: an archived target opens
-  // like any other, and opening it must never mutate its archive state.
-  it('awaits mount and point load before opening an archived conversation', async () => {
+  it('restores an archived conversation task before opening it', async () => {
     await openCommandPaletteSearchTarget(archivedConversation, navigate);
 
     expect(mocks.ensureProjectLoaded).toHaveBeenCalledWith('project-1');
     expect(mocks.mountProject).toHaveBeenCalledWith('project-1');
     expect(mocks.ensureTaskLoaded).toHaveBeenCalledWith('task-1');
-    expect(mocks.restoreTask).not.toHaveBeenCalled();
+    expect(mocks.restoreTask).toHaveBeenCalledWith('task-1');
     expect(mocks.openTaskTarget).toHaveBeenCalledWith(
       { projectId: 'project-1', taskId: 'task-1', conversationId: 'conversation-1' },
       navigate
@@ -94,13 +92,13 @@ describe('openCommandPaletteSearchTarget', () => {
     expect(mocks.openTaskTarget).not.toHaveBeenCalled();
   });
 
-  it('opens without restoring when search metadata disagrees with canonical state', async () => {
+  it('uses canonical archive state when search metadata disagrees', async () => {
     await openCommandPaletteSearchTarget(
       { ...archivedConversation, taskArchived: false },
       navigate
     );
 
-    expect(mocks.restoreTask).not.toHaveBeenCalled();
+    expect(mocks.restoreTask).toHaveBeenCalledWith('task-1');
     expect(mocks.openTaskTarget).toHaveBeenCalledOnce();
   });
 });

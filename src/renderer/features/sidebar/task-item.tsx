@@ -186,9 +186,11 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
   const showMarkerInReservedSlot = appearance.marker !== 'none' && rowVariant === 'underProject';
   const showMarkerAtCompactEdge = appearance.marker !== 'none' && rowVariant !== 'underProject';
 
-  // Archived rows provision like any other: archiving is organizational, so it
-  // must not decide whether a task can open and run.
+  // Task archive cascades to its sessions. The shared open flow must restore
+  // that complete entity before provisioning, so pointer-down cannot race ahead
+  // with an empty active-conversation snapshot.
   const handleProvision = () => {
+    if (isArchived) return;
     if (task.state !== 'unprovisioned' || task.phase !== 'idle') return;
     void taskManager?.provisionTask(taskId).catch(() => {});
   };
