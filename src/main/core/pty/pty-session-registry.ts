@@ -28,6 +28,22 @@ import {
 import { TmuxTerminalReplyFilter } from './tmux-terminal-reply-filter';
 
 const FLUSH_INTERVAL_MS = 16; // One IPC output batch per display frame.
+/**
+ * Interactive echo fast path.
+ *
+ * While the user is typing, the handful of bytes the shell echoes back *is* the
+ * whole frame — there is nothing for a coalescing timer to merge, so waiting a
+ * full FLUSH_INTERVAL_MS adds a frame of latency to every keypress. Flush those
+ * immediately and keep batching everything else.
+ *
+ * The window is bounded on both axes so a flood can never degenerate into one
+ * IPC message per PTY read: only output that arrives within
+ * PTY_INTERACTIVE_ECHO_WINDOW_MS of the last keystroke qualifies, and only while
+ * the pending batch is still smaller than PTY_INTERACTIVE_ECHO_MAX_BYTES. A
+ * full-screen TUI repaint exceeds that size and falls back to the timer.
+ */
+export const PTY_INTERACTIVE_ECHO_WINDOW_MS = 100;
+export const PTY_INTERACTIVE_ECHO_MAX_BYTES = 1024;
 const CONTINUATION_BYTE_MASK = 0xc0;
 const CONTINUATION_BYTE_MARKER = 0x80;
 
@@ -555,6 +571,13 @@ export class PtySessionRegistry {
         this.flushOne(sessionId, state)
       ) {
         immediateBatchCount += 1;
+      }
+      if (this.isInteractiveEcho(state)) {
+        if (state.flushTimer !== null) {
+          clearTimeout(state.flushTimer);
+          state.flushTimer = null;
+        }
+        this.flushOne(sessionId, state);
       }
       if (this.finalizeExitIfDrained(sessionId, state)) return;
       this.scheduleFlush(
@@ -1190,6 +1213,14 @@ export class PtySessionRegistry {
     state.rendererDetachTimer = null;
   }
 
+  /** Output that is echoing the keystroke the user just typed. */
+  private isInteractiveEcho(state: SessionState): boolean {
+    if (state.paused || state.lastInputAt === null) return false;
+    if (state.pendingByteLength === 0) return false;
+    if (state.pendingByteLength > PTY_INTERACTIVE_ECHO_MAX_BYTES) return false;
+    return Date.now() - state.lastInputAt <= PTY_INTERACTIVE_ECHO_WINDOW_MS;
+  }
+
   private scheduleFlush(sessionId: string, state: SessionState, delay: number): void {
     if (state.flushTimer !== null || state.paused || state.pendingByteLength === 0) return;
     state.flushTimer = setTimeout(() => {
@@ -1398,6 +1429,27 @@ export class PtySessionRegistry {
     ) {
       this.setRendererBackpressured(sessionId, state, false);
     }
+  }
+
+  /**
+   * Distinct renderer web contents that subscribed to this session, or null when
+   * that set is not fully known.
+   *
+   * Used to address PTY output at the windows that asked for it instead of
+   * broadcasting every batch to every open window. Null means "fall back to the
+   * broadcast": either nobody is registered yet (a renderer may have installed
+   * its channel listener microtasks before its subscribe call lands) or some
+   * consumer registered without an identifiable owner.
+   */
+  consumerOwnerWebContentsIds(sessionId: string): number[] | null {
+    const consumers = this.consumers.get(sessionId);
+    if (!consumers || consumers.size === 0) return null;
+    const ids = new Set<number>();
+    for (const consumer of consumers.values()) {
+      if (consumer.ownerWebContentsId === null) return null;
+      ids.add(consumer.ownerWebContentsId);
+    }
+    return [...ids];
   }
 
   private hasCurrentConsumers(sessionId: string, generation: number): boolean {

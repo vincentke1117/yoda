@@ -24,11 +24,31 @@ const focusedWindowEventNames = new Set([
   'menu:undo',
 ]);
 
+/**
+ * Per-event override deciding which windows an emit reaches.
+ *
+ * The default is a broadcast to every window, which is right for app-wide
+ * notifications and wrong for high-rate per-topic streams: PTY output would be
+ * serialized and copied once per open window even though exactly one window
+ * subscribed. Returning `null` keeps the broadcast for that emit.
+ */
+type EventWindowResolver = (topic: string | undefined) => BrowserWindow[] | null;
+
+const eventWindowResolvers = new Map<string, EventWindowResolver>();
+
+export function setEventWindowResolver(
+  eventName: string,
+  resolver: EventWindowResolver | null
+): void {
+  if (resolver) eventWindowResolvers.set(eventName, resolver);
+  else eventWindowResolvers.delete(eventName);
+}
+
 function createMainAdapter(): EmitterAdapter {
   return {
     emit: (eventName: string, data: unknown, topic?: string) => {
       const channel = topic ? `${eventName}.${topic}` : eventName;
-      for (const win of targetWindows(eventName)) {
+      for (const win of targetWindows(eventName, topic)) {
         win.webContents.send(channel, data);
       }
     },
@@ -41,7 +61,10 @@ function createMainAdapter(): EmitterAdapter {
   };
 }
 
-function targetWindows(eventName: string): BrowserWindow[] {
+function targetWindows(eventName: string, topic?: string): BrowserWindow[] {
+  const resolved = eventWindowResolvers.get(eventName)?.(topic);
+  if (resolved) return resolved.filter((win) => !win.isDestroyed());
+
   if (mainWindowEventNames.has(eventName)) {
     const win = getMainWindow();
     return win && !win.isDestroyed() ? [win] : [];

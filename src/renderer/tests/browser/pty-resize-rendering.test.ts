@@ -5,6 +5,7 @@ import { FrontendPty } from '@renderer/lib/pty/pty';
 
 vi.mock('@renderer/lib/ipc', () => ({
   events: {
+    emit: vi.fn(),
     on: vi.fn(() => vi.fn()),
   },
   rpc: {

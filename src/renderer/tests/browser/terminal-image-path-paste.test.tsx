@@ -11,6 +11,15 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@renderer/lib/ipc', () => ({
   events: {
+    // Keystrokes and pasted text reach main over a one-way channel now, not the
+    // `sendInput` RPC. Route them into the same spy so this test keeps asserting
+    // what gets forwarded rather than how it travels. The channel name is
+    // inlined because a `vi.mock` factory is hoisted above this file's imports.
+    emit: vi.fn((event: { name?: string } | undefined, payload: unknown) => {
+      if (event?.name !== 'pty:input-send') return;
+      const input = payload as { sessionId: string; data: string };
+      void mocks.sendInput(input.sessionId, input.data);
+    }),
     on: vi.fn(() => vi.fn()),
   },
   rpc: {

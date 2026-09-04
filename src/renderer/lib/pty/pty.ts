@@ -4,6 +4,7 @@ import { Terminal, type ITerminalOptions } from '@xterm/xterm';
 import type { ConversationSurfaceAnchor } from '@shared/conversations';
 import {
   PTY_CONSUMER_HEARTBEAT_INTERVAL_MS,
+  ptyAcknowledgeChannel,
   ptyDataChannel,
   type PtyDataEvent,
 } from '@shared/events/ptyEvents';
@@ -2581,7 +2582,14 @@ export class FrontendPty {
       this.acknowledgedGeneration = generation;
       this.acknowledgedSequence = sequence;
     }
-    rpc.pty.acknowledgeOutput(this.sessionId, consumerId, generation, sequence).catch(() => {});
+    // One-way send: the reply was always empty, and a dropped ack costs nothing
+    // because the next one is cumulative.
+    events.emit(ptyAcknowledgeChannel, {
+      sessionId: this.sessionId,
+      consumerId,
+      generation,
+      sequence,
+    });
   }
 
   /**

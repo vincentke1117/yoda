@@ -1,7 +1,12 @@
 import { type Terminal } from '@xterm/xterm';
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { appPasteChannel } from '@shared/events/appEvents';
-import { ptyDataChannel, ptyExitChannel, type PtyExitEvent } from '@shared/events/ptyEvents';
+import {
+  ptyDataChannel,
+  ptyExitChannel,
+  ptyInputSendChannel,
+  type PtyExitEvent,
+} from '@shared/events/ptyEvents';
 import {
   DEFAULT_TERMINAL_LINK_OPEN,
   DEFAULT_TERMINAL_SCROLLBACK_LINES,
@@ -477,19 +482,10 @@ export function usePty(
           }
         }
       }
-      void rpc.pty
-        .sendInput(sessionId, data)
-        .then((result) => {
-          if (!result.success) {
-            log.warn('Terminal input queue is full', {
-              sessionId,
-              error: result.error,
-            });
-          }
-        })
-        .catch((error) => {
-          log.warn('Failed to send terminal input', { sessionId, error });
-        });
+      // One-way send, not an RPC. An `invoke` put a promise round-trip on the
+      // critical path of every keystroke, and its only use here was a warning
+      // log — main emits that itself now.
+      events.emit(ptyInputSendChannel, { sessionId, data });
     },
     [sessionId]
   );
