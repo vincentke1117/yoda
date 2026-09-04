@@ -157,3 +157,5 @@ optional_env:
 - Yoda 导出的 `.yoda-theme.json` 会在 `skin.image` 保留导入图片的完整 Data URI；本地源文件丢失时先按 MIME 解码到原文件名，再用尺寸与 SHA-256 验证（2026-08-26, 4dd1568）
 - 终端智能路径「路径在哪结束」无法只靠正则判定（`（`、`，`、空格既出现在真实文件名里，也用来开启文件名后的注解）：正则取宽匹配，再用 `fs.probePaths` 选最长且真实存在的读法收窄；新增 prose 形态优先加 trim variant，不要再往正则里加例外（2026-09-02, ac1d377）
 - xterm `ILinkProvider.provideLinks` 的 callback 允许异步返回，可以在里面做文件系统往返；但 hover 每次换行都会重跑检测，探测结果必须带 TTL 缓存，右键菜单只读缓存不发 IPC（2026-09-02, ac1d377）
+- xterm 的 WebGL 渲染器是 `f7fe9c1f65` 主动移除的（旧设计正是「挂载时 WebGL、离屏时 DOM」），现在 DOM 渲染器是唯一视觉场景；`pty-resize-rendering.test.ts` 用 `.xterm-rows` 结构和 textContent 断言守着它，canvas 下无等价物。要重新引入必须单独立项并先解释那次移除（2026-09-04, 71bcb62）
+- 终端输入与 ACK 走单向 `events.emit`（`pty:input-send` / `pty:acknowledge`），不要改回 `rpc.pty.sendInput` / `acknowledgeOutput` 的 invoke 往返；测试要观察它们就在 `vi.mock('@renderer/lib/ipc')` 的 `events.emit` 里按 channel name 转发进原有 spy（factory 被 hoist，只能内联字符串）（2026-09-04, 71bcb62）
