@@ -12,8 +12,10 @@ function createHarness() {
   let pending: (() => void) | null = null;
   const stalls: number[] = [];
   const reports: ReturnType<typeof summarizeLagSamples>[] = [];
+  let measurable = true;
   const probe = new EventLoopLagProbe({
     now: () => now,
+    shouldRecordSample: () => measurable,
     setTimer: (fn: () => void) => {
       pending = fn;
       return 1;
@@ -28,6 +30,9 @@ function createHarness() {
     probe,
     stalls,
     reports,
+    setMeasurable(value: boolean) {
+      measurable = value;
+    },
     /** Advance the clock by `elapsedMs` and let the armed timer fire. */
     tick(elapsedMs: number) {
       now += elapsedMs;
@@ -94,6 +99,28 @@ describe('EventLoopLagProbe blocking-work attribution', () => {
       { label: 'rpc:tasks.list', calls: 1, totalMs: 400, maxMs: 400 },
     ]);
     expect(harness.probe.peek().topBlocking).toEqual([]);
+  });
+});
+
+describe('EventLoopLagProbe sampling guard', () => {
+  it('drops an interval the environment could have throttled', () => {
+    const harness = createHarness();
+    harness.probe.start();
+
+    // A hidden page's timer fires a second late (a minute late, once it has
+    // been hidden long enough). That is the throttle, not a stall, and
+    // recording it would invent a freeze that never happened.
+    harness.setMeasurable(false);
+    harness.tick(50 + 950);
+
+    expect(harness.probe.peek().samples).toBe(0);
+    expect(harness.stalls).toEqual([]);
+
+    // Measurement resumes from the next interval, not from the throttled one.
+    harness.setMeasurable(true);
+    harness.tick(50 + 120);
+    expect(harness.probe.peek().samples).toBe(1);
+    expect(harness.probe.peek().maxMs).toBe(120);
   });
 });
 

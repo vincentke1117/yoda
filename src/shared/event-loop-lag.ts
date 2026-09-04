@@ -117,6 +117,15 @@ type EventLoopLagProbeOptions = {
   onStall?: (lagMs: number) => void;
   onReport?: (summary: EventLoopLagSummary) => void;
   observeUnattributedPauses?: UnattributedPauseObserver;
+  /**
+   * Whether the interval that just elapsed is measurable at all.
+   *
+   * Called exactly once per tick. A browser throttles timers in a hidden page —
+   * to once a second, then once a minute — so an unguarded probe there reports
+   * the throttle interval as a multi-second stall. Returning false drops the
+   * sample instead of inventing a freeze that never happened.
+   */
+  shouldRecordSample?: () => boolean;
 };
 
 /**
@@ -208,8 +217,15 @@ export class EventLoopLagProbe {
 
   private tick(): void {
     const now = this.now();
+    // Always consult the guard, even when the sample is kept: it is called once
+    // per tick and may be clearing per-interval state of its own.
+    const measurable = this.options.shouldRecordSample?.() ?? true;
     // Never negative: a timer may fire late, never early.
     const lagMs = Math.max(0, now - this.expectedAt);
+    if (!measurable) {
+      this.arm();
+      return;
+    }
     if (this.samples.length < MAX_RETAINED_SAMPLES) this.samples.push(lagMs);
     if (lagMs >= EVENT_LOOP_STALL_WARN_MS) this.onStall?.(lagMs);
     if (now - this.windowStartedAt >= REPORT_INTERVAL_MS) {

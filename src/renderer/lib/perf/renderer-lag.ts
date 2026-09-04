@@ -22,6 +22,27 @@ const observeLongTasks: UnattributedPauseObserver = (record) => {
   }
 };
 
+/**
+ * Drop any interval a hidden page could have had throttled.
+ *
+ * Chromium throttles timers in a background page to once a second, and after
+ * five minutes hidden to once a minute. Measuring through that reports a 60s
+ * "stall" that is nothing but the throttle, which is exactly the wrong
+ * conclusion to hand someone chasing a freeze. Intervals that merely straddle a
+ * visibility change are dropped too, since only part of them was throttled.
+ */
+function createVisibilityGuard(): () => boolean {
+  let visibilityChanged = false;
+  document.addEventListener('visibilitychange', () => {
+    visibilityChanged = true;
+  });
+  return () => {
+    const measurable = document.visibilityState === 'visible' && !visibilityChanged;
+    visibilityChanged = false;
+    return measurable;
+  };
+}
+
 let probe: EventLoopLagProbe | null = null;
 
 /**
@@ -38,6 +59,7 @@ export function startRendererLagProbe(): EventLoopLagProbe {
   if (probe) return probe;
   probe = new EventLoopLagProbe({
     observeUnattributedPauses: observeLongTasks,
+    shouldRecordSample: createVisibilityGuard(),
     onStall: (lagMs) => {
       log.warn('[renderer-thread] stalled', { lagMs: Math.round(lagMs) });
     },
