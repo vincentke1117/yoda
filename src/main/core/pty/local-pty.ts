@@ -2,6 +2,8 @@ import * as nodePty from 'node-pty';
 import type { IPty } from 'node-pty';
 import { log } from '@main/lib/logger';
 import { normalizeSignal } from './exit-signals';
+import { isPtyHostEnabled } from './host/protocol';
+import { spawnHostedPty } from './host/pty-host';
 import { suppressExpectedNodePtyErrors } from './node-pty-errors';
 import type { Pty, PtyDimensions, PtyExitInfo } from './pty';
 
@@ -16,7 +18,21 @@ export interface LocalSpawnOptions extends PtyDimensions {
 const MIN_COLS = 2;
 const MIN_ROWS = 1;
 
-export function spawnLocalPty(options: LocalSpawnOptions): LocalPtySession {
+/**
+ * Spawn a local PTY, in this process or in the PTY host.
+ *
+ * The host is opt-in while it proves itself (YODA_PTY_HOST=1). It exists
+ * because the work that stalls Electron's main thread is native: measured over
+ * several minutes of real use, no RPC handler crossed 16ms and the slowest
+ * SQLite query was 49ms, yet the loop still lost 107-689ms at a time. A PTY
+ * read cannot be protected from that while it shares the loop.
+ */
+export function spawnLocalPty(options: LocalSpawnOptions): Pty {
+  if (isPtyHostEnabled()) return spawnHostedPty(options);
+  return spawnInProcessPty(options);
+}
+
+export function spawnInProcessPty(options: LocalSpawnOptions): LocalPtySession {
   const { id, command, args, cwd, env, cols, rows } = options;
 
   log.info('LocalPtySession:spawn', {
